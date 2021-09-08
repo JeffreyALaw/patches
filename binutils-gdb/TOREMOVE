@@ -1,0 +1,9 @@
+gdb/testsuite/gdb.base/watchpoint.exp
+gdb/testsuite/gdb.base/watchpoint-unaligned.exp
+gdb/testsuite/gdb.base/watchpoint-reuse-slot.exp
+gdb/testsuite/gdb.base/set-cwd.exp
+gdb/testsuite/gdb.threads/omp-par-scope.exp
+gdb/testsuite/gdb.threads/process-dies-while-detaching.exp
+gdb/testsuite/gdb.python/py-finish-breakpoint2.exp
+gdb/testsuite/gdb.base/signals-state-child.exp
+gdb/testsuite/gdb.base/jit-so.exp

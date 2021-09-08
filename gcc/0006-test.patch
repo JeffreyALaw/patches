@@ -1,0 +1,20 @@
+diff --git a/gcc/testsuite/gcc.dg/sinhovercosh-1.c b/gcc/testsuite/gcc.dg/sinhovercosh-1.c
+index d41093fa6de..e29a4ddf785 100644
+--- a/gcc/testsuite/gcc.dg/sinhovercosh-1.c
++++ b/gcc/testsuite/gcc.dg/sinhovercosh-1.c
+@@ -1,4 +1,4 @@
+-/* { dg-do compile } */
++/* { dg-do compile { target { ! newlib } } } */
+ /* { dg-options "-Ofast -fdump-tree-optimized" } */
+ 
+ extern float sinhf (float);
+diff --git a/gcc/testsuite/gcc.dg/tanhbysinh.c b/gcc/testsuite/gcc.dg/tanhbysinh.c
+index fde72c2f93b..0eac8a66191 100644
+--- a/gcc/testsuite/gcc.dg/tanhbysinh.c
++++ b/gcc/testsuite/gcc.dg/tanhbysinh.c
+@@ -1,4 +1,4 @@
+-/* { dg-do compile } */
++/* { dg-do compile { target { ! newlib } } } */
+ /* { dg-options "-Ofast -fdump-tree-optimized" } */
+ 
+ extern float sinhf (float);
