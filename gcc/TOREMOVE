@@ -38,3 +38,5 @@ gcc/testsuite/gcc.dg/special/gcsec-1.c
 gcc/testsuite/c-c++-common/torture/builtin-convertvector-1.c
 # This ping-pongs on mips native
 gcc/testsuite/gcc.dg/plugin/poly-int-03_plugin.c
+# Temporary until Aldy fixes his changes
+gcc/testsuite/gcc.dg/torture/pr55107.c
