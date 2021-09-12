@@ -15,8 +15,8 @@ PATH=`pwd`/installed/bin:/home/law/bin:$PATH
 
 pushd obj/binutils-gdb
 ../../binutils-gdb/configure --prefix=$PREFIX
-make -j $NPROC -l $NPROC all-gas all-binutils all-ld all-gdb
-make install-gas install-binutils install-ld install-gdb
+make -j $NPROC -l $NPROC all-gas all-binutils all-ld 
+make install-gas install-binutils install-ld
 popd
 
 pushd obj/gcc
