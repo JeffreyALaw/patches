@@ -39,7 +39,6 @@ gcc/testsuite/c-c++-common/torture/builtin-convertvector-1.c
 # This ping-pongs on mips native
 gcc/testsuite/gcc.dg/plugin/poly-int-03_plugin.c
 # Temporary until Aldy fixes his changes
-#gcc/testsuite/gcc.dg/torture/pr55107.c
 gcc/testsuite/gcc.dg/loop-unswitch-3.c
 gcc/testsuite/gcc.dg/tree-ssa/cunroll-15.c
 gcc/testsuite/gcc.dg/tree-ssa/ldist-22.c
@@ -47,5 +46,3 @@ gcc/testsuite/gcc.dg/tree-ssa/pr61743-2.c
 gcc/testsuite/gcc.dg/tree-ssa/ssa-dom-thread-7.c
 gcc/testsuite/gcc.dg/tree-ssa/ssa-lim-16.c
 gcc/testsuite/gcc.dg/tree-ssa/20030714-2.c
-gcc/testsuite/gcc.dg/tree-ssa/pr66752-3.c
-gcc/testsuite/gcc.dg/tree-ssa/pr77445-2.c
