@@ -1,5 +1,5 @@
 # This file contains the job names that need fresh baselines.  In general it
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
-lm32-elf
-sh3eb-linux-gnu
+or1k-elf
+s390-linux-gnu
