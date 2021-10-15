@@ -41,7 +41,6 @@ gcc/testsuite/gcc.dg/plugin/poly-int-03_plugin.c
 # Temporary to give HongTao time to sort this out
 gcc/testsuite/gcc.dg/Warray-bounds-48.c
 gcc/testsuite/gcc.dg/Wzero-length-array-bounds-2.c
+gcc/testsuite/c-c++-common/torture/vector-compare-2.c
 # Similarly to give Stefan time to fix his stuff
-#gcc/testsuite/gcc.dg/tree-ssa/pr45427.c
-#gcc/testsuite/gcc.c-torture/execute/20100827-1.c
 gcc/testsuite/gcc.dg/loop-unswitch-4.c
