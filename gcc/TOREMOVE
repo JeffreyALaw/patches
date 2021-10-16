@@ -43,3 +43,5 @@ gcc/testsuite/gcc.dg/Warray-bounds-48.c
 gcc/testsuite/gcc.dg/Wzero-length-array-bounds-2.c
 # Similarly to give Stefan time to fix his stuff
 gcc/testsuite/gcc.dg/loop-unswitch-4.c
+# Temporarily while we evaluate Aldy's patch
+gcc/testsuite/gcc.dg/loop-8.c
