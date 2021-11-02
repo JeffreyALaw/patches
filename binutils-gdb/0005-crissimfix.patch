@@ -21,3 +21,16 @@ index 6613a93ecc5..0dac00e0b97 100644
  
    /* Allocate simulator I/O managed memory if none specified by user.  */
    if (cris_have_900000xxif)
+diff --git a/sim/cris/Makefile.in b/sim/cris/Makefile.in
+index 18dd2f451b5..0f9a28401c5 100644
+--- a/sim/cris/Makefile.in
++++ b/sim/cris/Makefile.in
+@@ -42,7 +42,7 @@ SIM_EXTRA_DEPS = \
+ SIM_EXTRA_CLEAN = cris-clean
+ 
+ # Some modules don't build cleanly yet.
+-crisv10f.o crisv32f.o: SIM_WERROR_CFLAGS =
++sim-if.o crisv10f.o crisv32f.o: SIM_WERROR_CFLAGS =
+ 
+ ## COMMON_POST_CONFIG_FRAG
+ 
