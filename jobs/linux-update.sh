@@ -137,7 +137,7 @@ cd ../..
 
 # Step 4, build glibc
 cd ${TARGET}-obj/glibc
-../../glibc/configure --prefix=`pwd`/../../${TARGET}-installed/${TARGET} --build=x86_64-linux-gnu --host=${TARGET} --enable-add-ons
+../../glibc/configure --prefix=`pwd`/../../${TARGET}-installed/${TARGET} --build=x86_64-linux-gnu --host=${TARGET} --enable-add-ons --disable-werror
 make -j $NPROC -l $NPROC 
 make install
 cd ../..

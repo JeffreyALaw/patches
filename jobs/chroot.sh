@@ -78,7 +78,7 @@ case ${TARGET} in
     ;;
   *)
     pushd obj/glibc
-    ../../glibc/configure --prefix=/ --enable-add-ons
+    ../../glibc/configure --prefix=/ --enable-add-ons --disable-werror
     make -j $NPROC -l $NPROC 
     #make install
     popd
