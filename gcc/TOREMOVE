@@ -49,9 +49,8 @@ gcc/testsuite/gcc.dg/uninit-pr89230-1.c
 gcc/testsuite/gcc.dg/uninit-pred-9_b.c
 gcc/testsuite/gcc.dg/pr87985.c
 gcc/testsuite/gcc.dg/torture/pr60115.c
-gcc/testsuite/gcc.c-torture/execute/user-printf.c
-#gcc/testsuite/gcc.dg/torture/pr58143-3.c
-gcc/testsuite/gcc.c-torture/execute/strncmp-1.c
+#gcc/testsuite/gcc.c-torture/execute/user-printf.c
+#gcc/testsuite/gcc.c-torture/execute/strncmp-1.c
 # Duplicate names, though I'm not sure how
 gcc/testsuite/g++.dg/modules/xtreme-header-5_a.H
 # Just started, havent analyzed
