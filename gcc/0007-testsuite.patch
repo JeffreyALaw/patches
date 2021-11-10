@@ -1,36 +1,32 @@
 diff --git a/gcc/testsuite/gcc.dg/tree-ssa/builtin-sprintf-warn-16.c b/gcc/testsuite/gcc.dg/tree-ssa/builtin-sprintf-warn-16.c
-index d6cbfe3e191..378e3509dd8 100644
+index d6cbfe3e191..21f9a31f93c 100644
 --- a/gcc/testsuite/gcc.dg/tree-ssa/builtin-sprintf-warn-16.c
 +++ b/gcc/testsuite/gcc.dg/tree-ssa/builtin-sprintf-warn-16.c
-@@ -128,6 +128,7 @@ void test_width_var (void)
-   T ("%*i", W (double), V (int)); /* { dg-warning "between 1 and 2147483648 " } */
-   /* { dg-warning "expects argument of type .int." "" { target *-*-* } .-1 } */
+@@ -135,11 +135,12 @@ void test_width_var (void)
+        upper bound wraps around zero).  It's possible to constrain
+        the upper bound on the output more, based on the upper bound
+        of the width here, but not worth the trouble.  */
++    int z = V (int);
+     extern unsigned w;
+     if (w < 5 || (unsigned)-1 - 7 < w)
+       w = 5;
  
-+#if 0
-   {
-     /* Create an unsigned range with a lower bound greater than 1 and
-        an upper bound in excess of INT_MAX and verify that the lower
-@@ -141,6 +142,7 @@ void test_width_var (void)
- 
-     T ("%*u", w, V (int));   /* { dg-warning "between 1 and 2147483648 " } */
+-    T ("%*u", w, V (int));   /* { dg-warning "between 1 and 2147483648 " } */
++    T ("%*u", w, z);   /* { dg-warning "between 1 and 2147483648 " } */
    }
-+#endif
  
    {
-     /* Verify that enums are correctly handled (i.e., that the warning
-@@ -231,6 +233,7 @@ void test_precision_var (void)
-   T ("%.*i", P (double), V (int)); /* { dg-warning "up to 2147483648 " } */
-   /* { dg-warning "expects argument of type .int." "" { target *-*-* } .-1 } */
- 
-+#if 0
-   {
-     /* Similar to the corresponding width case, create an unsigned range
+@@ -236,11 +237,12 @@ void test_precision_var (void)
         with a lower bound greater than 1 and an upper bound in excess of
-@@ -242,6 +245,7 @@ void test_precision_var (void)
+        INT_MAX and verify that the lower bound isn't used as the minimum
+        output (since the excessive upper bound wraps around zero).  */
++    int z = V (int);
+     extern unsigned p;
+     if (p < 7 || (unsigned)-1 - 9 < p)
+       p = 7;
  
-     T ("%.*u", p, V (int));   /* { dg-warning "up to 2147483647 " } */
+-    T ("%.*u", p, V (int));   /* { dg-warning "up to 2147483647 " } */
++    T ("%.*u", p, z);   /* { dg-warning "up to 2147483647 " } */
    }
-+#endif
  
    {
-     /* Verify that enums are correctly handled.  */
