@@ -1,5 +1,5 @@
 diff --git a/gcc/config/bfin/bfin.md b/gcc/config/bfin/bfin.md
-index fd65f4d9e63..7e0bc2d5027 100644
+index fd65f4d9e63..10a19aac23e 100644
 --- a/gcc/config/bfin/bfin.md
 +++ b/gcc/config/bfin/bfin.md
 @@ -1959,7 +1959,8 @@
@@ -22,3 +22,13 @@ index fd65f4d9e63..7e0bc2d5027 100644
    ""
    "@
     /* loop end %0 %l1 */
+@@ -1997,7 +1999,8 @@
+ 	(plus (match_dup 0)
+ 	      (const_int -1)))
+    (unspec [(const_int 0)] UNSPEC_LSETUP_END)
+-   (clobber (match_scratch:SI 2))]
++   (clobber (match_scratch:SI 2))
++   (clobber (reg:BI REG_CC))]
+   "memory_operand (operands[0], SImode) || splitting_loops"
+   [(set (match_dup 2) (match_dup 0))
+    (set (match_dup 2) (plus:SI (match_dup 2) (const_int -1)))
