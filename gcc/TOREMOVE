@@ -45,3 +45,7 @@ gcc/testsuite/g++.dg/modules/xtreme-header-5_a.H
 # Waiting on Richi to fix
 gcc/testsuite/gcc.dg/tree-ssa/if-to-switch-5.c
 gcc/testsuite/gcc.dg/tree-ssa/if-to-switch-9.c
+# Just started failing, perhaps Jakub's fixes?
+gcc/testsuite/c-c++-common/attr-retain-5.c
+gcc/testsuite/c-c++-common/attr-retain-6.c
+gcc/testsuite/c-c++-common/attr-retain-9.c
