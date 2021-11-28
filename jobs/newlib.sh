@@ -244,6 +244,12 @@ make site.exp
 echo lappend boards_dir "`pwd`/../../../patches/support" >> site.exp
 cd ../../../
 
+# If a second argument is provided, it is a flag that we want to stop
+# before running the testsuite
+if [ "x$2" != "x"]; then
+  exit 0
+fi
+
 
 # The binutils suite is run unconditionally
 cd ${TARGET}-obj/binutils
