@@ -7,7 +7,7 @@ index 10a19aac23e..2cc37897e0a 100644
     %0 = B %1 (Z)%!
     B %0 = %1;
 -   CC = %1;
-+   CC = !BITTST (%1,0)
++   CC = BITTST (%1,0)
     %0 = CC;
     CC = R0 < R0;
     CC = R0 == R0;"
