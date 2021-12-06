@@ -1,13 +1,13 @@
 diff --git a/gcc/config/bfin/bfin.md b/gcc/config/bfin/bfin.md
-index 10a19aac23e..2cc37897e0a 100644
+index 10a19aac23e..49e33a52496 100644
 --- a/gcc/config/bfin/bfin.md
 +++ b/gcc/config/bfin/bfin.md
-@@ -539,7 +539,7 @@
-    %0 = %1 (X);
-    %0 = B %1 (Z)%!
-    B %0 = %1;
--   CC = %1;
-+   cc =%1<0;
-    %0 = CC;
-    CC = R0 < R0;
-    CC = R0 == R0;"
+@@ -1741,7 +1741,7 @@
+ 	(ior:SI (ashift:SI (match_operand:SI 1 "register_operand" "d") (const_int 1))
+ 		(zero_extend:SI (reg:BI REG_CC))))
+    (set (reg:BI REG_CC)
+-	(zero_extract:BI (match_dup 1) (const_int 31) (const_int 0)))]
++	(zero_extract:BI (match_dup 1) (const_int 1) (const_int 31)))]
+   ""
+   "%0 = ROT %1 BY 1%!"
+   [(set_attr "type" "dsp32shiftimm")])
