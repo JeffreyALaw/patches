@@ -1,0 +1,37 @@
+
+
+Commit 13b6c7639cf assumed that registers in a span will be in a certain
+order. But that assumption is not true at least for the big endian targets.
+Currently amdgcn is probably only target where CFA is split into multiple
+registers so build_span_loc is only gets called for it. However, the
+dwf_cfa_reg function where this ICE was seen can be called for any
+architecture from the comparison dwf_cfa_reg (src) == cur_cfa->reg in
+dwarf2out_frame_debug_expr. So dwf_cfa_reg should not assume certain
+order of registers.
+
+I was tempted to modify the assert to handle big-endian cases but that will
+still be error prone and may fail on some other targets.
+
+gcc/ChangeLog:
+
+	PR debug/103619
+	* dwarf2cfi.c (dwf_cfa_reg): Remove gcc_assert.
+---
+ gcc/dwarf2cfi.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/gcc/dwarf2cfi.c b/gcc/dwarf2cfi.c
+index 9dd1dfe71b7..55ae172eda2 100644
+--- a/gcc/dwarf2cfi.c
++++ b/gcc/dwarf2cfi.c
+@@ -1136,7 +1136,6 @@ dwf_cfa_reg (rtx reg)
+ 	      gcc_assert (GET_MODE_SIZE (GET_MODE (XVECEXP (span, 0, i)))
+ 			  .to_constant ()  == result.span_width);
+ 	      gcc_assert (REG_P (XVECEXP (span, 0, i)));
+-	      gcc_assert (dwf_regno (XVECEXP (span, 0, i)) == result.reg + i);
+ 	    }
+ 	}
+     }
+-- 
+2.25.1
+
