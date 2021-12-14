@@ -1,3 +1,24 @@
 # This file contains the job names that need fresh baselines.  In general it
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
+bfin-elf
+cris-elf
+fr30-elf
+frv-elf
+ft32-elf
+h8300-elf
+iq2000-elf
+lm32-elf
+m32r-elf
+mcore-elf
+microblaze-elf
+mips64-linux-gnu
+mips64el-linux-gnu
+mn10300-elf
+moxie-elf
+msp430-elf
+nds32be-elf
+nds32le-elf
+or1k-elf
+rl78-elf
+
