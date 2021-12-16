@@ -1,5 +1,6 @@
 # This file contains the job names that need fresh baselines.  In general it
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
-c6x-elf
-microblaze-linux
+mips64-linux-gnu
+mips64el-linux-gnu
+mipsisa32r2-linux-gnu
