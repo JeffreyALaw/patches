@@ -1,8 +1,11 @@
 # This file contains the job names that need fresh baselines.  In general it
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
-cris-elf
-iq2000-elf
-fr30-elf
-sh3-linux-gnu
-sh3eb-linux-gnu
+avr-elf
+visium-elf
+xstormy16-elf
+moxie-elf
+lm32-elf
+nds32le-elf
+nds32be-elf
+or1k-elf
