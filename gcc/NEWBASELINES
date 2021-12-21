@@ -1,13 +1,5 @@
 # This file contains the job names that need fresh baselines.  In general it
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
-microblaze-linux
-csky-linux-gnu
-frv-elf
-m32r-elf
-mcore-elf
-mn10300-elf
-msp430-elf
-rx-elf
-v850e-elf
-h8300-elf
+sh4-linux-gnu
+sh4eb-linux-gnu
