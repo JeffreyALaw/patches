@@ -16,6 +16,7 @@ mkdir /x86_64
 cd /usr/lib64
 tar cf - . | (cd /x86_64 ; tar xf - )
 mv /x86_64 .
+hash -r
 rm -rf `ls | grep -v ld- | grep -v x86_64`
 
 # Now extract the chroot on top of ourselves, this may well fail due
