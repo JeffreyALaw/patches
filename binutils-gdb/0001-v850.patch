@@ -48,8 +48,8 @@ index 40d578e..dfb6f82 100644
    /* Compute the result.  */
 -  divide_by   = op0;
 -  divide_this = op1;
-+  divide_by   = (signed32) op0;
-+  divide_this = (signed32) op1;
++  divide_by   = (int32_t) op0;
++  divide_this = (int32_t) op1;
  
    if (divide_by == 0 || (divide_by == -1 && divide_this == (1 << 31)))
      {
