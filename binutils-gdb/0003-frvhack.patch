@@ -1,20 +1,20 @@
 diff --git a/bfd/elflink.c b/bfd/elflink.c
-index 107480286f3..d5ef783877a 100644
+index 107480286f3..99542b7a524 100644
 --- a/bfd/elflink.c
 +++ b/bfd/elflink.c
-@@ -11834,6 +11834,7 @@ elf_link_input_bfd (struct elf_final_link_info *flinfo, bfd *input_bfd)
+@@ -11832,6 +11832,7 @@ elf_link_input_bfd (struct elf_final_link_info *flinfo, bfd *input_bfd)
+ 		if ((o->flags & SEC_ELF_REVERSE_COPY)
+ 		    && o->size > address_size)
  		  {
++#if 0
  		    /* Reverse-copy input section to output.  */
  
-+#if 0
  		    if (o->reloc_count != 0
- 			&& (o->size * bed->s->int_rels_per_ext_rel
- 			    != o->reloc_count * address_size))
-@@ -11845,6 +11846,7 @@ elf_link_input_bfd (struct elf_final_link_info *flinfo, bfd *input_bfd)
- 			   input_bfd, o);
+@@ -11846,6 +11847,7 @@ elf_link_input_bfd (struct elf_final_link_info *flinfo, bfd *input_bfd)
  			bfd_set_error (bfd_error_bad_value);
  			return false;
-+#endif
  		      }
++#endif
  
  		    do
+ 		      {
