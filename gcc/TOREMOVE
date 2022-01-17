@@ -50,7 +50,3 @@ gcc/testsuite/gcc.dg/tree-ssa/if-to-switch-9.c
 libgomp/testsuite/libgomp.c/places-10.c
 # Recent, expecting this to get resolved
 gcc/testsuite/gfortran.dg/unlimited_polymorphic_3.f03
-# Until it's fully fixed
-gcc/testsuite/gcc.src/maintainers.exp
-# Just started, need to debug
-gcc/testsuite/gcc.dg/torture/pr57147-2.c
