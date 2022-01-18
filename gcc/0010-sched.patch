@@ -1,7 +1,7 @@
 diff --git a/gcc/sched-deps.c b/gcc/sched-deps.c
 index 28b9d38ab3f..b1bc529663a 100644
---- a/gcc/sched-deps.c
-+++ b/gcc/sched-deps.c
+--- a/gcc/sched-deps.cc
++++ b/gcc/sched-deps.cc
 @@ -991,7 +991,7 @@ ask_dependency_caches (dep_t dep)
  	/* There is no existing dep so it should be created.  */
  	return DEP_CREATED;

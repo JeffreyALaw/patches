@@ -1,7 +1,7 @@
 diff --git a/gcc/lra-assigns.c b/gcc/lra-assigns.c
 index c6a941fe663..4f765bbd8de 100644
---- a/gcc/lra-assigns.c
-+++ b/gcc/lra-assigns.c
+--- a/gcc/lra-assigns.cc
++++ b/gcc/lra-assigns.cc
 @@ -1799,6 +1799,35 @@ lra_split_hard_reg_for (void)
  	    bitmap_clear (&failed_reload_pseudos);
  	    return true;
@@ -40,8 +40,8 @@ index c6a941fe663..4f765bbd8de 100644
    bitmap_clear (&non_reload_pseudos);
 diff --git a/gcc/lra-constraints.c b/gcc/lra-constraints.c
 index 4d734548c38..169402290b9 100644
---- a/gcc/lra-constraints.c
-+++ b/gcc/lra-constraints.c
+--- a/gcc/lra-constraints.cc
++++ b/gcc/lra-constraints.cc
 @@ -5774,7 +5774,7 @@ lra_copy_reg_equiv (unsigned int new_regno, unsigned int original_regno)
     register and s is a new split pseudo.  The save is put before INSN
     if BEFORE_P is true.	 Return true if we succeed in such

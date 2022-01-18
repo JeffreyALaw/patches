@@ -1,7 +1,7 @@
 diff --git a/gcc/config/sh/sh.c b/gcc/config/sh/sh.c
 index 0628f059ca2..e7c8e5f84b7 100644
---- a/gcc/config/sh/sh.c
-+++ b/gcc/config/sh/sh.c
+--- a/gcc/config/sh/sh.cc
++++ b/gcc/config/sh/sh.cxc
 @@ -10762,6 +10762,12 @@ sh_register_move_cost (machine_mode mode,
        && ! REGCLASS_HAS_GENERAL_REG (dstclass))
      return 2 * ((GET_MODE_SIZE (mode) + 7) / 8U);
