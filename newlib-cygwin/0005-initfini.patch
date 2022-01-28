@@ -44,6 +44,19 @@ index 30419887e..6edaabf45 100644
  #define _init __libc_init_array
  #define _fini __libc_fini_array
  #endif
+diff --git a/libgloss/cris/lcrt0.c b/libgloss/cris/lcrt0.c
+index 8b8cc0bb0..48489edd3 100644
+--- a/libgloss/cris/lcrt0.c
++++ b/libgloss/cris/lcrt0.c
+@@ -29,7 +29,7 @@
+ #include "linunistd.h"
+ #include "newlib.h"
+ 
+-#ifdef HAVE_INITFINI_ARRAY
++#ifdef _HAVE_INITFINI_ARRAY
+ #define _init __libc_init_array
+ #define _fini __libc_fini_array
+ #endif
 diff --git a/libgloss/or1k/crt0.S b/libgloss/or1k/crt0.S
 index 03d732355..74a040981 100644
 --- a/libgloss/or1k/crt0.S
