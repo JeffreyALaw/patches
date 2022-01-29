@@ -99,6 +99,11 @@ case "${TARGET}" in
   nios*-* | nios*-*-* | nios*-*-*-*)
     export ARCH=nios2
     ;;
+
+  or1k*-* | or1k*-*-* | or1k*-*-*-*)
+    export ARCH=openrisc
+    ;;
+    
     
   powerpc*-* | powerpc*-*-* | powerpc*-*-*-*)
     export ARCH=powerpc
