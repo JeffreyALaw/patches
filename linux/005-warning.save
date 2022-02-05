@@ -1,0 +1,13 @@
+diff --git a/tools/objtool/check.c b/tools/objtool/check.c
+index add39902166d..8410d97c32fa 100644
+--- a/tools/objtool/check.c
++++ b/tools/objtool/check.c
+@@ -2823,7 +2823,7 @@ static inline bool func_uaccess_safe(struct symbol *func)
+ 
+ static inline const char *call_dest_name(struct instruction *insn)
+ {
+-	static char pvname[16];
++	static char pvname[20];
+ 	struct reloc *rel;
+ 	int idx;
+ 
