@@ -113,7 +113,7 @@ index ed51157691b..a9f39bb4dd1 100644
  
  ;;; negative-multiply-add
 -(define_insn "fnmasf4"
-+(define_insn "*fnmasf4"
++(define_insn "fnmssf4"
    [(set (match_operand:SF                 0 "register_operand" "=r")
  	(neg:SF (fma:SF (match_operand:SF 1 "register_operand" "r")
  			(match_operand:SF 2 "register_operand" "r")
@@ -122,7 +122,7 @@ index ed51157691b..a9f39bb4dd1 100644
  
  ;; negative-multiply-subtract
 -(define_insn "fnmssf4"
-+(define_insn "*fnmssf4"
++(define_insn "fnmasf4"
    [(set (match_operand:SF                         0 "register_operand" "=r")
  	(neg:SF (fma:SF (match_operand:SF         1 "register_operand" "r")
  			(match_operand:SF         2 "register_operand" "r")
