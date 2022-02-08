@@ -1,16 +1,3 @@
-diff --git a/Makefile b/Makefile
-index 1fc3491096cb..97745bc354d4 100644
---- a/Makefile
-+++ b/Makefile
-@@ -777,7 +777,7 @@ stackp-flags-$(CONFIG_STACKPROTECTOR_STRONG)      := -fstack-protector-strong
- 
- KBUILD_CFLAGS += $(stackp-flags-y)
- 
--KBUILD_CFLAGS-$(CONFIG_WERROR) += -Werror
-+KBUILD_CFLAGS-$(CONFIG_WERROR) += 
- KBUILD_CFLAGS += $(KBUILD_CFLAGS-y) $(CONFIG_CC_IMPLICIT_FALLTHROUGH)
- 
- ifdef CONFIG_CC_IS_CLANG
 diff --git a/tools/lib/subcmd/Makefile b/tools/lib/subcmd/Makefile
 index 1c777a72bb39..ccbc4c925408 100644
 --- a/tools/lib/subcmd/Makefile
