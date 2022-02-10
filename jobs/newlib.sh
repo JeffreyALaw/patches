@@ -228,6 +228,8 @@ fi
 cd ../../
 
 # Step 3, build newlib
+cd ${SRCDIR}/newlib-cygwin
+autoreconf -fiv
 cd ${TARGET}-obj/newlib
 ${SRCDIR}/newlib-cygwin/configure --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET}
 make -j $NPROC -l $NPROC
