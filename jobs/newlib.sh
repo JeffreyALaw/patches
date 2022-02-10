@@ -229,8 +229,7 @@ cd ../../
 
 # Step 3, build newlib
 cd ${TARGET}-obj/newlib
-pushd 
-cd ${SRCDIR}/newlib-cygwin
+pushd ${SRCDIR}/newlib-cygwin
 autoreconf -fiv
 popd
 ${SRCDIR}/newlib-cygwin/configure --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET}
