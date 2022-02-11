@@ -230,7 +230,10 @@ cd ../../
 # Step 3, build newlib
 cd ${TARGET}-obj/newlib
 pushd ${SRCDIR}/newlib-cygwin
-autoreconf -fiv
+find . -name aclocal.m4 | xargs touch
+find . -name configure | xargs touch
+find . -name Makefile.am | xargs touch
+find . -name Makefile.in | xargs touch
 popd
 ${SRCDIR}/newlib-cygwin/configure --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET}
 make -j $NPROC -l $NPROC
