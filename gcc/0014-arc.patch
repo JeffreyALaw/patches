@@ -6,7 +6,7 @@ index 8cc173519ab..d802c45f9af 100644
  
  
    cmode = GET_MODE (x);
-+  if (GET_MODE_CLASS (cmode) == MODE_CC))
++  if (GET_MODE_CLASS (cmode) == MODE_CC)
 +    return comparison;
    if (cmode == VOIDmode)
      cmode = GET_MODE (y);
