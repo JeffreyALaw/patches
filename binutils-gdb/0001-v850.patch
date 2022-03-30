@@ -52,12 +52,4 @@ index 8fac8bd9891..94399e2ad4f 100644
  
    if (divide_by == 0 || (divide_by == -1 && divide_this == (1 << 31)))
      {
-@@ -3267,7 +3267,7 @@ v850_bins (SIM_DESC sd, unsigned int source, unsigned int lsb, unsigned int msb,
-   pos = lsb;
-   width = (msb - lsb) + 1;
- 
--  mask = ~ (-(1 << width));
-+  mask = ~ (-(1UL << width));
-   source &= mask;
-   mask <<= pos;
-   result = (* dest) & ~ mask;
+
