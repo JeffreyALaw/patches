@@ -9,7 +9,7 @@ set -e
 set -o pipefail
 
 # To facilitate debugging if there's a host side issue.
-hostname
+#hostname
 
 # We only need the binutils-gdb and gcc trees
 patches/jobs/setupsources.sh $TARGET binutils-gdb gcc glibc linux chroots

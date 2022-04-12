@@ -5,7 +5,7 @@ set -e
 set -o pipefail
 
 # To facilitate debugging if there is a host side issue
-hostname
+#hostname
 
 TARGET=$1
 
