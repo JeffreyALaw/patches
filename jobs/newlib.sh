@@ -4,6 +4,9 @@
 set -e
 set -o pipefail
 
+# To facilitate debugging if there is a hsot side issue
+hostname
+
 TARGET=$1
 
 NPROC=`nproc --all`

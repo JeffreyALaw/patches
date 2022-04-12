@@ -6,6 +6,9 @@ PATH=/bin:$PATH
 set -e
 set -o pipefail
 
+# To facilitate debugging if there is a host side issue
+hostname
+
 patches/jobs/setupsources.sh $TARGET binutils-gdb gcc glibc linux
 
 rm -rf obj
