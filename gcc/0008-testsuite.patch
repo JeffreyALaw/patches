@@ -118,7 +118,7 @@ index 640f0af4f75..a83370ae41f 100644
  /* { dg-do run } */
  /* { dg-require-effective-target trampolines } */
 -/* { dg-additional-options "-fipa-pta" } */
-+/* { dg-additional-options "-fipa-pta, -Wl,-z,execstack" } */
++/* { dg-additional-options "-fipa-pta -Wl,-z,execstack" } */
  
  void callme (void (*callback) (void));
  
@@ -153,7 +153,7 @@ index e3dcf573a94..37a8f48ca19 100644
  /* { dg-do run } */
  /* { dg-require-effective-target trampolines } */
 -/* { dg-options "-O2" } */
-+/* { dg-options "-O2- -Wl,-z,execstack" } */
++/* { dg-options "-O2 -Wl,-z,execstack" } */
  
  /* This used to fail on various versions of Solaris 2 because the
     trampoline couldn't be made executable.  */
