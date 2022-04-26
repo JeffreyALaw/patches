@@ -1,170 +1,28 @@
-diff --git a/gcc/testsuite/gcc.c-torture/execute/20000822-1.c b/gcc/testsuite/gcc.c-torture/execute/20000822-1.c
-index e99bcc2fea3..175c17b90cd 100644
---- a/gcc/testsuite/gcc.c-torture/execute/20000822-1.c
-+++ b/gcc/testsuite/gcc.c-torture/execute/20000822-1.c
-@@ -1,4 +1,5 @@
- /* { dg-require-effective-target trampolines } */
-+/* { dg-additional-options "-Wl,-z,execstack } */
- 
- int f0(int (*fn)(int *), int *p)
- {
-diff --git a/gcc/testsuite/gcc.c-torture/execute/921215-1.c b/gcc/testsuite/gcc.c-torture/execute/921215-1.c
-index 28dccd662f2..3468c9d35f0 100644
---- a/gcc/testsuite/gcc.c-torture/execute/921215-1.c
-+++ b/gcc/testsuite/gcc.c-torture/execute/921215-1.c
-@@ -1,4 +1,5 @@
- /* { dg-require-effective-target trampolines } */
-+/* { dg-additional-options "-Wl,-z,execstack } */
- 
- main()
- {
-diff --git a/gcc/testsuite/gcc.c-torture/execute/931002-1.c b/gcc/testsuite/gcc.c-torture/execute/931002-1.c
-index fc5222374d9..a63708a47e0 100644
---- a/gcc/testsuite/gcc.c-torture/execute/931002-1.c
-+++ b/gcc/testsuite/gcc.c-torture/execute/931002-1.c
-@@ -1,4 +1,5 @@
- /* { dg-require-effective-target trampolines } */
-+/* { dg-additional-options "-Wl,-z,execstack } */
- 
- f (void (*func) ())
- {
-diff --git a/gcc/testsuite/gcc.c-torture/execute/nestfunc-1.c b/gcc/testsuite/gcc.c-torture/execute/nestfunc-1.c
-index 29ccfc399bd..880d0062b2c 100644
---- a/gcc/testsuite/gcc.c-torture/execute/nestfunc-1.c
-+++ b/gcc/testsuite/gcc.c-torture/execute/nestfunc-1.c
-@@ -1,4 +1,5 @@
- /* { dg-require-effective-target trampolines } */
-+/* { dg-additional-options "-Wl,-z,execstack } */
- 
- int
- g (int a, int b, int (*gi) (int, int))
-diff --git a/gcc/testsuite/gcc.c-torture/execute/nestfunc-2.c b/gcc/testsuite/gcc.c-torture/execute/nestfunc-2.c
-index 1a25a17449e..a122585ee07 100644
---- a/gcc/testsuite/gcc.c-torture/execute/nestfunc-2.c
-+++ b/gcc/testsuite/gcc.c-torture/execute/nestfunc-2.c
-@@ -1,4 +1,5 @@
- /* { dg-require-effective-target trampolines } */
-+/* { dg-additional-options "-Wl,-z,execstack } */
- 
- extern int foo (int, int, int (*) (int, int, int, int, int, int, int));
- 
-diff --git a/gcc/testsuite/gcc.c-torture/execute/nestfunc-3.c b/gcc/testsuite/gcc.c-torture/execute/nestfunc-3.c
-index 2bdfece9c5b..6636b37485b 100644
---- a/gcc/testsuite/gcc.c-torture/execute/nestfunc-3.c
-+++ b/gcc/testsuite/gcc.c-torture/execute/nestfunc-3.c
-@@ -1,4 +1,5 @@
- /* { dg-require-effective-target trampolines } */
-+/* { dg-additional-options "-Wl,-z,execstack } */
- 
- extern long foo (long, long, long (*) (long, long));
- extern long use (long (*) (long, long), long, long);
-diff --git a/gcc/testsuite/gcc.c-torture/execute/nestfunc-4.c b/gcc/testsuite/gcc.c-torture/execute/nestfunc-4.c
-index c7225700709..accddc14726 100644
---- a/gcc/testsuite/gcc.c-torture/execute/nestfunc-4.c
-+++ b/gcc/testsuite/gcc.c-torture/execute/nestfunc-4.c
-@@ -1,4 +1,5 @@
- /* { dg-add-options stack_size } */
-+/* { dg-additional-options "-Wl,-z,execstack } */
- 
- /* Origin: hp@bitrange.com
-    Test that return values come out right from a 1000-level call chain to
-diff --git a/gcc/testsuite/gcc.c-torture/execute/nestfunc-5.c b/gcc/testsuite/gcc.c-torture/execute/nestfunc-5.c
-index fc9ad955a9f..228fccee4cf 100644
---- a/gcc/testsuite/gcc.c-torture/execute/nestfunc-5.c
-+++ b/gcc/testsuite/gcc.c-torture/execute/nestfunc-5.c
-@@ -1,4 +1,5 @@
- /* { dg-require-effective-target trampolines } */
-+/* { dg-additional-options "-Wl,-z,execstack } */
- 
- extern void abort (void);
- extern void exit (int);
-diff --git a/gcc/testsuite/gcc.c-torture/execute/nestfunc-6.c b/gcc/testsuite/gcc.c-torture/execute/nestfunc-6.c
-index fad729aaba3..2e542193f91 100644
---- a/gcc/testsuite/gcc.c-torture/execute/nestfunc-6.c
-+++ b/gcc/testsuite/gcc.c-torture/execute/nestfunc-6.c
-@@ -1,4 +1,5 @@
- /* { dg-require-effective-target trampolines } */
-+/* { dg-additional-options "-Wl,-z,execstack } */
- 
- /* Test that the GP gets properly restored, either by the nonlocal
-    receiver or the nested function.  */
-diff --git a/gcc/testsuite/gcc.c-torture/execute/nestfunc-7.c b/gcc/testsuite/gcc.c-torture/execute/nestfunc-7.c
-index 5b3d34b8dce..987d5dd4e99 100644
---- a/gcc/testsuite/gcc.c-torture/execute/nestfunc-7.c
-+++ b/gcc/testsuite/gcc.c-torture/execute/nestfunc-7.c
-@@ -1,3 +1,4 @@
-+/* { dg-additional-options "-Wl,-z,execstack } */
- struct A
- {
-   int one;
-diff --git a/gcc/testsuite/gcc.dg/pr34457-1.c b/gcc/testsuite/gcc.dg/pr34457-1.c
-index 3dca13df093..38b28d54310 100644
---- a/gcc/testsuite/gcc.dg/pr34457-1.c
-+++ b/gcc/testsuite/gcc.dg/pr34457-1.c
-@@ -2,7 +2,7 @@
- /* { dg-do link } */
- /* { dg-require-effective-target trampolines } */
- /* { dg-require-effective-target lto } */
--/* { dg-options "-flto -O2" } */
-+/* { dg-options "-flto -O2 -Wl,-z,execstack" } */
- /* { dg-additional-sources "pr34457-2.c" } */
-    
- 
-diff --git a/gcc/testsuite/gcc.dg/torture/pr86389.c b/gcc/testsuite/gcc.dg/torture/pr86389.c
-index 640f0af4f75..a83370ae41f 100644
---- a/gcc/testsuite/gcc.dg/torture/pr86389.c
-+++ b/gcc/testsuite/gcc.dg/torture/pr86389.c
+diff --git a/gcc/testsuite/gcc.dg/lto/pr94157_0.c b/gcc/testsuite/gcc.dg/lto/pr94157_0.c
+index a76141b1809..a6e308b855b 100644
+--- a/gcc/testsuite/gcc.dg/lto/pr94157_0.c
++++ b/gcc/testsuite/gcc.dg/lto/pr94157_0.c
 @@ -1,6 +1,6 @@
- /* { dg-do run } */
- /* { dg-require-effective-target trampolines } */
--/* { dg-additional-options "-fipa-pta" } */
-+/* { dg-additional-options "-fipa-pta -Wl,-z,execstack" } */
+ /* { dg-lto-do link } */
+ /* { dg-require-effective-target gas } */
+-/* { dg-lto-options { { -O0 -fipa-vrp -flto -Wa,--noexecstack -Wa,--noexecstack -Wa,--execstack  -Wa,--execstack -Wa,--execstack -Wa,--execstack -Wa,--execstack -Wa,--execstack -Wa,--execstack -Wa,--execstack -Wa,--execstack -Wa,--execstack -Wa,--execstack -Wa,--execstack -Wa,--execstack -Wa,--execstack -Wl,-z,execstack} } } */
++/* { dg-lto-options { { -O0 -fipa-vrp -flto -Wa,--noexecstack -Wa,--noexecstack -Wa,--execstack  -Wa,--execstack -Wa,--execstack -Wa,--execstack -Wa,--execstack -Wa,--execstack -Wa,--execstack -Wa,--execstack -Wa,--execstack -Wa,--execstack -Wa,--execstack -Wa,--execstack -Wa,--execstack -Wa,--execstack } } } */
  
- void callme (void (*callback) (void));
+ int main() {
  
-diff --git a/gcc/testsuite/gcc.dg/torture/stackalign/nested-5.c b/gcc/testsuite/gcc.dg/torture/stackalign/nested-5.c
-index e6bf3645c59..044ff1e8045 100644
---- a/gcc/testsuite/gcc.dg/torture/stackalign/nested-5.c
-+++ b/gcc/testsuite/gcc.dg/torture/stackalign/nested-5.c
-@@ -1,5 +1,6 @@
- /* { dg-do run } */
- /* { dg-require-effective-target trampolines } */
-+/* { dg-additional-options "-Wl,-z,execstack" } */
+diff --git a/gcc/testsuite/lib/prune.exp b/gcc/testsuite/lib/prune.exp
+index 422498527aa..04c6a1dd7a1 100644
+--- a/gcc/testsuite/lib/prune.exp
++++ b/gcc/testsuite/lib/prune.exp
+@@ -82,6 +82,11 @@ proc prune_gcc_output { text } {
+     regsub -all "(^|\n)\[^\n\]*file path prefix \[^\n\]* never used" $text "" text
+     regsub -all "(^|\n)\[^\n\]*linker input file unused since linking not done" $text "" text
  
- extern void abort (void);
- extern void exit (int);
-diff --git a/gcc/testsuite/gcc.dg/torture/stackalign/nested-6.c b/gcc/testsuite/gcc.dg/torture/stackalign/nested-6.c
-index 708cd9e89a9..8595c09b8b1 100644
---- a/gcc/testsuite/gcc.dg/torture/stackalign/nested-6.c
-+++ b/gcc/testsuite/gcc.dg/torture/stackalign/nested-6.c
-@@ -1,5 +1,6 @@
- /* { dg-do run } */
- /* { dg-require-effective-target trampolines } */
-+/* { dg-additional-options "-Wl,-z,execstack" } */
- 
- typedef __SIZE_TYPE__ size_t;
- extern void abort (void);
-diff --git a/gcc/testsuite/gcc.dg/trampoline-1.c b/gcc/testsuite/gcc.dg/trampoline-1.c
-index e3dcf573a94..37a8f48ca19 100644
---- a/gcc/testsuite/gcc.dg/trampoline-1.c
-+++ b/gcc/testsuite/gcc.dg/trampoline-1.c
-@@ -3,7 +3,7 @@
- 
- /* { dg-do run } */
- /* { dg-require-effective-target trampolines } */
--/* { dg-options "-O2" } */
-+/* { dg-options "-O2 -Wl,-z,execstack" } */
- 
- /* This used to fail on various versions of Solaris 2 because the
-    trampoline couldn't be made executable.  */
-diff --git a/gcc/testsuite/gcc.dg/tree-ssa/tailcall-7-run.c b/gcc/testsuite/gcc.dg/tree-ssa/tailcall-7-run.c
-index b67ebf12661..3ba14271edd 100644
---- a/gcc/testsuite/gcc.dg/tree-ssa/tailcall-7-run.c
-+++ b/gcc/testsuite/gcc.dg/tree-ssa/tailcall-7-run.c
-@@ -1,5 +1,5 @@
- /* { dg-do run { target trampolines } } */
--/* { dg-options "-O2" } */
-+/* { dg-options "-O2 -Wl,-z,execstack" } */
- /* { dg-additional-sources "tailcall-7.c" } */
- 
- struct s { int x; };
++    # Ideally the tests would indicate that executable stacks were needed
++    # to the linker.  But the option for that varies and may not even exist
++    # on some targets.  So we're stuck pruning the warning.
++    regsub -all "(^|\n)(\[^\n\]*: warning:\[^\n\]*requires executable stack\[^\n\]*\n?)+" $text "\\1" text
++
+     # Ignore harmless warnings from Xcode 3.2.x.
+     regsub -all "(^|\n)\[^\n\]*ld: warning: can't add line info to anonymous symbol\[^\n\]*" $text "" text
+     regsub -all "(^|\n)\[^\n\]*warning: DWARFDebugInfoEntry::AppendDependants\[^\n\]*AT_\[^\n\]*FORM_ref4\[^\n\]*" $text "" text
