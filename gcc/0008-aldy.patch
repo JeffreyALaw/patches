@@ -263,7 +263,7 @@ index 599f718ecdc..67ee809826c 100644
  f1 (double *p, double *q, unsigned int n)
  {
 diff --git a/gcc/tree-ssa-dom.cc b/gcc/tree-ssa-dom.cc
-index 21745bf31d3..74f4eec91be 100644
+index 4a0cf2ef54c..74f4eec91be 100644
 --- a/gcc/tree-ssa-dom.cc
 +++ b/gcc/tree-ssa-dom.cc
 @@ -48,7 +48,8 @@ along with GCC; see the file COPYING3.  If not see
@@ -397,7 +397,7 @@ index 21745bf31d3..74f4eec91be 100644
 +  if (state)
 +    return hybrid_jt_simplifier::simplify (stmt, within_stmt, bb, state);
  
--      const value_range_equiv *vr = m_vr_values->get_value_range (op);
+-      const value_range *vr = m_vr_values->get_value_range (op);
 -      return find_case_label_range (switch_stmt, vr);
 -    }
 -  if (gassign *assign_stmt = dyn_cast <gassign *> (stmt))
