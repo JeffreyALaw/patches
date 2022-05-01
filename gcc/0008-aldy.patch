@@ -686,6 +686,29 @@ index f29441747e2..db0aa838bfe 100644
    bool simplify_switch_using_ranges (gswitch *);
    bool simplify_float_conversion_using_ranges (gimple_stmt_iterator *,
  					       gimple *);
+diff --git a/gcc/testsuite/gcc.target/mips/data-sym-multi-pool.c b/gcc/testsuite/gcc.target/mips/data-sym-multi-pool.c
+index 26a622a44c9..3cf2d4f0248 100644
+--- a/gcc/testsuite/gcc.target/mips/data-sym-multi-pool.c
++++ b/gcc/testsuite/gcc.target/mips/data-sym-multi-pool.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mips16 -mcode-readable=yes -fno-tree-vrp" } */
++/* { dg-options "-mips16 -mcode-readable=yes -fno-tree-vrp -fno-tree-dominator-opts" } */
+ /* { dg-skip-if "per-function expected output" { *-*-* } { "-flto" } { "" } } */
+ 
+ /* This testcase generates multiple constant pools within a function body.  */
+diff --git a/gcc/testsuite/gcc.target/mips/mips.exp b/gcc/testsuite/gcc.target/mips/mips.exp
+index 8a622674905..42a0dbb6202 100644
+--- a/gcc/testsuite/gcc.target/mips/mips.exp
++++ b/gcc/testsuite/gcc.target/mips/mips.exp
+@@ -335,6 +335,7 @@ foreach option {
+     split-wide-types
+     tree-vectorize
+     tree-vrp
++    tree-dominator-opts
+     unroll-all-loops
+     unroll-loops
+     ipa-ra
 -- 
 2.35.1
 
