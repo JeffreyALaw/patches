@@ -54,6 +54,3 @@ gcc/testsuite/gfortran.dg/unlimited_polymorphic_3.f03
 gcc/testsuite/g++.dg/warn/deprecated-16.C
 # Seems to be bouncing every few days on cris-elf
 gcc/testsuite/gcc.dg/graphite/interchange-10.c
-# Temporary until Richi makes a decision how to fix
-gcc/testsuite/c-c++-common/Warray-bounds.c
-
