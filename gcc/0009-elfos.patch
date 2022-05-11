@@ -13,3 +13,16 @@ index acb376283cf..09dd4c89985 100644
  
  /* Output assembly directive to move to the beginning of current section.  */
  #ifdef HAVE_GAS_SUBSECTION_ORDERING
+diff --git a/gcc/testsuite/lib/prune.exp b/gcc/testsuite/lib/prune.exp
+index 04c6a1dd7a1..c13cd6430e1 100644
+--- a/gcc/testsuite/lib/prune.exp
++++ b/gcc/testsuite/lib/prune.exp
+@@ -85,7 +85,7 @@ proc prune_gcc_output { text } {
+     # Ideally the tests would indicate that executable stacks were needed
+     # to the linker.  But the option for that varies and may not even exist
+     # on some targets.  So we're stuck pruning the warning.
+-    regsub -all "(^|\n)(\[^\n\]*: warning:\[^\n\]*requires executable stack\[^\n\]*\n?)+" $text "\\1" text
++    regsub -all "(^|\n)(\[^\n\]*: warning:\[^\n\]*executable stack\[^\n\]*\n?)+" $text "\\1" text
+ 
+     # Ignore harmless warnings from Xcode 3.2.x.
+     regsub -all "(^|\n)\[^\n\]*ld: warning: can't add line info to anonymous symbol\[^\n\]*" $text "" text
