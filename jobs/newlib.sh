@@ -28,7 +28,7 @@ export TESTARGS=none
 export RUNGCCTESTS=no
 export SIMTARG=
 export SIMINSTALLTARG=
-export DUMMYSIM=no
+export DUMMY_SIM=no
 export BUILDLIBSTDCXX=yes
 export TESTCXX=check-g++
 
@@ -257,7 +257,7 @@ cd ../../../
 
 # If a second argument is provided, it is a flag that we want to stop
 # before running the testsuite
-if [ "x$2" != "x"]; then
+if [ "x$2" != "x" ]; then
   exit 0
 fi
 
