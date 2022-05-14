@@ -15,13 +15,15 @@ index acb376283cf..09dd4c89985 100644
  #ifdef HAVE_GAS_SUBSECTION_ORDERING
 
 diff --git a/gcc/testsuite/lib/prune.exp b/gcc/testsuite/lib/prune.exp
-index 04c6a1dd7a1..7a070ab7593 100644
+index 04c6a1dd7a1..64c9f56fbf0 100644
 --- a/gcc/testsuite/lib/prune.exp
 +++ b/gcc/testsuite/lib/prune.exp
-@@ -86,6 +86,7 @@ proc prune_gcc_output { text } {
+@@ -85,7 +85,8 @@ proc prune_gcc_output { text } {
+     # Ideally the tests would indicate that executable stacks were needed
      # to the linker.  But the option for that varies and may not even exist
      # on some targets.  So we're stuck pruning the warning.
-     regsub -all "(^|\n)(\[^\n\]*: warning:\[^\n\]*requires executable stack\[^\n\]*\n?)+" $text "\\1" text
+-    regsub -all "(^|\n)(\[^\n\]*: warning:\[^\n\]*requires executable stack\[^\n\]*\n?)+" $text "\\1" text
++    regsub -all "(^|\n)(\[^\n\]*: warning:\[^\n\]*executable stack\[^\n\]*\n?)+" $text "\\1" text
 +    regsub -all "(^|\n)(\[^\n\]*: warning:\[^\n\]*has a LOAD segment\[^\n\]*\n?)+" $text "\\1" text
  
      # Ignore harmless warnings from Xcode 3.2.x.
