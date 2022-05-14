@@ -10,7 +10,7 @@ TARGET=$1
 rm -rf testresults
 mkdir -p testresults
 cp `find ${TARGET}-obj obj -name \*.sum -print` testresults
-cp `find ${TARGET}-obj obj -name \*.log -print` testresults
+cp `find ${TARGET}-obj obj -name gcc.log -print` testresults
 
 newbase=`grep ${TARGET} patches/gcc/NEWBASELINES || true`
 if [ -f old-testresults/gas.sum.gz ]; then
