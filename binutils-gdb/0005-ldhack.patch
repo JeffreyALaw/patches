@@ -1,0 +1,20 @@
+diff --git a/bfd/elf.c b/bfd/elf.c
+index f046994e3a8..2ed5656ddc4 100644
+--- a/bfd/elf.c
++++ b/bfd/elf.c
+@@ -6474,6 +6474,7 @@ assign_file_positions_except_relocs (bfd *abfd,
+ 	      if (phdr->p_memsz == 0)
+ 		continue;
+ 
++#if 0
+ 	      if (phdr->p_type == PT_TLS && (phdr->p_flags & PF_X))
+ 		_bfd_error_handler (_("warning: %pB has a TLS segment with execute permission"),
+ 				    abfd);
+@@ -6481,6 +6482,7 @@ assign_file_positions_except_relocs (bfd *abfd,
+ 		       && (phdr->p_flags & (PF_R | PF_W | PF_X)) == (PF_R | PF_W | PF_X))
+ 		_bfd_error_handler (_("warning: %pB has a LOAD segment with RWX permissions"),
+ 				    abfd);
++#endif
+ 	    }
+ 	}
+       
