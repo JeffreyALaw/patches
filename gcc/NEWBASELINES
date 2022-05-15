@@ -1,3 +1,11 @@
 # This file contains the job names that need fresh baselines.  In general it
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
+csky-linux-gnu
+or1k-linux-gnu
+s390-linux-gnu
+nios-linux-gnu
+microblaze-linux
+sh3-linux-gnu
+sh3eb-linux-gnu
+vax-linux-gnu
