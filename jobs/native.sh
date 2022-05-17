@@ -17,7 +17,7 @@ export PREFIX=`pwd`/installed
 PATH=`pwd`/installed/bin:/home/law/bin:$PATH
 
 pushd obj/binutils-gdb
-../../binutils-gdb/configure --prefix=$PREFIX
+../../binutils-gdb/configure --enable-warn-execstack=no --prefix=$PREFIX
 make -j $NPROC -l $NPROC all-gas all-binutils all-ld 
 make install-gas install-binutils install-ld
 popd

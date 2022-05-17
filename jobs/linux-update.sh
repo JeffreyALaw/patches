@@ -28,7 +28,7 @@ patches/jobs/setupsources.sh ${TARGET} binutils-gdb gcc glibc linux
 
 # Step 1, build binutils
 cd ${TARGET}-obj/binutils
-../../binutils-gdb/configure --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET}
+../../binutils-gdb/configure --enable-warn-execstack=no --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET}
 make -j $NPROC -l $NPROC all-gas all-binutils all-ld
 make install-gas install-binutils install-ld
 cd ../..

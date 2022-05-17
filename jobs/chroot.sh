@@ -49,7 +49,7 @@ case ${TARGET} in
 esac
 
 pushd obj/binutils-gdb
-../../binutils-gdb/configure --prefix=/usr ${TARGET}
+../../binutils-gdb/configure --prefix=/usr --enable-warn-execstack=no ${TARGET} 
 make -j $NPROC -l $NPROC all-gas all-binutils all-ld
 make -k -j $NPROC -l $NPROC check-gas check-binutils check-ld || true
 make install-gas install-binutils install-ld
