@@ -151,9 +151,9 @@ make install
 cd ../..
 
 # Step 5, run tests
-cd ${TARGET}-obj/binutils
-make -k -j $NPROC -l $NPROC check-gas check-ld check-binutils || true
-cd ../..
+#cd ${TARGET}-obj/binutils
+#make -k -j $NPROC -l $NPROC check-gas check-ld check-binutils || true
+#cd ../..
 
 # Step 5, conditionally run the GCC testsuite using the simulator
 if [ $DUMMY_SIM = "yes" ]; then
