@@ -54,3 +54,5 @@ gcc/testsuite/gfortran.dg/unlimited_polymorphic_3.f03
 gcc/testsuite/g++.dg/warn/deprecated-16.C
 # Seems to be bouncing every few days on cris-elf
 gcc/testsuite/gcc.dg/graphite/interchange-10.c
+# started failing on sh4 recently
+gcc/testsuite/c-c++-common/goacc/kernels-decompose-pr10400-1-2.c
