@@ -1,12 +1,13 @@
 diff --git a/ld/emulparams/elf32fr30.sh b/ld/emulparams/elf32fr30.sh
-index 1764a325698..55c3f29220f 100644
+index 1764a325698..9eec80270a1 100644
 --- a/ld/emulparams/elf32fr30.sh
 +++ b/ld/emulparams/elf32fr30.sh
-@@ -1,6 +1,6 @@
+@@ -1,7 +1,6 @@
  MACHINE=
  SCRIPT_NAME=elf
 -TEMPLATE_NAME=generic
+-EXTRA_EM_FILE=genelf
 +TEMPLATE_NAME=elf
- EXTRA_EM_FILE=genelf
  OUTPUT_FORMAT="elf32-fr30"
  NO_REL_RELOCS=yes
+ TEXT_START_ADDR=0x10000
