@@ -41,9 +41,9 @@ make -j $NPROC -l $NPROC
 popd
 
 # The binutils suite is run unconditionally
-pushd obj/binutils-gdb
-make -k -j $NPROC -l $NPROC check-gas check-ld check-binutils || true
-popd
+#pushd obj/binutils-gdb
+#make -k -j $NPROC -l $NPROC check-gas check-ld check-binutils || true
+#popd
 
 # As is the GCC testsuite on native targets
 pushd obj/gcc
