@@ -263,9 +263,9 @@ fi
 
 
 # The binutils suite is run unconditionally
-cd ${TARGET}-obj/binutils
-make -k -j $NPROC -l $NPROC check-gas check-ld check-binutils || true
-cd ../..
+#cd ${TARGET}-obj/binutils
+#make -k -j $NPROC -l $NPROC check-gas check-ld check-binutils || true
+#cd ../..
 
 # Step 5, conditionally run the GCC testsuite using the simulator
 cd ${TARGET}-obj/gcc/gcc
