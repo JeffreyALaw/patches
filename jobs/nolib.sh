@@ -46,4 +46,4 @@ cd ${TARGET}-obj/binutils
 make -k -j $NPROC -l $NPROC check-gas check-ld check-binutils || true
 cd ../..
 
-patches/jobs/validate-results.sh $TARGET
+#patches/jobs/validate-results.sh $TARGET
