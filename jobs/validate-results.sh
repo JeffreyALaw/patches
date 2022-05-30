@@ -9,8 +9,8 @@ TARGET=$1
 # Step #6, setup for artifact archiving and comparing testresults
 rm -rf testresults
 mkdir -p testresults
-find ${TARGET}-obj obj -name \*.sum -exec cp \{\} testresults
-find ${TARGET}-obj obj -name \*.log -exec cp \{\} testresults
+find ${TARGET}-obj obj -name \*.sum -exec cp \{\} testresults;
+find ${TARGET}-obj obj -name \*.log -exec cp \{\} testresults;
 
 newbase=`grep ${TARGET} patches/gcc/NEWBASELINES || true`
 if [ -f old-testresults/gas.sum.gz ]; then
