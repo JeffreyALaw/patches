@@ -9,7 +9,7 @@ TARGET=$1
 # Step #6, setup for artifact archiving and comparing testresults
 rm -rf testresults
 mkdir -p testresults
-if [ -f ${TARGET-obj/gcc/gcc/testsuite/gcc/gcc.sum ]; then
+if [ -f ${TARGET}-obj/gcc/gcc/testsuite/gcc/gcc.sum ]; then
   cp `find ${TARGET}-obj -name \*.sum -print` testresults
   cp `find ${TARGET}-obj -name \*.log -print | grep -v config` testresults
 fi
