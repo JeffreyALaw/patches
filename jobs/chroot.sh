@@ -93,7 +93,7 @@ mkdir -p testresults
 cp `find obj -name \*.sum -print` testresults
 
 newbase=`grep ${TARGET} patches/gcc/NEWBASELINES || true`
-if [ -f old-testresults/gas.sum.gz ]; then
+if [ -f old-testresults/gcc.sum.gz ]; then
   rm -f old-testresults/*.sum
   gunzip old-testresults/*.sum.gz
   if [ "x$newbase" == "x" ]; then
