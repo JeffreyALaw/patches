@@ -11,11 +11,11 @@ rm -rf testresults
 mkdir -p testresults
 if [ -f ${TARGET}-obj/gcc/gcc/testsuite/gcc/gcc.sum ]; then
   cp `find ${TARGET}-obj -name \*.sum -print` testresults
-  cp `find ${TARGET}-obj -name \*.log -print | grep -v config` testresults
+#  cp `find ${TARGET}-obj -name \*.log -print | grep -v config` testresults
 fi
 if [ -f obj/gcc/gcc/testsuite/gcc/gcc.sum ]; then
   cp `find obj -name \*.sum -print` testresults
-  cp `find obj -name \*.log -print | grep -v config` testresults
+#  cp `find obj -name \*.log -print | grep -v config` testresults
 fi
 
 
@@ -33,6 +33,6 @@ fi
 cd testresults
 if [ -f gcc.sum ]; then
   gzip --best *.sum
-  gzip --best *.log
+#  gzip --best *.log
 fi
 
