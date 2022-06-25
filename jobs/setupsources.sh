@@ -43,7 +43,8 @@ for repo in $*; do
     popd
     pushd $repo
     git checkout -q -- .
-    git pull
+    git pull -q
+    git status .
     popd
   else
     pushd $repo
