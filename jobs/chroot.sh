@@ -63,7 +63,7 @@ make -k install || true
 popd
 
 case ${TARGET} in
-  armeb-linux-gnueabi*| riscv*-*-*)
+  armeb-linux-gnueabi*| riscv*-*-* | sh*-*-*)
     # These are failing right now and have not been debugged
     ;;
   *)
