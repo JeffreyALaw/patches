@@ -11,7 +11,8 @@ rm -rf testresults
 mkdir -p testresults
 if [ -f ${TARGET}-obj/gcc/gcc/testsuite/gcc/gcc.sum ]; then
   cp `find ${TARGET}-obj -name \*.sum -print` testresults
-#  cp `find ${TARGET}-obj -name \*.log -print | grep -v config` testresults
+  cp `find ${TARGET}-obj -name gcc.log -print | grep -v config` testresults
+  cp `find ${TARGET}-obj -name g++.log -print | grep -v config` testresults
 fi
 if [ -f obj/gcc/gcc/testsuite/gcc/gcc.sum ]; then
   cp `find obj -name \*.sum -print` testresults
