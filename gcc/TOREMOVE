@@ -58,3 +58,5 @@ gcc/testsuite/gcc.dg/graphite/interchange-10.c
 gcc/testsuite/c-c++-common/goacc/kernels-decompose-pr100400-1-2.c
 # Per H-P's comments which xfailed this test, it is flakey
 gcc/testsuite/gcc.dg/pr84877.c
+# Until I fix the targts
+gcc/testsuite/c-c++-common/Wcast-align.c
