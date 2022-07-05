@@ -60,5 +60,3 @@ gcc/testsuite/c-c++-common/goacc/kernels-decompose-pr100400-1-2.c
 gcc/testsuite/gcc.dg/pr84877.c
 # Until I fix the targts
 gcc/testsuite/c-c++-common/Wcast-align.c
-# And aldy's goof
-gcc/testsuite/gcc.dg/auto-init-uninit-4.c
