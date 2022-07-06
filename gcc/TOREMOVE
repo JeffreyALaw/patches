@@ -51,7 +51,7 @@ libgomp/testsuite/libgomp.c/places-10.c
 # Recent, expecting this to get resolved
 gcc/testsuite/gfortran.dg/unlimited_polymorphic_3.f03
 # Temporary until Jason fixes the deprecated warning
-gcc/testsuite/g++.dg/warn/deprecated-16.C
+#gcc/testsuite/g++.dg/warn/deprecated-16.C
 # Seems to be bouncing every few days on cris-elf
 gcc/testsuite/gcc.dg/graphite/interchange-10.c
 # started failing on sh4 recently
