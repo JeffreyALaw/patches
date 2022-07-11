@@ -712,7 +712,7 @@ index f32effecfb6..081615f9bed 100644
    rtx_insn *insn;
  
 -  reload_completed = 1;
-+  crtl->rtl-pass_properties |= PROGRESS_reload_completed;
++  crtl->rtl_pass_properties |= PROGRESS_reload_completed;
    epilogue_completed = 1;
  
    /* Mark the end of the (empty) prologue.  */
@@ -721,7 +721,7 @@ index f32effecfb6..081615f9bed 100644
    assemble_end_function (thunk_fndecl, fnname);
  
 -  reload_completed = 0;
-+  crtl->rtl-pass_properties &= ~PROGRESS_reload_completed;
++  crtl->rtl_pass_properties &= ~PROGRESS_reload_completed;
    epilogue_completed = 0;
  }
  
@@ -759,7 +759,7 @@ index 9bee618b639..c75a815ce08 100644
    rtx scratch0, scratch1, scratch2;
  
 -  reload_completed = 1;
-+  crtl->rtl-pass_properties |= PROGRESS_reload_completed;
++  crtl->rtl_pass_properties |= PROGRESS_reload_completed;
    epilogue_completed = 1;
    crtl->uses_only_leaf_regs = 1;
  
@@ -768,7 +768,7 @@ index 9bee618b639..c75a815ce08 100644
    assemble_end_function (thunk_fndecl, fnname);
  
 -  reload_completed = 0;
-+  crtl->rtl-pass_properties &= ~PROGRESS_reload_completed;
++  crtl->rtl_pass_properties &= ~PROGRESS_reload_completed;
    epilogue_completed = 0;
  }
  
