@@ -691,3 +691,15 @@ index 71d72b6..89e4be9 100644
  
  #ifdef INSN_SCHEDULING
 
+diff --git a/gcc/genpeep.cc b/gcc/genpeep.cc
+index 24b991afd16..b5ff2511fb7 100644
+--- a/gcc/genpeep.cc
++++ b/gcc/genpeep.cc
+@@ -378,6 +378,7 @@ from the machine description file `md'.  */\n\n");
+   printf ("#include \"except.h\"\n");
+   printf ("#include \"diagnostic-core.h\"\n");
+   printf ("#include \"flags.h\"\n");
++  printf ("#include \"emit-rtl.h\"\n");
+   printf ("#include \"tm-constrs.h\"\n\n");
+ 
+   printf ("extern rtx peep_operand[];\n\n");
