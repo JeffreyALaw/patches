@@ -1,0 +1,693 @@
+
+
+
+This patch builds upon Richard Biener's suggestion of avoiding global
+variables to track state/identify which passes have already been run.
+In the early middle-end, the tree-ssa passes use the curr_properties
+field in cfun to track this.  This patch uses a new rtl_pass_progress
+int field in crtl to do something similar.
+
+This patch allows the global variables lra_in_progress, reload_in_progress,
+reload_completed, epilogue_completed and regstack_completed to be removed
+from rtl.h and implemented as bits within the new crtl->rtl_pass_progress.
+I've also taken the liberty of adding a new combine_completed bit at the
+same time [to respond the Segher's comment it's easy to change this to
+combine1_completed and combine2_completed if we ever perform multiple
+combine passes (or multiple reload/regstack passes)].  At the same time,
+I've also refactored bb_reorder_complete into the same new field;
+interestingly bb_reorder_complete was already a bool in crtl.
+
+One very minor advantage of this implementation/refactoring is that the
+predicate "can_create_pseudo_p ()" which is semantically defined to be
+!reload_in_progress && !reload_completed, can now be performed very
+efficiently as effectively the test (progress & 12) == 0, i.e. a single
+test instruction on x86.
+
+For consistency, I've also moved cse_not_expected (the last remaining
+global variable in rtl.h) into crtl, as its own bool field.
+
+The vast majority of this patch is then churn to handle these changes.
+Thanks to macros, most code is unaffected, assuming it treats those
+global variables as r-values, though some source files required/may
+require tweaks as these "variables" are now defined in emit-rtl.h
+instead of rtl.h.
+
+This patch has been tested on x86_64-pc-linux-gnu with make bootstrap
+and make -k check, both with and without --target_board=unix{-m32},
+with no new failures.  Might this clean-up be acceptable in stage 1,
+given the possible temporary disruption transitioning some backends?
+I'll start checking various backends myself with cross-compilers, but if
+Jeff Law could spin this patch on his build farm, that would help
+identify targets that need attention.
+
+
+2022-07-10  Roger Sayle  <roger@nextmovesoftware.com>
+
+gcc/ChangeLog
+        * bb-reorder.cc (reorder_basic_blocks): bb_reorder_complete is
+        now a bit in crtl->rtl_pass_progress.
+        * cfgrtl.cc (rtl_split_edge): Likewise.
+        (fixup_partitions): Likewise.
+        (verify_hot_cold_block_grouping): Likewise.
+        (cfg_layout_initialize): Likewise.
+         * combine.cc (rest_of_handle_combine): Set combine_completed
+        bit in crtl->rtl_pass_progress.
+        * cse.cc (rest_of_handle_cse): cse_not_expected is now a field
+        in crtl.
+        (rest_of_handle_cse2): Likewise.
+        (rest_of_handle_cse_after_global_opts): Likewise.
+        * df-problems.cc: Include emit-rtl.h to access RTL pass progress
+        variables.
+
+        * emit-rtl.h (PROGRESS_reload_completed): New bit masks.
+        (rtl_data::rtl_pass_progress): New integer field to track progress.
+        (rtl_data::bb_reorder_complete): Delete, no part of
+rtl_pass_progress.
+        (rtl_data::cse_not_expected): New bool field, previously a global
+        variable.
+        (crtl_pass_progress): New convience macro.
+        (combine_completed): New macro.
+        (lra_in_progress): New macro replacing global variable.
+        (reload_in_progress): Likewise.
+        (reload_completed): Likewise.
+        (bb_reorder_complete): New macro replacing bool field in crtl.
+        (epilogue_completed): New macro replacing global variable.
+        (regstack_completed): Likewise.
+        (can_create_pseudo_p): Move from rtl.h and update definition.
+
+        * explow.cc (memory_address_addr_space): cse_not_expected is now
+        a field in crtl.
+        (use_anchored_address): Likewise.
+        * final.c (rest_of_clean_state): Reset crtl->rtl_pass_progress
+        to zero.
+        * function.cc (prepare_function_start): cse_not_expected is now
+        a field in crtl.
+        (thread_prologue_and_epilogue_insns): epilogue_completed is now
+        a bit in crtl->rtl_pass_progress.
+        * ifcvt.cc (noce_try_cmove_arith): cse_not_expected is now a
+        field in crtl.
+        * lra-eliminations.cc (init_elim_table): lra_in_progress is now
+        a bit in crtl->rtl_pass_progress.
+        * lra.cc (lra_in_progress): Delete global variable.
+        (lra): lra_in_progress and reload_completed are now bits in
+        crtl->rtl_pass_progress.
+        * modulo-sched.cc (sms_schedule): reload_completed is now a bit
+        in crtl->rtl_pass_progress.
+        * passes.cc (skip_pass): reload_completed and epilogue_completed
+        are now bits in crtl->rtl_pass_progress.
+        * recog.cc (reload_completed): Delete global variable.
+        (epilogue_completed): Likewise.
+        * reg-stack.cc (regstack_completed): Likewise.
+        (rest_of_handle_stack_regs): regstack_completed is now a bit in
+        crtl->rtl_pass_progress.
+        * regstat.cc: Include memmodel.h and emit-rtl.h to access RTL
+        pass progress variables.
+        * reload1.cc (reload_in_progress): Delete global variable.
+        (reload): reload_in_progress and reload_completed are now bits
+        in crtl->rtl_pass_progress.
+        * rtl.h (reload_completed): Delete global variable prototype.
+        (epilogue_completed): Likewise.
+        (reload_in_progress): Likewise.
+        (lra_in_progress): Likewise.
+        (can_create_pseudo_p): Delete, moved to emit-rtl.h.
+        (regstack_completed): Delete global variable prototype.
+        (cse_not_expected): Likewise.
+        * sched-ebb.cc: Include memmodel.h and emit-rtl.h to access RTL
+        pass progress variables.
+
+        * config/i386/x86-tune-sched-atom.cc: Include memmodel.h and
+        emit-rtl.h to access RTL pass progress variables.
+        * config/i386/x86-tune-sched.cc: Likewise.
+
+
+Thanks in advance,
+Roger
+--
+
+
+patchcc2.txt
+
+diff --git a/gcc/bb-reorder.cc b/gcc/bb-reorder.cc
+index 5cd4825..1c1cbae 100644
+--- a/gcc/bb-reorder.cc
++++ b/gcc/bb-reorder.cc
+@@ -2570,7 +2570,7 @@ reorder_basic_blocks (void)
+ 
+   /* Signal that rtl_verify_flow_info_1 can now verify that there
+      is at most one switch between hot/cold sections.  */
+-  crtl->bb_reorder_complete = true;
++  crtl->rtl_pass_progress |= PROGRESS_bb_reorder_complete;
+ }
+ 
+ /* Determine which partition the first basic block in the function
+diff --git a/gcc/cfgrtl.cc b/gcc/cfgrtl.cc
+index a05c338..8fe367e 100644
+--- a/gcc/cfgrtl.cc
++++ b/gcc/cfgrtl.cc
+@@ -1907,7 +1907,7 @@ rtl_split_edge (edge edge_in)
+              an extra partition crossing in the chain, which is illegal.
+              It can't go after the src, because src may have a fall-through
+              to a different block.  */
+-          if (crtl->bb_reorder_complete
++          if (bb_reorder_complete
+               && (edge_in->flags & EDGE_CROSSING))
+             {
+               after = last_bb_in_partition (edge_in->src);
+@@ -2444,7 +2444,7 @@ fixup_partitions (void)
+       while (! bbs_to_fix.is_empty ());
+ 
+       /* Fix up hot cold block grouping if needed.  */
+-      if (crtl->bb_reorder_complete && current_ir_type () == IR_RTL_CFGRTL)
++      if (bb_reorder_complete && current_ir_type () == IR_RTL_CFGRTL)
+ 	{
+ 	  basic_block bb, first = NULL, second = NULL;
+ 	  int current_partition = BB_UNPARTITIONED;
+@@ -2507,7 +2507,7 @@ verify_hot_cold_block_grouping (void)
+   /* Even after bb reordering is complete, we go into cfglayout mode
+      again (in compgoto). Ensure we don't call this before going back
+      into linearized RTL when any layout fixes would have been committed.  */
+-  if (!crtl->bb_reorder_complete
++  if (!bb_reorder_complete
+       || current_ir_type () != IR_RTL_CFGRTL)
+     return err;
+ 
+@@ -4481,7 +4481,7 @@ cfg_layout_initialize (int flags)
+      layout required moving a block from the hot to the cold
+      section. This would create an illegal partitioning unless some
+      manual fixup was performed.  */
+-  gcc_assert (!crtl->bb_reorder_complete || !crtl->has_bb_partition);
++  gcc_assert (!bb_reorder_complete || !crtl->has_bb_partition);
+ 
+   initialize_original_copy_tables ();
+ 
+diff --git a/gcc/combine.cc b/gcc/combine.cc
+index a5fabf3..18e2a80 100644
+--- a/gcc/combine.cc
++++ b/gcc/combine.cc
+@@ -14991,6 +14991,7 @@ rest_of_handle_combine (void)
+     }
+ 
+   regstat_free_n_sets_and_refs ();
++  crtl->rtl_pass_progress |= PROGRESS_combine_completed;
+   return 0;
+ }
+ 
+diff --git a/gcc/config/i386/x86-tune-sched-atom.cc b/gcc/config/i386/x86-tune-sched-atom.cc
+index 07d2093..9fe3933 100644
+--- a/gcc/config/i386/x86-tune-sched-atom.cc
++++ b/gcc/config/i386/x86-tune-sched-atom.cc
+@@ -34,6 +34,8 @@ along with GCC; see the file COPYING3.  If not see
+ #include "rtl-iter.h"
+ #include "regset.h"
+ #include "sched-int.h"
++#include "memmodel.h"
++#include "emit-rtl.h"
+ 
+ /* Try to reorder ready list to take advantage of Atom pipelined IMUL
+    execution. It is applied if
+diff --git a/gcc/config/i386/x86-tune-sched.cc b/gcc/config/i386/x86-tune-sched.cc
+index 1ffaeef..315ce04 100644
+--- a/gcc/config/i386/x86-tune-sched.cc
++++ b/gcc/config/i386/x86-tune-sched.cc
+@@ -32,6 +32,8 @@ along with GCC; see the file COPYING3.  If not see
+ #include "insn-attr.h"
+ #include "insn-opinit.h"
+ #include "recog.h"
++#include "memmodel.h"
++#include "emit-rtl.h"
+ 
+ /* Return the maximum number of instructions a cpu can issue.  */
+ 
+diff --git a/gcc/cse.cc b/gcc/cse.cc
+index b13afd4..b094a38 100644
+--- a/gcc/cse.cc
++++ b/gcc/cse.cc
+@@ -7533,7 +7533,7 @@ rest_of_handle_cse (void)
+ 
+   /* If we are not running more CSE passes, then we are no longer
+      expecting CSE to be run.  But always rerun it in a cheap mode.  */
+-  cse_not_expected = !flag_rerun_cse_after_loop && !flag_gcse;
++  crtl->cse_not_expected = !flag_rerun_cse_after_loop && !flag_gcse;
+ 
+   if (tem == 2)
+     {
+@@ -7617,7 +7617,7 @@ rest_of_handle_cse2 (void)
+   else if (tem == 1 || cse_cfg_altered)
+     cse_cfg_altered |= cleanup_cfg (0);
+ 
+-  cse_not_expected = 1;
++  crtl->cse_not_expected = true;
+   return 0;
+ }
+ 
+@@ -7681,7 +7681,7 @@ rest_of_handle_cse_after_global_opts (void)
+   cse_cfg_altered |= purge_all_dead_edges ();
+   delete_trivially_dead_insns (get_insns (), max_reg_num ());
+ 
+-  cse_not_expected = !flag_rerun_cse_after_loop;
++  crtl->cse_not_expected = !flag_rerun_cse_after_loop;
+ 
+   /* If cse altered any jumps, rerun jump opts to clean things up.  */
+   if (tem == 2)
+diff --git a/gcc/df-problems.cc b/gcc/df-problems.cc
+index 238424c..8fd0470 100644
+--- a/gcc/df-problems.cc
++++ b/gcc/df-problems.cc
+@@ -38,6 +38,7 @@ along with GCC; see the file COPYING3.  If not see
+ #include "rtl-iter.h"
+ #include "regs.h"
+ #include "function-abi.h"
++#include "emit-rtl.h"
+ 
+ /* Note that turning REG_DEAD_DEBUGGING on will cause
+    gcc.c-torture/unsorted/dump-noaddr.c to fail because it prints
+diff --git a/gcc/emit-rtl.h b/gcc/emit-rtl.h
+index 7a58fed..8dcbb36 100644
+--- a/gcc/emit-rtl.h
++++ b/gcc/emit-rtl.h
+@@ -54,6 +54,16 @@ struct GTY(()) incoming_args {
+   rtx internal_arg_pointer;
+ };
+ 
++#define PROGRESS_combine_completed	(1 << 0)
++#define PROGRESS_lra_in_progress	(1 << 1)
++#define PROGRESS_reload_in_progress	(1 << 2)
++#define PROGRESS_reload_completed	(1 << 3)
++#define PROGRESS_epilogue_completed	(1 << 4)
++#define PROGRESS_bb_reorder_complete	(1 << 5)
++#define PROGRESS_regstack_completed	(1 << 6)
++
++#define PROGRESS_no_pseudos \
++	(PROGRESS_reload_in_progress | PROGRESS_reload_completed)
+ 
+ /* Datastructures maintained for currently processed function in RTL form.  */
+ struct GTY(()) rtl_data {
+@@ -76,6 +86,9 @@ struct GTY(()) rtl_data {
+ 
+   rtl_ssa::function_info *GTY((skip)) ssa;
+ 
++  /* Track progress of RTL passes, reload_completed etc.  */
++  int rtl_pass_progress;
++
+   /* For function.cc  */
+ 
+   /* # of bytes of outgoing arguments.  If ACCUMULATE_OUTGOING_ARGS is
+@@ -303,9 +316,13 @@ struct GTY(()) rtl_data {
+      block.  */
+   bool has_bb_partition;
+ 
+-  /* Nonzero if the function being compiled has completed the bb reordering
+-     pass.  */
+-  bool bb_reorder_complete;
++  /* If this is nonzero, we do not bother generating VOLATILE
++     around volatile memory references, and we are willing to
++     output indirect addresses.  If cse is to follow, we reject
++     indirect addresses so a useful potential cse is generated;
++     if it is used only once, instruction combination will produce
++     the same indirect address eventually.  */
++  bool cse_not_expected;
+ 
+   /* Like regs_ever_live, but 1 if a reg is set or clobbered from an
+      asm.  Unlike regs_ever_live, elements of this array corresponding
+@@ -342,6 +359,20 @@ extern GTY(()) struct rtl_data x_rtl;
+    want to do differently.  */
+ #define crtl (&x_rtl)
+ 
++/* rtl_pass_progress macros.  */
++#define crtl_pass_progress (crtl->rtl_pass_progress)
++
++#define combine_completed (crtl_pass_progress & PROGRESS_combine_completed)
++#define lra_in_progress (crtl_pass_progress & PROGRESS_lra_in_progress)
++#define reload_in_progress (crtl_pass_progress & PROGRESS_reload_in_progress)
++#define reload_completed (crtl_pass_progress & PROGRESS_reload_completed)
++#define bb_reorder_complete (crtl_pass_progress & PROGRESS_bb_reorder_complete)
++#define epilogue_completed (crtl_pass_progress & PROGRESS_epilogue_completed)
++#define regstack_completed (crtl_pass_progress & PROGRESS_regstack_completed)
++
++/* This macro indicates whether you may create a new pseudo-register.  */
++#define can_create_pseudo_p() ((crtl_pass_progress & PROGRESS_no_pseudos) == 0)
++
+ /* Return whether two MEM_ATTRs are equal.  */
+ bool mem_attrs_eq_p (const class mem_attrs *, const class mem_attrs *);
+ 
+diff --git a/gcc/explow.cc b/gcc/explow.cc
+index ddb4d6ae..9fbeea7 100644
+--- a/gcc/explow.cc
++++ b/gcc/explow.cc
+@@ -439,7 +439,7 @@ memory_address_addr_space (machine_mode mode, rtx x, addr_space_t as)
+ 
+   /* By passing constant addresses through registers
+      we get a chance to cse them.  */
+-  if (! cse_not_expected && CONSTANT_P (x) && CONSTANT_ADDRESS_P (x))
++  if (! crtl->cse_not_expected && CONSTANT_P (x) && CONSTANT_ADDRESS_P (x))
+     x = force_reg (address_mode, x);
+ 
+   /* We get better cse by rejecting indirect addressing at this stage.
+@@ -448,7 +448,7 @@ memory_address_addr_space (machine_mode mode, rtx x, addr_space_t as)
+      are visible.  But not if cse won't be done!  */
+   else
+     {
+-      if (! cse_not_expected && !REG_P (x))
++      if (! crtl->cse_not_expected && !REG_P (x))
+ 	x = break_out_memory_refs (x);
+ 
+       /* At this point, any valid address is accepted.  */
+@@ -603,7 +603,7 @@ use_anchored_address (rtx x)
+      We will then be able to reuse registers for several accesses, if the
+      target costs say that that's worthwhile.  */
+   mode = GET_MODE (base);
+-  if (!cse_not_expected)
++  if (!crtl->cse_not_expected)
+     base = force_reg (mode, base);
+ 
+   return replace_equiv_address (x, plus_constant (mode, base, offset));
+diff --git a/gcc/final.cc b/gcc/final.cc
+index 0352786..5ee812e 100644
+--- a/gcc/final.cc
++++ b/gcc/final.cc
+@@ -4511,11 +4511,7 @@ rest_of_clean_state (void)
+     }
+ 
+   flag_rerun_cse_after_global_opts = 0;
+-  reload_completed = 0;
+-  epilogue_completed = 0;
+-#ifdef STACK_REGS
+-  regstack_completed = 0;
+-#endif
++  crtl->rtl_pass_progress = 0;
+ 
+   /* Clear out the insn_length contents now that they are no
+      longer valid.  */
+diff --git a/gcc/function.cc b/gcc/function.cc
+index 31256b5..349aaa3 100644
+--- a/gcc/function.cc
++++ b/gcc/function.cc
+@@ -4924,7 +4924,7 @@ prepare_function_start (void)
+   if (flag_stack_usage_info && !flag_callgraph_info)
+     allocate_stack_usage_info ();
+ 
+-  cse_not_expected = ! optimize;
++  crtl->cse_not_expected = ! optimize;
+ 
+   /* Caller save not needed yet.  */
+   caller_save_needed = 0;
+@@ -6093,7 +6093,7 @@ thread_prologue_and_epilogue_insns (void)
+   /* A small fib -- epilogue is not yet completed, but we wish to re-use
+      this marker for the splits of EH_RETURN patterns, and nothing else
+      uses the flag in the meantime.  */
+-  epilogue_completed = 1;
++  crtl->rtl_pass_progress |= PROGRESS_epilogue_completed;
+ 
+   /* Find non-fallthru edges that end with EH_RETURN instructions.  On
+      some targets, these get split to a special version of the epilogue
+@@ -6259,7 +6259,7 @@ thread_prologue_and_epilogue_insns (void)
+ 
+   /* Threading the prologue and epilogue changes the artificial refs
+      in the entry and exit blocks.  */
+-  epilogue_completed = 1;
++  crtl->rtl_pass_progress |= PROGRESS_epilogue_completed;
+   df_update_entry_exit_and_calls ();
+ }
+ 
+diff --git a/gcc/ifcvt.cc b/gcc/ifcvt.cc
+index 2e8ab39..fd7d1ed 100644
+--- a/gcc/ifcvt.cc
++++ b/gcc/ifcvt.cc
+@@ -2128,7 +2128,7 @@ noce_try_cmove_arith (struct noce_if_info *if_info)
+      conditional on their addresses followed by a load.  Don't do this
+      early because it'll screw alias analysis.  Note that we've
+      already checked for no side effects.  */
+-  if (cse_not_expected
++  if (crtl->cse_not_expected
+       && MEM_P (a) && MEM_P (b)
+       && MEM_ADDR_SPACE (a) == MEM_ADDR_SPACE (b))
+     {
+diff --git a/gcc/lra-eliminations.cc b/gcc/lra-eliminations.cc
+index c630ff4..434e4ec 100644
+--- a/gcc/lra-eliminations.cc
++++ b/gcc/lra-eliminations.cc
+@@ -1261,14 +1261,14 @@ init_elim_table (void)
+      will cause, e.g., gen_rtx_REG (Pmode, STACK_POINTER_REGNUM) to
+      equal stack_pointer_rtx.  We depend on this. Threfore we switch
+      off that we are in LRA temporarily.  */
+-  lra_in_progress = 0;
++  crtl->rtl_pass_progress &= ~PROGRESS_lra_in_progress;
+   for (ep = reg_eliminate; ep < &reg_eliminate[NUM_ELIMINABLE_REGS]; ep++)
+     {
+       ep->from_rtx = gen_rtx_REG (Pmode, ep->from);
+       ep->to_rtx = gen_rtx_REG (Pmode, ep->to);
+       eliminable_reg_rtx[ep->from] = ep->from_rtx;
+     }
+-  lra_in_progress = 1;
++  crtl->rtl_pass_progress |= PROGRESS_lra_in_progress;
+ }
+ 
+ /* Function for initialization of elimination once per function.  It
+diff --git a/gcc/lra.cc b/gcc/lra.cc
+index 1444cb7..ce4843f 100644
+--- a/gcc/lra.cc
++++ b/gcc/lra.cc
+@@ -2218,9 +2218,6 @@ update_inc_notes (void)
+       }
+ }
+ 
+-/* Set to 1 while in lra.  */
+-int lra_in_progress;
+-
+ /* Start of pseudo regnos before the LRA.  */
+ int lra_new_regno_start;
+ 
+@@ -2316,7 +2313,7 @@ lra (FILE *f)
+   if (flag_checking)
+     check_rtl (false);
+ 
+-  lra_in_progress = 1;
++  crtl->rtl_pass_progress |= PROGRESS_lra_in_progress;
+ 
+   lra_live_range_iter = lra_coalesce_iter = lra_constraint_iter = 0;
+   lra_assignment_iter = lra_assignment_iter_after_spill = 0;
+@@ -2508,7 +2505,7 @@ lra (FILE *f)
+   ira_restore_scratches (lra_dump_file);
+   lra_eliminate (true, false);
+   lra_final_code_change ();
+-  lra_in_progress = 0;
++  crtl->rtl_pass_progress &= ~PROGRESS_lra_in_progress;
+   if (live_p)
+     lra_clear_live_ranges ();
+   lra_live_ranges_finish ();
+@@ -2519,7 +2516,7 @@ lra (FILE *f)
+   finish_insn_recog_data ();
+   regstat_free_n_sets_and_refs ();
+   regstat_free_ri ();
+-  reload_completed = 1;
++  crtl->rtl_pass_progress |= PROGRESS_reload_completed;
+   update_inc_notes ();
+ 
+   inserted_p = fixup_abnormal_edges ();
+diff --git a/gcc/modulo-sched.cc b/gcc/modulo-sched.cc
+index 162de19..f3b15a4 100644
+--- a/gcc/modulo-sched.cc
++++ b/gcc/modulo-sched.cc
+@@ -1369,11 +1369,11 @@ sms_schedule (void)
+   /* Initialize issue_rate.  */
+   if (targetm.sched.issue_rate)
+     {
+-      int temp = reload_completed;
++      int temp = crtl->rtl_pass_progress;
+ 
+-      reload_completed = 1;
++      crtl->rtl_pass_progress |= PROGRESS_reload_completed;
+       issue_rate = targetm.sched.issue_rate ();
+-      reload_completed = temp;
++      crtl->rtl_pass_progress = temp;
+     }
+   else
+     issue_rate = 1;
+diff --git a/gcc/passes.cc b/gcc/passes.cc
+index 78a07f8..9a1a0d8 100644
+--- a/gcc/passes.cc
++++ b/gcc/passes.cc
+@@ -2541,12 +2541,12 @@ skip_pass (opt_pass *pass)
+   /* Pass "reload" sets the global "reload_completed", and many
+      things depend on this (e.g. instructions in .md files).  */
+   if (strcmp (pass->name, "reload") == 0)
+-    reload_completed = 1;
++    crtl->rtl_pass_progress |= PROGRESS_reload_completed;
+ 
+   /* Similar for pass "pro_and_epilogue" and the "epilogue_completed" global
+      variable.  */
+   if (strcmp (pass->name, "pro_and_epilogue") == 0)
+-    epilogue_completed = 1;
++    crtl->rtl_pass_progress |= PROGRESS_epilogue_completed;
+ 
+   /* The INSN_ADDRESSES vec is normally set up by
+      shorten_branches; set it up for the benefit of passes that
+diff --git a/gcc/recog.cc b/gcc/recog.cc
+index dac172b..cb1e331 100644
+--- a/gcc/recog.cc
++++ b/gcc/recog.cc
+@@ -85,15 +85,6 @@ static operand_alternative asm_op_alt[MAX_RECOG_OPERANDS
+ 
+ int which_alternative;
+ 
+-/* Nonzero after end of reload pass.
+-   Set to 1 or 0 by toplev.cc.
+-   Controls the significance of (SUBREG (MEM)).  */
+-
+-int reload_completed;
+-
+-/* Nonzero after thread_prologue_and_epilogue_insns has run.  */
+-int epilogue_completed;
+-
+ /* Initialize data used by the function `recog'.
+    This must be called once in the compilation of a function
+    before any insn recognition may be done in the function.  */
+diff --git a/gcc/reg-stack.cc b/gcc/reg-stack.cc
+index fd03250..a2580f1 100644
+--- a/gcc/reg-stack.cc
++++ b/gcc/reg-stack.cc
+@@ -188,8 +188,6 @@ static vec<char> stack_regs_mentioned_data;
+ 
+ #define REG_STACK_SIZE (LAST_STACK_REG - FIRST_STACK_REG + 1)
+ 
+-int regstack_completed = 0;
+-
+ /* This is the basic stack record.  TOP is an index into REG[] such
+    that REG[TOP] is the top of stack.  If TOP is -1 the stack is empty.
+ 
+@@ -3440,7 +3438,7 @@ rest_of_handle_stack_regs (void)
+ #ifdef STACK_REGS
+   if (reg_to_stack ())
+     df_insn_rescan_all ();
+-  regstack_completed = 1;
++  crtl->rtl_pass_progress |= PROGRESS_regstack_completed;
+ #endif
+   return 0;
+ }
+diff --git a/gcc/regstat.cc b/gcc/regstat.cc
+index db28354..1825a4f 100644
+--- a/gcc/regstat.cc
++++ b/gcc/regstat.cc
+@@ -27,6 +27,8 @@ along with GCC; see the file COPYING3.  If not see
+ #include "predict.h"
+ #include "df.h"
+ #include "regs.h"
++#include "memmodel.h"
++#include "emit-rtl.h"
+ 
+ 
+ struct regstat_n_sets_and_refs_t *regstat_n_sets_and_refs;
+diff --git a/gcc/reload1.cc b/gcc/reload1.cc
+index 728dc2a..153315e 100644
+--- a/gcc/reload1.cc
++++ b/gcc/reload1.cc
+@@ -216,10 +216,6 @@ int reload_first_uid;
+    a call-clobbered reg across calls.  */
+ int caller_save_needed;
+ 
+-/* Set to 1 while reload_as_needed is operating.
+-   Required by some machines to handle any generated moves differently.  */
+-int reload_in_progress = 0;
+-
+ /* This obstack is used for allocation of rtl during register elimination.
+    The allocated storage can be freed once find_reloads has processed the
+    insn.  */
+@@ -877,7 +873,7 @@ reload (rtx_insn *first, int global)
+   /* From now on, we may need to generate moves differently.  We may also
+      allow modifications of insns which cause them to not be recognized.
+      Any such modifications will be cleaned up during reload itself.  */
+-  reload_in_progress = 1;
++  crtl->rtl_pass_progress |= PROGRESS_reload_in_progress;
+ 
+   /* This loop scans the entire function each go-round
+      and repeats until one repetition spills no additional hard regs.  */
+@@ -1067,7 +1063,7 @@ reload (rtx_insn *first, int global)
+ 
+   CLEAR_REG_SET (&changed_allocation_pseudos);
+   CLEAR_REG_SET (&spilled_pseudos);
+-  reload_in_progress = 0;
++  crtl->rtl_pass_progress &= ~PROGRESS_reload_in_progress;
+ 
+   /* Now eliminate all pseudo regs by modifying them into
+      their equivalent memory references.
+@@ -1158,7 +1154,7 @@ reload (rtx_insn *first, int global)
+   /* We must set reload_completed now since the cleanup_subreg_operands call
+      below will re-recognize each insn and reload may have generated insns
+      which are only valid during and after reload.  */
+-  reload_completed = 1;
++  crtl->rtl_pass_progress |= PROGRESS_reload_completed;
+ 
+   /* Make a pass over all the insns and delete all USEs which we inserted
+      only to tag a REG_EQUAL note on them.  Remove all REG_DEAD and REG_UNUSED
+@@ -1294,7 +1290,10 @@ reload (rtx_insn *first, int global)
+ 
+   gcc_assert (bitmap_empty_p (&spilled_pseudos));
+ 
+-  reload_completed = !failure;
++  if (failure)
++    crtl->rtl_pass_progress &= ~PROGRESS_reload_completed;
++  else
++    crtl->rtl_pass_progress |= PROGRESS_reload_completed;
+ 
+   return need_dce;
+ }
+diff --git a/gcc/rtl.h b/gcc/rtl.h
+index 488016b..55c3435 100644
+--- a/gcc/rtl.h
++++ b/gcc/rtl.h
+@@ -4089,41 +4089,6 @@ PUT_MODE (rtx x, machine_mode mode)
+ extern rtx output_constant_def (tree, int);
+ extern rtx lookup_constant_def (tree);
+ 
+-/* Nonzero after end of reload pass.
+-   Set to 1 or 0 by reload1.cc.  */
+-
+-extern int reload_completed;
+-
+-/* Nonzero after thread_prologue_and_epilogue_insns has run.  */
+-extern int epilogue_completed;
+-
+-/* Set to 1 while reload_as_needed is operating.
+-   Required by some machines to handle any generated moves differently.  */
+-
+-extern int reload_in_progress;
+-
+-/* Set to 1 while in lra.  */
+-extern int lra_in_progress;
+-
+-/* This macro indicates whether you may create a new
+-   pseudo-register.  */
+-
+-#define can_create_pseudo_p() (!reload_in_progress && !reload_completed)
+-
+-#ifdef STACK_REGS
+-/* Nonzero after end of regstack pass.
+-   Set to 1 or 0 by reg-stack.cc.  */
+-extern int regstack_completed;
+-#endif
+-
+-/* If this is nonzero, we do not bother generating VOLATILE
+-   around volatile memory references, and we are willing to
+-   output indirect addresses.  If cse is to follow, we reject
+-   indirect addresses so a useful potential cse is generated;
+-   if it is used only once, instruction combination will produce
+-   the same indirect address eventually.  */
+-extern int cse_not_expected;
+-
+ /* Translates rtx code to tree code, for those codes needed by
+    real_arithmetic.  The function returns an int because the caller may not
+    know what `enum tree_code' means.  */
+diff --git a/gcc/sched-ebb.cc b/gcc/sched-ebb.cc
+index 71d72b6..89e4be9 100644
+--- a/gcc/sched-ebb.cc
++++ b/gcc/sched-ebb.cc
+@@ -32,6 +32,8 @@ along with GCC; see the file COPYING3.  If not see
+ #include "cfgrtl.h"
+ #include "cfgbuild.h"
+ #include "sched-int.h"
++#include "memmodel.h"
++#include "emit-rtl.h"
+ 
+ 
+ #ifdef INSN_SCHEDULING
+
