@@ -750,3 +750,25 @@ index 59a7b216433..e169c9411d5 100644
    "shll	%0"
    [(set_attr "type" "arith")])
  
+diff --git a/gcc/config/sh/sh.cc b/gcc/config/sh/sh.cc
+index 9bee618b639..c75a815ce08 100644
+--- a/gcc/config/sh/sh.cc
++++ b/gcc/config/sh/sh.cc
+@@ -10796,7 +10796,7 @@ sh_output_mi_thunk (FILE *file, tree thunk_fndecl ATTRIBUTE_UNUSED,
+   int did_load = 0;
+   rtx scratch0, scratch1, scratch2;
+ 
+-  reload_completed = 1;
++  crtl->rtl-pass_properties |= PROGRESS_reload_completed;
+   epilogue_completed = 1;
+   crtl->uses_only_leaf_regs = 1;
+ 
+@@ -10950,7 +10950,7 @@ sh_output_mi_thunk (FILE *file, tree thunk_fndecl ATTRIBUTE_UNUSED,
+   final_end_function ();
+   assemble_end_function (thunk_fndecl, fnname);
+ 
+-  reload_completed = 0;
++  crtl->rtl-pass_properties &= ~PROGRESS_reload_completed;
+   epilogue_completed = 0;
+ }
+ 
