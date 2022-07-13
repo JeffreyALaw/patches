@@ -773,3 +773,25 @@ index 71d72b6161f..89e4be97723 100644
  
  
  #ifdef INSN_SCHEDULING
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index 2e83ca07394..b5fe2b3e997 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -4906,7 +4906,7 @@ riscv_output_mi_thunk (FILE *file, tree thunk_fndecl ATTRIBUTE_UNUSED,
+   rtx_insn *insn;
+ 
+   /* Pretend to be a post-reload pass while generating rtl.  */
+-  reload_completed = 1;
++  crtl->rtl_pass_progress |= PROGRESS_reload_completed;
+ 
+   /* Mark the end of the (empty) prologue.  */
+   emit_note (NOTE_INSN_PROLOGUE_END);
+@@ -4969,7 +4969,7 @@ riscv_output_mi_thunk (FILE *file, tree thunk_fndecl ATTRIBUTE_UNUSED,
+ 
+   /* Clean up the vars set above.  Note that final_end_function resets
+      the global pointer for us.  */
+-  reload_completed = 0;
++  crtl->rtl_pass_progress &= ~PROGRESS_reload_completed;
+ }
+ 
+ /* Allocate a chunk of memory for per-function machine-dependent data.  */
