@@ -239,27 +239,31 @@ index 5aaf76a9490..eeb2984a712 100644
  static rtx_insn *last_scheduled_insn;
  #define NUM_SIDES 2
 diff --git a/gcc/config/sh/sh.cc b/gcc/config/sh/sh.cc
-index 9bee618b639..73093b7e71b 100644
+index 9bee618b639..db01e8e96c0 100644
 --- a/gcc/config/sh/sh.cc
 +++ b/gcc/config/sh/sh.cc
-@@ -10796,7 +10796,7 @@ sh_output_mi_thunk (FILE *file, tree thunk_fndecl ATTRIBUTE_UNUSED,
+@@ -10796,8 +10796,8 @@ sh_output_mi_thunk (FILE *file, tree thunk_fndecl ATTRIBUTE_UNUSED,
    int did_load = 0;
    rtx scratch0, scratch1, scratch2;
  
 -  reload_completed = 1;
+-  epilogue_completed = 1;
 +  crtl->rtl_pass_progress |= PROGRESS_reload_completed;
-   epilogue_completed = 1;
++  crtl->rtl_pass_progress |= PROGRESS_epilogue_completed;
    crtl->uses_only_leaf_regs = 1;
  
-@@ -10950,7 +10950,7 @@ sh_output_mi_thunk (FILE *file, tree thunk_fndecl ATTRIBUTE_UNUSED,
+   emit_note (NOTE_INSN_PROLOGUE_END);
+@@ -10950,8 +10950,8 @@ sh_output_mi_thunk (FILE *file, tree thunk_fndecl ATTRIBUTE_UNUSED,
    final_end_function ();
    assemble_end_function (thunk_fndecl, fnname);
  
 -  reload_completed = 0;
+-  epilogue_completed = 0;
 +  crtl->rtl_pass_progress &= ~PROGRESS_reload_completed;
-   epilogue_completed = 0;
++  crtl->rtl_pass_progress &= ~PROGRESS_epilogue_completed;
  }
  
+ /* Return an RTX pair for the address and call site label of a function
 diff --git a/gcc/config/sh/sh.md b/gcc/config/sh/sh.md
 index 59a7b216433..e169c9411d5 100644
 --- a/gcc/config/sh/sh.md
