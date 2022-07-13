@@ -863,4 +863,39 @@ index 1a33c88f19f..ab65ca00f75 100644
 +  crtl->rtl_pass_progress &= ~PROGRESS_reload_completed;
  }
  
+diff --git a/gcc/config/or1k/or1k.cc b/gcc/config/or1k/or1k.cc
+index da2f59062ba..f5e84e265b0 100644
+--- a/gcc/config/or1k/or1k.cc
++++ b/gcc/config/or1k/or1k.cc
+@@ -1445,7 +1445,7 @@ or1k_expand_move (machine_mode mode, rtx op0, rtx op1)
+ 	      HOST_WIDE_INT hi = i ^ lo;
+ 	      rtx subtarget = op0;
  
+-	      if (!cse_not_expected && can_create_pseudo_p ())
++	      if (!crtl->cse_not_expected && can_create_pseudo_p ())
+ 		subtarget = gen_reg_rtx (SImode);
+ 	      emit_insn (gen_rtx_SET (subtarget, GEN_INT (hi)));
+ 	      emit_insn (gen_iorsi3 (op0, subtarget, GEN_INT (lo)));
+@@ -2102,8 +2102,8 @@ or1k_output_mi_thunk (FILE *file, tree thunk_fndecl,
+   rtx this_rtx, funexp;
+   rtx_insn *insn;
+ 
+-  reload_completed = 1;
+-  epilogue_completed = 1;
++  crtl->rtl_pass_progress |= PROGRESS_reload_completed;
++  crtl->rtl_pass_progress |= PROGRESS_epilogue_completed;
+ 
+   emit_note (NOTE_INSN_PROLOGUE_END);
+ 
+@@ -2187,8 +2187,8 @@ or1k_output_mi_thunk (FILE *file, tree thunk_fndecl,
+   final_end_function ();
+   assemble_end_function (thunk_fndecl, fnname);
+ 
+-  reload_completed = 0;
+-  epilogue_completed = 0;
++  crtl->rtl_pass_progress &= ~PROGRESS_reload_completed;
++  crtl->rtl_pass_progress &= ~PROGRESS_epilogue_completed;
+ }
+ 
+ #undef  TARGET_ASM_OUTPUT_MI_THUNK
+
