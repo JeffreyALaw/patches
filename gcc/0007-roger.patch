@@ -817,3 +817,25 @@ index 33fb98d5cad..3ea5d5bc62b 100644
  }
  
  /* Output code to add DELTA to the first argument, and then jump
+diff --git a/gcc/config/m68k/m68k.cc b/gcc/config/m68k/m68k.cc
+index 62898dafe92..113844f39a3 100644
+--- a/gcc/config/m68k/m68k.cc
++++ b/gcc/config/m68k/m68k.cc
+@@ -5583,7 +5583,7 @@ m68k_output_mi_thunk (FILE *file, tree thunk ATTRIBUTE_UNUSED,
+   tmp = gen_rtx_REG (Pmode, STATIC_CHAIN_REGNUM);
+ 
+   /* Pretend to be a post-reload pass while generating rtl.  */
+-  reload_completed = 1;
++  crtl->rtl_pass_progress |= PROGRESS_reload_completed;
+ 
+   /* The "this" pointer is stored at 4(%sp).  */
+   this_slot = gen_rtx_MEM (Pmode, plus_constant (Pmode,
+@@ -5658,7 +5658,7 @@ m68k_output_mi_thunk (FILE *file, tree thunk ATTRIBUTE_UNUSED,
+   assemble_end_function (thunk, fnname);
+ 
+   /* Clean up the vars set above.  */
+-  reload_completed = 0;
++  crtl->rtl_pass_progress &= ~PROGRESS_reload_completed;
+ 
+   /* Restore the original PIC register.  */
+   if (flag_pic)
