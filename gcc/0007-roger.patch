@@ -795,3 +795,25 @@ index 2e83ca07394..b5fe2b3e997 100644
  }
  
  /* Allocate a chunk of memory for per-function machine-dependent data.  */
+diff --git a/gcc/config/arm/arm.cc b/gcc/config/arm/arm.cc
+index 33fb98d5cad..3ea5d5bc62b 100644
+--- a/gcc/config/arm/arm.cc
++++ b/gcc/config/arm/arm.cc
+@@ -28983,7 +28983,7 @@ arm32_output_mi_thunk (FILE *file, tree, HOST_WIDE_INT delta,
+ 
+   rtx temp = gen_rtx_REG (Pmode, IP_REGNUM);
+   rtx this_rtx = gen_rtx_REG (Pmode, this_regno);
+-  reload_completed = 1;
++  crtl->rtl_pass_progress |= PROGRESS_reload_completed;
+   emit_note (NOTE_INSN_PROLOGUE_END);
+ 
+   /* Add DELTA to THIS_RTX.  */
+@@ -29035,7 +29035,7 @@ arm32_output_mi_thunk (FILE *file, tree, HOST_WIDE_INT delta,
+   final_end_function ();
+ 
+   /* Stop pretending this is a post-reload pass.  */
+-  reload_completed = 0;
++  crtl->rtl_pass_progress &= ~PROGRESS_reload_completed;
+ }
+ 
+ /* Output code to add DELTA to the first argument, and then jump
