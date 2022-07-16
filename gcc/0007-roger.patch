@@ -870,7 +870,7 @@ index 54ab486a02d..70ad1800db4 100644
       unscaled indexed addresses.  */
    if (!TARGET_NO_SPACE_REGS
 -      && !cse_not_expected
-+      && !crtl->se_not_expected
++      && !crtl->cse_not_expected
        && GET_CODE (operand1) == MEM
        && GET_CODE (XEXP (operand1, 0)) == PLUS
        && REG_P (XEXP (XEXP (operand1, 0), 0))
