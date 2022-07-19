@@ -1,7 +1,7 @@
 # This file contains the job names that need fresh baselines.  In general it
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
-m32r-elf
 sh3eb-linux-gnu
 mips64-linux-gnu
 mips64el-linux-gnu
+m32r-elf
