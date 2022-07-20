@@ -5,3 +5,5 @@ cris-elf
 fr30-elf
 frv-elf
 ft32-elf
+iq2000-elf
+lm32-elf
