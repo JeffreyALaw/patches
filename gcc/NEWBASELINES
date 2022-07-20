@@ -3,3 +3,5 @@
 # reset.  
 csky-linux-gnu
 c6x-elf
+cris-elf
+fr30-elf
