@@ -11,5 +11,6 @@ rx-elf
 s390-linux-gnu
 sh3-linux-gnu
 v850e-elf
-c6x-elf
-m32r-elf
+sh3eb-linux-gnu
+moxie-elf
+bfin-elf
