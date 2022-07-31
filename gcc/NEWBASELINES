@@ -11,5 +11,5 @@ rx-elf
 s390-linux-gnu
 sh3-linux-gnu
 v850e-elf
-microblaze-linux
 c6x-elf
+m32r-elf
