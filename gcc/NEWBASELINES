@@ -3,3 +3,4 @@
 # reset.  
 h8300-elf
 riscv64-linux-gnu
+alpha-linux-gnu
