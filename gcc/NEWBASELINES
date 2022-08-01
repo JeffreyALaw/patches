@@ -2,6 +2,5 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 h8300-elf
-nds32be-elf
 mips64-linux-gnu
 mips64el-linux-gnu
