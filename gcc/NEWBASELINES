@@ -4,3 +4,4 @@
 sh4-linux-gnu
 hppa-linux-gnu
 sh4eb-linux-gnu
+mipsisa32r2-linux-gnu
