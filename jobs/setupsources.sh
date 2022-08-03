@@ -47,10 +47,7 @@ for repo in $*; do
     git status .
     popd
   else
-    mkdir -p $repo
-    pushd $repo
     git clone $url $repo
-    popd
   fi
   
 done
