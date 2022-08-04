@@ -896,3 +896,43 @@ index 4b486aeea90..199b6de49d2 100644
  }
  
  static bool
+diff --git a/gcc/config/rs6000/rs6000-internal.h b/gcc/config/rs6000/rs6000-internal.h
+index 8ee8c987b81..0b5390b993a 100644
+--- a/gcc/config/rs6000/rs6000-internal.h
++++ b/gcc/config/rs6000/rs6000-internal.h
+@@ -26,7 +26,7 @@
+ 
+ /* Structure used to define the rs6000 stack */
+ typedef struct rs6000_stack {
+-  int reload_completed;		/* stack info won't change from here on */
++  int reload_completed_;		/* stack info won't change from here on */
+   int first_gp_reg_save;	/* first callee saved GP register used */
+   int first_fp_reg_save;	/* first callee saved FP register used */
+   int first_altivec_reg_save;	/* first callee saved AltiVec register used */
+diff --git a/gcc/config/rs6000/rs6000-logue.cc b/gcc/config/rs6000/rs6000-logue.cc
+index 59fe1c8cb8b..7c77e216f4d 100644
+--- a/gcc/config/rs6000/rs6000-logue.cc
++++ b/gcc/config/rs6000/rs6000-logue.cc
+@@ -78,7 +78,7 @@ int rs6000_pic_labelno = 0;
+ struct machine_function *
+ rs6000_init_machine_status (void)
+ {
+-  stack_info.reload_completed = 0;
++  stack_info.reload_completed_ = 0;
+   return ggc_cleared_alloc<machine_function> ();
+ }
+ 
+@@ -683,11 +683,11 @@ rs6000_stack_info (void)
+   HOST_WIDE_INT non_fixed_size;
+   bool using_static_chain_p;
+ 
+-  if (reload_completed && info->reload_completed)
++  if (reload_completed && info->reload_completed_)
+     return info;
+ 
+   memset (info, 0, sizeof (*info));
+-  info->reload_completed = reload_completed;
++  info->reload_completed_ = reload_completed;
+ 
+   /* Select which calling sequence.  */
+   info->abi = DEFAULT_ABI;
