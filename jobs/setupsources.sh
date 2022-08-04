@@ -47,7 +47,17 @@ for repo in $*; do
     git status .
     popd
   else
-    git clone $url $repo
+    # If the repo already exists, go into it, clean & update
+    if [ -d $repo ]; then
+      pushd $repo
+      git clean -f
+      git checkout -- .
+      git pull
+      popd
+    else
+      git clone $url $repo
+    fi
+
   fi
   
 done
