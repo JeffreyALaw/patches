@@ -874,3 +874,25 @@ index 54ab486a02d..70ad1800db4 100644
        && GET_CODE (operand1) == MEM
        && GET_CODE (XEXP (operand1, 0)) == PLUS
        && REG_P (XEXP (XEXP (operand1, 0), 0))
+diff --git a/gcc/config/aarch64/aarch64.cc b/gcc/config/aarch64/aarch64.cc
+index 4b486aeea90..199b6de49d2 100644
+--- a/gcc/config/aarch64/aarch64.cc
++++ b/gcc/config/aarch64/aarch64.cc
+@@ -10001,7 +10001,7 @@ aarch64_output_mi_thunk (FILE *file, tree thunk ATTRIBUTE_UNUSED,
+   if (aarch64_bti_enabled ())
+     emit_insn (gen_bti_c());
+ 
+-  reload_completed = 1;
++  crtl->rtl_pass_progress |= PROGRESS_reload_completed;
+   emit_note (NOTE_INSN_PROLOGUE_END);
+ 
+   this_rtx = gen_rtx_REG (Pmode, this_regno);
+@@ -10073,7 +10073,7 @@ aarch64_output_mi_thunk (FILE *file, tree thunk ATTRIBUTE_UNUSED,
+   assemble_end_function (thunk, fnname);
+ 
+   /* Stop pretending to be a post-reload pass.  */
+-  reload_completed = 0;
++  crtl->rtl_pass_progress &= ~PROGRESS_reload_completed;
+ }
+ 
+ static bool
