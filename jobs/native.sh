@@ -1,4 +1,4 @@
-#!/bin/sh -x
+#!/bin/bash -x
 TARGET=$1
 NPROC=`nproc --all`
 PATH=/bin:$PATH
