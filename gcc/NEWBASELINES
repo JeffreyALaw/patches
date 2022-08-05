@@ -3,3 +3,4 @@
 # reset.  
 armeb-linux-gnueabi
 arm-linux-gnueabi
+msp430-elf
