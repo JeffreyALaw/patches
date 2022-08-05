@@ -936,3 +936,29 @@ index 59fe1c8cb8b..7c77e216f4d 100644
  
    /* Select which calling sequence.  */
    info->abi = DEFAULT_ABI;
+diff --git a/gcc/config/sparc/sparc.cc b/gcc/config/sparc/sparc.cc
+index c72c38e1999..699e85fc77a 100644
+--- a/gcc/config/sparc/sparc.cc
++++ b/gcc/config/sparc/sparc.cc
+@@ -12372,8 +12372,8 @@ sparc_output_mi_thunk (FILE *file, tree thunk_fndecl ATTRIBUTE_UNUSED,
+   rtx_insn *insn;
+   unsigned int int_arg_first;
+ 
+-  reload_completed = 1;
+-  epilogue_completed = 1;
++  crtl->rtl_pass_progress |= PROGRESS_reload_completed;
++  crtl->rtl_pass_progress |= PROGRESS_epilogue_completed;
+ 
+   emit_note (NOTE_INSN_PROLOGUE_END);
+ 
+@@ -12561,8 +12561,8 @@ sparc_output_mi_thunk (FILE *file, tree thunk_fndecl ATTRIBUTE_UNUSED,
+   final_end_function ();
+   assemble_end_function (thunk_fndecl, fnname);
+ 
+-  reload_completed = 0;
+-  epilogue_completed = 0;
++  crtl->rtl_pass_progress &= ~PROGRESS_reload_completed;
++  crtl->rtl_pass_progress &= ~PROGRESS_epilogue_completed;
+ }
+ 
+ /* Return true if sparc_output_mi_thunk would be able to output the
