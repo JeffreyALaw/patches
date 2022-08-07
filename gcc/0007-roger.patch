@@ -962,3 +962,39 @@ index c72c38e1999..699e85fc77a 100644
  }
  
  /* Return true if sparc_output_mi_thunk would be able to output the
+diff --git a/gcc/fold-const.cc b/gcc/fold-const.cc
+index 99021a82df4..c9e741776cd 100644
+--- a/gcc/fold-const.cc
++++ b/gcc/fold-const.cc
+@@ -50,6 +50,7 @@ along with GCC; see the file COPYING3.  If not see
+ #include "gimple.h"
+ #include "predict.h"
+ #include "memmodel.h"
++#include "emit-rtl.h"
+ #include "tm_p.h"
+ #include "tree-ssa-operands.h"
+ #include "optabs-query.h"
+diff --git a/gcc/tree-ssa-ifcombine.cc b/gcc/tree-ssa-ifcombine.cc
+index 80c41c45489..0e926115390 100644
+--- a/gcc/tree-ssa-ifcombine.cc
++++ b/gcc/tree-ssa-ifcombine.cc
+@@ -28,6 +28,7 @@ along with GCC; see the file COPYING3.  If not see
+ #include "cfghooks.h"
+ #include "tree-pass.h"
+ #include "memmodel.h"
++#include "emit-rtl.h"
+ #include "tm_p.h"
+ #include "ssa.h"
+ #include "tree-pretty-print.h"
+diff --git a/gcc/tree-ssa-reassoc.cc b/gcc/tree-ssa-reassoc.cc
+index e13e2cb308d..f5450107db4 100644
+--- a/gcc/tree-ssa-reassoc.cc
++++ b/gcc/tree-ssa-reassoc.cc
+@@ -30,6 +30,7 @@ along with GCC; see the file COPYING3.  If not see
+ #include "alloc-pool.h"
+ #include "tree-pass.h"
+ #include "memmodel.h"
++#include "emit-rtl.h"
+ #include "tm_p.h"
+ #include "ssa.h"
+ #include "optabs-tree.h"
