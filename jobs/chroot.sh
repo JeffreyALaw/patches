@@ -23,6 +23,11 @@ if [ -L "/usr/bin/awk" ]; then
   ln -s /usr/bin/gawk /usr/bin/awk
 fi
 
+if [! -f "/bin/stty" ]; then
+  cp /bin/true /bin/stty
+fi
+
+
 rm -rf obj
 mkdir -p obj/{binutils-gdb,gcc,glibc,linux}
 
