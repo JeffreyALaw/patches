@@ -4,3 +4,5 @@
 visium-elf
 lm32-elf
 bfin-elf
+mn10300-elf
+nds32-elf
