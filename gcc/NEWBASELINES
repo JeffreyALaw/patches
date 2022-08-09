@@ -3,4 +3,15 @@
 # reset.  
 arc-elf
 c6x-elf
-
+cris-elf
+csky-linux-gnu
+fr30-elf
+frv-elf
+ft32-elf
+iq2000-elf
+m32r-elf
+mcore-elf
+microblaze-linux
+moxie-elf
+nds32be-elf
+nios2-linux-gnu
