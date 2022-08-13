@@ -1,9 +1,7 @@
 # This file contains the job names that need fresh baselines.  In general it
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
-or1k-linux-gnu
-rl78-elf
-s390-linux-gnu
-sh3-linux-gnu
-sh3eb-linux-gnu
-xstorm6-elf
+rx-elf
+xstormy16-elf
+v850-elf
+
