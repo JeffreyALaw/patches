@@ -4,4 +4,4 @@
 rx-elf
 xstormy16-elf
 v850-elf
-
+armeb-linux-gnueabihf
