@@ -1,7 +1,6 @@
 # This file contains the job names that need fresh baselines.  In general it
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
-rx-elf
-xstormy16-elf
 v850-elf
 armeb-linux-gnueabihf
+h8300-elf
