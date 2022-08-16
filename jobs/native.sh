@@ -28,7 +28,7 @@ make -j $NPROC -l $NPROC
 make install
 popd
 
-if [ $target != sparc64-linux-gnu ]; do
+if [ $target != sparc64-linux-gnu ]; then
   export KERNEL_TARGETS="all modules"
   pushd obj/linux
   make -C ../../linux O=`pwd` mrproper
