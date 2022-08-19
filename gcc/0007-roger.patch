@@ -998,3 +998,27 @@ index e13e2cb308d..f5450107db4 100644
  #include "tm_p.h"
  #include "ssa.h"
  #include "optabs-tree.h"
+diff --git a/gcc/config/rs6000/rs6000-call.cc b/gcc/config/rs6000/rs6000-call.cc
+index 551968b0995..efedb50e214 100644
+--- a/gcc/config/rs6000/rs6000-call.cc
++++ b/gcc/config/rs6000/rs6000-call.cc
+@@ -2924,8 +2924,8 @@ rs6000_output_mi_thunk (FILE *file, tree thunk_fndecl ATTRIBUTE_UNUSED,
+   rtx this_rtx, funexp;
+   rtx_insn *insn;
+ 
+-  reload_completed = 1;
+-  epilogue_completed = 1;
++  crtl->rtl_pass_progress |= PROGRESS_reload_completed;
++  crtl->rtl_pass_progress |= PROGRESS_epilogue_completed;
+ 
+   /* Mark the end of the (empty) prologue.  */
+   emit_note (NOTE_INSN_PROLOGUE_END);
+@@ -2986,6 +2986,6 @@ rs6000_output_mi_thunk (FILE *file, tree thunk_fndecl ATTRIBUTE_UNUSED,
+   final_end_function ();
+   assemble_end_function (thunk_fndecl, fnname);
+ 
+-  reload_completed = 0;
+-  epilogue_completed = 0;
++  crtl->rtl_pass_progress &= ~PROGRESS_reload_completed;
++  crtl->rtl_pass_progress &= ~PROGRESS_epilogue_completed;
+ }
