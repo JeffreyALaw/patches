@@ -23,7 +23,7 @@ make install-gas install-binutils install-ld
 popd
 
 pushd obj/gcc
-../../gcc/configure --prefix=$PREFIX --disable-analyzer --prefix=$PREFIX --enable-languages=c,c++,fortran --disable-multilib --disable-libsanitizer
+../../gcc/configure --prefix=$PREFIX --disable-analyzer --prefix=$PREFIX --enable-languages=all --disable-multilib --disable-libsanitizer
 make -j $NPROC -l $NPROC
 make install
 popd

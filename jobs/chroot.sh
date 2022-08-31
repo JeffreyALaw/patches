@@ -61,7 +61,7 @@ make install-gas install-binutils install-ld
 popd
 
 pushd obj/gcc
-../../gcc/configure --prefix=/usr --disable-werror --disable-analyzer --enable-languages=c,c++ --disable-multilib ${TARGET} $GCC_CONFIG
+../../gcc/configure --prefix=/usr --disable-werror --disable-analyzer --enable-languages=all --disable-multilib ${TARGET} $GCC_CONFIG
 make -j $NPROC -l $NPROC
 (cd gcc; make -j $NPROC -l $NPROC -k check-gcc || true)
 make -k install || true
