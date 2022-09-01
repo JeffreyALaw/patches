@@ -13,13 +13,13 @@ index 5026c5906cd..0e346652ed5 100644
      }
      return 0
 diff --git a/gcc/testsuite/lib/target-supports.exp b/gcc/testsuite/lib/target-supports.exp
-index 04a2a8e8659..8ffbb48635a 100644
+index 236128bf5de..04251018ddb 100644
 --- a/gcc/testsuite/lib/target-supports.exp
 +++ b/gcc/testsuite/lib/target-supports.exp
-@@ -564,6 +564,7 @@ proc check_effective_target_trampolines { } {
+@@ -556,6 +556,7 @@ proc check_effective_target_trampolines { } {
+     if { [istarget avr-*-*]
+ 	 || [istarget msp430-*-*]
  	 || [istarget nvptx-*-*]
- 	 || [istarget hppa2.0w-hp-hpux11.23]
- 	 || [istarget hppa64-hp-hpux11.23]
 +	 || [istarget ft32-*-*]
  	 || [istarget pru-*-*]
  	 || [istarget bpf-*-*] } {
