@@ -1,0 +1,12 @@
+diff --git a/libgcc/unwind-dw2-fde.c b/libgcc/unwind-dw2-fde.c
+index 000ee69b18a..603b7143b21 100644
+--- a/libgcc/unwind-dw2-fde.c
++++ b/libgcc/unwind-dw2-fde.c
+@@ -35,6 +35,7 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+ #include "unwind-pe.h"
+ #include "unwind-dw2-fde.h"
+ #include "gthr.h"
++#include "stdint.h"
+ #else
+ #if (defined(__GTHREAD_MUTEX_INIT) || defined(__GTHREAD_MUTEX_INIT_FUNCTION)) \
+     && defined(__GCC_HAVE_SYNC_COMPARE_AND_SWAP_4)
