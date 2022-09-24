@@ -1,0 +1,43 @@
+
+>
+>     +static const bool in_shutdown = false;
+>
+> I'll let Jason or others decide if this is the right solution.  It seems that in_shutdown also could be declared outside the #ifdef and initialized as "false".
+
+sure, either is fine. Moving it outside the #ifdef wastes one byte in the executable (while the compiler can eliminate the const), but it does not really matter.
+
+I have verified that the patch below fixes builds for both fast-path and non-fast-path builds. But if you prefer I will move the in_shutdown definition instead.
+
+Best
+
+Thomas
+
+PS: in_shutdown is an int here instead of a bool because non-fast-path builds do not include stdbool. Not a good reason, of course, but I wanted to keep the patch minimal and it makes no difference in practice.
+
+
+    When using the atomic fast path deregistering can fail during
+    program shutdown if the lookup structures are already destroyed.
+    The assert in __deregister_frame_info_bases takes that into
+    account. In the non-fast-path case however is not aware of
+    program shutdown, which caused a compiler error on such platforms.
+    We fix that by introducing a constant for in_shutdown in
+    non-fast-path builds.
+
+    libgcc/ChangeLog:
+            * unwind-dw2-fde.c: Introduce a constant for in_shutdown
+            for the non-fast-path case.
+
+diff --git a/libgcc/unwind-dw2-fde.c b/libgcc/unwind-dw2-fde.c
+index d237179f4ea..0bcd5061d76 100644
+--- a/libgcc/unwind-dw2-fde.c
++++ b/libgcc/unwind-dw2-fde.c
+@@ -67,6 +67,8 @@ static void
+ init_object (struct object *ob);
+
+ #else
++/* Without fast path frame deregistration must always succeed.  */
++static const int in_shutdown = 0;
+
+ /* The unseen_objects list contains objects that have been registered
+    but not yet categorized in any way.  The seen_objects list has had
+
