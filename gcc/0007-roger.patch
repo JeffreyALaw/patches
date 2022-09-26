@@ -1022,3 +1022,25 @@ index 551968b0995..efedb50e214 100644
 +  crtl->rtl_pass_progress &= ~PROGRESS_reload_completed;
 +  crtl->rtl_pass_progress &= ~PROGRESS_epilogue_completed;
  }
+diff --git a/gcc/config/xtensa/xtensa.cc b/gcc/config/xtensa/xtensa.cc
+index 828c7642b7c..343b3cc550b 100644
+--- a/gcc/config/xtensa/xtensa.cc
++++ b/gcc/config/xtensa/xtensa.cc
+@@ -5037,7 +5037,7 @@ xtensa_output_mi_thunk (FILE *file, tree thunk ATTRIBUTE_UNUSED,
+   rtx temp0 = gen_rtx_REG (Pmode, A9_REG);
+   const char *fnname = IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME (thunk));
+ 
+-  reload_completed = 1;
++  crtl->rtl_pass_progress |= PROGRESS_reload_completed;
+ 
+   if (aggregate_value_p (TREE_TYPE (TREE_TYPE (function)), function))
+     this_reg_no = 3;
+@@ -5097,7 +5097,7 @@ xtensa_output_mi_thunk (FILE *file, tree thunk ATTRIBUTE_UNUSED,
+   assemble_end_function (thunk, fnname);
+ 
+   /* Stop pretending to be a post-reload pass.  */
+-  reload_completed = 0;
++  crtl->rtl_pass_progress &= ~PROGRESS_reload_completed;
+ }
+ 
+ static rtx
