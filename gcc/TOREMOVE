@@ -28,6 +28,7 @@ gcc/testsuite/gcc.c-torture/compile/limits-exprparen.c
 gcc/testsuite/gcc.c-torture/execute/simd-1.c
 # Times out on msp430
 gcc/testsuite/gcc.c-torture/execute/arith-rand-ll.c
+gcc/testsuite/gcc.dg/pr82004.c
 # These tests are a bit odd, but ultimately report non-unique names
 gcc/testsuite/c-c++-common/goacc/privatization-1-compute.c
 # These seem to ping-pong on the cross-glibc configurations
@@ -36,6 +37,7 @@ gcc/testsuite/gcc.dg/pie-static-2.c
 gcc/testsuite/gcc.dg/special/gcsec-1.c
 # These ping-pong on msp430-elf
 gcc/testsuite/c-c++-common/torture/builtin-convertvector-1.c
+gcc/testsuite/gcc.dg/pr78213.c
 # This ping-pongs on mips native
 gcc/testsuite/gcc.dg/plugin/poly-int-03_plugin.c
 gcc/testsuite/gcc.dg/plugin/poly-int-02_plugin.c
@@ -43,15 +45,10 @@ gcc/testsuite/gcc.dg/plugin/poly-int-02_plugin.c
 gcc/testsuite/gcc.dg/uninit-pred-7_a.c
 # Duplicate names, though I'm not sure how
 gcc/testsuite/g++.dg/modules/xtreme-header-5_a.H
-# Waiting on Richi to fix
-#gcc/testsuite/gcc.dg/tree-ssa/if-to-switch-5.c
-#gcc/testsuite/gcc.dg/tree-ssa/if-to-switch-9.c
 # Been regressing for a long time, nobody seems to be digging into it
 libgomp/testsuite/libgomp.c/places-10.c
 # Recent, expecting this to get resolved
 gcc/testsuite/gfortran.dg/unlimited_polymorphic_3.f03
-# Temporary until Jason fixes the deprecated warning
-#gcc/testsuite/g++.dg/warn/deprecated-16.C
 # Seems to be bouncing every few days on cris-elf
 gcc/testsuite/gcc.dg/graphite/interchange-10.c
 # started failing on sh4 recently
@@ -62,5 +59,3 @@ gcc/testsuite/gcc.dg/pr84877.c
 gcc/testsuite/c-c++-common/Wcast-align.c
 # Until we fixup some stuff
 gcc/testsuite/gcc.dg/tree-prof/cmpsf-1.c
-# Seems to bounce on msp430-elf
-gcc/testsuite/gcc.dg/pr78213.c
