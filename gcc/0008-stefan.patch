@@ -1,0 +1,35 @@
+
+
+For BImode get_narrowest_mode evaluates to QImode but BImode < QImode.
+Thus FOR_EACH_MODE_UNTIL never reaches BImode and iterates until OImode
+for which no wider mode exists so we end up with VOIDmode and fail.
+Fixed by adding a size guard so we effectively skip BImode.
+
+Bootstrap and regtest are currently running on x64.  Assuming they pass
+ok for mainline?
+
+gcc/ChangeLog:
+
+	PR rtl-optimization/107088
+	* cselib.cc (new_cselib_val): Skip BImode while keeping track of
+	subvalue relations.
+---
+ gcc/cselib.cc | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/gcc/cselib.cc b/gcc/cselib.cc
+index 9b582e5d3d6..2abc763a3f8 100644
+--- a/gcc/cselib.cc
++++ b/gcc/cselib.cc
+@@ -1571,6 +1571,7 @@ new_cselib_val (unsigned int hash, machine_mode mode, rtx x)
+ 
+   scalar_int_mode int_mode;
+   if (REG_P (x) && is_int_mode (mode, &int_mode)
++      && GET_MODE_SIZE (int_mode) > 1
+       && REG_VALUES (REGNO (x)) != NULL
+       && (!cselib_current_insn || !DEBUG_INSN_P (cselib_current_insn)))
+     {
+-- 
+2.37.3
+
+
