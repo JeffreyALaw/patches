@@ -340,45 +340,3 @@ index e895de8ce59..e536602a01d 100644
     mov.l	%S1,%S0"
    [(set (attr "length") (symbol_ref "compute_mov_length (operands)"))])
  
-diff --git a/gcc/common/config/h8300/h8300-common.cc b/gcc/common/config/h8300/h8300-common.cc
-index bfbda22006b..22e2cfcb7b2 100644
---- a/gcc/common/config/h8300/h8300-common.cc
-+++ b/gcc/common/config/h8300/h8300-common.cc
-@@ -32,6 +32,8 @@ static const struct default_options h8300_option_optimization_table[] =
-        and/or variable-cycle branches where (cycle count taken !=
-        cycle count not taken).  */
-     { OPT_LEVELS_ALL, OPT_freorder_blocks, NULL, 0 },
-+    /* Enable redundant extension instructions removal at -O2 and higher.  */
-+    { OPT_LEVELS_2_PLUS, OPT_free, NULL, 1 },
-     { OPT_LEVELS_NONE, 0, NULL, 0 }
-   };
- 
-diff --git a/gcc/config/h8300/extensions.md b/gcc/config/h8300/extensions.md
-index 74647c79cd8..7149dc0ac52 100644
---- a/gcc/config/h8300/extensions.md
-+++ b/gcc/config/h8300/extensions.md
-@@ -47,6 +47,24 @@
-     operands[2] = gen_rtx_REG (QImode, REGNO (operands[0]));
-   })
- 
-+;; Similarly, but setting cczn.
-+(define_split
-+  [(set (reg:CCZN CC_REG)
-+	(compare:CCZN
-+	  (zero_extend:HI (match_operand:QI 1 "general_operand_src" ""))
-+	  (const_int 0)))
-+   (set (match_operand:HI 0 "register_operand" "")
-+        (zero_extend:HI (match_dup 1)))]
-+  "!REG_P (operands[1]) && reload_completed"
-+  [(parallel [(set (match_dup 2) (match_dup 1))
-+	      (clobber (reg:CC CC_REG))])
-+   (parallel [(set (reg:CCZN CC_REG)
-+		   (compare:CCZN (zero_extend:HI (match_dup 2)) (const_int 0)))
-+	      (set (match_dup 0) (zero_extend:HI (match_dup 2)))])]
-+  {
-+    operands[2] = gen_rtx_REG (QImode, REGNO (operands[0]));
-+  })
-+
- (define_insn "*zero_extendqisi2"
-   [(set (match_operand:SI 0 "register_operand" "=r,r")
- 	(zero_extend:SI (match_operand:QI 1 "general_operand_src" "0,g>")))]
