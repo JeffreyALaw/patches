@@ -1,8 +1,8 @@
 diff --git a/gcc/config/h8300/addsub.md b/gcc/config/h8300/addsub.md
-index b1eb0d20188..2b90af0b302 100644
+index b1eb0d20188..43da93288b5 100644
 --- a/gcc/config/h8300/addsub.md
 +++ b/gcc/config/h8300/addsub.md
-@@ -239,3 +239,104 @@
+@@ -239,3 +239,94 @@
    "reload_completed"
    "xor.w\\t#32768,%e0"
    [(set_attr "length" "4")])
@@ -97,16 +97,6 @@ index b1eb0d20188..2b90af0b302 100644
 +   gcc_unreachable ();
 +}
 +  [(set_attr "length" "2")])
-+
-+;; add the carry bit to op0/dest.  Perhaps this should
-+;; allow a constant operand rather than forcing #0?
-+(define_insn ""
-+  [(set (match_operand:QI 0 "register_operand" "=r")
-+        (plus:QI (match_dup 0) (reg:CCC CC_REG)))
-+   (clobber (reg:CC CC_REG))]
-+  ""
-+  "addx\t#0,%X0"
-+  [(set_attr "length" "2")])
 diff --git a/gcc/config/h8300/h8300.md b/gcc/config/h8300/h8300.md
 index f592af1d5f7..91891592f9f 100644
 --- a/gcc/config/h8300/h8300.md
@@ -143,7 +133,7 @@ index f592af1d5f7..91891592f9f 100644
  
  (include "movepush.md")
 diff --git a/gcc/config/h8300/testcompare.md b/gcc/config/h8300/testcompare.md
-index 81dce1d0bc1..0542950c443 100644
+index 81dce1d0bc1..d3d777765ad 100644
 --- a/gcc/config/h8300/testcompare.md
 +++ b/gcc/config/h8300/testcompare.md
 @@ -345,6 +345,19 @@
@@ -166,7 +156,7 @@ index 81dce1d0bc1..0542950c443 100644
  ;; We can fold in negation of the result and generate better code than
  ;; what the generic bits would do when testing for C == 1
  (define_insn_and_split "*store_neg_c"
-@@ -607,3 +620,55 @@
+@@ -607,3 +620,43 @@
  		 (const_int 0)))
     (set (match_dup 0)
  	(<eqne_invert>:HI (reg:CCZ CC_REG) (const_int 0)))])
@@ -185,18 +175,13 @@ index 81dce1d0bc1..0542950c443 100644
 +  ""
 +  "#"
 +  "&& reload_completed"
-+  [(parallel [(set (match_dup 0) (const_int 0))
-+	      (clobber (reg:CC CC_REG))])
-+   (parallel [(set (reg:CCC CC_REG)
++  [(parallel [(set (reg:CCC CC_REG)
 +		   (ne:CCC (plus_minus:<QHSI:OVF>
 +			     (zero_extend:<QHSI:OVF> (match_dup 2))
 +			     (zero_extend:<QHSI:OVF> (match_dup 3)))
 +			   (zero_extend:<QHSI:OVF> (plus_minus:QHSI (match_dup 2) (match_dup 3)))))
 +	      (set (match_dup 1) (plus_minus:QHSI (match_dup 2) (match_dup 3)))])
-+   (parallel [(set (match_dup 4)
-+		   (plus:QI (match_dup 4) (reg:CCC CC_REG)))
-+	      (clobber (reg:CC CC_REG))])]
-+{ operands[4] = gen_rtx_REG (E_QImode, REGNO (operands[0])); })
++   (set (match_dup 0) (ne:QHSI2 (reg:CCC CC_REG) (const_int 0)))])
 +
 +;; Same thing, but we only care about overflow status.
 +(define_insn_and_split ""
@@ -208,17 +193,10 @@ index 81dce1d0bc1..0542950c443 100644
 +  ""
 +  "#"
 +  "&& reload_completed"
-+  [(parallel [(set (match_dup 0) (const_int 0))
-+	      (clobber (reg:CC CC_REG))])
-+   (parallel [(set (reg:CCC CC_REG)
++  [(parallel [(set (reg:CCC CC_REG)
 +		   (ne:CCC (plus_minus:<QHSI:OVF>
 +			     (zero_extend:<QHSI:OVF> (match_dup 2))
 +			     (zero_extend:<QHSI:OVF> (match_dup 3)))
 +			   (zero_extend:<QHSI:OVF> (plus_minus:QHSI (match_dup 2) (match_dup 3)))))
 +	      (set (match_dup 1) (plus_minus:QHSI (match_dup 2) (match_dup 3)))])
-+   (parallel [(set (match_dup 4)
-+		   (plus:QI (match_dup 4) (reg:CCC CC_REG)))
-+	      (clobber (reg:CC CC_REG))])]
-+{
-+  operands[4] = gen_rtx_REG (E_QImode, REGNO (operands[0]));
-+})
++   (set (match_dup 0) (ne:QHSI2 (reg:CCC CC_REG) (const_int 0)))])
