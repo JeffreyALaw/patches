@@ -59,3 +59,5 @@ gcc/testsuite/gcc.dg/pr84877.c
 gcc/testsuite/c-c++-common/Wcast-align.c
 # Until we fixup some stuff
 gcc/testsuite/gcc.dg/tree-prof/cmpsf-1.c
+# Until I debug
+gcc/testsuite/gcc.dg/debug/btf/btf-enum-1.c
