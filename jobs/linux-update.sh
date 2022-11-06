@@ -15,6 +15,10 @@ PATH=~/bin/:$PATH
 export GENERATION=2
 echo $GENERATION
 
+# Fix pahole.  Temporary until we rebuild the
+# docker containers
+cp /home/jlaw/jenkins/docker-volume/pahole/build/pahole /usr/bin
+
 rm -rf ${TARGET}-obj
 mkdir -p ${TARGET}-installed
 mkdir -p ${TARGET}-obj/binutils
