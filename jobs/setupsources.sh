@@ -5,6 +5,9 @@ set -o pipefail
 TARGET=$1
 shift
 
+# Shut up git ownership checking
+git config --global safe.directory '*'
+
 # This script copies the requested sources from the docker
 # volume, updates them from their appropriate upstreams, then
 # applies ptaches
