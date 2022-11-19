@@ -1,0 +1,12 @@
+diff --git a/gcc/testsuite/gcc.dg/pr96542.c b/gcc/testsuite/gcc.dg/pr96542.c
+index 5014f2acad8..0aad2e9494e 100644
+--- a/gcc/testsuite/gcc.dg/pr96542.c
++++ b/gcc/testsuite/gcc.dg/pr96542.c
+@@ -22,6 +22,6 @@ baz (unsigned int x)
+   return (-1U >> x) * 16;
+ }
+ 
+-/* { dg-final { scan-tree-dump-times  "254" 2 "evrp" } }  */
++/* { dg-final { scan-tree-dump-times  "return 254" 2 "evrp" } }  */
+ /* { dg-final { scan-tree-dump "= PHI <32.*, 4294967280" "evrp" } }  */
+ 
