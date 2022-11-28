@@ -67,3 +67,5 @@ gcc/testsuite/gcc.dg/fold-overflow-1.c
 gcc/testsuite/c-c++-common/diagnostic-format-json-2.c
 gcc/testsuite/c-c++-common/diagnostic-format-json-3.c
 gcc/testsuite/c-c++-common/diagnostic-format-json-4.c
+# Seems to be hanging on sh4 right now
+gcc//testsuite/gcc.dg/c11-atomic-4.c
