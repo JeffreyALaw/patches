@@ -25,17 +25,17 @@ index 236128bf5de..04251018ddb 100644
  	 || [istarget bpf-*-*] } {
  	return 0;
 diff --git a/gcc/testsuite/gcc.c-torture/execute/ieee/ieee.exp b/gcc/testsuite/gcc.c-torture/execute/ieee/ieee.exp
-index 6d3c371d6ef..b195f72ff25 100644
+index 6d3c371d6ef..8b3684d823e 100644
 --- a/gcc/testsuite/gcc.c-torture/execute/ieee/ieee.exp
 +++ b/gcc/testsuite/gcc.c-torture/execute/ieee/ieee.exp
-@@ -30,6 +30,10 @@ load_lib c-torture.exp
- # Disable tests on machines with no hardware support for IEEE arithmetic.
- if { [istarget "vax-*-*"] || [ istarget "powerpc-*-*spe"] || [istarget "pdp11-*-*"] } { return }
+@@ -53,6 +53,10 @@ if { [istarget "alpha*-*-*"]
+   lappend additional_flags "-mieee"
+ }
  
-+# Or which have a crippled IEEE unit that doesn't support INF/NaN or
-+# other special values
-+if { [istarget "rx*-*-*"] } { return }
++if [istarget rx-*-*] then {
++  lappend additional_flags "-mnofpu"
++}
 +
- if $tracelevel then {
-     strace $tracelevel
+ if { ![check_effective_target_signal] } {
+     lappend additional_flags "-DSIGNAL_SUPPRESS"
  }
