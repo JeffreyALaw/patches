@@ -24,18 +24,3 @@ index 236128bf5de..04251018ddb 100644
  	 || [istarget pru-*-*]
  	 || [istarget bpf-*-*] } {
  	return 0;
-diff --git a/gcc/testsuite/gcc.c-torture/execute/ieee/ieee.exp b/gcc/testsuite/gcc.c-torture/execute/ieee/ieee.exp
-index 6d3c371d6ef..8b3684d823e 100644
---- a/gcc/testsuite/gcc.c-torture/execute/ieee/ieee.exp
-+++ b/gcc/testsuite/gcc.c-torture/execute/ieee/ieee.exp
-@@ -53,6 +53,10 @@ if { [istarget "alpha*-*-*"]
-   lappend additional_flags "-mieee"
- }
- 
-+if [istarget rx-*-*] then {
-+  lappend additional_flags "-mnofpu"
-+}
-+
- if { ![check_effective_target_signal] } {
-     lappend additional_flags "-DSIGNAL_SUPPRESS"
- }
