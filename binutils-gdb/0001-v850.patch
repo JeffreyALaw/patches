@@ -24,11 +24,11 @@ index fba59cc242b..7dac9976cfc 100644
    {
  	${RELOCATING+__stack = .;}
  	*(.stack)
-diff --git a/sim/v850/sim-main.h b/sim/v850/sim-main.h
-index 49b845dfe7a..26839da44da 100644
---- a/sim/v850/sim-main.h
-+++ b/sim/v850/sim-main.h
-@@ -48,7 +48,7 @@ extern SIM_DESC simulator;
+diff --git a/sim/v850/v850-sim.h b/sim/v850/v850-sim.h
+index 35032306235..70b8a680cb9 100644
+--- a/sim/v850/v850-sim.h
++++ b/sim/v850/v850-sim.h
+@@ -46,7 +46,7 @@ extern SIM_DESC simulator;
  
  
  #define V850_ROM_SIZE 0x8000
