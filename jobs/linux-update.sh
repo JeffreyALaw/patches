@@ -120,6 +120,7 @@ case "${TARGET}" in
     
   sh*-* | sh*-*-* | sh*-*-*-*)
     export ARCH=sh
+    export KERNEL=false
     ;;
     
   *)
