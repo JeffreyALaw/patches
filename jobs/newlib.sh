@@ -216,7 +216,7 @@ cd ../..
 # Step 2, build gcc
 PATH=`pwd`/${TARGET}-installed/bin:$PATH
 cd ${TARGET}-obj/gcc
-${SRCDIR}/gcc/configure --disable-analyzer --with-system-libunwind --with-newlib --without-headers --disable-threads --disable-shared --enable-languages=all --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET}
+${SRCDIR}/gcc/configure --disable-analyzer --with-system-libunwind --with-newlib --without-headers --disable-threads --disable-shared --enable-languages=c,c++,lto,fortran --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET}
 make -j $NPROC -l $NPROC all-gcc
 make install-gcc
 
