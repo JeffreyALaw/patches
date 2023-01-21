@@ -1,0 +1,92 @@
+commit f311bb7be002130ad27ce0dbd297f260c60376f3
+Author: Jeff Law <jeffreyalaw@gmail.com>
+Date:   Sat Jan 21 17:41:20 2023 -0500
+
+    Revert "[PR106746] drop cselib addr lookup in debug insn mem"
+    
+    This reverts commit 3c99493bf39a7fef9213e6f5af94b78bb15fcfdc.
+
+diff --git a/gcc/sched-deps.cc b/gcc/sched-deps.cc
+index a9214f67432..f9371b81fb4 100644
+--- a/gcc/sched-deps.cc
++++ b/gcc/sched-deps.cc
+@@ -2605,26 +2605,26 @@ sched_analyze_2 (class deps_desc *deps, rtx x, rtx_insn *insn)
+ 
+     case MEM:
+       {
+-	if (!DEBUG_INSN_P (insn))
+-	  {
+-	    /* Reading memory.  */
+-	    rtx_insn_list *u;
+-	    rtx_insn_list *pending;
+-	    rtx_expr_list *pending_mem;
+-	    rtx t = x;
++	/* Reading memory.  */
++	rtx_insn_list *u;
++	rtx_insn_list *pending;
++	rtx_expr_list *pending_mem;
++	rtx t = x;
+ 
+-	    if (sched_deps_info->use_cselib)
+-	      {
+-		machine_mode address_mode = get_address_mode (t);
+-
+-		t = shallow_copy_rtx (t);
+-		cselib_lookup_from_insn (XEXP (t, 0), address_mode, 1,
+-					 GET_MODE (t), insn);
+-		XEXP (t, 0)
+-		  = cselib_subst_to_values_from_insn (XEXP (t, 0), GET_MODE (t),
+-						      insn);
+-	      }
++	if (sched_deps_info->use_cselib)
++	  {
++	    machine_mode address_mode = get_address_mode (t);
++
++	    t = shallow_copy_rtx (t);
++	    cselib_lookup_from_insn (XEXP (t, 0), address_mode, 1,
++				     GET_MODE (t), insn);
++	    XEXP (t, 0)
++	      = cselib_subst_to_values_from_insn (XEXP (t, 0), GET_MODE (t),
++						  insn);
++	  }
+ 
++	if (!DEBUG_INSN_P (insn))
++	  {
+ 	    t = canon_rtx (t);
+ 	    pending = deps->pending_read_insns;
+ 	    pending_mem = deps->pending_read_mems;
+diff --git a/gcc/testsuite/gcc.target/i386/pr106746.c b/gcc/testsuite/gcc.target/i386/pr106746.c
+deleted file mode 100644
+index 14f7dab71d6..00000000000
+--- a/gcc/testsuite/gcc.target/i386/pr106746.c
++++ /dev/null
+@@ -1,29 +0,0 @@
+-/* { dg-do compile } */
+-/* { dg-options "-O2 -fsched2-use-superblocks -fcompare-debug -Wno-psabi" } */
+-
+-typedef char __attribute__((__vector_size__ (64))) U;
+-typedef short __attribute__((__vector_size__ (64))) V;
+-typedef int __attribute__((__vector_size__ (64))) W;
+-
+-char c;
+-U a;
+-U *r;
+-W foo0_v512u32_0;
+-
+-void
+-foo (W)
+-{
+-  U u;
+-  V v;
+-  W w = __builtin_shuffle (foo0_v512u32_0, foo0_v512u32_0);
+-  u =
+-    __builtin_shufflevector (a, u, 3, 0, 4, 9, 9, 6, 7, 8, 5,
+-			     0, 6, 1, 8, 1, 2, 8, 6,
+-			     1, 8, 4, 9, 3, 8, 4, 6, 0, 9, 0, 1, 8, 2, 3, 3,
+-			     0, 4, 9, 9, 6, 7, 8, 5,
+-			     0, 6, 1, 8, 1, 2, 8, 6,
+-			     1, 8, 4, 9, 3, 8, 4, 6, 0, 9, 0, 1, 8, 2, 3);
+-  v *= c;
+-  w &= c;
+-  *r = (U) v + (U) w;
+-}
