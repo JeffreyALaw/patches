@@ -44,7 +44,7 @@ fi
 # Step 2, build gcc
 PATH=`pwd`/${TARGET}-installed/bin:$PATH
 cd ${TARGET}-obj/gcc
-../../gcc/configure $SHARED --disable-analyzer --disable-multilib --without-headers --disable-threads --enable-languages=all --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET}
+../../gcc/configure $SHARED --disable-analyzer --disable-multilib --without-headers --disable-threads --enable-languages=c,c++,fortran,lto --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET}
 make -j $NPROC -l $NPROC all-gcc
 make install-gcc
 
