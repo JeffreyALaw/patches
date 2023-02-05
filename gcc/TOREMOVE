@@ -69,3 +69,5 @@ gcc/testsuite/c-c++-common/diagnostic-format-json-3.c
 gcc/testsuite/c-c++-common/diagnostic-format-json-4.c
 # Seems to be hanging on sh4 right now
 gcc//testsuite/gcc.dg/c11-atomic-4.c
+# Takes a long time and occasionally times out if builders are busy
+gcc/testsuite/gcc.dg/long_branch.c
