@@ -131,6 +131,8 @@ esac
 cd ${TARGET}-obj/linux
 make -C ../../linux O=${TARGET} ARCH=${ARCH} INSTALL_HDR_PATH=../../${TARGET}-installed/${TARGET} headers_install
 
+# Temporary, things have gone to *(@&$ upstream
+KERNEL=false
 if [ $KERNEL == "true" ]; then
   make -C ../../linux O=${TARGET} ARCH=${ARCH} mrproper
   make -C ../../linux O=${TARGET} ARCH=${ARCH} CROSS_COMPILE=${TARGET}- -j $NPROC -l $NPROC $CONFIG
