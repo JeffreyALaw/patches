@@ -28,23 +28,8 @@ On Sun, Feb 5, 2023 at 7:48 PM Jeff Law <jeffreyalaw@gmail.com> wrote:
     Jeff
 
 
-0001-Fix-libgloss-build-for-fr30-and-xstormy16.patch
-
-From 29211fd70d0e8ad6660e2b552323747bc28e2941 Mon Sep 17 00:00:00 2001
-From: Jeff Johnston <jjohnstn@redhat.com>
-Date: Thu, 9 Feb 2023 16:59:31 -0500
-Subject: [PATCH] Fix libgloss build for fr30 and xstormy16
-
-- conditionally don't use -idirafter option
----
- libgloss/Makefile.am  |  4 ++++
- libgloss/Makefile.in  |  3 ++-
- libgloss/configure    | 17 +++++++++++++++++
- libgloss/configure.ac |  5 +++++
- 4 files changed, 28 insertions(+), 1 deletion(-)
-
 diff --git a/libgloss/Makefile.am b/libgloss/Makefile.am
-index 4309cd3..92d91bf 100644
+index 4309cd3a4..92d91bf74 100644
 --- a/libgloss/Makefile.am
 +++ b/libgloss/Makefile.am
 @@ -24,7 +24,11 @@ includetool_DATA =
@@ -60,7 +45,7 @@ index 4309cd3..92d91bf 100644
  # A fake library so automake will generate rules for plain objects that we want
  # to install (e.g. our crt0.o objects).
 diff --git a/libgloss/Makefile.in b/libgloss/Makefile.in
-index a117577..ebbf28c 100644
+index a117577ea..ebbf28cd8 100644
 --- a/libgloss/Makefile.in
 +++ b/libgloss/Makefile.in
 @@ -807,7 +807,8 @@ includetooldir = $(tooldir)/include
@@ -73,8 +58,21 @@ index a117577..ebbf28c 100644
  
  # A fake library so automake will generate rules for plain objects that we want
  # to install (e.g. our crt0.o objects).
+diff --git a/libgloss/config/default.mh b/libgloss/config/default.mh
+index 81f0920f9..4e7f106f9 100644
+--- a/libgloss/config/default.mh
++++ b/libgloss/config/default.mh
+@@ -1,7 +1,7 @@
+ NEWLIB_CFLAGS = `if [ -d ${objroot}/newlib ]; then echo -I${objroot}/newlib/targ-include -I${srcroot}/newlib/libc/include; fi`
+ NEWLIB_LDFLAGS = `if [ -d ${objroot}/newlib ]; then echo -B${objroot}/newlib/ -L${objroot}/newlib/; fi`
+ 
+-INCLUDES = -I. -I$(srcdir)/.. -I$(objdir)/.. -idirafter $(srcroot)/include
++INCLUDES = -I. -I$(srcdir)/.. -I$(objdir)/..
+ # Note that when building the library, ${MULTILIB} is not the way multilib
+ # options are passed; they're passed in $(CFLAGS).
+ CFLAGS_FOR_TARGET = -O2 -g ${MULTILIB} ${INCLUDES} ${NEWLIB_CFLAGS}
 diff --git a/libgloss/configure b/libgloss/configure
-index 28754b6..a188a79 100755
+index 28754b6d5..2a2f0d605 100755
 --- a/libgloss/configure
 +++ b/libgloss/configure
 @@ -630,6 +630,8 @@ CPPFLAGS
@@ -118,7 +116,7 @@ index 28754b6..a188a79 100755
  
  ac_ext=c
  ac_cpp='$CPP $CPPFLAGS'
-@@ -5347,6 +5360,10 @@ if test -z "${CONFIG_WINCE_TRUE}" && test -z "${CONFIG_WINCE_FALSE}"; then
+@@ -5347,6 +5362,10 @@ if test -z "${CONFIG_WINCE_TRUE}" && test -z "${CONFIG_WINCE_FALSE}"; then
    as_fn_error $? "conditional \"CONFIG_WINCE\" was never defined.
  Usually this means the macro was only invoked conditionally." "$LINENO" 5
  fi
@@ -130,7 +128,7 @@ index 28754b6..a188a79 100755
    as_fn_error $? "conditional \"AMDEP\" was never defined.
  Usually this means the macro was only invoked conditionally." "$LINENO" 5
 diff --git a/libgloss/configure.ac b/libgloss/configure.ac
-index 5fb2684..4528b09 100644
+index 5fb26845c..4528b09f2 100644
 --- a/libgloss/configure.ac
 +++ b/libgloss/configure.ac
 @@ -145,6 +145,7 @@ case "${target}" in
@@ -159,7 +157,3 @@ index 5fb2684..4528b09 100644
  dnl For now, don't bother configuring testsuite
  dnl
  dnl if test "${config_testsuite}" = "true";
--- 
-1.8.3.1
-
-
