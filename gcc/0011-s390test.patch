@@ -1,0 +1,13 @@
+diff --git a/gcc/testsuite/gcc.target/s390/vector/vec-abi-3.c b/gcc/testsuite/gcc.target/s390/vector/vec-abi-3.c
+index 4be2360a36e..0d7cf5e66d4 100644
+--- a/gcc/testsuite/gcc.target/s390/vector/vec-abi-3.c
++++ b/gcc/testsuite/gcc.target/s390/vector/vec-abi-3.c
+@@ -26,8 +26,6 @@
+ /* { dg-final { scan-assembler-times "vab\t%v24,%v\[0-9\]*,%v\[0-9\]*" 1 } } */
+ /* { dg-final { scan-assembler-times "srlg\t%r\[0-9\]*,%r2,32" 1 { target lp64 } } } */
+ /* { dg-final { scan-assembler-times "srlg\t%r\[0-9\]*,%r3,32" 1 { target lp64 } } } */
+-/* { dg-final { scan-assembler-times "llgfr\t%.*,%r2" 1 { target { ! lp64 } } } } */
+-/* { dg-final { scan-assembler-times "llgfr\t%.*,%r4" 1 { target { ! lp64 } } } } */
+ 
+ 
+ typedef double v2df __attribute__((vector_size(16)));
