@@ -11,16 +11,3 @@ index 1c777a72bb39..ccbc4c925408 100644
  endif
  
  CFLAGS += -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE
-diff --git a/tools/objtool/Makefile b/tools/objtool/Makefile
-index 92ce4fce7bc7..e82f068bcbd4 100644
---- a/tools/objtool/Makefile
-+++ b/tools/objtool/Makefile
-@@ -30,7 +30,7 @@ INCLUDES := -I$(srctree)/tools/include \
- 	    -I$(srctree)/tools/objtool/include \
- 	    -I$(srctree)/tools/objtool/arch/$(SRCARCH)/include
- WARNINGS := $(EXTRA_WARNINGS) -Wno-switch-default -Wno-switch-enum -Wno-packed -Wno-nested-externs
--CFLAGS   := -Werror $(WARNINGS) $(KBUILD_HOSTCFLAGS) -g $(INCLUDES) $(LIBELF_FLAGS)
-+CFLAGS   := $(WARNINGS) $(KBUILD_HOSTCFLAGS) -g $(INCLUDES) $(LIBELF_FLAGS)
- LDFLAGS  += $(LIBELF_LIBS) $(LIBSUBCMD) $(KBUILD_HOSTLDFLAGS)
- 
- # Allow old libelf to be used:
