@@ -48,7 +48,7 @@ gcc/testsuite/g++.dg/modules/xtreme-header-5_a.H
 # Been regressing for a long time, nobody seems to be digging into it
 libgomp/testsuite/libgomp.c/places-10.c
 # Recent, expecting this to get resolved
-gcc/testsuite/gfortran.dg/unlimited_polymorphic_3.f03
+#gcc/testsuite/gfortran.dg/unlimited_polymorphic_3.f03
 # Seems to be bouncing every few days on cris-elf
 gcc/testsuite/gcc.dg/graphite/interchange-10.c
 # started failing on sh4 recently
@@ -71,3 +71,5 @@ gcc/testsuite/c-c++-common/diagnostic-format-json-4.c
 gcc//testsuite/gcc.dg/c11-atomic-exec-4.c
 # Takes a long time and occasionally times out if builders are busy
 gcc/testsuite/gcc.dg/long_branch.c
+# Until Andrew fixes his code
+gcc/testsuite/gcc.dg/tree-ssa/pr23109.c
