@@ -46,8 +46,6 @@ gcc/testsuite/gcc.dg/plugin/poly-int-02_plugin.c
 gcc/testsuite/gcc.dg/uninit-pred-7_a.c
 # Duplicate names, though I'm not sure how
 gcc/testsuite/g++.dg/modules/xtreme-header-5_a.H
-# Been regressing for a long time, nobody seems to be digging into it
-#libgomp/testsuite/libgomp.c/places-10.c
 # Seems to be bouncing every few days on cris-elf
 gcc/testsuite/gcc.dg/graphite/interchange-10.c
 # started failing on sh4 recently
@@ -55,7 +53,7 @@ gcc/testsuite/c-c++-common/goacc/kernels-decompose-pr100400-1-2.c
 # Per H-P's comments which xfailed this test, it is flakey
 gcc/testsuite/gcc.dg/pr84877.c
 # Until I fix the targts
-gcc/testsuite/c-c++-common/Wcast-align.c
+#gcc/testsuite/c-c++-common/Wcast-align.c
 # Until we fixup some stuff
 gcc/testsuite/gcc.dg/tree-prof/cmpsf-1.c
 # Until I debug
