@@ -1,0 +1,117 @@
+
+
+
+Hi Wilhelm (and Jeff),
+Many thanks for your offer to test my revised patch for PR 109476 on AVR.
+Any chance that I could ask you to please spin the attached patch?, that I've
+confirmed now bootstraps and passes the regression tests on x86_64-pc-linux-gnu,
+both 32 and 64 bit.  I've also added a new AVR specific test case.
+
+Jeff, if it's not too much trouble, please could you also try it out on your farm/queue?
+I'm not sure if the reviewers will consider this suitable for late stage 4, but I'd be more
+confident if your automated testers gave this patch a clean bill of health.
+
+Many thanks (and in advance) to you both for all your help.
+Best regards,
+Roger
+--
+
+> -----Original Message-----
+> From: klaus.doldinger64 at googlemail dot com <gcc-bugzilla@gcc.gnu.org>
+> Sent: 14 April 2023 08:46
+> To: roger@nextmovesoftware.com
+> Subject: [Bug rtl-optimization/109476] Missing optimization for 8bit/8bit
+> multiplication / regression
+>
+> https://gcc.gnu.org/bugzilla/show_bug.cgi?id=109476
+>
+> --- Comment #16 from Wilhelm M <klaus.doldinger64 at googlemail dot com> ---
+> (In reply to Roger Sayle from comment #14)
+>> My apologies for the delay/issues.  My bootstrap and regression
+>> testing of this patch (on x86_64-pc-linux-gnu) revealed an issue or
+>> two (including the reported ICE).  My plan was to fix/resolve all
+>> these before posting a concrete submission to gcc-patches.
+>
+> We all appreciate your great effort in this case! Please don't hesitate to send here
+> some patches to test with. I'll be happy to test your patches!
+>
+> --
+> You are receiving this mail because:
+> You are on the CC list for the bug.
+
+patchav.txt
+
+diff --git a/gcc/lower-subreg.cc b/gcc/lower-subreg.cc
+index 481e1e8..81fc5380 100644
+--- a/gcc/lower-subreg.cc
++++ b/gcc/lower-subreg.cc
+@@ -37,6 +37,7 @@ along with GCC; see the file COPYING3.  If not see
+ #include "cfgbuild.h"
+ #include "dce.h"
+ #include "expr.h"
++#include "explow.h"
+ #include "tree-pass.h"
+ #include "lower-subreg.h"
+ #include "rtl-iter.h"
+@@ -1299,11 +1300,12 @@ find_decomposable_shift_zext (rtx_insn *insn, bool speed_p)
+ 
+ /* Decompose a more than word wide shift (in INSN) of a multiword
+    pseudo or a multiword zero-extend of a wordmode pseudo into a move
+-   and 'set to zero' insn.  Return a pointer to the new insn when a
+-   replacement was done.  */
++   and 'set to zero' insn.  SPEED_P says whether we are optimizing
++   for speed or size, when checking if a ZERO_EXTEND is preferable.
++   Return a pointer to the new insn when a replacement was done.  */
+ 
+ static rtx_insn *
+-resolve_shift_zext (rtx_insn *insn)
++resolve_shift_zext (rtx_insn *insn, bool speed_p)
+ {
+   rtx set;
+   rtx op;
+@@ -1378,14 +1380,29 @@ resolve_shift_zext (rtx_insn *insn)
+ 				dest_reg, GET_CODE (op) != ASHIFTRT);
+     }
+ 
+-  if (dest_reg != src_reg)
+-    emit_move_insn (dest_reg, src_reg);
+-  if (GET_CODE (op) != ASHIFTRT)
+-    emit_move_insn (dest_upper, CONST0_RTX (word_mode));
+-  else if (INTVAL (XEXP (op, 1)) == 2 * BITS_PER_WORD - 1)
+-    emit_move_insn (dest_upper, copy_rtx (src_reg));
++  /* Consider using ZERO_EXTEND instead of setting DEST_UPPER to zero
++     if this is considered reasonable.  */
++  if (GET_CODE (op) == LSHIFTRT
++      && GET_MODE (op) == twice_word_mode
++      && REG_P (SET_DEST (set))
++      && !choices[speed_p].splitting_zext)
++    {
++      rtx tmp = force_reg (word_mode, copy_rtx (src_reg));
++      tmp = simplify_gen_unary (ZERO_EXTEND, twice_word_mode, tmp, word_mode);
++      emit_move_insn (SET_DEST (set), tmp);
++    }
+   else
+-    emit_move_insn (dest_upper, upper_src);
++    {
++      if (dest_reg != src_reg)
++	emit_move_insn (dest_reg, src_reg);
++      if (GET_CODE (op) != ASHIFTRT)
++	emit_move_insn (dest_upper, CONST0_RTX (word_mode));
++      else if (INTVAL (XEXP (op, 1)) == 2 * BITS_PER_WORD - 1)
++	emit_move_insn (dest_upper, copy_rtx (src_reg));
++      else
++	emit_move_insn (dest_upper, upper_src);
++    }
++
+   insns = get_insns ();
+ 
+   end_sequence ();
+@@ -1670,7 +1687,7 @@ decompose_multiword_subregs (bool decompose_copies)
+ 		    {
+ 		      rtx_insn *decomposed_shift;
+ 
+-		      decomposed_shift = resolve_shift_zext (insn);
++		      decomposed_shift = resolve_shift_zext (insn, speed_p);
+ 		      if (decomposed_shift != NULL_RTX)
+ 			{
+ 			  insn = decomposed_shift;
