@@ -39,3 +39,17 @@ index 05dead9c077..7ce1b754e76 100644
  #undef TARGET_LEGITIMATE_ADDRESS_P
  #define TARGET_LEGITIMATE_ADDRESS_P cris_legitimate_address_p
  
+diff --git a/gcc/config/fr30/fr30.cc b/gcc/config/fr30/fr30.cc
+index 0d05b13aa31..d2b2bf39c7f 100644
+--- a/gcc/config/fr30/fr30.cc
++++ b/gcc/config/fr30/fr30.cc
+@@ -185,9 +185,6 @@ static int fr30_num_arg_regs (const function_arg_info &);
+ #undef TARGET_CAN_ELIMINATE
+ #define TARGET_CAN_ELIMINATE fr30_can_eliminate
+ 
+-#undef TARGET_LRA_P
+-#define TARGET_LRA_P hook_bool_void_false
+-
+ #undef TARGET_ASM_TRAMPOLINE_TEMPLATE
+ #define TARGET_ASM_TRAMPOLINE_TEMPLATE fr30_asm_trampoline_template
+ #undef TARGET_TRAMPOLINE_INIT
