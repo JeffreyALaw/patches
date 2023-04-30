@@ -1,0 +1,27 @@
+diff --git a/gcc/config/epiphany/epiphany.cc b/gcc/config/epiphany/epiphany.cc
+index fdd4df71456..20c20e18ea0 100644
+--- a/gcc/config/epiphany/epiphany.cc
++++ b/gcc/config/epiphany/epiphany.cc
+@@ -106,8 +106,6 @@ static rtx_insn *frame_insn (rtx);
+ #define TARGET_SCHED_ISSUE_RATE epiphany_issue_rate
+ #define TARGET_SCHED_ADJUST_COST epiphany_adjust_cost
+ 
+-#define TARGET_LRA_P hook_bool_void_false
+-
+ #define TARGET_LEGITIMATE_ADDRESS_P epiphany_legitimate_address_p
+ 
+ #define TARGET_SECONDARY_RELOAD epiphany_secondary_reload
+diff --git a/gcc/config/m32c/m32c.cc b/gcc/config/m32c/m32c.cc
+index e0d06f833d3..691014f5223 100644
+--- a/gcc/config/m32c/m32c.cc
++++ b/gcc/config/m32c/m32c.cc
+@@ -1636,9 +1636,6 @@ m32c_trampoline_init (rtx m_tramp, tree fndecl, rtx chainval)
+ #undef A0
+ }
+ 
+-#undef TARGET_LRA_P
+-#define TARGET_LRA_P hook_bool_void_false
+-
+ /* Addressing Modes */
+ 
+ /* The r8c/m32c family supports a wide range of non-orthogonal
