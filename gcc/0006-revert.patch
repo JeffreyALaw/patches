@@ -1,0 +1,170 @@
+commit e7ce7c4905fd254760b1cd187752a03bc0c148ba
+Author: Longjun Luo <luolongjuna@gmail.com>
+Date:   Sun Apr 30 12:28:06 2023 -0600
+
+    [PATCH] libcpp: suppress builtin macro redefined warnings for __LINE__
+    
+    From 0821df518b264e754d698d399f98be1a62945e32 Mon Sep 17 00:00:00 2001
+    From: Longjun Luo <luolongjuna@gmail.com>
+    Date: Thu, 12 Jan 2023 23:59:54 +0800
+    Subject: [PATCH] libcpp: suppress builtin macro redefined warnings for
+     __LINE__
+    
+    As implied in
+    gcc.gnu.org/legacy-ml/gcc-patches/2008-09/msg00076.html,
+    gcc provides -Wno-builtin-macro-redefined to suppress warning when
+    redefining builtin macro. However, at that time, there was no
+    scenario for __LINE__ macro.
+    
+    But, when we try to build a live-patch, we compare sections by using
+    -ffunction-sections. Some same functions are considered changed because
+    of __LINE__ macro.
+    
+    At present, to detect such a changed caused by __LINE__ macro, we
+    have to analyse code and maintain a function list. For example,
+    in kpatch, check this commit
+    github.com/dynup/kpatch/commit/0e1b95edeafa36edb7bcf11da6d1c00f76d7e03d.
+    
+    So, in this scenario, when we try to compared sections, it would
+    be better to support suppress builtin macro redefined warnings for
+    __LINE__ macro.
+    
+    libcpp:
+            * init.cc (builtin_array): Do not always warn for a redefinition
+            of __LINE__.
+    
+    gcc/testsuite
+    
+            * gcc.dg/builtin-redefine.c: Test for redefintion warnings
+            for __LINE__.
+            * gcc.dg/builtin-redefine-1.c: New test.
+
+diff --git a/gcc/testsuite/gcc.dg/builtin-redefine-1.c b/gcc/testsuite/gcc.dg/builtin-redefine-1.c
+new file mode 100755
+index 00000000000..c1e05b4fc7c
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/builtin-redefine-1.c
+@@ -0,0 +1,49 @@
++/* Test default warnings for redefining builtin macros.  */
++
++/* { dg-do compile } */
++/* { dg-options "-D__TIMESTAMP__=x -D__TIME__=x -D__DATE__=x -D__FILE__=x -D__FILE_NAME__=x -D__BASE_FILE__=x -D__LINE__=0" } */
++
++/* Check default behavior for builtin macros redefinition.  */
++
++/* { dg-message "\"__TIMESTAMP__\" redefined" "" {target "*-*-*"} 0 } */
++#ifndef __TIMESTAMP__
++#error "__TIMESTAMP__ builtin is not defined"
++/* { dg-bogus "Expected built-in is not defined" "" { target *-*-* } .-1 } */
++#endif
++
++/* { dg-message "\"__TIME__\" redefined" "" {target "*-*-*"} 0 } */
++#ifndef __TIME__
++#error "__TIME__ builtin is not defined"
++/* { dg-bogus "Expected built-in is not defined" "" { target *-*-* } .-1 } */
++#endif
++
++/* { dg-message "\"__DATE__\" redefined" "" {target "*-*-*"} 0 } */
++#ifndef __DATE__
++#error "__DATE__ builtin is not defined"
++/* { dg-bogus "Expected built-in is not defined" "" { target *-*-* } .-1 } */
++#endif
++
++/* { dg-message "\"__FILE__\" redefined" "" {target "*-*-*"} 0 } */
++#ifndef __FILE__
++#error "__FILE__ builtin is not defined"
++/* { dg-bogus "Expected built-in is not defined" "" { target *-*-* } .-1 } */
++#endif
++
++/* { dg-message "\"__FILE_NAME__\" redefined" "" {target "*-*-*"} 0 } */
++#ifndef __FILE_NAME__
++#error "__FILE_NAME__ builtin is not defined"
++/* { dg-bogus "Expected built-in is not defined" "" { target *-*-* } .-1 } */
++#endif
++
++/* { dg-message "\"__BASE_FILE__\" redefined" "" {target "*-*-*"} 0 } */
++#ifndef __BASE_FILE__
++#error "__BASE_FILE__ builtin is not defined"
++/* { dg-bogus "Expected built-in is not defined" "" { target *-*-* } .-1 } */
++#endif
++
++/* { dg-message "\"__LINE__\" redefined" "" {target "*-*-*"} 0 } */
++#ifndef __LINE__
++#error "__LINE__ builtin is not defined"
++/* { dg-bogus "Expected built-in is not defined" "" { target *-*-* } .-1 } */
++#endif
++
+diff --git a/gcc/testsuite/gcc.dg/builtin-redefine.c b/gcc/testsuite/gcc.dg/builtin-redefine.c
+index 882b2210992..fa27ee9aefc 100644
+--- a/gcc/testsuite/gcc.dg/builtin-redefine.c
++++ b/gcc/testsuite/gcc.dg/builtin-redefine.c
+@@ -1,9 +1,9 @@
+ /* Test -Wno-builtin-macro-redefined warnings.  */
+ 
+ /* { dg-do compile } */
+-/* { dg-options "-Wno-builtin-macro-redefined -U__DATE__ -D__TIME__=X" } */
++/* { dg-options "-Wno-builtin-macro-redefined -U__DATE__ -D__TIME__=X -D__LINE__=0" } */
+ 
+-/* Check date, time, and datestamp built-ins warnings may be suppressed.  */
++/* Check date, time, datestamp and line built-ins warnings may be suppressed.  */
+ 
+ #if defined(__DATE__)
+ #error "__DATE__ is defined, but should not be (-U command line error)"
+@@ -15,6 +15,11 @@
+ /* { dg-bogus "__TIME__ is not defined" "" { target *-*-* } .-1 } */
+ #endif
+ 
++#if __LINE__ != 0
++#error "__LINE__ is not defined as expected (-D command line error)"
++/* { dg-bogus "__LINE__ is not defined" "" { target *-*-* } .-1 } */
++#endif
++
+ #if !defined(__TIMESTAMP__)
+ #error "__TIMESTAMP__ is not defined (built-in macro expectation error)"
+ /* { dg-bogus "__TIMESTAMP__ is not defined" "" { target *-*-* } .-1 } */
+@@ -53,6 +58,18 @@
+ #undef __TIMESTAMP__         /* Undefine while defined.  */
+ 
+ 
++#undef __LINE__              /* Undefine while defined.  */
++#undef __LINE__              /* Undefine while already undefined.  */
++
++#define __LINE__ "1"         /* Define while undefined.  */
++#define __LINE__ "1"         /* Re-define while defined.  */ /* { dg-line line_prev } */
++
++#define __LINE__ "2"         /* { dg-warning "-:\"__LINE__\" redefined" } */
++/* { dg-message "-:previous definition" "" { target *-*-* } line_prev } */
++
++#undef __LINE__              /* Undefine while defined.  */
++
++
+ /* Check other built-ins with warnings that may be suppressed.  */
+ 
+ #if !defined(__FILE__) || !defined(__BASE_FILE__)
+@@ -66,12 +83,11 @@
+ 
+ /* Check selected built-ins not affected by warning suppression. */
+ 
+-#if !defined(__LINE__) || !defined(__INCLUDE_LEVEL__) || !defined(__COUNTER__)
++#if !defined(__INCLUDE_LEVEL__) || !defined(__COUNTER__)
+ #error "Expected built-in is not defined (built-in macro expectation error)"
+ /* { dg-bogus "Expected built-in is not defined" "" { target *-*-* } .-1 } */
+ #endif
+ 
+-#define __LINE__ 0           /* { dg-warning "-:\"__LINE__\" redef" } */
+ #define __INCLUDE_LEVEL__ 0  /* { dg-warning "-:\"__INCLUDE_LEVEL__\" redef" } */
+ #define __COUNTER__ 0        /* { dg-warning "-:\"__COUNTER__\" redef" } */
+ 
+diff --git a/libcpp/init.cc b/libcpp/init.cc
+index c508f06112a..bdeccffa029 100644
+--- a/libcpp/init.cc
++++ b/libcpp/init.cc
+@@ -421,7 +421,7 @@ static const struct builtin_macro builtin_array[] =
+   B("__FILE__",		 BT_FILE,          false),
+   B("__FILE_NAME__",	 BT_FILE_NAME,     false),
+   B("__BASE_FILE__",	 BT_BASE_FILE,     false),
+-  B("__LINE__",		 BT_SPECLINE,      true),
++  B("__LINE__",		 BT_SPECLINE,      false),
+   B("__INCLUDE_LEVEL__", BT_INCLUDE_LEVEL, true),
+   B("__COUNTER__",	 BT_COUNTER,       true),
+   /* Make sure to update the list of built-in
