@@ -25,3 +25,17 @@ index e0d06f833d3..691014f5223 100644
  /* Addressing Modes */
  
  /* The r8c/m32c family supports a wide range of non-orthogonal
+diff --git a/gcc/config/cris/cris.cc b/gcc/config/cris/cris.cc
+index 05dead9c077..7ce1b754e76 100644
+--- a/gcc/config/cris/cris.cc
++++ b/gcc/config/cris/cris.cc
+@@ -215,9 +215,6 @@ int cris_cpu_version = CRIS_DEFAULT_CPU_VERSION;
+ #undef TARGET_INIT_LIBFUNCS
+ #define TARGET_INIT_LIBFUNCS cris_init_libfuncs
+ 
+-#undef TARGET_LRA_P
+-#define TARGET_LRA_P hook_bool_void_false
+-
+ #undef TARGET_LEGITIMATE_ADDRESS_P
+ #define TARGET_LEGITIMATE_ADDRESS_P cris_legitimate_address_p
+ 
