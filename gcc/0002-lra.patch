@@ -67,3 +67,17 @@ index e800af78e14..384d702ed77 100644
  #undef TARGET_WARN_FUNC_RETURN
  #define TARGET_WARN_FUNC_RETURN mcore_warn_func_return
  
+diff --git a/gcc/config/microblaze/microblaze.cc b/gcc/config/microblaze/microblaze.cc
+index 6df2c712cab..ebe78304f89 100644
+--- a/gcc/config/microblaze/microblaze.cc
++++ b/gcc/config/microblaze/microblaze.cc
+@@ -4017,9 +4017,6 @@ microblaze_starting_frame_offset (void)
+ #undef TARGET_LEGITIMATE_ADDRESS_P
+ #define TARGET_LEGITIMATE_ADDRESS_P 	microblaze_legitimate_address_p 
+ 
+-#undef TARGET_LRA_P
+-#define TARGET_LRA_P hook_bool_void_false
+-
+ #undef TARGET_FRAME_POINTER_REQUIRED
+ #define TARGET_FRAME_POINTER_REQUIRED	microblaze_frame_pointer_required
+ 
