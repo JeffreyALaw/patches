@@ -95,3 +95,73 @@ index 4e4fb8bdac2..eda2959adb9 100644
  #undef TARGET_LEGITIMATE_ADDRESS_P
  #define TARGET_LEGITIMATE_ADDRESS_P	mmix_legitimate_address_p
  #undef TARGET_LEGITIMATE_CONSTANT_P
+diff --git a/gcc/config/mn10300/mn10300.cc b/gcc/config/mn10300/mn10300.cc
+index a8b01a543cc..4540858d312 100644
+--- a/gcc/config/mn10300/mn10300.cc
++++ b/gcc/config/mn10300/mn10300.cc
+@@ -3368,9 +3368,6 @@ mn10300_reorg (void)
+ #undef  TARGET_CASE_VALUES_THRESHOLD
+ #define TARGET_CASE_VALUES_THRESHOLD mn10300_case_values_threshold
+ 
+-#undef TARGET_LRA_P
+-#define TARGET_LRA_P hook_bool_void_false
+-
+ #undef  TARGET_LEGITIMATE_ADDRESS_P
+ #define TARGET_LEGITIMATE_ADDRESS_P	mn10300_legitimate_address_p
+ #undef  TARGET_DELEGITIMIZE_ADDRESS
+diff --git a/gcc/config/msp430/msp430.cc b/gcc/config/msp430/msp430.cc
+index 6f9c56187ee..1af0223cb39 100644
+--- a/gcc/config/msp430/msp430.cc
++++ b/gcc/config/msp430/msp430.cc
+@@ -902,9 +902,6 @@ msp430_gimplify_va_arg_expr (tree valist, tree type, gimple_seq *pre_p,
+   return addr;
+ }
+ 
+-#undef TARGET_LRA_P
+-#define TARGET_LRA_P hook_bool_void_false
+-
+ /* Addressing Modes */
+ 
+ #undef  TARGET_LEGITIMATE_ADDRESS_P
+diff --git a/gcc/config/rl78/rl78.cc b/gcc/config/rl78/rl78.cc
+index 7ed28d35883..440eb134b34 100644
+--- a/gcc/config/rl78/rl78.cc
++++ b/gcc/config/rl78/rl78.cc
+@@ -1135,9 +1135,6 @@ rl78_is_legitimate_constant (machine_mode mode ATTRIBUTE_UNUSED, rtx x ATTRIBUTE
+   return true;
+ }
+ 
+-#undef TARGET_LRA_P
+-#define TARGET_LRA_P hook_bool_void_false
+-
+ #undef  TARGET_ADDR_SPACE_LEGITIMATE_ADDRESS_P
+ #define TARGET_ADDR_SPACE_LEGITIMATE_ADDRESS_P	rl78_as_legitimate_address
+ 
+diff --git a/gcc/config/stormy16/stormy16.cc b/gcc/config/stormy16/stormy16.cc
+index 98f87fa8251..81b32dbc958 100644
+--- a/gcc/config/stormy16/stormy16.cc
++++ b/gcc/config/stormy16/stormy16.cc
+@@ -2894,9 +2894,6 @@ xstormy16_push_rounding (poly_int64 bytes)
+ #undef  TARGET_PREFERRED_OUTPUT_RELOAD_CLASS
+ #define TARGET_PREFERRED_OUTPUT_RELOAD_CLASS xstormy16_preferred_reload_class
+ 
+-#undef TARGET_LRA_P
+-#define TARGET_LRA_P hook_bool_void_false
+-
+ #undef TARGET_LEGITIMATE_ADDRESS_P
+ #define TARGET_LEGITIMATE_ADDRESS_P	xstormy16_legitimate_address_p
+ #undef TARGET_MODE_DEPENDENT_ADDRESS_P
+diff --git a/gcc/config/visium/visium.cc b/gcc/config/visium/visium.cc
+index ec4c2e9ae5c..c727b5d6d29 100644
+--- a/gcc/config/visium/visium.cc
++++ b/gcc/config/visium/visium.cc
+@@ -280,9 +280,6 @@ static HOST_WIDE_INT visium_constant_alignment (const_tree, HOST_WIDE_INT);
+ #undef  TARGET_LEGITIMATE_CONSTANT_P
+ #define TARGET_LEGITIMATE_CONSTANT_P visium_legitimate_constant_p
+ 
+-#undef  TARGET_LRA_P
+-#define TARGET_LRA_P hook_bool_void_false
+-
+ #undef  TARGET_LEGITIMATE_ADDRESS_P
+ #define TARGET_LEGITIMATE_ADDRESS_P visium_legitimate_address_p
+ 
