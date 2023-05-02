@@ -1,0 +1,28 @@
+diff --git a/gcc/config/stormy16/stormy16.cc b/gcc/config/stormy16/stormy16.cc
+index 81b32dbc958..27a9169f975 100644
+--- a/gcc/config/stormy16/stormy16.cc
++++ b/gcc/config/stormy16/stormy16.cc
+@@ -1358,6 +1358,13 @@ xstormy16_function_profiler (void)
+ {
+   sorry ("%<function_profiler%> support");
+ }
++
++static void
++xstormy16_option_override (void)
++{
++  flag_split_wide_types = 0;
++}
++
+ 
+ /* Update CUM to advance past argument ARG.  Once this is done,
+    the variable CUM is suitable for analyzing the *following*
+@@ -2916,6 +2923,9 @@ xstormy16_push_rounding (poly_int64 bytes)
+ #undef  TARGET_HAVE_SPECULATION_SAFE_VALUE
+ #define TARGET_HAVE_SPECULATION_SAFE_VALUE speculation_safe_value_not_needed
+ 
++#undef TARGET_OPTION_OVERRIDE
++#define TARGET_OPTION_OVERRIDE          xstormy16_option_override
++
+ struct gcc_target targetm = TARGET_INITIALIZER;
+ 
+ #include "gt-stormy16.h"
