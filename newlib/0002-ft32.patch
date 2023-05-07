@@ -9,3 +9,18 @@ index c61c1a6e7..2b3641650 100644
 +__PMSIZE = 0x1000;
 +__RAMSIZE = 0x10000;
 +
+diff --git a/libgloss/ft32/sim.ld b/libgloss/ft32/sim.ld
+index c61c1a6e7..499206328 100644
+--- a/libgloss/ft32/sim.ld
++++ b/libgloss/ft32/sim.ld
+@@ -29,6 +29,10 @@ SECTIONS
+     *(.dtors)
+     ___dtors_end = . ;
+   } > ram
++  /* Exception handlers */
++  .eh_frame_hdr : { *(.eh_frame_hdr) } > ram
++  .eh_frame : { KEEP (*(.eh_frame)) } > ram
++  .gcc_except_table : { *(.gcc_except_table) *(.gcc_except_table.*) } > ram
+   .data          : AT (ADDR (.text) + SIZEOF (.text))
+   {
+     *(.data)
