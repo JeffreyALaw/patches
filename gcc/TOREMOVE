@@ -69,5 +69,3 @@ gcc//testsuite/gcc.dg/c11-atomic-exec-4.c
 # Temporary until I can bisect and shunt to the right folks
 gcc/testsuite/gcc.dg/tree-ssa/evrp-ignore.c
 gcc/testsuite/gcc.dg/tree-ssa/vrp06.c
-# Until Andrew P. fixes things
-gcc/testsuite/gcc.dg/pr81192.c
