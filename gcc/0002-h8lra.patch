@@ -1,0 +1,31 @@
+diff --git a/gcc/config/h8300/constraints.md b/gcc/config/h8300/constraints.md
+index f1ebce14dad..8de04b368dd 100644
+--- a/gcc/config/h8300/constraints.md
++++ b/gcc/config/h8300/constraints.md
+@@ -144,7 +144,7 @@
+        (match_test "op == CONST0_RTX (SFmode)")))
+ 
+ ;; Extra constraints.
+-(define_constraint "Q"
++(define_special_memory_constraint "Q"
+   "@internal"
+   (and (match_test "TARGET_H8300SX")
+        (match_operand 0 "memory_operand")))
+@@ -196,7 +196,7 @@
+ 		 (match_test "TARGET_H8300SX"))
+ 	    (match_code "const_int" "0"))))
+ 
+-(define_memory_constraint "WU"
++(define_special_memory_constraint "WU"
+   "@internal"
+   (and (match_code "mem")
+        (match_test "satisfies_constraint_U (op)")))
+@@ -211,7 +211,7 @@
+   (and (match_code "const_int")
+        (match_test "exact_log2 (ival & 0xff) != -1")))
+ 
+-(define_constraint "Zz"
++(define_special_memory_constraint "Zz"
+   "@internal"
+   (and (match_test "TARGET_H8300SX")
+        (match_code "mem")
