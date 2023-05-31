@@ -1,0 +1,13 @@
+diff --git a/gcc/config/mcore/mcore.cc b/gcc/config/mcore/mcore.cc
+index e800af78e14..bb644cb8fb5 100644
+--- a/gcc/config/mcore/mcore.cc
++++ b/gcc/config/mcore/mcore.cc
+@@ -3197,7 +3197,7 @@ mcore_trampoline_init (rtx m_tramp, tree fndecl, rtx chain_value)
+ static bool
+ mcore_legitimate_constant_p (machine_mode mode ATTRIBUTE_UNUSED, rtx x)
+ {
+-  return GET_CODE (x) != CONST_DOUBLE;
++  return GET_CODE (x) != CONST_DOUBLE && GET_CODE (x) != CONST;
+ }
+ 
+ /* Helper function for `mcore_legitimate_address_p'.  */
