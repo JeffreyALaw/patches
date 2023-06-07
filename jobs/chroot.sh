@@ -38,6 +38,7 @@ export GCC_CONFIG=""
 case ${TARGET} in
   riscv*-* | riscv*-*-* | riscv*-*-*-*)
     KERNEL_TARGETS=all
+    GCC_CONFIG="--disable-bootstrap"
     ;;
   powerpc-* | powerpc-*-* | powerpc-*-*-*)
     KERNEL_CONFIG=pmac32_defconfig
