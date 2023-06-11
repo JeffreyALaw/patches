@@ -1,0 +1,36 @@
+*** configure.orig	Sun Jun 11 16:14:42 2023
+--- configure	Sun Jun 11 16:14:51 2023
+***************
+*** 4751,4781 ****
+  fi
+  
+  
+- # Make sure that we found the right avr cross-compiler.
+- 
+- case "${CC}" in
+-    *gcc*)
+-        case "X`${CC} -dumpmachine`X" in
+-            XavrX) ;;
+-            *) as_fn_error $? "Wrong C compiler found; check the PATH!" "$LINENO" 5 ;;
+-        esac
+-        ;;
+-    *) as_fn_error $? "Wrong C compiler found; check the PATH!" "$LINENO" 5 ;;
+- esac
+- case "${AS}" in
+-    *avr*as*) ;;
+-    *) as_fn_error $? "Wrong assembler found; check the PATH!" "$LINENO" 5 ;;
+- esac
+- case "${AR}" in
+-    *avr*ar*) ;;
+-    *) as_fn_error $? "Wrong archiver found; check the PATH!" "$LINENO" 5 ;;
+- esac
+- case "${RANLIB}" in
+-    *avr*ranlib*) ;;
+-    *) as_fn_error $? "Wrong ranlib found; check the PATH!" "$LINENO" 5 ;;
+- esac
+- 
+- 
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether ln -s works" >&5
+  $as_echo_n "checking whether ln -s works... " >&6; }
+  LN_S=$as_ln_s
+--- 4751,4756 ----
