@@ -40,6 +40,13 @@ case "${TARGET}" in
     SIMINSTALLTARG=
     TESTARGS="--target_board=arc-sim"
     ;;
+  avr*-*)
+    RUNGCCTESTS=yes
+    DUMMY_SIM=yes
+    SIMTARG=
+    SIMINSTALLTARG=
+    TESTARGS="--target_board=arc-sim"
+    ;;
   bfin*-*)
     RUNGCCTESTS=yes
     SIMTARG=all-sim
@@ -231,19 +238,34 @@ fi
 cd ../../
 
 # Step 3, build newlib
-cd ${TARGET}-obj/newlib
-pushd ${SRCDIR}/newlib-cygwin
-find . -name aclocal.m4 | xargs touch
-find . -name aclocal.m4 | xargs touch
-find . -name configure | xargs touch
-find . -name Makefile.am | xargs touch
-find . -name Makefile.in | xargs touch
-find . -name config.h.in | xargs touch
-popd
-${SRCDIR}/newlib-cygwin/configure --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET}
-make -j $NPROC -l $NPROC
-make install
-cd ../..
+if [ ${TARGET} != "avr-elf" ]; then
+  cd ${TARGET}-obj/newlib
+  pushd ${SRCDIR}/newlib-cygwin
+  find . -name aclocal.m4 | xargs touch
+  find . -name aclocal.m4 | xargs touch
+  find . -name configure | xargs touch
+  find . -name Makefile.am | xargs touch
+  find . -name Makefile.in | xargs touch
+  find . -name config.h.in | xargs touch
+  popd
+  ${SRCDIR}/newlib-cygwin/configure --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET}
+  make -j $NPROC -l $NPROC
+  make install
+  cd ../..
+else
+  # We don't have bzip2 in the docker image.  My bad
+  wget "https://sourceforge.net/projects/bzip2/files/bzip2-1.0.6.tar.gz/download" -O bzip2.1.0.6.tar.gz
+  tar xf bzip2-1.0.6.tar.gz
+  cd bzip2-1.0.6
+  make -j 40
+  make install PREFIX=/usr/bin
+
+  # avr needs a different newlib than everyone else.  boo
+  wget http://download.savannah.gnu.org/releases/avr-libc/avr-libc-2.1.0.tar.bz2
+  bunzip2 avr-libc-2.1.0.tar.bz2
+  # The AVR team mucked up 30+ years of standard ways to configure cross toolchains,
+  # remove that crap
+fi
 
 # Step 5, run tests
 if [ $DUMMY_SIM = "yes" ]; then
