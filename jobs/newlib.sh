@@ -272,7 +272,7 @@ else
   popd
   pushd ${TARGET}-obj/newlib
   # Now that the sources are all fixed up, build them in a fairly standard way
-  ${SRCDIR}/avr-libc-2.1.0/configure --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} --host=avr
+  ${SRCDIR}/avr-libc-2.1.0/configure --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} --host=avr-elf
   make -j $NPROC -l $NPROC
   make install
   popd ../..
@@ -285,7 +285,7 @@ else
   git clone https://git.savannah.nongnu.org/git/simulavr.git
   cd simulavr
   make build -j 80
-  cp build/app/simulavr /home/jlaw/jenkins/workspace/avr-elf/avr-elf-installed/bin
+  cp build/app/simulavr /home/jlaw/jenkins/workspace/avr-elf/avr-elf-installed/bin/avr-elf-run
 fi
 
 # Step 5, run tests
