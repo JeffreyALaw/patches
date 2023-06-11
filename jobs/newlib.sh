@@ -276,9 +276,9 @@ else
   make -j $NPROC -l $NPROC
   make install
   # But of course they f'd up the install process, so fix that.
-  pushd ${TARGET}-installed/avr
-  tar cf - . | (cd ../avr-elf ; tar xf - )
-  popd
+  #pushd ${TARGET}-installed/avr
+  #tar cf - . | (cd ../avr-elf ; tar xf - )
+  #popd
 
 
   # We also need to build the AVR simulator, which (of course) needs
