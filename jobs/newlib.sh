@@ -238,7 +238,7 @@ fi
 cd ../../
 
 # Step 3, build newlib
-if [ ${TARGET} != "avr-elf" ]; then
+if [ ${TARGET} != avr-elf ]; then
   cd ${TARGET}-obj/newlib
   pushd ${SRCDIR}/newlib-cygwin
   find . -name aclocal.m4 | xargs touch
