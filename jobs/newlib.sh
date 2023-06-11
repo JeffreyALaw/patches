@@ -275,17 +275,22 @@ else
   ${SRCDIR}/avr-libc-2.1.0/configure --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} --host=avr-elf
   make -j $NPROC -l $NPROC
   make install
-  popd ../..
+  # But of course they f'd up the install process, so fix that.
+  pushd ${TARGET}-installed/avr
+  tar cf - . | (cd ../avr-elf ; tar xf - )
+  popd
+
 
   # We also need to build the AVR simulator, which (of course) needs
   # cmake which we don't have in our newlib build docker container :(
   wget https://github.com/Kitware/CMake/releases/download/v3.26.4/cmake-3.26.4-linux-x86_64.sh
-  yes | ./cmake-3.26.4-linux-x86_64.sh
+  yes | sh ./cmake-3.26.4-linux-x86_64.sh
   PATH=/home/jlaw/jenkins/workspace/avr-elf/cmake-3.26.4-linux-x86_64/bin:$PATH
   git clone https://git.savannah.nongnu.org/git/simulavr.git
-  cd simulavr
+  pushd simulavr
   make build -j 80
   cp build/app/simulavr /home/jlaw/jenkins/workspace/avr-elf/avr-elf-installed/bin/avr-elf-run
+  popd
 fi
 
 # Step 5, run tests
