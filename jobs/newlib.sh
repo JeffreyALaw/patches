@@ -270,11 +270,22 @@ else
   # remove that crap
   patch < ../patches/newlib-cygwin/avr-libc-hack
   popd
+  pushd ${TARGET}-obj/newlib
   # Now that the sources are all fixed up, build them in a fairly standard way
-  ${SRCDIR}/avr-libc-2.1.0/configure --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET}
+  ${SRCDIR}/avr-libc-2.1.0/configure --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} --host=avr
   make -j $NPROC -l $NPROC
   make install
-  cd ../..
+  popd ../..
+
+  # We also need to build the AVR simulator, which (of course) needs
+  # cmake which we don't have in our newlib build docker container :(
+  wget https://github.com/Kitware/CMake/releases/download/v3.26.4/cmake-3.26.4-linux-x86_64.sh
+  yes | ./cmake-3.26.4-linux-x86_64.sh
+  PATH=/home/jlaw/jenkins/workspace/avr-elf/cmake-3.26.4-linux-x86_64/bin:$PATH
+  git clone https://git.savannah.nongnu.org/git/simulavr.git
+  cd simulavr
+  make build -j 80
+  cp build/app/simulavr /home/jlaw/jenkins/workspace/avr-elf/avr-elf-installed/bin
 fi
 
 # Step 5, run tests
