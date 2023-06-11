@@ -254,17 +254,27 @@ if [ ${TARGET} != "avr-elf" ]; then
   cd ../..
 else
   # We don't have bzip2 in the docker image.  My bad
-  wget "https://sourceforge.net/projects/bzip2/files/bzip2-1.0.6.tar.gz/download" -O bzip2.1.0.6.tar.gz
+  wget "https://sourceforge.net/projects/bzip2/files/bzip2-1.0.6.tar.gz/download" -O bzip2-1.0.6.tar.gz
   tar xf bzip2-1.0.6.tar.gz
-  cd bzip2-1.0.6
+  pushd bzip2-1.0.6
   make -j 40
-  make install PREFIX=/usr/bin
+  make install PREFIX=/usr
+  popd
 
   # avr needs a different newlib than everyone else.  boo
   wget http://download.savannah.gnu.org/releases/avr-libc/avr-libc-2.1.0.tar.bz2
   bunzip2 avr-libc-2.1.0.tar.bz2
+  tar xf avr-libc-2.1.0.tar
+  pushd avr-libc-2.1.0
   # The AVR team mucked up 30+ years of standard ways to configure cross toolchains,
   # remove that crap
+  patch < ../patches/newlib-cygwin/avr-libc-hack
+  popd
+  # Now that the sources are all fixed up, build them in a fairly standard way
+  ${SRCDIR}/avr-libc-2.1.0/configure --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET}
+  make -j $NPROC -l $NPROC
+  make install
+  cd ../..
 fi
 
 # Step 5, run tests
