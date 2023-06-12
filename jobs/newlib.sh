@@ -277,17 +277,17 @@ else
   make install
   popd
 
-  # We also need to build the AVR simulator, which (of course) needs
-  # cmake which we don't have in our newlib build docker container :(
-  wget https://github.com/Kitware/CMake/releases/download/v3.26.4/cmake-3.26.4-linux-x86_64.sh
-  sh ./cmake-3.26.4-linux-x86_64.sh --skip-license || true
-  echo DONE extracting
-  PATH=/home/jlaw/jenkins/workspace/avr-elf/cmake-3.26.4-linux-x86_64/bin:$PATH
-  git clone https://git.savannah.nongnu.org/git/simulavr.git
-  pushd simulavr
-  make build -j 80
-  cp build/app/simulavr /home/jlaw/jenkins/workspace/avr-elf/avr-elf-installed/bin/avr-elf-run
-  popd
+#  # We also need to build the AVR simulator, which (of course) needs
+#  # cmake which we don't have in our newlib build docker container :(
+#  wget https://github.com/Kitware/CMake/releases/download/v3.26.4/cmake-3.26.4-linux-x86_64.sh
+#  sh ./cmake-3.26.4-linux-x86_64.sh --skip-license || true
+#  echo DONE extracting
+#  PATH=/home/jlaw/jenkins/workspace/avr-elf/cmake-3.26.4-linux-x86_64/bin:$PATH
+#  git clone https://git.savannah.nongnu.org/git/simulavr.git
+#  pushd simulavr
+#  make build -j 80
+#  cp build/app/simulavr /home/jlaw/jenkins/workspace/avr-elf/avr-elf-installed/bin/avr-elf-run
+#  popd
 fi
 
 # Step 5, run tests
