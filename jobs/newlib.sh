@@ -284,7 +284,8 @@ else
   # We also need to build the AVR simulator, which (of course) needs
   # cmake which we don't have in our newlib build docker container :(
   wget https://github.com/Kitware/CMake/releases/download/v3.26.4/cmake-3.26.4-linux-x86_64.sh
-  yes | sh ./cmake-3.26.4-linux-x86_64.sh --skip-license
+  sh ./cmake-3.26.4-linux-x86_64.sh --skip-license || true
+  echo DONE extracting
   PATH=/home/jlaw/jenkins/workspace/avr-elf/cmake-3.26.4-linux-x86_64/bin:$PATH
   git clone https://git.savannah.nongnu.org/git/simulavr.git
   pushd simulavr
