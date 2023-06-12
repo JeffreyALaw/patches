@@ -275,11 +275,7 @@ else
   ${SRCDIR}/avr-libc-2.1.0/configure --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} --host=avr-elf
   make -j $NPROC -l $NPROC
   make install
-  # But of course they f'd up the install process, so fix that.
-  #pushd ${TARGET}-installed/avr
-  #tar cf - . | (cd ../avr-elf ; tar xf - )
-  #popd
-
+  popd
 
   # We also need to build the AVR simulator, which (of course) needs
   # cmake which we don't have in our newlib build docker container :(
