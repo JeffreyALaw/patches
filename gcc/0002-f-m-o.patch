@@ -1,5 +1,72 @@
+
+
+This is a new RTL pass that tries to optimize memory offset calculations
+by moving them from add immediate instructions to the memory loads/stores.
+For example it can transform this:
+
+  addi t4,sp,16
+  add  t2,a6,t4
+  shl  t3,t2,1
+  ld   a2,0(t3)
+  addi a2,1
+  sd   a2,8(t2)
+
+into the following (one instruction less):
+
+  add  t2,a6,sp
+  shl  t3,t2,1
+  ld   a2,32(t3)
+  addi a2,1
+  sd   a2,24(t2)
+
+Although there are places where this is done already, this pass is more
+powerful and can handle the more difficult cases that are currently not
+optimized. Also, it runs late enough and can optimize away unnecessary
+stack pointer calculations.
+
+gcc/ChangeLog:
+
+	* Makefile.in: Add fold-mem-offsets.o.
+	* passes.def: Schedule a new pass.
+	* tree-pass.h (make_pass_fold_mem_offsets): Declare.
+	* common.opt: New options.
+	* doc/invoke.texi: Document new option.
+	* fold-mem-offsets.cc: New file.
+
+gcc/testsuite/ChangeLog:
+
+	* gcc.target/riscv/fold-mem-offsets-1.c: New test.
+	* gcc.target/riscv/fold-mem-offsets-2.c: New test.
+	* gcc.target/riscv/fold-mem-offsets-3.c: New test.
+
+Signed-off-by: Manolis Tsamis <manolis.tsamis@vrull.eu>
+---
+
+Changes in v2:
+        - Made the pass target-independant instead of RISCV specific.
+        - Fixed a number of bugs.
+        - Add code to handle more ADD patterns as found
+          in other targets (x86, aarch64).
+        - Improved naming and comments.
+        - Fixed bitmap memory leak.
+
+ gcc/Makefile.in                               |   1 +
+ gcc/common.opt                                |   4 +
+ gcc/doc/invoke.texi                           |   8 +
+ gcc/fold-mem-offsets.cc                       | 630 ++++++++++++++++++
+ gcc/passes.def                                |   1 +
+ .../gcc.target/riscv/fold-mem-offsets-1.c     |  16 +
+ .../gcc.target/riscv/fold-mem-offsets-2.c     |  24 +
+ .../gcc.target/riscv/fold-mem-offsets-3.c     |  17 +
+ gcc/tree-pass.h                               |   1 +
+ 9 files changed, 702 insertions(+)
+ create mode 100644 gcc/fold-mem-offsets.cc
+ create mode 100644 gcc/testsuite/gcc.target/riscv/fold-mem-offsets-1.c
+ create mode 100644 gcc/testsuite/gcc.target/riscv/fold-mem-offsets-2.c
+ create mode 100644 gcc/testsuite/gcc.target/riscv/fold-mem-offsets-3.c
+
 diff --git a/gcc/Makefile.in b/gcc/Makefile.in
-index 0c02f312985..c77e6705a92 100644
+index 4be82e83b9e..98a59e0d207 100644
 --- a/gcc/Makefile.in
 +++ b/gcc/Makefile.in
 @@ -1423,6 +1423,7 @@ OBJS = \
@@ -10,14 +77,55 @@ index 0c02f312985..c77e6705a92 100644
  	function.o \
  	function-abi.o \
  	function-tests.o \
+diff --git a/gcc/common.opt b/gcc/common.opt
+index a28ca13385a..5a793de34fa 100644
+--- a/gcc/common.opt
++++ b/gcc/common.opt
+@@ -1248,6 +1248,10 @@ fcprop-registers
+ Common Var(flag_cprop_registers) Optimization
+ Perform a register copy-propagation optimization pass.
+ 
++ffold-mem-offsets
++Target Bool Var(flag_fold_mem_offsets) Init(1)
++Fold instructions calculating memory offsets to the memory access instruction if possible.
++
+ fcrossjumping
+ Common Var(flag_crossjumping) Optimization
+ Perform cross-jumping optimization.
+diff --git a/gcc/doc/invoke.texi b/gcc/doc/invoke.texi
+index 9ecbd32a228..b1dba4df536 100644
+--- a/gcc/doc/invoke.texi
++++ b/gcc/doc/invoke.texi
+@@ -537,6 +537,7 @@ Objective-C and Objective-C++ Dialects}.
+ -fauto-inc-dec  -fbranch-probabilities
+ -fcaller-saves
+ -fcombine-stack-adjustments  -fconserve-stack
++-ffold-mem-offsets
+ -fcompare-elim  -fcprop-registers  -fcrossjumping
+ -fcse-follow-jumps  -fcse-skip-blocks  -fcx-fortran-rules
+ -fcx-limited-range
+@@ -14230,6 +14231,13 @@ the comparison operation before register allocation is complete.
+ 
+ Enabled at levels @option{-O1}, @option{-O2}, @option{-O3}, @option{-Os}.
+ 
++@opindex ffold-mem-offsets
++@item -ffold-mem-offsets
++@itemx -fno-fold-mem-offsets
++Try to eliminate add instructions by folding them in memory loads/stores.
++
++Enabled at levels @option{-O2}, @option{-O3}.
++
+ @opindex fcprop-registers
+ @item -fcprop-registers
+ After register allocation and post-register allocation instruction splitting,
 diff --git a/gcc/fold-mem-offsets.cc b/gcc/fold-mem-offsets.cc
 new file mode 100644
-index 00000000000..5ca2b450887
+index 00000000000..8ef0f438191
 --- /dev/null
 +++ b/gcc/fold-mem-offsets.cc
-@@ -0,0 +1,633 @@
-+/* Fold memory offsets pass for RISC-V.
-+   Copyright (C) 2022 Free Software Foundation, Inc.
+@@ -0,0 +1,630 @@
++/* Late RTL pass to fold memory offsets.
++   Copyright (C) 2023 Free Software Foundation, Inc.
 +
 +This file is part of GCC.
 +
@@ -42,6 +150,7 @@ index 00000000000..5ca2b450887
 +#include "coretypes.h"
 +#include "tm.h"
 +#include "rtl.h"
++#include "rtl-iter.h"
 +#include "tree.h"
 +#include "expr.h"
 +#include "backend.h"
@@ -56,69 +165,62 @@ index 00000000000..5ca2b450887
 +#include "tree-pass.h"
 +#include "cfgrtl.h"
 +
-+/* This pass tries to optimize memory offset calculations by moving them
-+   from add immediate instructions to the memory loads/stores.
-+   For example it can transform this:
++/* This pass tries to optimize memory offset calculations by moving constants
++   from add instructions to the memory instructions (loads / stores).
++   For example it can transform code like this:
 +
-+     addi t4,sp,16
-+     add  t2,a6,t4
-+     shl  t3,t2,1
-+     ld   a2,0(t3)
-+     addi a2,1
-+     sd   a2,8(t2)
++     add  t4, sp, 16
++     add  t2, a6, t4
++     shl  t3, t2, 1
++     ld   a2, 0(t3)
++     add  a2, 1
++     sd   a2, 8(t2)
 +
 +   into the following (one instruction less):
 +
-+     add  t2,a6,sp
-+     shl  t3,t2,1
-+     ld   a2,32(t3)
-+     addi a2,1
-+     sd   a2,24(t2)
++     add  t2, a6, sp
++     shl  t3, t2, 1
++     ld   a2, 32(t3)
++     add  a2, 1
++     sd   a2, 24(t2)
 +
-+   Usually, the code generated from the previous passes tries to have the
-+   offsets in the memory instructions but this pass is still beneficial
-+   because:
++   Although the previous passes try to emit efficient offset calculations
++   this pass is still beneficial because:
 +
-+    - There are cases where add instructions are added in a late rtl pass
-+      and the rest of the pipeline cannot eliminate them.  Specifically,
-+      arrays and structs allocated on the stack can result in multiple
-+      unnecessary add instructions that cannot be eliminated easily
-+      otherwise.
++    - The mechanisms that optimize memory offsets usually work with specific
++      patterns or have limitations.  This pass is designed to fold offsets
++      through complex calculations that affect multiple memory operations
++      and have partially overlapping calculations.
 +
-+    - The existing mechanisms that move offsets to memory instructions
-+      usually apply only to specific patterns or have other limitations.
-+      This pass is very generic and can fold offsets through complex
-+      calculations with multiple memory uses and partially overlapping
-+      calculations.  As a result it can eliminate more instructions than
-+      what is possible otherwise.
++    - There are cases where add instructions are introduced in late rtl passes
++      and the rest of the pipeline cannot eliminate them.  Arrays and structs
++      allocated on the stack can result in unwanted add instructions that
++      cannot be eliminated easily.
 +
-+   This pass runs inside a single basic blocks and consists of 4 phases:
++   This pass works on a basic block level and consists of 4 phases:
 +
 +    - Phase 1 (Analysis): Find "foldable" instructions.
 +      Foldable instructions are those that we know how to propagate
-+      a constant addition through (add, slli, mv, ...) and only have other
++      a constant addition through (add, shift, move, ...) and only have other
 +      foldable instructions for uses.  In that phase a DFS traversal on the
 +      definition tree is performed and foldable instructions are marked on
 +      a bitmap.  The add immediate instructions that are reachable in this
-+      DFS are candidates for removal since all the intermediate
-+      calculations affected by them are also foldable.
++      DFS are candidates for folding since all the intermediate calculations
++      affected by them are also foldable.
 +
-+    - Phase 2 (Validity): Traverse again, this time calculating the
-+      offsets that would result from folding all add immediate instructions
-+      found.  Also keep track of which instructions will be folded for this
-+      particular offset because folding can be partially or completely
-+      shared across an number of different memory instructions.  At this point,
-+      since we calculated the actual offset resulting from folding, we check
-+      and keep track if it's a valid 12-bit immediate.
++    - Phase 2 (Validity): Traverse and calculate the offsets that would result
++      from folding the add immediate instructions.  Check whether the
++      calculated offsets result in a valid instruction for the target.
 +
-+    - Phase 3 (Commit offsets): Traverse again.  This time it is known if
-+      a particular fold is valid so actually fold the offset by changing
-+      the RTL statement.  It's important that this phase is separate from the
-+      previous because one instruction that is foldable with a valid offset
-+      can become result in an invalid offset for another instruction later on.
++    - Phase 3 (Commit offsets): Traverse again.  It is now known which folds
++      are valid so at this point change the offsets in the memory instructions.
 +
-+    - Phase 4 (Commit instruction deletions): Scan all insns and delete
-+      all add immediate instructions that were folded.  */
++    - Phase 4 (Commit instruction deletions): Scan all instructions and delete
++      or simplify (reduce to move) all add immediate instructions that were
++      folded.
++
++   This pass should run before hard register propagation because it creates
++   register moves that we expect to be eliminated.  */
 +
 +namespace {
 +
@@ -145,30 +247,27 @@ index 00000000000..5ca2b450887
 +  /* opt_pass methods: */
 +  virtual bool gate (function *)
 +    {
-+      return optimize >= 2;
++      return flag_fold_mem_offsets && optimize >= 2;
 +    }
 +
 +  virtual unsigned int execute (function *);
 +}; // class pass_fold_mem_offsets
 +
-+/* Bitmap that tracks which instructions are reachable through sequences
-+   of foldable instructions.  */
-+static bitmap_head can_fold_insn;
++/* Tracks which instructions can be reached through instructions that can
++   propagate offsets for folding.  */
++static bitmap_head can_fold_insns;
 +
-+/* Bitmap with instructions marked for deletion due to folding.  */
-+static bitmap_head pending_remove_insn;
++/* Marks instructions that are currently eligible for folding.  */
++static bitmap_head candidate_fold_insns;
 +
-+/* Bitmap with instructions that cannot be deleted because that would
-+   require folding an offset that's invalid in some memory access.
-+   An instruction can be in both PENDING_REMOVE_INSN and CANNOT_REMOVE_INSN
-+   at the same time, in which case it cannot be safely deleted.  */
-+static bitmap_head cannot_remove_insn;
++/* Tracks instructions that cannot be folded because it turned out that
++   folding will result in creating an invalid memory instruction.
++   An instruction can be in both CANDIDATE_FOLD_INSNS and CANNOT_FOLD_INSNS
++   at the same time, in which case it is not legal to fold.  */
++static bitmap_head cannot_fold_insns;
 +
-+/* The number of folded addi instructions of the form "addi reg, sp, X".  */
-+static int stats_folded_sp;
-+
-+/* The number of the rest folded addi instructions.  */
-+static int stats_folded_other;
++/* The number of instructions that were simplified or eliminated.  */
++static int stats_fold_count;
 +
 +enum fold_mem_phase
 +{
@@ -178,11 +277,10 @@ index 00000000000..5ca2b450887
 +  FM_PHASE_COMMIT_INSNS
 +};
 +
-+/* Helper function for fold_offsets.
-+  Get the single reaching definition of an instruction inside a BB.
-+  The definition is desired for REG used in INSN.
-+  Return the definition insn or NULL if there's no definition with
-+  the desired criteria.  */
++/* Get the single reaching definition of an instruction inside a BB.
++   The definition is desired for REG used in INSN.
++   Return the definition insn or NULL if there's no definition with
++   the desired criteria.  */
 +static rtx_insn*
 +get_single_def_in_bb (rtx_insn *insn, rtx reg)
 +{
@@ -231,18 +329,16 @@ index 00000000000..5ca2b450887
 +  return def;
 +}
 +
-+/* Helper function for fold_offsets.
-+   Get all the reaching uses of an instruction.  The uses are desired for REG
-+   set in INSN.  Return use list or NULL if a use is missing or irregular.
-+   If SUCCESS is not NULL then it's value is set to false if there are
-+   missing or irregular uses and to true otherwise.  */
++/* Get all uses of REG which is set in INSN.  Return the use list or NULL if a
++   use is missing / irregular.  If SUCCESS is not NULL then set it to false if
++   there are missing / irregular uses and true otherwise.  */
 +static struct df_link*
 +get_uses (rtx_insn *insn, rtx reg, bool* success)
 +{
 +  df_ref def;
 +  struct df_link *ref_chain, *ref_link;
 +
-+  if (success != NULL)
++  if (success)
 +    *success = false;
 +
 +  FOR_EACH_INSN_DEF (def, insn)
@@ -256,35 +352,27 @@ index 00000000000..5ca2b450887
 +
 +  for (ref_link = ref_chain; ref_link; ref_link = ref_link->next)
 +    {
-+      /* Problem getting some use for this instruction.  */
++      /* Problem getting a use for this instruction.  */
 +      if (ref_link->ref == NULL)
 +	return NULL;
 +      if (DF_REF_CLASS (ref_link->ref) != DF_REF_REGULAR)
 +	return NULL;
 +    }
 +
-+  if (success != NULL)
++  if (success)
 +    *success = true;
 +
 +  return ref_chain;
 +}
 +
-+/* Recursive function that computes the foldable offsets through the
-+   definitions of REG in INSN given an integer scale factor SCALE.
-+   Returns the offset that would have to be added if all instructions
-+   in PENDING_DELETES were to be deleted.
++/* Function that computes the offset that would have to be added to all uses
++   of REG if the instructions marked in FOLDABLE_INSNS were to be eliminated.
 +
-+  - if ANALYZE is true then it recurses through definitions with the common
-+    code and marks eligible for folding instructions in the bitmap
-+    can_fold_insn.  An instruction is eligible if all it's uses are also
-+    eligible.  Initially can_fold_insn is true for memory accesses.
-+
-+  - if ANALYZE is false then it recurses through definitions with the common
-+    code and computes and returns the offset that would result from folding
-+    the instructions in PENDING_DELETES were to be deleted.  */
++   If ANALYZE is true then mark in CAN_FOLD_INSNS which instructions
++   transitively only affect other instructions found in CAN_FOLD_INSNS.
++   If ANALYZE is false then compute the offset required for folding.  */
 +static HOST_WIDE_INT
-+fold_offsets (rtx_insn* insn, rtx reg, int scale, bool analyze,
-+	      bitmap pending_deletes)
++fold_offsets (rtx_insn* insn, rtx reg, bool analyze, bitmap foldable_insns)
 +{
 +  rtx_insn* def = get_single_def_in_bb (insn, reg);
 +
@@ -299,62 +387,71 @@ index 00000000000..5ca2b450887
 +  rtx src = SET_SRC (set);
 +  rtx dest = SET_DEST (set);
 +
++  if (!REG_P (dest))
++    return 0;
++
 +  enum rtx_code code = GET_CODE (src);
 +
-+  /* Return early for SRC codes that we don't know how to handle.  */
++  /* Return early for SRC codes that we can't propagate through.  */
 +  if (code != PLUS && code != ASHIFT && code != REG)
 +    return 0;
 +
 +  unsigned int dest_regno = REGNO (dest);
 +
-+  /* We don't want to fold offsets from instructions that change some
-+     particular registers with potentially global side effects.  */
-+  if (fixed_regs[dest_regno])
++  /* We can only affect the values of GPR registers.  */
++  if (fixed_regs[dest_regno]
++      || !TEST_HARD_REG_BIT (reg_class_contents[GENERAL_REGS], dest_regno))
 +    return 0;
 +
 +  if (analyze)
 +    {
-+      /* We can only fold through instructions that are eventually used as
++      /* We only fold through instructions that are transitively used as
 +	 memory addresses and do not have other uses.  Use the same logic
-+	 from the offset calculation to visit instructions that can
-+	 propagate offsets and keep track in can_fold_insn which have uses
-+	 that end always in memory instructions.  */
++	 from offset calculation to visit instructions that can propagate
++	 offsets and keep track of them in CAN_FOLD_INSNS.  */
++      bool success;
++      struct df_link *uses = get_uses (def, dest, &success), *ref_link;
 +
-+      if (REG_P (dest))
++      if (!success)
++	return 0;
++
++      for (ref_link = uses; ref_link; ref_link = ref_link->next)
 +	{
-+	  bool success;
-+	  struct df_link *uses = get_uses (def, dest, &success), *ref_link;
++	  rtx_insn* use = DF_REF_INSN (ref_link->ref);
 +
-+	  if (!success)
++	  if (DEBUG_INSN_P (use))
++	    continue;
++
++	  /* Punt if the use is anything more complicated than a set
++	     (clobber, use, etc).  */
++	  if (!NONJUMP_INSN_P (use) || GET_CODE (PATTERN (use)) != SET)
 +	    return 0;
 +
-+	  for (ref_link = uses; ref_link; ref_link = ref_link->next)
++	  /* This use affects instructions outside of CAN_FOLD_INSNS.  */
++	  if (!bitmap_bit_p (&can_fold_insns, INSN_UID (use)))
++	    return 0;
++
++	  rtx use_set = PATTERN (use);
++
++	  /* Special case: A foldable memory store is not foldable if it
++	     mentions DEST outside of the address calculation.  */
++	  if (use_set && MEM_P (SET_DEST (use_set)))
 +	    {
-+	      rtx_insn* use = DF_REF_INSN (ref_link->ref);
-+
-+	      /* Ignore debug insns during analysis.  */
-+	      if (DEBUG_INSN_P (use))
-+		continue;
-+
-+	      if (!bitmap_bit_p (&can_fold_insn, INSN_UID (use)))
-+		return 0;
-+
-+	      rtx use_set = single_set (use);
-+
-+	      /* Prevent folding when a memory store uses the dest register.  */
-+	      if (use_set
-+		  && MEM_P (SET_DEST (use_set))
-+		  && REG_P (SET_SRC (use_set))
-+		  && REGNO (SET_SRC (use_set)) == REGNO (dest))
-+		return 0;
++	      subrtx_iterator::array_type array;
++	      FOR_EACH_SUBRTX (iter, array, SET_SRC (use_set), NONCONST)
++		if (REG_P (*iter) && REGNO (*iter) == REGNO (dest))
++		  return 0;
 +	    }
-+
-+	  bitmap_set_bit (&can_fold_insn, INSN_UID (def));
 +	}
-+    }
 +
-+  if (!bitmap_bit_p (&can_fold_insn, INSN_UID (def)))
-+    return 0;
++      bitmap_set_bit (&can_fold_insns, INSN_UID (def));
++    }
++  else
++    {
++      /* We cannot propagate through this instruction.  */
++      if (!bitmap_bit_p (&can_fold_insns, INSN_UID (def)))
++	return 0;
++    }
 +
 +  switch (code)
 +    {
@@ -363,60 +460,88 @@ index 00000000000..5ca2b450887
 +	/* Propagate through add.  */
 +	rtx arg1 = XEXP (src, 0);
 +	rtx arg2 = XEXP (src, 1);
-+
 +	HOST_WIDE_INT offset = 0;
 +
 +	if (REG_P (arg1))
-+	  offset += fold_offsets (def, arg1, 1, analyze, pending_deletes);
-+	else if (GET_CODE (arg1) == ASHIFT && REG_P (XEXP (arg1, 0))
++	  offset += fold_offsets (def, arg1, analyze, foldable_insns);
++	else if (GET_CODE (arg1) == ASHIFT
++		 && REG_P (XEXP (arg1, 0))
 +		 && CONST_INT_P (XEXP (arg1, 1)))
 +	  {
-+	    /* Also handle shift-and-add from the zbb extension.  */
-+	    int shift_scale = (1 << (int) INTVAL (XEXP (arg1, 1)));
-+	    offset += fold_offsets (def, XEXP (arg1, 0), shift_scale, analyze,
-+				    pending_deletes);
++	    /* Handle R1 = (R2 << C) + ...  */
++	    HOST_WIDE_INT scale
++	      = (HOST_WIDE_INT_1U << INTVAL (XEXP (arg1, 1)));
++	    offset += scale * fold_offsets (def, XEXP (arg1, 0), analyze,
++					 foldable_insns);
 +	  }
++	else if (GET_CODE (arg1) == PLUS
++		 && REG_P (XEXP (arg1, 0))
++		 && REG_P (XEXP (arg1, 1)))
++	  {
++	    /* Handle R1 = (R2 + R3) + ...  */
++	    offset += fold_offsets (def, XEXP (arg1, 0), analyze,
++				    foldable_insns);
++	    offset += fold_offsets (def, XEXP (arg1, 1), analyze,
++				    foldable_insns);
++	  }
++	else if (GET_CODE (arg1) == PLUS
++		 && GET_CODE (XEXP (arg1, 0)) == ASHIFT
++		 && REG_P (XEXP (XEXP (arg1, 0), 0))
++		 && CONST_INT_P (XEXP (XEXP (arg1, 0), 1))
++		 && REG_P (XEXP (arg1, 1)))
++	  {
++	    /* Handle R1 = ((R2 << C) + R3) + ...  */
++	    HOST_WIDE_INT scale
++	      = (HOST_WIDE_INT_1U << INTVAL (XEXP (XEXP (arg1, 0), 1)));
++	    offset += scale * fold_offsets (def, XEXP (XEXP (arg1, 0), 0),
++					    analyze, foldable_insns);
++	    offset += fold_offsets (def, XEXP (arg1, 1), analyze,
++				    foldable_insns);
++	  }
++	else
++	  return 0;
 +
 +	if (REG_P (arg2))
-+	  offset += fold_offsets (def, arg2, 1, analyze, pending_deletes);
-+	else if (CONST_INT_P (arg2) && !analyze)
++	  offset += fold_offsets (def, arg2, analyze, foldable_insns);
++	else if (REG_P (arg1) && CONST_INT_P (arg2) && !analyze)
 +	  {
 +	    offset += INTVAL (arg2);
-+	    bitmap_set_bit (pending_deletes, INSN_UID (def));
++	    /* This is a R1 = R2 + C instruction, candidate for folding.  */
++	    bitmap_set_bit (foldable_insns, INSN_UID (def));
 +	  }
++	else
++	  return 0;
 +
-+	return scale * offset;
++	return offset;
 +      }
 +    case ASHIFT:
 +      {
-+	/* Propagate through sll.  */
++	/* Propagate through left shift.  */
 +	rtx arg1 = XEXP (src, 0);
 +	rtx arg2 = XEXP (src, 1);
 +
 +	if (REG_P (arg1) && CONST_INT_P (arg2))
 +	  {
 +	    int shift_scale = (1 << (int) INTVAL (arg2));
-+	    return scale * fold_offsets (def, arg1, shift_scale, analyze,
-+					 pending_deletes);
++	    return shift_scale * fold_offsets (def, arg1, analyze,
++					foldable_insns);
 +	  }
 +
 +	return 0;
 +      }
 +    case REG:
-+      /* Propagate through mv.  */
-+      return scale * fold_offsets (def, src, 1, analyze, pending_deletes);
++      /* Propagate through register move.  */
++      return fold_offsets (def, src, analyze, foldable_insns);
 +    default:
 +      /* Cannot propagate.  */
 +      return 0;
 +    }
 +}
 +
-+/* Helper function for fold_offset_mem.
-+   If INSN is a set rtx that loads from or stores to
-+   some memory location that could have an offset folded
-+   to it, return the rtx for the memory operand.  */
++/* If INSN is a memory load / store that could have an offset folded to it,
++   return the rtx for the memory operand.  */
 +static rtx
-+get_foldable_mem_rtx (rtx_insn* insn)
++get_foldable_mem (rtx_insn* insn)
 +{
 +  rtx set = single_set (insn);
 +
@@ -425,10 +550,7 @@ index 00000000000..5ca2b450887
 +      rtx src = SET_SRC (set);
 +      rtx dest = SET_DEST (set);
 +
-+      /* We don't want folding if the memory has
-+	 unspec/unspec volatile in either src or dest.
-+	 In particular this also prevents folding
-+	 when atomics are involved.  */
++      /* Don't fold when we have unspec / volatile.  */
 +      if (GET_CODE (src) == UNSPEC
 +	  || GET_CODE (src) == UNSPEC_VOLATILE
 +	  || GET_CODE (dest) == UNSPEC
@@ -439,150 +561,138 @@ index 00000000000..5ca2b450887
 +	return src;
 +      else if (MEM_P (dest))
 +	return dest;
-+      else if ((
-+		GET_CODE (src) == SIGN_EXTEND
-+		|| GET_CODE (src) == ZERO_EXTEND
-+	      )
-+	      && MEM_P (XEXP (src, 0)))
++      else if ((GET_CODE (src) == SIGN_EXTEND
++		|| GET_CODE (src) == ZERO_EXTEND)
++	       && MEM_P (XEXP (src, 0)))
 +	return XEXP (src, 0);
 +    }
 +
 +  return NULL;
 +}
 +
-+/* Driver function that performs the actions defined by PHASE for INSN.  */
++/* Helper function that performs the actions defined by PHASE for INSN.  */
 +static void
-+fold_offset_mem (rtx_insn* insn, int phase)
++fold_mem_offsets_driver (rtx_insn* insn, int phase)
 +{
 +  if (phase == FM_PHASE_COMMIT_INSNS)
 +    {
-+      if (bitmap_bit_p (&pending_remove_insn, INSN_UID (insn))
-+	  && !bitmap_bit_p (&cannot_remove_insn, INSN_UID (insn)))
++      if (bitmap_bit_p (&candidate_fold_insns, INSN_UID (insn))
++	  && !bitmap_bit_p (&cannot_fold_insns, INSN_UID (insn)))
 +	{
-+	  rtx set = single_set (insn);
-+	  rtx src = SET_SRC (set);
-+	  rtx dest = SET_DEST (set);
-+	  rtx arg1 = XEXP (src, 0);
-+
-+	  /* INSN is an add immidiate addi DEST, SRC1, SRC2 that we
-+	     must replace with addi DEST, SRC1, 0.  */
-+	  if (XEXP (src, 0) == stack_pointer_rtx)
-+	    stats_folded_sp++;
-+	  else
-+	    stats_folded_other++;
-+
 +	  if (dump_file)
 +	    {
-+	      fprintf (dump_file, "Instruction deleted from folding:");
++	      fprintf (dump_file, "Instruction reduced to move:");
 +	      print_rtl_single (dump_file, insn);
 +	    }
 +
++	  stats_fold_count++;
++
++	  /* INSN is R1 = R2 + C.
++	     Replace it with R1 = R2 because C was folded.  */
++	  rtx set = single_set (insn);
++	  rtx dest = SET_DEST (set);
++	  rtx arg1 = XEXP (SET_SRC (set), 0);
++
++	  /* If the DEST == ARG1 then the move is a no-op.  */
 +	  if (REGNO (dest) != REGNO (arg1))
 +	    {
-+	      /* If the dest register is different than the fisrt argument
-+		 then the addition with constant 0 is equivalent to a move
-+		 instruction.  We emit the move and let the subsequent
-+		 pass cprop_hardreg eliminate that if possible.  */
-+	      rtx arg1_reg_rtx = gen_rtx_REG (GET_MODE (dest), REGNO (arg1));
-+	      rtx mov_rtx = gen_move_insn (dest, arg1_reg_rtx);
++	      /* Emit the move and let the subsequent pass cprop_hardreg
++		 eliminate it if possible.  */
++	      gcc_checking_assert (GET_MODE (dest) == GET_MODE (arg1));
++	      rtx mov_rtx = gen_move_insn (dest, arg1);
 +	      df_insn_rescan (emit_insn_after (mov_rtx, insn));
 +	    }
 +
-+	  /* If the dest register is the same with the first argument
-+	     then the addition with constant 0 is a no-op.
-+	     We can now delete the original add immidiate instruction.  */
++	  /* Delete the original add immidiate instruction.  */
 +	  delete_insn (insn);
 +	}
 +    }
 +  else
 +    {
-+      rtx mem = get_foldable_mem_rtx (insn);
++      rtx mem = get_foldable_mem (insn);
 +
 +      if (!mem)
 +	return;
 +
 +      rtx mem_addr = XEXP (mem, 0);
 +      rtx reg;
-+      HOST_WIDE_INT cur_off;
++      HOST_WIDE_INT cur_offset;
 +
 +      if (REG_P (mem_addr))
 +	{
 +	  reg = mem_addr;
-+	  cur_off = 0;
++	  cur_offset = 0;
 +	}
 +      else if (GET_CODE (mem_addr) == PLUS
 +	       && REG_P (XEXP (mem_addr, 0))
 +	       && CONST_INT_P (XEXP (mem_addr, 1)))
 +	{
 +	  reg = XEXP (mem_addr, 0);
-+	  cur_off = INTVAL (XEXP (mem_addr, 1));
++	  cur_offset = INTVAL (XEXP (mem_addr, 1));
 +	}
 +      else
 +	return;
 +
 +      if (phase == FM_PHASE_ANALYSIS)
 +	{
-+	  bitmap_set_bit (&can_fold_insn, INSN_UID (insn));
-+	  fold_offsets (insn, reg, 1, true, NULL);
++	  /* Analyse folding opportunities for this memory instruction.  */
++	  bitmap_set_bit (&can_fold_insns, INSN_UID (insn));
++	  fold_offsets (insn, reg, true, NULL);
 +	}
 +      else if (phase == FM_PHASE_VALIDITY)
 +	{
-+	  bitmap_head new_pending_deletes;
-+	  bitmap_initialize (&new_pending_deletes, NULL);
-+	  HOST_WIDE_INT offset = cur_off + fold_offsets (insn, reg, 1, false,
-+							&new_pending_deletes);
++	  bitmap_head fold_insns;
++	  bitmap_initialize (&fold_insns, NULL);
++	  HOST_WIDE_INT new_offset
++	    = cur_offset + fold_offsets (insn, reg, false, &fold_insns);
 +
-+	  /* Temporarily change the offset in MEM to test whether
-+	     it results in a valid instruction.  */
++	  /* Test if it is valid to change MEM_ADDR's offset to NEW_OFFSET.  */
 +	  machine_mode mode = GET_MODE (mem_addr);
-+	  XEXP (mem, 0) = gen_rtx_PLUS (mode, reg, GEN_INT (offset));
-+
-+	  bool valid_change = recog (PATTERN (insn), insn, 0) >= 0;
-+
++	  XEXP (mem, 0) = gen_rtx_PLUS (mode, reg, GEN_INT (new_offset));
++	  bool illegal = insn_invalid_p (insn, false);
 +	  /* Restore the instruction.  */
 +	  XEXP (mem, 0) = mem_addr;
++	  INSN_CODE (insn) = -1;
 +
-+	  if (valid_change)
-+	    bitmap_ior_into (&pending_remove_insn, &new_pending_deletes);
++	  if (illegal)
++	    bitmap_ior_into (&cannot_fold_insns, &fold_insns);
 +	  else
-+	    bitmap_ior_into (&cannot_remove_insn, &new_pending_deletes);
-+	  bitmap_release (&new_pending_deletes);
++	    bitmap_ior_into (&candidate_fold_insns, &fold_insns);
++
++	  bitmap_release (&fold_insns);
 +	}
 +      else if (phase == FM_PHASE_COMMIT_OFFSETS)
 +	{
-+	  bitmap_head required_deletes;
-+	  bitmap_initialize (&required_deletes, NULL);
-+	  HOST_WIDE_INT offset = cur_off + fold_offsets (insn, reg, 1, false,
-+							 &required_deletes);
-+	  bool illegal = bitmap_intersect_p (&required_deletes,
-+					     &cannot_remove_insn);
++	  bitmap_head fold_insns;
++	  bitmap_initialize (&fold_insns, NULL);
++	  HOST_WIDE_INT new_offset
++	    = cur_offset + fold_offsets (insn, reg, false, &fold_insns);
 +
-+	  if (offset == cur_off)
++	  /* If an change turned out illegal in the previous phase then legal
++	     transformations that share calculations also become illegal.  */
++	  bool illegal = bitmap_intersect_p (&fold_insns, &cannot_fold_insns);
++	  if (illegal)
++	    bitmap_ior_into (&cannot_fold_insns, &fold_insns);
++
++	  gcc_assert (new_offset == cur_offset
++		      || !bitmap_empty_p (&fold_insns));
++
++	  bitmap_release (&fold_insns);
++
++	  if (illegal || new_offset == cur_offset)
 +	    return;
 +
-+	  gcc_assert (!bitmap_empty_p (&required_deletes));
-+
-+	  /* We have to update CANNOT_REMOVE_INSN again if transforming
-+	     this instruction is illegal.  */
-+	  if (illegal)
-+	    bitmap_ior_into (&cannot_remove_insn, &required_deletes);
-+	  else
++	  if (dump_file)
 +	    {
-+	      machine_mode mode = GET_MODE (mem_addr);
-+	      XEXP (mem, 0) = gen_rtx_PLUS (mode, reg, GEN_INT (offset));
-+	      df_insn_rescan (insn);
-+
-+	      if (dump_file)
-+		{
-+		  fprintf (dump_file, "Memory offset changed from "
-+				      HOST_WIDE_INT_PRINT_DEC
-+				      " to "
-+				      HOST_WIDE_INT_PRINT_DEC
-+				      " for instruction:\n", cur_off, offset);
-+			print_rtl_single (dump_file, insn);
-+		}
++	      fprintf (dump_file, "Memory offset changed from "
++		       HOST_WIDE_INT_PRINT_DEC " to " HOST_WIDE_INT_PRINT_DEC
++		       " for instruction:\n", cur_offset, new_offset);
++	      print_rtl_single (dump_file, insn);
 +	    }
-+	  bitmap_release (&required_deletes);
++
++	  machine_mode mode = GET_MODE (mem_addr);
++	  XEXP (mem, 0) = gen_rtx_PLUS (mode, reg, GEN_INT (new_offset));
++	  df_insn_rescan (insn);
 +	}
 +    }
 +}
@@ -590,54 +700,49 @@ index 00000000000..5ca2b450887
 +unsigned int
 +pass_fold_mem_offsets::execute (function *fn)
 +{
-+  return 0;
-+
-+  basic_block bb;
-+  rtx_insn *insn;
-+
 +  df_set_flags (DF_RD_PRUNE_DEAD_DEFS | DF_DEFER_INSN_RESCAN);
 +  df_chain_add_problem (DF_UD_CHAIN + DF_DU_CHAIN);
 +  df_analyze ();
 +
-+  bitmap_initialize (&can_fold_insn, NULL);
-+  bitmap_initialize (&pending_remove_insn, NULL);
-+  bitmap_initialize (&cannot_remove_insn, NULL);
++  bitmap_initialize (&can_fold_insns, NULL);
++  bitmap_initialize (&candidate_fold_insns, NULL);
++  bitmap_initialize (&cannot_fold_insns, NULL);
 +
-+  stats_folded_sp = 0;
-+  stats_folded_other = 0;
++  stats_fold_count = 0;
 +
++  basic_block bb;
++  rtx_insn *insn;
 +  FOR_ALL_BB_FN (bb, fn)
 +    {
-+      /* The shorten-memrefs pass runs when a BB is optimized for size
-+	 and moves offsets from multiple memory instructions to a common
-+	 add instruction.  Disable folding if optimizing for size because
-+	 this pass will cancel the effects of shorten-memrefs.  */
++      /* There is a conflict between this pass and RISCV's shorten-memrefs
++	  pass.  For now disable folding if optimizing for size because
++	  otherwise this cancels the effects of shorten-memrefs.  */
 +      if (optimize_bb_for_size_p (bb))
 +	continue;
 +
-+      bitmap_clear (&can_fold_insn);
-+      bitmap_clear (&pending_remove_insn);
-+      bitmap_clear (&cannot_remove_insn);
++      bitmap_clear (&can_fold_insns);
++      bitmap_clear (&candidate_fold_insns);
++      bitmap_clear (&cannot_fold_insns);
 +
 +      FOR_BB_INSNS (bb, insn)
-+	fold_offset_mem (insn, FM_PHASE_ANALYSIS);
++	fold_mem_offsets_driver (insn, FM_PHASE_ANALYSIS);
 +
 +      FOR_BB_INSNS (bb, insn)
-+	fold_offset_mem (insn, FM_PHASE_VALIDITY);
++	fold_mem_offsets_driver (insn, FM_PHASE_VALIDITY);
 +
 +      FOR_BB_INSNS (bb, insn)
-+	fold_offset_mem (insn, FM_PHASE_COMMIT_OFFSETS);
++	fold_mem_offsets_driver (insn, FM_PHASE_COMMIT_OFFSETS);
 +
 +      FOR_BB_INSNS (bb, insn)
-+	fold_offset_mem (insn, FM_PHASE_COMMIT_INSNS);
++	fold_mem_offsets_driver (insn, FM_PHASE_COMMIT_INSNS);
 +    }
 +
-+  statistics_counter_event (cfun, "addi with sp fold", stats_folded_sp);
-+  statistics_counter_event (cfun, "other addi fold", stats_folded_other);
++  statistics_counter_event (cfun, "Number of folded instructions",
++			    stats_fold_count);
 +
-+  bitmap_release (&can_fold_insn);
-+  bitmap_release (&pending_remove_insn);
-+  bitmap_release (&cannot_remove_insn);
++  bitmap_release (&can_fold_insns);
++  bitmap_release (&candidate_fold_insns);
++  bitmap_release (&cannot_fold_insns);
 +
 +  return 0;
 +}
@@ -661,6 +766,84 @@ index c9a8f19747b..f7d64c8f637 100644
  	  NEXT_PASS (pass_cprop_hardreg);
  	  NEXT_PASS (pass_fast_rtl_dce);
  	  NEXT_PASS (pass_reorder_blocks);
+diff --git a/gcc/testsuite/gcc.target/riscv/fold-mem-offsets-1.c b/gcc/testsuite/gcc.target/riscv/fold-mem-offsets-1.c
+new file mode 100644
+index 00000000000..574cc92b6ab
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/fold-mem-offsets-1.c
+@@ -0,0 +1,16 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -mfold-mem-offsets" } */
++
++void sink(int arr[2]);
++
++void
++foo(int a, int b, int i)
++{
++  int arr[2] = {a, b};
++  arr[i]++;
++  sink(arr);
++}
++
++// Should compile without negative memory offsets when using -mfold-mem-offsets
++/* { dg-final { scan-assembler-not "lw\t.*,-.*\\(.*\\)" } } */
++/* { dg-final { scan-assembler-not "sw\t.*,-.*\\(.*\\)" } } */
+\ No newline at end of file
+diff --git a/gcc/testsuite/gcc.target/riscv/fold-mem-offsets-2.c b/gcc/testsuite/gcc.target/riscv/fold-mem-offsets-2.c
+new file mode 100644
+index 00000000000..e6c251d3a3c
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/fold-mem-offsets-2.c
+@@ -0,0 +1,24 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -mfold-mem-offsets" } */
++
++void sink(int arr[3]);
++
++void
++foo(int a, int b, int c, int i)
++{
++  int arr1[3] = {a, b, c};
++  int arr2[3] = {a, c, b};
++  int arr3[3] = {c, b, a};
++
++  arr1[i]++;
++  arr2[i]++;
++  arr3[i]++;
++  
++  sink(arr1);
++  sink(arr2);
++  sink(arr3);
++}
++
++// Should compile without negative memory offsets when using -mfold-mem-offsets
++/* { dg-final { scan-assembler-not "lw\t.*,-.*\\(.*\\)" } } */
++/* { dg-final { scan-assembler-not "sw\t.*,-.*\\(.*\\)" } } */
+\ No newline at end of file
+diff --git a/gcc/testsuite/gcc.target/riscv/fold-mem-offsets-3.c b/gcc/testsuite/gcc.target/riscv/fold-mem-offsets-3.c
+new file mode 100644
+index 00000000000..8586d3e3a29
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/fold-mem-offsets-3.c
+@@ -0,0 +1,17 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -mfold-mem-offsets" } */
++
++void load(int arr[2]);
++
++int
++foo(long unsigned int i)
++{
++  int arr[2];
++  load(arr);
++
++  return arr[3 * i + 77];
++}
++
++// Should compile without negative memory offsets when using -mfold-mem-offsets
++/* { dg-final { scan-assembler-not "lw\t.*,-.*\\(.*\\)" } } */
++/* { dg-final { scan-assembler-not "addi\t.*,.*,77" } } */
+\ No newline at end of file
 diff --git a/gcc/tree-pass.h b/gcc/tree-pass.h
 index 6cdaed7d4b2..6d93af8fd57 100644
 --- a/gcc/tree-pass.h
@@ -673,3 +856,6 @@ index 6cdaed7d4b2..6d93af8fd57 100644
  extern rtl_opt_pass *make_pass_cprop_hardreg (gcc::context *ctxt);
  extern rtl_opt_pass *make_pass_reorder_blocks (gcc::context *ctxt);
  extern rtl_opt_pass *make_pass_leaf_regs (gcc::context *ctxt);
+-- 
+2.34.1
+
