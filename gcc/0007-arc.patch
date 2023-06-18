@@ -8,7 +8,7 @@ index c51ce173350..f68b3eeb4d8 100644
     || register_operand (operands[1], QImode)
 +   || (CONSTANT_P (operands[1])
 +       && (!satisfies_constraint_I (operands[1]) || !optimize_size)
-+       && satisfies_constraint_Usc (operands[0]))"
++       && satisfies_constraint_Usc (operands[0]))
     || (satisfies_constraint_Cm3 (operands[1])
         && memory_operand (operands[0], QImode))"
    "@
