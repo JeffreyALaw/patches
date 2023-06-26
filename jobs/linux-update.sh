@@ -24,7 +24,7 @@ mkdir -p ${TARGET}-obj/glibc
 
 export RUNGCCTESTS=yes
 
-patches/jobs/setupsources.sh ${TARGET} binutils-gdb gcc glibc linux
+patches/jobs/setupsources.sh ${TARGET} master binutils-gdb gcc glibc linux
 
 # Step 1, build binutils
 cd ${TARGET}-obj/binutils

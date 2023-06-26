@@ -9,7 +9,7 @@ set -o pipefail
 # To facilitate debugging if there is a host side issue
 #hostname
 
-patches/jobs/setupsources.sh $TARGET binutils-gdb gcc glibc linux
+patches/jobs/setupsources.sh $TARGET master binutils-gdb gcc glibc linux
 
 rm -rf obj
 mkdir -p obj/{binutils-gdb,gcc,glibc,linux}

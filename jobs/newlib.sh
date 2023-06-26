@@ -207,7 +207,7 @@ case "${TARGET}" in
     ;;
 esac
 
-patches/jobs/setupsources.sh $TARGET binutils-gdb gcc newlib-cygwin
+patches/jobs/setupsources.sh $TARGET master binutils-gdb gcc newlib-cygwin
 
 
 # Step 1, build binutils

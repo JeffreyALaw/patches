@@ -12,7 +12,7 @@ set -o pipefail
 #hostname
 
 # We only need the binutils-gdb and gcc trees
-patches/jobs/setupsources.sh $TARGET binutils-gdb gcc glibc linux chroots
+patches/jobs/setupsources.sh $TARGET master binutils-gdb gcc glibc linux chroots
 
 # We are currently running native.  Switch to the target environment
 patches/jobs/switch-to-target.sh $TARGET

@@ -4,6 +4,8 @@ set -o pipefail
 
 TARGET=$1
 shift
+GCC_BRANCH=$1
+shift
 
 # Shut up git ownership checking
 git config --global safe.directory '*'
@@ -45,7 +47,7 @@ for repo in $*; do
     tar cf - ./$repo | (cd /home/jlaw/jenkins/workspace/${TARGET} ; tar xf - )
     popd
     pushd $repo
-    git checkout -q -- .
+    git checkout -q $GCC_BRANCH -- .
     git pull -q
     git status .
     popd
