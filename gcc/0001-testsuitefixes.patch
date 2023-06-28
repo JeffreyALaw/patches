@@ -34,7 +34,7 @@ index c04db2be7f9..8720c06d21b 100644
  proc check_effective_target_lra { } {
 -    if { [istarget hppa*-*-*] || [istarget cris-*-*] || [istarget avr-*-*] } {
 +    if { [istarget hppa*-*-*] || [istarget cris-*-*] || [istarget avr-*-*] 
-+	  || [istarget ft32-*-*] } {
++	  || [istarget ft32-*-*] || [istarget lm32-*-*]} {
  	return 0
      }
      return 1
