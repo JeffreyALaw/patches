@@ -32,8 +32,8 @@ index c04db2be7f9..8720c06d21b 100644
  # return 1 if LRA is supported.
  
  proc check_effective_target_lra { } {
--    if { [istarget hppa*-*-*] || [istarget cris-*-*] || [istarget avr-*-*] } {
-+    if { [istarget hppa*-*-*] || [istarget cris-*-*] || [istarget avr-*-*] 
+-    if { [istarget hppa*-*-*] || [istarget avr-*-*] } {
++    if { [istarget hppa*-*-*] || [istarget avr-*-*] 
 +	  || [istarget ft32-*-*] || [istarget lm32-*-*] || [istarget visium-*-*] || [istarget fr30-*-*] || [istarget avr-*-*]  || [istarget rl78-*-*] || [istarget sh*-*-*] [istarget bfin-*-*] || [istarget rx-*-*] } {
  	return 0
      }
