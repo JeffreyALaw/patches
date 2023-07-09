@@ -1,8 +1,4 @@
 # This file contains the job names that need fresh baselines.  In general it
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
-bfin-elf
-mips64-linux-gnu
-s390-linux-gnu
-sh3eb-linux-gnu
-sh3-linux-gnu
+rx-elf
