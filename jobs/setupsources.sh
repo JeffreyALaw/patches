@@ -57,13 +57,7 @@ for repo in $*; do
         git branch $GCC_BRANCH
         git checkout $GCC_BRANCH
         git branch --set-upstream-to=vendors/$GCC_BRANCH $GCC_BRANCH
-        fi
-      # WTF is going on here
-      git checkout -q vendors/$GCC_BRANCH
-      git checkout -- .
-      git branch $GCC_BRANCH
-      git checkout $GCC_BRANCH
-      git branch --set-upstream-to=vendors/$GCC_BRANCH $GCC_BRANCH
+      fi
     else
       git checkout -q master -- .
     fi
