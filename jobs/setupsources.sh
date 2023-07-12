@@ -49,7 +49,8 @@ for repo in $*; do
     pushd $repo
     if [ "$repo" == "gcc" ]; then
       # WTF is going on here
-      git checkout -q vendors/$GCC_BRANCH .
+      git checkout -q vendors/$GCC_BRANCH
+      git checkout -- .
       git branch $GCC_BRANCH
       git checkout $GCC_BRANCH
       git branch --set-upstream-to=vendors/$GCC_BRANCH $GCC_BRANCH
