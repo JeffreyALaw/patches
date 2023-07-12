@@ -47,7 +47,11 @@ for repo in $*; do
     tar cf - ./$repo | (cd /home/jlaw/jenkins/workspace/${TARGET} ; tar xf - )
     popd
     pushd $repo
-    git checkout -q $GCC_BRANCH -- .
+    if [ "$repo" == "gcc" ]; then
+      git checkout -q $GCC_BRANCH -- .
+    else
+      git checkout -q master -- .
+    fi
     git pull -q
     git status .
     popd
