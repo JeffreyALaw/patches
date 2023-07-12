@@ -24,20 +24,6 @@ index 236128bf5de..04251018ddb 100644
  	 || [istarget pru-*-*]
  	 || [istarget bpf-*-*] } {
  	return 0;
-diff --git a/gcc/testsuite/lib/target-supports.exp b/gcc/testsuite/lib/target-supports.exp
-index c04db2be7f9..8720c06d21b 100644
---- a/gcc/testsuite/lib/target-supports.exp
-+++ b/gcc/testsuite/lib/target-supports.exp
-@@ -12358,7 +12358,8 @@ proc check_effective_target_o_flag_in_section { } {
- # return 1 if LRA is supported.
- 
- proc check_effective_target_lra { } {
--    if { [istarget hppa*-*-*] || [istarget avr-*-*] } {
-+    if { [istarget hppa*-*-*] || [istarget mn10300-*-*] || [istarget frv-*-*] || [istarget mcore-*-*] || [istarget avr-*-*] 
-+	  || [istarget ft32-*-*] || [istarget lm32-*-*] || [istarget visium-*-*] || [istarget fr30-*-*] || [istarget avr-*-*]  || [istarget rl78-*-*] || [istarget sh*-*-*] || [istarget bfin-*-*] || [istarget rx-*-*] } {
- 	return 0
-     }
-     return 1
 diff --git a/gcc/testsuite/gcc.dg/pr108095.c b/gcc/testsuite/gcc.dg/pr108095.c
 index fb76caae72e..0a487cf614a 100644
 --- a/gcc/testsuite/gcc.dg/pr108095.c
