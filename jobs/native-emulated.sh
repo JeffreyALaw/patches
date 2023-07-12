@@ -1,15 +1,21 @@
-#!/bin/bash -x
-TARGET=$1
+#!/bin/bash
 NPROC=`nproc --all`
 PATH=/bin:$PATH
 
 set -e
 set -o pipefail
 
-# To facilitate debugging if there is a host side issue
-#hostname
+# The target is mandatory.  The branch is not.  If no branch is
+# specified, then use master.
+TARGET=$1
+shift
+BRANCH=$1
 
-patches/jobs/setupsources.sh $TARGET master binutils-gdb gcc glibc linux
+if [ "$BRANCH" == "" ]; then
+  BRANCH=master
+fi
+
+patches/jobs/setupsources.sh $TARGET $BRANCH binutils-gdb gcc glibc linux
 
 rm -rf obj
 mkdir -p obj/{binutils-gdb,gcc,glibc,linux}
@@ -28,14 +34,12 @@ make -j $NPROC -l $NPROC
 make install
 popd
 
-if [ $target != sparc64-linux-gnu ]; then
-  export KERNEL_TARGETS="all modules"
-  pushd obj/linux
-  make -C ../../linux O=`pwd` mrproper
-  make -C ../../linux O=`pwd` -j $NPROC -l $NPROC defconfig
-  make -C ../../linux O=`pwd` -j $NPROC -l $NPROC $KERNEL_TARGETS
-  popd
-fi
+export KERNEL_TARGETS="all modules"
+pushd obj/linux
+make -C ../../linux O=`pwd` mrproper
+make -C ../../linux O=`pwd` -j $NPROC -l $NPROC defconfig
+make -C ../../linux O=`pwd` -j $NPROC -l $NPROC $KERNEL_TARGETS
+popd
 
 pushd obj/glibc
 ../../glibc/configure --disable-werror --prefix=$PREFIX --enable-add-ons
