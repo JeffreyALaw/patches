@@ -79,6 +79,10 @@ case "${TARGET}" in
   	export ARCH=csky
     export KERNEL=false
     ;;
+
+  loongarch*-* | loongarch*-*-* | loongarch*-*-*-*)
+    export ARCH=loongarch64
+    export KERNEL=false
    
   microblaze*-* | microblaze*-*-* | microblaze*-*-*-*)
     export ARCH=microblaze
