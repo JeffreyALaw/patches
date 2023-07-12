@@ -48,7 +48,8 @@ for repo in $*; do
     popd
     pushd $repo
     if [ "$repo" == "gcc" ]; then
-      git checkout -q $GCC_BRANCH -- .
+      git checkout -q vendors/$GCC_BRANCH -- .
+      git branch --set-upstream-to=vendors/$GCC_BRANCH $GCC_BRANCH
     else
       git checkout -q master -- .
     fi
