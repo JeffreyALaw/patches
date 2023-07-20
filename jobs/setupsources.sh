@@ -1,6 +1,6 @@
 #!/bin/bash -x
 
-source functions.sh 
+source patches/jobs/functions.sh 
 
 set -e
 set -o pipefail
