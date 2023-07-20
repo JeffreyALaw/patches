@@ -65,7 +65,7 @@ for repo in $*; do
     # We're having a lot of instability with the remote nodes at this step
     # due to network instability.  Given we're just updating a local repo,
     # we can repeat the attempt until it succeeds
-    patches/jobs/git_pull_wrapped.sh
+    ../patches/jobs/git_pull_wrapped.sh
     git status .
     popd
   else
