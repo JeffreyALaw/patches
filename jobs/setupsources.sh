@@ -1,4 +1,7 @@
 #!/bin/bash -x
+
+source functions.sh 
+
 set -e
 set -o pipefail
 
@@ -61,7 +64,10 @@ for repo in $*; do
     else
       git checkout -q master -- .
     fi
-    git pull -q
+    # We're having a lot of instability with the remote nodes at this step
+    # due to network instability.  Given we're just updating a local repo,
+    # we can repeat the attempt until it succeeds
+    retry git pull -q
     git status .
     popd
   else
