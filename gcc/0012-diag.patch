@@ -29,3 +29,16 @@ index 884d81c12aa..faec90c5ebf 100644
  		"unsupported non-standard extension",
  		m_arch, subset);
        return;
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index 332fa720f01..b981f9fd96e 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -6713,7 +6713,7 @@ riscv_option_override (void)
+      We can only allow TARGET_MIN_VLEN * 8 (LMUL) < 65535.  */
+   if (TARGET_MIN_VLEN > 4096)
+     sorry (
+-      "Current RISC-V GCC can not support VLEN > 4096bit for 'V' Extension");
++      "Current RISC-V GCC can not support VLEN greater than 4096bit for 'V' Extension");
+ 
+   /* Convert -march to a chunks count.  */
+   riscv_vector_chunks = riscv_convert_vector_bits ();
