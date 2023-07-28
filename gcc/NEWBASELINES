@@ -2,3 +2,4 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 rx-elf
+mn10300-elf
