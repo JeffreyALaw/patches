@@ -3,6 +3,7 @@
 # reset.  
 bfin-elf
 c6x-elf
+cris-elf
 csky-linux-gnu
 v850-elf
 or1k-linux-gnu
