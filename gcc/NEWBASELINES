@@ -2,6 +2,8 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 bfin-elf
+c6x-elf
+csky-linux-gnu
 v850-elf
 or1k-linux-gnu
 nios2-linux-gnu
@@ -9,5 +11,3 @@ nds32be-elf
 mn103000-elf
 mips64el-linux-gnu
 loongarch64-linux-gnu
-csky-linux-gnu
-arc-elf
