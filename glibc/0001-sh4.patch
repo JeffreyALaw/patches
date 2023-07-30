@@ -1,33 +1,37 @@
-      /* Canonicalize the comparison.  It must be an equality comparison
-	 against 0.  If it isn't, then emit an SCC instruction so that
-	 we can then use an equality comparison against zero.  */
-      if (!equality_operator (operands[1], VOIDmode)
-          || XEXP (operands[1], 1) != CONST0_RTX (E_<MODE>mode))
-        {
-          enum rtx_code code = GET_CODE (operands[1]);
-          enum rtx_code new_code = NE;
-          bool *invert_ptr = 0;
-
-          if (code == LE || code == GE)
-            {
-              bool invert = true;
-              invert_ptr = &invert;
-              new_code = EQ;
-            }
-
-          /* Emit an scc like instruction into a temporary
-             so that we can use an EQ/NE comparison.  */
-          rtx tmp = gen_reg_rtx (<MODE>mode);
-
-	  /* We can support both FP and integer conditional moves.  */
-	  if (INTEGRAL_MODE_P (GET_MODE (XEXP (operands[1], 0))))
-	    riscv_expand_int_scc (tmp, code, XEXP (operands[1], 0),
-				  XEXP (operands[1], 1), invert_ptr);
-	  else if (FLOAT_MODE_P (GET_MODE (XEXP (operands[1], 0)))
-		   && fp_scc_comparison (operands[1], GET_MODE (operands[1])))
-	    riscv_expand_float_scc (tmp, code, XEXP (operands[1], 0),
-				    XEXP (operands[1], 1));
-	  else
-	    FAIL;
-          operands[1] = gen_rtx_fmt_ee (new_code, E_<MODE>mode, tmp, const0_rtx);
-        }
+--- a/sysdeps/unix/sysv/linux/sh/sysdep.S
++++ b/sysdeps/unix/sysv/linux/sh/sysdep.S
+@@ -30,3 +30,14 @@
+ 
+ #define __syscall_error __syscall_error_1
+ #include <sysdeps/unix/sh/sysdep.S>
++
++       .data
++       .align 3
++       .globl ___fpscr_values
++       .type ___fpscr_values, @object
++       .size ___fpscr_values, 8
++___fpscr_values:
++       .long 0
++       .long 0x80000
++weak_alias (___fpscr_values, __fpscr_values)
++
+--- a/sysdeps/unix/sysv/linux/sh/Versions
++++ b/sysdeps/unix/sysv/linux/sh/Versions
+@@ -2,6 +2,7 @@
+   GLIBC_2.2 {
+     # functions used in other libraries
+     __xstat64; __fxstat64; __lxstat64;
++    __fpscr_values;
+ 
+     # a*
+     alphasort64;
+--- a/sysdeps/unix/sysv/linux/sh/le/libc.abilist
++++ b/sysdeps/unix/sysv/linux/sh/le/libc.abilist
+@@ -267,6 +267,7 @@
+ GLIBC_2.2 __flbf F
+ GLIBC_2.2 __fork F
+ GLIBC_2.2 __fpending F
++GLIBC_2.2 __fpscr_values D 0x8
+ GLIBC_2.2 __fpu_control D 0x4
+ GLIBC_2.2 __fpurge F
+ GLIBC_2.2 __freadable F
