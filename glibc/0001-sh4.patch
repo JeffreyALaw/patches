@@ -1,0 +1,33 @@
+      /* Canonicalize the comparison.  It must be an equality comparison
+	 against 0.  If it isn't, then emit an SCC instruction so that
+	 we can then use an equality comparison against zero.  */
+      if (!equality_operator (operands[1], VOIDmode)
+          || XEXP (operands[1], 1) != CONST0_RTX (E_<MODE>mode))
+        {
+          enum rtx_code code = GET_CODE (operands[1]);
+          enum rtx_code new_code = NE;
+          bool *invert_ptr = 0;
+
+          if (code == LE || code == GE)
+            {
+              bool invert = true;
+              invert_ptr = &invert;
+              new_code = EQ;
+            }
+
+          /* Emit an scc like instruction into a temporary
+             so that we can use an EQ/NE comparison.  */
+          rtx tmp = gen_reg_rtx (<MODE>mode);
+
+	  /* We can support both FP and integer conditional moves.  */
+	  if (INTEGRAL_MODE_P (GET_MODE (XEXP (operands[1], 0))))
+	    riscv_expand_int_scc (tmp, code, XEXP (operands[1], 0),
+				  XEXP (operands[1], 1), invert_ptr);
+	  else if (FLOAT_MODE_P (GET_MODE (XEXP (operands[1], 0)))
+		   && fp_scc_comparison (operands[1], GET_MODE (operands[1])))
+	    riscv_expand_float_scc (tmp, code, XEXP (operands[1], 0),
+				    XEXP (operands[1], 1));
+	  else
+	    FAIL;
+          operands[1] = gen_rtx_fmt_ee (new_code, E_<MODE>mode, tmp, const0_rtx);
+        }
