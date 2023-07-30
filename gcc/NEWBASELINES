@@ -2,9 +2,4 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 mn103000-elf
-moxie-elf
-v850e-elf
-sh3-linux-gnu
-sh3eb-linux-gnu
-visium-elf
-
+h8300-elf
