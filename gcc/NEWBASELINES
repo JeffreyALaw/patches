@@ -1,12 +1,12 @@
 # This file contains the job names that need fresh baselines.  In general it
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
-c6x-elf
-csky-linux-gnu
-v850-elf
+fr30-elf
+frv-elf
 or1k-linux-gnu
 nios2-linux-gnu
 nds32be-elf
 mn103000-elf
 mips64el-linux-gnu
 loongarch64-linux-gnu
+v850-elf
