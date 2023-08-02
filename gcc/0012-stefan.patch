@@ -1,0 +1,146 @@
+
+
+In certain cases a constant may not fit into the mode used to perform a
+comparison.  This may be the case for sign-extended constants which are
+used during an unsigned comparison as e.g. in
+
+(set (reg:CC 100 cc)
+    (compare:CC (mem:SI (reg/v/f:SI 115 [ a ]) [1 *a_4(D)+0 S4 A64])
+        (const_int -2147483648 [0xffffffff80000000])))
+
+Fixed by ensuring that the constant fits into comparison mode.
+
+Furthermore, on some targets as e.g. sparc the constant used in a
+comparison is chopped off before combine which leads to failing test
+cases (see PR 110869).  Fixed by not requiring that the source mode has
+to be DImode, and excluding sparc from the last two test cases entirely
+since there the constant cannot be further reduced.
+
+According to PR 110867 and 110869 this patch resolves bootstrap problems
+on armv8l and sparc.  While writing this, bootstrap+regtest are still
+running on x64 and s390x.  Assuming they pass, ok for mainline?
+
+gcc/ChangeLog:
+
+	PR combine/110867
+	* combine.cc (simplify_compare_const): Try the optimization only
+	in case the constant fits into the comparison mode.
+
+gcc/testsuite/ChangeLog:
+
+	PR combine/110869
+	* gcc.dg/cmp-mem-const-1.c: Relax mode for constant.
+	* gcc.dg/cmp-mem-const-2.c: Relax mode for constant.
+	* gcc.dg/cmp-mem-const-3.c: Relax mode for constant.
+	* gcc.dg/cmp-mem-const-4.c: Relax mode for constant.
+	* gcc.dg/cmp-mem-const-5.c: Exclude sparc since here the
+	constant is already reduced.
+	* gcc.dg/cmp-mem-const-6.c: Exclude sparc since here the
+	constant is already reduced.
+---
+ gcc/combine.cc                         | 4 ++++
+ gcc/testsuite/gcc.dg/cmp-mem-const-1.c | 2 +-
+ gcc/testsuite/gcc.dg/cmp-mem-const-2.c | 2 +-
+ gcc/testsuite/gcc.dg/cmp-mem-const-3.c | 2 +-
+ gcc/testsuite/gcc.dg/cmp-mem-const-4.c | 2 +-
+ gcc/testsuite/gcc.dg/cmp-mem-const-5.c | 4 ++--
+ gcc/testsuite/gcc.dg/cmp-mem-const-6.c | 4 ++--
+ 7 files changed, 12 insertions(+), 8 deletions(-)
+
+diff --git a/gcc/combine.cc b/gcc/combine.cc
+index 0d99fa541c5..e46d202d0a7 100644
+--- a/gcc/combine.cc
++++ b/gcc/combine.cc
+@@ -11998,11 +11998,15 @@ simplify_compare_const (enum rtx_code code, machine_mode mode,
+      x0 >= 0x40.  */
+   if ((code == LEU || code == LTU || code == GEU || code == GTU)
+       && is_a <scalar_int_mode> (GET_MODE (op0), &int_mode)
++      && HWI_COMPUTABLE_MODE_P (int_mode)
+       && MEM_P (op0)
+       && !MEM_VOLATILE_P (op0)
+       /* The optimization makes only sense for constants which are big enough
+ 	 so that we have a chance to chop off something at all.  */
+       && (unsigned HOST_WIDE_INT) const_op > 0xff
++      /* Bail out, if the constant does not fit into INT_MODE.  */
++      && (unsigned HOST_WIDE_INT) const_op
++	 < ((HOST_WIDE_INT_1U << (GET_MODE_PRECISION (int_mode) - 1) << 1) - 1)
+       /* Ensure that we do not overflow during normalization.  */
+       && (code != GTU || (unsigned HOST_WIDE_INT) const_op < HOST_WIDE_INT_M1U))
+     {
+diff --git a/gcc/testsuite/gcc.dg/cmp-mem-const-1.c b/gcc/testsuite/gcc.dg/cmp-mem-const-1.c
+index 263ad98af79..4f21a1ade4a 100644
+--- a/gcc/testsuite/gcc.dg/cmp-mem-const-1.c
++++ b/gcc/testsuite/gcc.dg/cmp-mem-const-1.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile { target { lp64 } } } */
+ /* { dg-options "-O1 -fdump-rtl-combine-details" } */
+-/* { dg-final { scan-rtl-dump "narrow comparison from mode DI to QI" "combine" } } */
++/* { dg-final { scan-rtl-dump "narrow comparison from mode .I to QI" "combine" } } */
+ 
+ typedef __UINT64_TYPE__ uint64_t;
+ 
+diff --git a/gcc/testsuite/gcc.dg/cmp-mem-const-2.c b/gcc/testsuite/gcc.dg/cmp-mem-const-2.c
+index a7cc5348295..7b722951594 100644
+--- a/gcc/testsuite/gcc.dg/cmp-mem-const-2.c
++++ b/gcc/testsuite/gcc.dg/cmp-mem-const-2.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile { target { lp64 } } } */
+ /* { dg-options "-O1 -fdump-rtl-combine-details" } */
+-/* { dg-final { scan-rtl-dump "narrow comparison from mode DI to QI" "combine" } } */
++/* { dg-final { scan-rtl-dump "narrow comparison from mode .I to QI" "combine" } } */
+ 
+ typedef __UINT64_TYPE__ uint64_t;
+ 
+diff --git a/gcc/testsuite/gcc.dg/cmp-mem-const-3.c b/gcc/testsuite/gcc.dg/cmp-mem-const-3.c
+index 06f80bf72d8..ed5059d3807 100644
+--- a/gcc/testsuite/gcc.dg/cmp-mem-const-3.c
++++ b/gcc/testsuite/gcc.dg/cmp-mem-const-3.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile { target { lp64 } } } */
+ /* { dg-options "-O1 -fdump-rtl-combine-details" } */
+-/* { dg-final { scan-rtl-dump "narrow comparison from mode DI to HI" "combine" } } */
++/* { dg-final { scan-rtl-dump "narrow comparison from mode .I to HI" "combine" } } */
+ 
+ typedef __UINT64_TYPE__ uint64_t;
+ 
+diff --git a/gcc/testsuite/gcc.dg/cmp-mem-const-4.c b/gcc/testsuite/gcc.dg/cmp-mem-const-4.c
+index 407999abf7e..23e83372bee 100644
+--- a/gcc/testsuite/gcc.dg/cmp-mem-const-4.c
++++ b/gcc/testsuite/gcc.dg/cmp-mem-const-4.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile { target { lp64 } } } */
+ /* { dg-options "-O1 -fdump-rtl-combine-details" } */
+-/* { dg-final { scan-rtl-dump "narrow comparison from mode DI to HI" "combine" } } */
++/* { dg-final { scan-rtl-dump "narrow comparison from mode .I to HI" "combine" } } */
+ 
+ typedef __UINT64_TYPE__ uint64_t;
+ 
+diff --git a/gcc/testsuite/gcc.dg/cmp-mem-const-5.c b/gcc/testsuite/gcc.dg/cmp-mem-const-5.c
+index e16773f5bcf..d266896a25e 100644
+--- a/gcc/testsuite/gcc.dg/cmp-mem-const-5.c
++++ b/gcc/testsuite/gcc.dg/cmp-mem-const-5.c
+@@ -1,6 +1,6 @@
+-/* { dg-do compile { target { lp64 } } } */
++/* { dg-do compile { target { lp64 } && ! target { sparc*-*-* } } } */
+ /* { dg-options "-O1 -fdump-rtl-combine-details" } */
+-/* { dg-final { scan-rtl-dump "narrow comparison from mode DI to SI" "combine" } } */
++/* { dg-final { scan-rtl-dump "narrow comparison from mode .I to SI" "combine" } } */
+ 
+ typedef __UINT64_TYPE__ uint64_t;
+ 
+diff --git a/gcc/testsuite/gcc.dg/cmp-mem-const-6.c b/gcc/testsuite/gcc.dg/cmp-mem-const-6.c
+index 8f53b5678bd..68d7a9d0265 100644
+--- a/gcc/testsuite/gcc.dg/cmp-mem-const-6.c
++++ b/gcc/testsuite/gcc.dg/cmp-mem-const-6.c
+@@ -1,6 +1,6 @@
+-/* { dg-do compile { target { lp64 } } } */
++/* { dg-do compile { target { lp64 } && ! target { sparc*-*-* } } } */
+ /* { dg-options "-O1 -fdump-rtl-combine-details" } */
+-/* { dg-final { scan-rtl-dump "narrow comparison from mode DI to SI" "combine" } } */
++/* { dg-final { scan-rtl-dump "narrow comparison from mode .I to SI" "combine" } } */
+ 
+ typedef __UINT64_TYPE__ uint64_t;
+ 
+-- 
+2.41.0
+
