@@ -14,10 +14,10 @@ index 4866dac5b6e..f9ae81f6d10 100644
 +MULTIARCH_DIRNAME = $(call if_multiarch,sh3-linux-gnu)
 +endif
  MULTILIB_EXCEPTIONS=m1 mb/m1 m2a
-Index: b/src/gcc/config/mips/t-linux64
+Index: b/gcc/config/mips/t-linux64
 ===================================================================
---- a/src/gcc/config/mips/t-linux64
-+++ b/src/gcc/config/mips/t-linux64
+--- a/gcc/config/mips/t-linux64
++++ b/gcc/config/mips/t-linux64
 @@ -18,24 +18,28 @@
  
  MULTILIB_OPTIONS = mabi=n32/mabi=32/mabi=64
@@ -70,10 +70,10 @@ Index: b/src/gcc/config/mips/t-linux64
 +MULTIARCH_DIRNAME = $(call if_multiarch,mips$(MIPS_ISA)$(MIPS_32)$(MIPS_R6)$(MIPS_EL)-linux-gnu$(MIPS_SOFT))
 +endif
 +endif
-Index: b/src/gcc/config.gcc
+Index: b/gcc/config.gcc
 ===================================================================
---- a/src/gcc/config.gcc
-+++ b/src/gcc/config.gcc
+--- a/gcc/config.gcc
++++ b/gcc/config.gcc
 @@ -2519,7 +2519,8 @@ mips*-*-linux*)				# Linux MIPS, either
  	extra_options="${extra_options} linux-android.opt"
  	case ${target} in
