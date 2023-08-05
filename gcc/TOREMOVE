@@ -68,3 +68,5 @@ gcc/testsuite/c-c++-common/diagnostic-format-json-4.c
 gcc//testsuite/gcc.dg/c11-atomic-exec-4.c
 # Until we can dive into it
 gcc/testsuite/gcc.dg/torture/pr105132.c
+# Bounces on mcore-elf
+gcc/testsuite/gcc.c-torture/execute/ffs-2.c
