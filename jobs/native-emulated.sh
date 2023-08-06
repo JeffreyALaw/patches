@@ -34,12 +34,20 @@ make -j $NPROC -l $NPROC
 make install
 popd
 
-export KERNEL_TARGETS="all modules"
-pushd obj/linux
-make -C ../../linux O=`pwd` mrproper
-make -C ../../linux O=`pwd` -j $NPROC -l $NPROC defconfig
-make -C ../../linux O=`pwd` -j $NPROC -l $NPROC $KERNEL_TARGETS
-popd
+case ${TARGET} in
+  ppc64le-*-*)
+    ;;
+  mips64el-*-*)
+    ;;
+  *)
+    export KERNEL_TARGETS="all modules"
+    pushd obj/linux
+    make -C ../../linux O=`pwd` mrproper
+    make -C ../../linux O=`pwd` -j $NPROC -l $NPROC defconfig
+    make -C ../../linux O=`pwd` -j $NPROC -l $NPROC $KERNEL_TARGETS
+    popd
+    ;;
+esac
 
 pushd obj/glibc
 ../../glibc/configure --disable-werror --prefix=$PREFIX --enable-add-ons
