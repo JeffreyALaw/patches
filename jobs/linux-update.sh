@@ -128,6 +128,10 @@ case "${TARGET}" in
     export KERNEL=false
     ;;
     
+  riscv*-* | riscv*-*-* | riscv*-*-*-*)
+    export ARCH=riscv
+    ;;
+
   *)
     /bin/false
     ;;
