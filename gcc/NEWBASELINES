@@ -2,3 +2,5 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 c6x-elf
+sh3-linux-gnu
+sh3eb-linux-gnu
