@@ -14,10 +14,12 @@ diff --git a/sim/cris/decodev32.h b/sim/cris/decodev32.h
 index fdd404f985d..c64a84a6607 100644
 --- a/sim/cris/decodev32.h
 +++ b/sim/cris/decodev32.h
-@@ -144,5 +144,6 @@ extern int crisv32f_model_crisv32_u_mem (SIM_CPU *, const IDESC *, int /*unit_nu
+@@ -144,5 +144,7 @@ extern int crisv32f_model_crisv32_u_mem (SIM_CPU *, const IDESC *, int /*unit_nu
  
  extern void crisv32f_model_insn_before (SIM_CPU *, int /*first_p*/);
  extern void crisv32f_model_insn_after (SIM_CPU *, int /*last_p*/, int /*cycles*/);
 +extern void crisv32f_specific_init (SIM_CPU *);
++extern int crisv32f_model_crisv32_u_stall (SIM_CPU *, const IDESC *, int /*unit_num*/, int /*referenced*/);
+
  
  #endif /* CRISV32F_DECODE_H */
