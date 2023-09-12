@@ -30,8 +30,12 @@ if [ $target != alpha-linux-gnu ]; then
   popd
 fi
 
+if [ $target == riscv64-linux-gnu ]; then
+  DISABLE_BOOTSTRAP=--disable-bootstrap
+fi
+
 pushd obj/gcc
-../../gcc/configure --prefix=$PREFIX --disable-analyzer --prefix=$PREFIX --enable-languages=c,c++,fortran,lto --disable-multilib --disable-libsanitizer  ${TARGET}
+../../gcc/configure --prefix=$PREFIX --disable-analyzer --prefix=$PREFIX --enable-languages=c,c++,fortran,lto --disable-multilib --disable-libsanitizer $DISABLE_BOOTSTRAP ${TARGET}
 make -j $NPROC -l $NPROC
 make install
 popd
