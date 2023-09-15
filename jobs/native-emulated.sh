@@ -56,7 +56,7 @@ case ${TARGET} in
 esac
 
 pushd obj/glibc
-../../glibc/configure --disable-werror --prefix=$PREFIX --enable-add-ons
+../../glibc/configure --disable-werror --prefix=$PREFIX --enable-add-ons ${TARGET}
 make -j $NPROC -l $NPROC
 popd
 
