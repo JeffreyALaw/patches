@@ -1,0 +1,13 @@
+diff --git a/gcc/testsuite/gcc.dg/uninit-pred-9_b.c b/gcc/testsuite/gcc.dg/uninit-pred-9_b.c
+index 0f508fa56e1..1d5a0a50733 100644
+--- a/gcc/testsuite/gcc.dg/uninit-pred-9_b.c
++++ b/gcc/testsuite/gcc.dg/uninit-pred-9_b.c
+@@ -17,7 +17,7 @@ int foo (int n, int l, int m, int r)
+ 
+   if (l > 100)
+     if ( (n <= 9) &&  (m < 100)  && (r < 19) )
+-      blah(v); /* { dg-bogus "uninitialized" "bogus warning" { xfail powerpc*-*-* cris-*-* riscv*-*-* } } */
++      blah(v); /* { dg-bogus "uninitialized" "bogus warning" { xfail powerpc*-*-* cris-*-* riscv*-*-* ft32-*-* } } */
+ 
+   if ( (n <= 8) &&  (m < 99)  && (r < 19) )
+       blah(v); /* { dg-bogus "uninitialized" "pr101674" { xfail mmix-*-* } } */
