@@ -1,0 +1,33 @@
+diff --git a/gcc/config/iq2000/iq2000.md b/gcc/config/iq2000/iq2000.md
+index aaeda39ae99..f157a82ebc0 100644
+--- a/gcc/config/iq2000/iq2000.md
++++ b/gcc/config/iq2000/iq2000.md
+@@ -988,7 +988,7 @@ (define_insn "lshrsi3_internal1"
+ (define_insn "rotrsi3"
+   [(set (match_operand:SI 0 "register_operand" "=r")
+         (rotatert:SI (match_operand:SI 1 "register_operand" "r")
+-                     (match_operand:SI 2 "uns_arith_operand" "O")))]
++                     (match_operand:SI 2 "uns_arith_constant" "O")))]
+   ""
+   "ram %0,%1,%2,0x0,0x0"
+   [(set_attr "type" "arith")])
+diff --git a/gcc/config/iq2000/predicates.md b/gcc/config/iq2000/predicates.md
+index 1330f7d613c..38857e17c24 100644
+--- a/gcc/config/iq2000/predicates.md
++++ b/gcc/config/iq2000/predicates.md
+@@ -17,6 +17,15 @@
+ ;; along with GCC; see the file COPYING3.  If not see
+ ;; <http://www.gnu.org/licenses/>.
+ 
++;; Return 1 if OP can be used as an operand where a 16-bit
++;; unsigned integer is needed.
++
++(define_predicate "uns_arith_constant"
++  (match_code "const_int")
++{
++  return SMALL_INT_UNSIGNED (op);
++})
++
+ ;; Return 1 if OP can be used as an operand where a register or 16-bit
+ ;; unsigned integer is needed.
+ 
