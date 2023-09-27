@@ -2,4 +2,3 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 ppc64le-linux-gnu
-msp430-elf
