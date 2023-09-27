@@ -1,0 +1,1574 @@
+
+
+This patch adds a combine pass that runs late in the pipeline.
+There are two instances: one between combine and split1, and one
+after postreload.
+
+The pass currently has a single objective: remove definitions by
+substituting into all uses.  The pre-RA version tries to restrict
+itself to cases that are likely to have a neutral or beneficial
+effect on register pressure.
+
+The patch fixes PR106594.  It also fixes a few FAILs and XFAILs
+in the aarch64 test results, mostly due to making proper use of
+MOVPRFX in cases where we didn't previously.  I hope it would
+also help with Robin's vec_duplicate testcase, although the
+pressure heuristic might need tweaking for that case.
+
+This is just a first step..  I'm hoping that the pass could be
+used for other combine-related optimisations in future.  In particular,
+the post-RA version doesn't need to restrict itself to cases where all
+uses are substitutitable, since it doesn't have to worry about register
+pressure.  If we did that, and if we extended it to handle multi-register
+REGs, the pass might be a viable replacement for regcprop, which in
+turn might reduce the cost of having a post-RA instance of the new pass.
+
+I've run an assembly comparison with one target per CPU directory,
+and it seems to be a win for all targets except nvptx (which is hard
+to measure, being a higher-level asm).  The biggest winner seemed
+to be AVR.
+
+However, if a version of the pass does go in, it might be better
+to enable it by default only on targets where the extra compile
+time seems to be worth it.  IMO, fixing PR106594 and the MOVPRFX
+issues makes it worthwhile for AArch64.
+
+The patch contains various bug fixes and new helper routines.
+I'd submit those separately in the final version.  Because of
+that, there's no GNU changelog yet.
+
+Bootstrapped & regression tested on aarch64-linux-gnu so far.
+
+Thanks,
+Richard
+
+
+---
+ gcc/Makefile.in                               |   2 +
+ gcc/config/aarch64/aarch64.cc                 |  25 +
+ gcc/config/aarch64/atomics.md                 |   2 +-
+ gcc/late-combine.cc                           | 706 ++++++++++++++++++
+ gcc/passes.def                                |   2 +
+ gcc/recog.cc                                  |  42 +-
+ gcc/reload.cc                                 |   6 -
+ gcc/rtl-ssa.h                                 |   1 +
+ gcc/rtl-ssa/access-utils.h                    |  65 +-
+ gcc/rtl-ssa/accesses.cc                       |  91 +++
+ gcc/rtl-ssa/blocks.cc                         |   4 +
+ gcc/rtl-ssa/changes.cc                        |  74 +-
+ gcc/rtl-ssa/functions.cc                      |   2 +-
+ gcc/rtl-ssa/functions.h                       |  15 +
+ gcc/rtl-ssa/insns.cc                          |   2 +
+ gcc/rtl-ssa/member-fns.inl                    |  11 +-
+ gcc/rtl-ssa/movement.cc                       |  40 +
+ gcc/rtl-ssa/movement.h                        |   7 +-
+ gcc/testsuite/gcc.dg/ira-shrinkwrap-prep-1.c  |   2 +-
+ gcc/testsuite/gcc.dg/stack-check-4.c          |   2 +-
+ .../gcc.target/aarch64/sve/cond_asrd_3.c      |  10 +-
+ .../gcc.target/aarch64/sve/cond_convert_3.c   |   8 +-
+ .../gcc.target/aarch64/sve/cond_convert_6.c   |   8 +-
+ .../gcc.target/aarch64/sve/cond_fabd_5.c      |  11 +-
+ .../gcc.target/aarch64/sve/cond_unary_4.c     |  13 +-
+ gcc/tree-pass.h                               |   1 +
+ 26 files changed, 1059 insertions(+), 93 deletions(-)
+ create mode 100644 gcc/late-combine.cc
+ create mode 100644 gcc/rtl-ssa/movement.cc
+
+diff --git a/gcc/Makefile.in b/gcc/Makefile.in
+index 6d608db4dd2..b5dc3b9ed47 100644
+--- a/gcc/Makefile.in
++++ b/gcc/Makefile.in
+@@ -1542,6 +1542,7 @@ OBJS = \
+ 	ira-lives.o \
+ 	jump.o \
+ 	langhooks.o \
++	late-combine.o \
+ 	lcm.o \
+ 	lists.o \
+ 	loop-doloop.o \
+@@ -1623,6 +1624,7 @@ OBJS = \
+ 	rtl-ssa/changes.o \
+ 	rtl-ssa/functions.o \
+ 	rtl-ssa/insns.o \
++	rtl-ssa/movement.o \
+ 	rtl-tests.o \
+ 	rtl.o \
+ 	rtlhash.o \
+diff --git a/gcc/config/aarch64/aarch64.cc b/gcc/config/aarch64/aarch64.cc
+index 219c4ee6d4c..d2ac657e017 100644
+--- a/gcc/config/aarch64/aarch64.cc
++++ b/gcc/config/aarch64/aarch64.cc
+@@ -15495,6 +15495,28 @@ aarch64_memory_move_cost (machine_mode mode, reg_class_t rclass_i, bool in)
+ 	  : aarch64_tune_params.memmov_cost.store_int);
+ }
+ 
++/* Implement TARGET_INSN_COST.  We have the opportunity to do something
++   much more productive here, such as using insn attributes to cost things.
++   But we don't, not yet.
++
++   The main point of this current definition is to make calling insn_cost
++   on one instruction equivalent to calling seq_cost on a sequence that
++   contains only that instruction.  The default definition would instead
++   only look at SET_SRCs, ignoring SET_DESTs.
++
++   This ensures that, for example, storing a 128-bit zero vector is more
++   expensive than storing a 128-bit vector register.  A move of zero
++   into a 128-bit vector register followed by multiple stores of that
++   register is then cheaper than multiple stores of zero (which would
++   use STP of XZR).  This in turn allows STPs to be formed.  */
++static int
++aarch64_insn_cost (rtx_insn *insn, bool speed)
++{
++  if (rtx set = single_set (insn))
++    return set_rtx_cost (set, speed);
++  return pattern_cost (PATTERN (insn), speed);
++}
++
+ /* Implement TARGET_INIT_BUILTINS.  */
+ static void
+ aarch64_init_builtins ()
+@@ -28343,6 +28365,9 @@ aarch64_libgcc_floating_mode_supported_p
+ #undef TARGET_RTX_COSTS
+ #define TARGET_RTX_COSTS aarch64_rtx_costs_wrapper
+ 
++#undef TARGET_INSN_COST
++#define TARGET_INSN_COST aarch64_insn_cost
++
+ #undef TARGET_SCALAR_MODE_SUPPORTED_P
+ #define TARGET_SCALAR_MODE_SUPPORTED_P aarch64_scalar_mode_supported_p
+ 
+diff --git a/gcc/config/aarch64/atomics.md b/gcc/config/aarch64/atomics.md
+index 2b6f04efa6c..055a87320ca 100644
+--- a/gcc/config/aarch64/atomics.md
++++ b/gcc/config/aarch64/atomics.md
+@@ -224,7 +224,7 @@ (define_insn_and_split "aarch64_atomic_exchange<mode>"
+       UNSPECV_ATOMIC_EXCHG))
+    (clobber (reg:CC CC_REGNUM))
+    (clobber (match_scratch:SI 4 "=&r"))]
+-  ""
++  "!TARGET_LSE"
+   "#"
+   "&& epilogue_completed"
+   [(const_int 0)]
+diff --git a/gcc/late-combine.cc b/gcc/late-combine.cc
+new file mode 100644
+index 00000000000..41ede06622e
+--- /dev/null
++++ b/gcc/late-combine.cc
+@@ -0,0 +1,706 @@
++// Late-stage instruction combination pass.
++// Copyright (C) 2023 Free Software Foundation, Inc.
++//
++// This file is part of GCC.
++//
++// GCC is free software; you can redistribute it and/or modify it under
++// the terms of the GNU General Public License as published by the Free
++// Software Foundation; either version 3, or (at your option) any later
++// version.
++//
++// GCC is distributed in the hope that it will be useful, but WITHOUT ANY
++// WARRANTY; without even the implied warranty of MERCHANTABILITY or
++// FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++// for more details.
++//
++// You should have received a copy of the GNU General Public License
++// along with GCC; see the file COPYING3.  If not see
++// <http://www.gnu.org/licenses/>.
++
++// The current purpose of this pass is to substitute definitions into
++// all uses, so that the definition can be removed.  However, it could
++// be extended to handle other combination-related optimizations in future.
++//
++// The pass can run before or after register allocation.  When running
++// before register allocation, it tries to avoid cases that are likely
++// to increase register pressure.  For the same reason, it avoids moving
++// instructions around, even if doing so would allow an optimization to
++// succeed.  These limitations are removed when running after register
++// allocation.
++
++#define INCLUDE_ALGORITHM
++#define INCLUDE_FUNCTIONAL
++#include "config.h"
++#include "system.h"
++#include "coretypes.h"
++#include "backend.h"
++#include "rtl.h"
++#include "df.h"
++#include "rtl-ssa.h"
++#include "print-rtl.h"
++#include "tree-pass.h"
++#include "cfgcleanup.h"
++#include "target.h"
++
++using namespace rtl_ssa;
++
++namespace {
++const pass_data pass_data_late_combine =
++{
++  RTL_PASS, // type
++  "late_combine", // name
++  OPTGROUP_NONE, // optinfo_flags
++  TV_NONE, // tv_id
++  0, // properties_required
++  0, // properties_provided
++  0, // properties_destroyed
++  0, // todo_flags_start
++  TODO_df_finish, // todo_flags_finish
++};
++
++// Class that represents one run of the pass.
++class late_combine
++{
++public:
++  unsigned int execute (function *);
++
++private:
++  rtx optimizable_set (insn_info *);
++  bool check_register_pressure (insn_info *, rtx);
++  bool check_uses (set_info *, rtx);
++  bool combine_into_uses (insn_info *, insn_info *);
++
++  auto_vec<insn_info *> m_worklist;
++};
++
++// Represents an attempt to substitute a single-set definition into all
++// uses of the definition.
++class insn_combination
++{
++public:
++  insn_combination (set_info *, rtx, rtx);
++  bool run ();
++  const vec<insn_change *> &use_changes () const { return m_use_changes; }
++
++private:
++  use_array get_new_uses (use_info *);
++  bool substitute_nondebug_use (use_info *);
++  bool substitute_nondebug_uses (set_info *);
++  bool move_and_recog (insn_change &);
++  bool try_to_preserve_debug_info (insn_change &, use_info *);
++  void substitute_debug_use (use_info *);
++  bool substitute_note (insn_info *, rtx, bool);
++  void substitute_notes (insn_info *, bool);
++  void substitute_note_uses (use_info *);
++  void substitute_optional_uses (set_info *);
++
++  // Represents the state of the function's RTL at the start of this
++  // combination attempt.
++  insn_change_watermark m_rtl_watermark;
++
++  // Represents the rtl-ssa state at the start of this combination attempt.
++  obstack_watermark m_attempt;
++
++  // The instruction that contains the definition, and that we're trying
++  // to delete.
++  insn_info *m_def_insn;
++
++  // The definition itself.
++  set_info *m_def;
++
++  // The destination and source of the single set that defines m_def.
++  // The destination is known to be a plain REG.
++  rtx m_dest;
++  rtx m_src;
++
++  // Contains all in-progress changes to uses of m_def.
++  auto_vec<insn_change *> m_use_changes;
++
++  // Contains the full list of changes that we want to make, in reverse
++  // postorder.
++  auto_vec<insn_change *> m_nondebug_changes;
++};
++
++insn_combination::insn_combination (set_info *def, rtx dest, rtx src)
++  : m_rtl_watermark (),
++    m_attempt (crtl->ssa->new_change_attempt ()),
++    m_def_insn (def->insn ()),
++    m_def (def),
++    m_dest (dest),
++    m_src (src),
++    m_use_changes (),
++    m_nondebug_changes ()
++{
++}
++
++// USE is a direct or indirect use of m_def.  Return the list of uses
++// that would be needed after substituting m_def into the instruction.
++// The returned list is marked as invalid if USE's insn and m_def_insn
++// use different definitions for the same resource (register or memory).
++use_array
++insn_combination::get_new_uses (use_info *use)
++{
++  auto *def = use->def ();
++  auto *use_insn = use->insn ();
++
++  use_array new_uses = use_insn->uses ();
++  new_uses = remove_uses_of_def (m_attempt, new_uses, def);
++  new_uses = merge_access_arrays (m_attempt, m_def_insn->uses (), new_uses);
++  if (new_uses.is_valid () && use->ebb () != m_def->ebb ())
++    new_uses = crtl->ssa->make_uses_available (m_attempt, new_uses, use->bb (),
++					       use_insn->is_debug_insn ());
++  return new_uses;
++}
++
++// Start the process of trying to replace USE by substitution, given that
++// USE occurs in a non-debug instruction.  Check that the substitution can
++// be represented in RTL and that each use of a resource (register or memory)
++// has a consistent definition.  If so, start an insn_change record for the
++// substitution and return true.
++bool
++insn_combination::substitute_nondebug_use (use_info *use)
++{
++  insn_info *use_insn = use->insn ();
++  rtx_insn *use_rtl = use_insn->rtl ();
++
++  if (dump_file && (dump_flags & TDF_DETAILS))
++    dump_insn_slim (dump_file, use->insn ()->rtl ());
++
++  // Chceck that we can change the instruction pattern.  Leave recognition
++  // of the result till later.
++  insn_propagation prop (use_rtl, m_dest, m_src);
++  if (!prop.apply_to_pattern (&PATTERN (use_rtl))
++      || prop.num_replacements == 0)
++    {
++      if (dump_file && (dump_flags & TDF_DETAILS))
++	fprintf (dump_file, "-- RTL substitution failed\n");
++      return false;
++    }
++
++  use_array new_uses = get_new_uses (use);
++  if (!new_uses.is_valid ())
++    {
++      if (dump_file && (dump_flags & TDF_DETAILS))
++	fprintf (dump_file, "-- could not prove that all sources"
++		 " are available\n");
++      return false;
++    }
++
++  auto *where = XOBNEW (m_attempt, insn_change);
++  auto *use_change = new (where) insn_change (use_insn);
++  m_use_changes.safe_push (use_change);
++  use_change->new_uses = new_uses;
++
++  return true;
++}
++
++// Apply substitute_nondebug_use to all direct and indirect uses of DEF.
++// There will be at most one level of indirection.
++bool
++insn_combination::substitute_nondebug_uses (set_info *def)
++{
++  for (use_info *use : def->nondebug_insn_uses ())
++    if (!use->is_live_out_use ()
++	&& !use->only_occurs_in_notes ()
++	&& !substitute_nondebug_use (use))
++      return false;
++
++  for (use_info *use : def->phi_uses ())
++    if (!substitute_nondebug_uses (use->phi ()))
++      return false;
++
++  return true;
++}
++
++// Complete the verification of USE_CHANGE, given that m_nondebug_insns
++// now contains an insn_change record for all proposed non-debug changes.
++// Check that the new instruction is a recognized pattern.  Also check that
++// the instruction can be placed somewhere that makes all definitions and
++// uses valid, and that permits any new hard-register clobbers added
++// during the recognition process.  Return true on success.
++bool
++insn_combination::move_and_recog (insn_change &use_change)
++{
++  insn_info *use_insn = use_change.insn ();
++
++  if (reload_completed && can_move_insn_p (use_insn))
++    use_change.move_range = { use_insn->bb ()->head_insn (),
++			      use_insn->ebb ()->last_bb ()->end_insn () };
++  if (!restrict_movement_ignoring (use_change,
++				   insn_is_changing (m_nondebug_changes)))
++    {
++      if (dump_file && (dump_flags & TDF_DETAILS))
++	fprintf (dump_file, "-- cannot satisfy all definitions and uses"
++		 " in insn %d\n", INSN_UID (use_insn->rtl ()));
++      return false;
++    }
++
++  if (!recog_ignoring (m_attempt, use_change,
++		       insn_is_changing (m_nondebug_changes)))
++    return false;
++
++  return true;
++}
++
++// USE_CHANGE.insn () is a debug instruction that uses m_def.  Try to
++// substitute the definition into the instruction and try to describe
++// the result in USE_CHANGE.  Return true on success.  Failure means that
++// the instruction must be reset instead.
++bool
++insn_combination::try_to_preserve_debug_info (insn_change &use_change,
++					      use_info *use)
++{
++  insn_info *use_insn = use_change.insn ();
++  rtx_insn *use_rtl = use_insn->rtl ();
++
++  use_change.new_uses = get_new_uses (use);
++  if (!use_change.new_uses.is_valid ()
++      || !restrict_movement (use_change))
++    return false;
++
++  insn_propagation prop (use_rtl, m_dest, m_src);
++  return prop.apply_to_pattern (&INSN_VAR_LOCATION_LOC (use_rtl));
++}
++
++// USE_INSN is a debug instruction that uses m_def.  Update it to reflect
++// the fact that m_def is going to disappear.  Try to preserve the source
++// value if possible, but reset the instruction if not.
++void
++insn_combination::substitute_debug_use (use_info *use)
++{
++  auto *use_insn = use->insn ();
++  rtx_insn *use_rtl = use_insn->rtl ();
++
++  auto use_change = insn_change (use_insn);
++  if (!try_to_preserve_debug_info (use_change, use))
++    {
++      use_change.new_uses = {};
++      use_change.move_range = use_change.insn ();
++      INSN_VAR_LOCATION_LOC (use_rtl) = gen_rtx_UNKNOWN_VAR_LOC ();
++    }
++  insn_change *changes[] = { &use_change };
++  crtl->ssa->change_insns (changes);
++}
++
++// NOTE is a reg note of USE_INSN, which previously used m_def.  Update
++// the note to reflect the fact that m_def is going to disappear.  Return
++// true on success, or false if the note must be deleted.
++//
++// CAN_PROPAGATE is true if m_dest can be replaced with m_use.
++bool
++insn_combination::substitute_note (insn_info *use_insn, rtx note,
++				   bool can_propagate)
++{
++  if (REG_NOTE_KIND (note) == REG_EQUAL
++      || REG_NOTE_KIND (note) == REG_EQUIV)
++    {
++      insn_propagation prop (use_insn->rtl (), m_dest, m_src);
++      return (prop.apply_to_rvalue (&XEXP (note, 0))
++	      && (can_propagate || prop.num_replacements == 0));
++    }
++  return true;
++}
++
++// Update USE_INSN's notes after deciding to go ahead with the optimization.
++// CAN_PROPAGATE is true if m_dest can be replaced with m_use.
++void
++insn_combination::substitute_notes (insn_info *use_insn, bool can_propagate)
++{
++  rtx_insn *use_rtl = use_insn->rtl ();
++  rtx *ptr = &REG_NOTES (use_rtl);
++  while (rtx note = *ptr)
++    {
++      if (substitute_note (use_insn, note, can_propagate))
++	ptr = &XEXP (note, 1);
++      else
++	*ptr = XEXP (note, 1);
++    }
++}
++
++// We've decided to go ahead with the substitution.  Update all REG_NOTES
++// involving USE.
++void
++insn_combination::substitute_note_uses (use_info *use)
++{
++  insn_info *use_insn = use->insn ();
++
++  bool can_propagate = true;
++  if (use->only_occurs_in_notes ())
++    {
++      // The only uses are in notes.  Try to keep the note if we can,
++      // but removing it is better than aborting the optimization.
++      insn_change use_change (use_insn);
++      use_change.new_uses = get_new_uses (use);
++      if (!use_change.new_uses.is_valid ()
++	  || !restrict_movement (use_change))
++	{
++	  use_change.move_range = use_insn;
++	  use_change.new_uses = remove_uses_of_def (m_attempt,
++						    use_insn->uses (),
++						    use->def ());
++	  can_propagate = false;
++	}
++      if (dump_file && (dump_flags & TDF_DETAILS))
++	{
++	  fprintf (dump_file, "%s notes in:\n",
++		   can_propagate ? "updating" : "removing");
++	  dump_insn_slim (dump_file, use_insn->rtl ());
++	}
++      substitute_notes (use_insn, can_propagate);
++      insn_change *changes[] = { &use_change };
++      crtl->ssa->change_insns (changes);
++    }
++  else
++    substitute_notes (use_insn, can_propagate);
++}
++
++// We've decided to go ahead with the substitution and we've dealt with
++// all uses that occur in the patterns of non-debug insns.  Update all
++// other uses for the fact that m_def is about to disappear.
++void
++insn_combination::substitute_optional_uses (set_info *def)
++{
++  if (auto insn_uses = def->all_insn_uses ())
++    {
++      use_info *use = *insn_uses.begin ();
++      while (use)
++	{
++	  use_info *next_use = use->next_any_insn_use ();
++	  if (use->is_in_debug_insn ())
++	    substitute_debug_use (use);
++	  else if (!use->is_live_out_use ())
++	    substitute_note_uses (use);
++	  use = next_use;
++	}
++    }
++  for (use_info *use : def->phi_uses ())
++    substitute_optional_uses (use->phi ());
++}
++
++// Try to perform the substitution.  Return true on success.
++bool
++insn_combination::run ()
++{
++  if (dump_file && (dump_flags & TDF_DETAILS))
++    {
++      fprintf (dump_file, "\ntrying to combine definition of r%d in:\n",
++	       m_def->regno ());
++      dump_insn_slim (dump_file, m_def_insn->rtl ());
++      fprintf (dump_file, "into:\n");
++    }
++
++  if (!substitute_nondebug_uses (m_def))
++    return false;
++
++  auto def_change = insn_change::delete_insn (m_def_insn);
++
++  m_nondebug_changes.reserve (m_use_changes.length () + 1);
++  m_nondebug_changes.quick_push (&def_change);
++  m_nondebug_changes.splice (m_use_changes);
++
++  for (auto *use_change : m_use_changes)
++    if (!move_and_recog (*use_change))
++      return false;
++
++  if (!changes_are_worthwhile (m_nondebug_changes)
++      || !crtl->ssa->verify_insn_changes (m_nondebug_changes))
++    return false;
++
++  substitute_optional_uses (m_def);
++
++  confirm_change_group ();
++  crtl->ssa->change_insns (m_nondebug_changes);
++  return true;
++}
++
++// See whether INSN is a single_set that we can optimize.  Return the
++// set if so, otherwise return null.
++rtx
++late_combine::optimizable_set (insn_info *insn)
++{
++  if (!insn->can_be_optimized ()
++      || insn->is_asm ()
++      || insn->has_volatile_refs ()
++      || insn->has_pre_post_modify ()
++      || !can_move_insn_p (insn))
++    return NULL_RTX;
++
++  return single_set (insn->rtl ());
++}
++
++// Suppose that we can replace all uses of SET_DEST (SET) with SET_SRC (SET),
++// where SET occurs in INSN.  Return true if doing so is not likely to
++// increase register pressure.
++bool
++late_combine::check_register_pressure (insn_info *insn, rtx set)
++{
++  // Plain register-to-register moves do not establish a register class
++  // preference and have no well-defined effect on the register allocator.
++  // If changes in register class are needed, the register allocator is
++  // in the best position to place those changes.  If no change in
++  // register class is needed, then the optimization reduces register
++  // pressure if SET_SRC (set) was already live at uses, otherwise the
++  // optimization is pressure-neutral.
++  rtx src = SET_SRC (set);
++  if (REG_P (src))
++    return true;
++
++  // On the same basis, substituting a SET_SRC that contains a single
++  // pseudo register either reduces pressure or is pressure-neutral,
++  // subject to the constraints below.  We would need to do more
++  // analysis for SET_SRCs that use more than one pseudo register.
++  unsigned int nregs = 0;
++  for (auto *use : insn->uses ())
++    if (use->is_reg ()
++	&& !HARD_REGISTER_NUM_P (use->regno ())
++	&& !use->only_occurs_in_notes ())
++      if (++nregs > 1)
++	return false;
++
++  // If there are no pseudo registers in SET_SRC then the optimization
++  // should improve register pressure.
++  if (nregs == 0)
++    return true;
++
++  // We'd be substituting (set (reg R1) SRC) where SRC is known to
++  // contain a single pseudo register R2.  Assume for simplicity that
++  // each new use of R2 would need to be in the same class C as the
++  // current use of R2.  If, for a realistic allocation, C is a
++  // non-strict superset of the R1's register class, the effect on
++  // register pressure should be positive or neutral.  If instead
++  // R1 occupies a different register class from R2, or if R1 has
++  // more allocation freedom than R2, then there's a higher risk that
++  // the effect on register pressure could be negative.
++  //
++  // First use constrain_operands to get the most likely choice of
++  // alternative.  For simplicity, just handle the case where the
++  // output operand is operand 0.
++  extract_insn (insn->rtl ());
++  rtx dest = SET_DEST (set);
++  if (recog_data.n_operands == 0
++      || recog_data.operand[0] != dest)
++    return false;
++
++  if (!constrain_operands (0, get_enabled_alternatives (insn->rtl ())))
++    return false;
++
++  preprocess_constraints (insn->rtl ());
++  auto *alt = which_op_alt ();
++  auto dest_class = alt[0].cl;
++
++  // Check operands 1 and above.
++  auto check_src = [&](unsigned int i)
++    {
++      if (recog_data.is_operator[i])
++	return true;
++
++      rtx op = recog_data.operand[i];
++      if (CONSTANT_P (op))
++	return true;
++
++      if (SUBREG_P (op))
++	op = SUBREG_REG (op);
++      if (REG_P (op))
++	{
++	  if (HARD_REGISTER_P (op))
++	    {
++	      // We've already rejected uses of non-fixed hard registers.
++	      gcc_checking_assert (fixed_regs[REGNO (op)]);
++	      return true;
++	    }
++
++	  // Make sure that the source operand's class is at least as
++	  // permissive as the destination operand's class.
++	  if (!reg_class_subset_p (dest_class, alt[i].cl))
++	    return false;
++
++	  // Make sure that the source operand occupies no more hard
++	  // registers than the destination operand.  This mostly matters
++	  // for subregs.
++	  if (targetm.class_max_nregs (dest_class, GET_MODE (dest))
++	      < targetm.class_max_nregs (alt[i].cl, GET_MODE (op)))
++	    return false;
++
++	  return true;
++	}
++      return false;
++    };
++  for (int i = 1; i < recog_data.n_operands; ++i)
++    if (!check_src (i))
++      return false;
++
++  return true;
++}
++
++// Check uses of DEF to see whether there is anything obvious that
++// prevents the substitution of SET into uses of DEF.
++bool
++late_combine::check_uses (set_info *def, rtx set)
++{
++  use_info *last_use = nullptr;
++  for (use_info *use : def->nondebug_insn_uses ())
++    {
++      insn_info *use_insn = use->insn ();
++
++      if (use->is_live_out_use ())
++	continue;
++      if (use->only_occurs_in_notes ())
++	continue;
++
++      // We cannot replace all uses if the value is live on exit.
++      if (use->is_artificial ())
++	return false;
++
++      // Avoid increasing the complexity of instructions that
++      // reference allocatable hard registers.
++      if (!REG_P (SET_SRC (set))
++	  && !reload_completed
++	  && (accesses_include_nonfixed_hard_registers (use_insn->uses ())
++	      || accesses_include_nonfixed_hard_registers (use_insn->defs ())))
++	return false;
++
++      // We'll keep the uses in their original order, even if we move
++      // them relative to other instructions.  Make sure that non-final
++      // uses do not change any values that occur in the SET_SRC.
++      if (last_use && last_use->ebb () == use->ebb ())
++	{
++	  def_info *ultimate_def = look_through_degenerate_phi (def);
++	  if (insn_clobbers_resources (last_use->insn (),
++				       ultimate_def->insn ()->uses ()))
++	    return false;
++	}
++
++      last_use = use;
++    }
++
++  for (use_info *use : def->phi_uses ())
++    if (!use->phi ()->is_degenerate ()
++	|| !check_uses (use->phi (), set))
++      return false;
++
++  return true;
++}
++
++// Try to remove INSN by substituting a definition into all uses.
++// If the optimization moves any instructions before CURSOR, add those
++// instructions to the end of m_worklist.
++bool
++late_combine::combine_into_uses (insn_info *insn, insn_info *cursor)
++{
++  // For simplicity, don't try to handle sets of multiple hard registers.
++  // And for correctness, don't remove any assignments to the stack or
++  // frame pointers, since that would implicitly change the set of valid
++  // memory locations between this assignment and the next.
++  //
++  // Removing assignments to the hard frame pointer would invalidate
++  // backtraces.
++  set_info *def = single_set_info (insn);
++  if (!def
++      || !def->is_reg ()
++      || def->regno () == STACK_POINTER_REGNUM
++      || def->regno () == FRAME_POINTER_REGNUM
++      || def->regno () == HARD_FRAME_POINTER_REGNUM)
++    return false;
++
++  rtx set = optimizable_set (insn);
++  if (!set)
++    return false;
++
++  // For simplicity, don't try to handle subreg destinations.
++  rtx dest = SET_DEST (set);
++  if (!REG_P (dest) || def->regno () != REGNO (dest))
++    return false;
++
++  // Don't prolong the live ranges of allocatable hard registers, or put
++  // them into more complicated instructions.  Failing to prevent this
++  // could lead to spill failures, or at least to worst register allocation.
++  if (!reload_completed
++      && accesses_include_nonfixed_hard_registers (insn->uses ()))
++    return false;
++
++  if (!reload_completed && !check_register_pressure (insn, set))
++    return false;
++
++  if (!check_uses (def, set))
++    return false;
++
++  insn_combination combination (def, SET_DEST (set), SET_SRC (set));
++  if (!combination.run ())
++    return false;
++
++  for (auto *use_change : combination.use_changes ())
++    if (*use_change->insn () < *cursor)
++      m_worklist.safe_push (use_change->insn ());
++    else
++      break;
++  return true;
++}
++
++// Run the pass on function FN.
++unsigned int
++late_combine::execute (function *fn)
++{
++  // Initialization.
++  calculate_dominance_info (CDI_DOMINATORS);
++  df_analyze ();
++  crtl->ssa = new rtl_ssa::function_info (fn);
++
++  insn_info *insn = *crtl->ssa->nondebug_insns ().begin ();
++  while (insn)
++    {
++      if (!insn->is_artificial ())
++	{
++	  insn_info *prev = insn->prev_nondebug_insn ();
++	  if (combine_into_uses (insn, prev))
++	    {
++	      // Any instructions that get added to the worklist were
++	      // previously after PREV.  Thus if we were able to move
++	      // an instruction X before PREV during one combination,
++	      // X cannot depend on any instructions that we move before
++	      // PREV during subsequent combinations.  This means that
++	      // the worklist should be free of backwards dependencies,
++	      // even if it isn't necessarily in RPO.
++	      for (unsigned int i = 0; i < m_worklist.length (); ++i)
++		combine_into_uses (m_worklist[i], prev);
++	      m_worklist.truncate (0);
++	      insn = prev;
++	    }
++	}
++      insn = insn->next_nondebug_insn ();
++    }
++
++  // Finalization.
++  if (crtl->ssa->perform_pending_updates ())
++    cleanup_cfg (0);
++  free_dominance_info (CDI_DOMINATORS);
++  return 0;
++}
++
++class pass_late_combine : public rtl_opt_pass
++{
++public:
++  pass_late_combine (gcc::context *ctxt)
++    : rtl_opt_pass (pass_data_late_combine, ctxt)
++  {}
++
++  // opt_pass methods:
++  opt_pass *clone () override { return new pass_late_combine (m_ctxt); }
++  bool gate (function *) override { return optimize >= 2; }
++  unsigned int execute (function *) override;
++};
++
++unsigned int
++pass_late_combine::execute (function *fn)
++{
++  return late_combine ().execute (fn);
++}
++
++} // end namespace
++
++// Create a new CC fusion pass instance.
++
++rtl_opt_pass *
++make_pass_late_combine (gcc::context *ctxt)
++{
++  return new pass_late_combine (ctxt);
++}
+diff --git a/gcc/passes.def b/gcc/passes.def
+index 4110a472914..e5276e39b69 100644
+--- a/gcc/passes.def
++++ b/gcc/passes.def
+@@ -487,6 +487,7 @@ along with GCC; see the file COPYING3.  If not see
+       NEXT_PASS (pass_initialize_regs);
+       NEXT_PASS (pass_ud_rtl_dce);
+       NEXT_PASS (pass_combine);
++      NEXT_PASS (pass_late_combine);
+       NEXT_PASS (pass_if_after_combine);
+       NEXT_PASS (pass_jump_after_combine);
+       NEXT_PASS (pass_partition_blocks);
+@@ -506,6 +507,7 @@ along with GCC; see the file COPYING3.  If not see
+       NEXT_PASS (pass_postreload);
+       PUSH_INSERT_PASSES_WITHIN (pass_postreload)
+ 	  NEXT_PASS (pass_postreload_cse);
++	  NEXT_PASS (pass_late_combine);
+ 	  NEXT_PASS (pass_gcse2);
+ 	  NEXT_PASS (pass_split_after_reload);
+ 	  NEXT_PASS (pass_ree);
+diff --git a/gcc/recog.cc b/gcc/recog.cc
+index 92f151248a6..3bd2d73c259 100644
+--- a/gcc/recog.cc
++++ b/gcc/recog.cc
+@@ -1339,13 +1339,26 @@ insn_propagation::apply_to_pattern_1 (rtx *loc)
+ 	      && apply_to_pattern_1 (&COND_EXEC_CODE (body)));
+ 
+     case PARALLEL:
+-      {
+-	int last = XVECLEN (body, 0) - 1;
+-	for (int i = 0; i < last; ++i)
+-	  if (!apply_to_pattern_1 (&XVECEXP (body, 0, i)))
+-	    return false;
+-	return apply_to_pattern_1 (&XVECEXP (body, 0, last));
+-      }
++      for (int i = 0; i < XVECLEN (body, 0); ++i)
++	{
++	  rtx *subloc = &XVECEXP (body, 0, i);
++	  if (GET_CODE (*subloc) == SET)
++	    {
++	      if (!apply_to_lvalue_1 (SET_DEST (*subloc)))
++		return false;
++	      /* ASM_OPERANDS are shared between SETs in the same PARALLEL.
++		 Only process them on the first iteration.  */
++	      if ((i == 0 || GET_CODE (SET_SRC (*subloc)) != ASM_OPERANDS)
++		  && !apply_to_rvalue_1 (&SET_SRC (*subloc)))
++		return false;
++	    }
++	  else
++	    {
++	      if (!apply_to_pattern_1 (subloc))
++		return false;
++	    }
++	}
++      return true;
+ 
+     case ASM_OPERANDS:
+       for (int i = 0, len = ASM_OPERANDS_INPUT_LENGTH (body); i < len; ++i)
+@@ -3080,13 +3093,6 @@ constrain_operands (int strict, alternative_mask alternatives)
+ 
+ 	  earlyclobber[opno] = 0;
+ 
+-	  /* A unary operator may be accepted by the predicate, but it
+-	     is irrelevant for matching constraints.  */
+-	  /* For special_memory_operand, there could be a memory operand inside,
+-	     and it would cause a mismatch for constraint_satisfied_p.  */
+-	  if (UNARY_P (op) && op == extract_mem_from_operand (op))
+-	    op = XEXP (op, 0);
+-
+ 	  if (GET_CODE (op) == SUBREG)
+ 	    {
+ 	      if (REG_P (SUBREG_REG (op))
+@@ -3152,14 +3158,6 @@ constrain_operands (int strict, alternative_mask alternatives)
+ 		    {
+ 		      rtx op1 = recog_data.operand[match];
+ 		      rtx op2 = recog_data.operand[opno];
+-
+-		      /* A unary operator may be accepted by the predicate,
+-			 but it is irrelevant for matching constraints.  */
+-		      if (UNARY_P (op1))
+-			op1 = XEXP (op1, 0);
+-		      if (UNARY_P (op2))
+-			op2 = XEXP (op2, 0);
+-
+ 		      val = operands_match_p (op1, op2);
+ 		    }
+ 
+diff --git a/gcc/reload.cc b/gcc/reload.cc
+index 2126bdd117c..85d644f8b7e 100644
+--- a/gcc/reload.cc
++++ b/gcc/reload.cc
+@@ -3077,12 +3077,6 @@ find_reloads (rtx_insn *insn, int replace, int ind_levels, int live_known,
+ 	      enum constraint_num cn;
+ 	      enum reg_class cl;
+ 
+-	      /* If the predicate accepts a unary operator, it means that
+-		 we need to reload the operand, but do not do this for
+-		 match_operator and friends.  */
+-	      if (UNARY_P (operand) && *p != 0)
+-		operand = XEXP (operand, 0);
+-
+ 	      /* If the operand is a SUBREG, extract
+ 		 the REG or MEM (or maybe even a constant) within.
+ 		 (Constants can occur as a result of reg_equiv_constant.)  */
+diff --git a/gcc/rtl-ssa.h b/gcc/rtl-ssa.h
+index 7355c6c4463..3a3c8b50ee2 100644
+--- a/gcc/rtl-ssa.h
++++ b/gcc/rtl-ssa.h
+@@ -49,6 +49,7 @@
+ #include "obstack-utils.h"
+ #include "mux-utils.h"
+ #include "rtlanal.h"
++#include "cfgbuild.h"
+ 
+ // Provides the global crtl->ssa.
+ #include "memmodel.h"
+diff --git a/gcc/rtl-ssa/access-utils.h b/gcc/rtl-ssa/access-utils.h
+index fbaaaa2c2d3..3f6d3d8bf8d 100644
+--- a/gcc/rtl-ssa/access-utils.h
++++ b/gcc/rtl-ssa/access-utils.h
+@@ -33,6 +33,17 @@ accesses_include_hard_registers (const access_array &accesses)
+   return accesses.size () && HARD_REGISTER_NUM_P (accesses.front ()->regno ());
+ }
+ 
++// Return true if ACCESSES includes a reference to a non-fixed hard register.
++inline bool
++accesses_include_nonfixed_hard_registers (access_array accesses)
++{
++  for (access_info *access : accesses)
++    if (HARD_REGISTER_NUM_P (access->regno ())
++	&& !fixed_regs[access->regno ()])
++      return true;
++  return false;
++}
++
+ // Return true if sorted array ACCESSES includes an access to memory.
+ inline bool
+ accesses_include_memory (const access_array &accesses)
+@@ -114,24 +125,6 @@ set_with_nondebug_insn_uses (access_info *access)
+   return nullptr;
+ }
+ 
+-// Return true if SET is the only set of SET->resource () and if it
+-// dominates all uses (excluding uses of SET->resource () at points
+-// where SET->resource () is always undefined).
+-inline bool
+-is_single_dominating_def (const set_info *set)
+-{
+-  return set->is_first_def () && set->is_last_def ();
+-}
+-
+-// SET is known to be available on entry to BB.  Return true if it is
+-// also available on exit from BB.  (The value might or might not be live.)
+-inline bool
+-remains_available_on_exit (const set_info *set, bb_info *bb)
+-{
+-  return (set->is_last_def ()
+-	  || *set->next_def ()->insn () > *bb->end_insn ());
+-}
+-
+ // ACCESS is known to be associated with an instruction rather than
+ // a phi node.  Return which instruction that is.
+ inline insn_info *
+@@ -251,6 +244,22 @@ last_def (def_mux mux)
+   return mux.last_def ();
+ }
+ 
++// If INSN's definitions contain a single set, return that set, otherwise
++// return null.
++inline set_info *
++single_set_info (insn_info *insn)
++{
++  set_info *set = nullptr;
++  for (auto def : insn->defs ())
++    if (auto this_set = dyn_cast<set_info *> (def))
++      {
++	if (set)
++	  return nullptr;
++	set = this_set;
++      }
++  return set;
++}
++
+ int lookup_use (splay_tree<use_info *> &, insn_info *);
+ int lookup_def (def_splay_tree &, insn_info *);
+ int lookup_clobber (clobber_tree &, insn_info *);
+@@ -300,6 +309,15 @@ next_call_clobbers_ignoring (insn_call_clobbers_tree &tree, insn_info *insn,
+   return tree->insn ();
+ }
+ 
++// Search forwards from immediately after INSN for the first instruction
++// recorded in TREE.  Return null if no such instruction exists.
++inline insn_info *
++next_call_clobbers (insn_call_clobbers_tree &tree, insn_info *insn)
++{
++  auto ignore = [](const insn_info *) { return false; };
++  return next_call_clobbers_ignoring (tree, insn, ignore);
++}
++
+ // If ACCESS is a set, return the first use of ACCESS by a nondebug insn I
+ // for which IGNORE (I) is false.  Return null if ACCESS is not a set or if
+ // no such use exists.
+@@ -535,6 +553,10 @@ insert_access (obstack_watermark &watermark,
+   return T (insert_access_base (watermark, access1, accesses2));
+ }
+ 
++// Return a copy of USES that drops any use of DEF.
++use_array remove_uses_of_def (obstack_watermark &, use_array uses,
++			      def_info *def);
++
+ // The underlying non-template implementation of remove_note_accesses.
+ access_array remove_note_accesses_base (obstack_watermark &, access_array);
+ 
+@@ -550,4 +572,11 @@ remove_note_accesses (obstack_watermark &watermark, T accesses)
+   return T (remove_note_accesses_base (watermark, accesses));
+ }
+ 
++// Return true if ACCESSES1 and ACCESSES2 have at least one resource in common.
++bool accesses_reference_same_resource (access_array accesses1,
++				       access_array accesses2);
++
++// Return true if INSN clobbers the value of any resources in ACCESSES.
++bool insn_clobbers_resources (insn_info *insn, access_array accesses);
++
+ }
+diff --git a/gcc/rtl-ssa/accesses.cc b/gcc/rtl-ssa/accesses.cc
+index f12b5f4dd77..a8ea61fa09c 100644
+--- a/gcc/rtl-ssa/accesses.cc
++++ b/gcc/rtl-ssa/accesses.cc
+@@ -1295,6 +1295,31 @@ function_info::insert_temp_clobber (obstack_watermark &watermark,
+   return insert_access (watermark, clobber, old_defs);
+ }
+ 
++// See the comment above the declaration.
++bool
++function_info::remains_available_on_exit (const set_info *set, bb_info *bb)
++{
++  if (HARD_REGISTER_NUM_P (set->regno ())
++      && TEST_HARD_REG_BIT (m_clobbered_by_calls, set->regno ()))
++    {
++      insn_info *search_insn = (set->bb () == bb
++				? set->insn ()
++				: bb->head_insn ());
++      for (ebb_call_clobbers_info *call_group : bb->ebb ()->call_clobbers ())
++	{
++	  if (!call_group->clobbers (set->resource ()))
++	    continue;
++
++	  insn_info *insn = next_call_clobbers (*call_group, search_insn);
++	  if (insn && insn->bb () == bb)
++	    return false;
++	}
++    }
++
++  return (set->is_last_def ()
++	  || *set->next_def ()->insn () > *bb->end_insn ());
++}
++
+ // A subroutine of make_uses_available.  Try to make USE's definition
+ // available at the head of BB.  WILL_BE_DEBUG_USE is true if the
+ // definition will be used only in debug instructions.
+@@ -1318,6 +1343,9 @@ function_info::make_use_available (use_info *use, bb_info *bb,
+   if (!def)
+     return use;
+ 
++  if (reload_completed && def->ebb () == bb->ebb ())
++    return use;
++
+   if (is_single_dominating_def (def))
+     return use;
+ 
+@@ -1503,6 +1531,19 @@ rtl_ssa::insert_access_base (obstack_watermark &watermark,
+   return builder.finish ();
+ }
+ 
++// See the comment above the declaration.
++use_array
++rtl_ssa::remove_uses_of_def (obstack_watermark &watermark, use_array uses,
++			     def_info *def)
++{
++  access_array_builder uses_builder (watermark);
++  uses_builder.reserve (uses.size ());
++  for (use_info *use : uses)
++    if (use->def () != def)
++      uses_builder.quick_push (use);
++  return use_array (uses_builder.finish ());
++}
++
+ // See the comment above the declaration.
+ access_array
+ rtl_ssa::remove_note_accesses_base (obstack_watermark &watermark,
+@@ -1521,6 +1562,56 @@ rtl_ssa::remove_note_accesses_base (obstack_watermark &watermark,
+   return accesses;
+ }
+ 
++// See the comment above the declaration.
++bool
++rtl_ssa::accesses_reference_same_resource (access_array accesses1,
++					   access_array accesses2)
++{
++  auto i1 = accesses1.begin ();
++  auto end1 = accesses1.end ();
++  auto i2 = accesses2.begin ();
++  auto end2 = accesses2.end ();
++
++  while (i1 != end1 && i2 != end2)
++    {
++      access_info *access1 = *i1;
++      access_info *access2 = *i2;
++
++      unsigned int regno1 = access1->regno ();
++      unsigned int regno2 = access2->regno ();
++      if (regno1 == regno2)
++	return true;
++
++      if (regno1 < regno2)
++	++i1;
++      else
++	++i2;
++    }
++  return false;
++}
++
++// See the comment above the declaration.
++bool
++rtl_ssa::insn_clobbers_resources (insn_info *insn, access_array accesses)
++{
++  if (accesses_reference_same_resource (insn->defs (), accesses))
++    return true;
++
++  if (insn->is_call () && accesses_include_hard_registers (accesses))
++    {
++      function_abi abi = insn_callee_abi (insn->rtl ());
++      for (const access_info *access : accesses)
++	{
++	  if (!HARD_REGISTER_NUM_P (access->regno ()))
++	    break;
++	  if (abi.clobbers_reg_p (access->mode (), access->regno ()))
++	    return true;
++	}
++    }
++
++  return false;
++}
++
+ // Print RESOURCE to PP.
+ void
+ rtl_ssa::pp_resource (pretty_printer *pp, resource_info resource)
+diff --git a/gcc/rtl-ssa/blocks.cc b/gcc/rtl-ssa/blocks.cc
+index 1f9969d78d8..5e227210ce2 100644
+--- a/gcc/rtl-ssa/blocks.cc
++++ b/gcc/rtl-ssa/blocks.cc
+@@ -525,6 +525,10 @@ function_info::create_phi (ebb_info *ebb, resource_info resource,
+ phi_info *
+ function_info::create_degenerate_phi (ebb_info *ebb, set_info *def)
+ {
++  def_lookup dl = find_def (def->resource (), ebb->phi_insn ());
++  if (set_info *set = dl.matching_set ())
++    return as_a<phi_info *> (set);
++
+   access_info *input = def;
+   phi_info *phi = create_phi (ebb, def->resource (), &input, 1);
+   if (def->is_reg ())
+diff --git a/gcc/rtl-ssa/changes.cc b/gcc/rtl-ssa/changes.cc
+index c48ddd2463c..4ab7be6e323 100644
+--- a/gcc/rtl-ssa/changes.cc
++++ b/gcc/rtl-ssa/changes.cc
+@@ -34,6 +34,7 @@
+ #include "emit-rtl.h"
+ #include "cfghooks.h"
+ #include "cfgrtl.h"
++#include "sreal.h"
+ 
+ using namespace rtl_ssa;
+ 
+@@ -171,18 +172,33 @@ rtl_ssa::changes_are_worthwhile (array_slice<insn_change *const> changes,
+ {
+   unsigned int old_cost = 0;
+   unsigned int new_cost = 0;
++  sreal weighted_old_cost = 0;
++  sreal weighted_new_cost = 0;
++  auto entry_count = ENTRY_BLOCK_PTR_FOR_FN (cfun)->count;
+   for (insn_change *change : changes)
+     {
+       old_cost += change->old_cost ();
++      basic_block cfg_bb = change->bb ()->cfg_bb ();
++      bool for_speed = optimize_bb_for_speed_p (cfg_bb);
++      if (for_speed)
++	weighted_old_cost += (cfg_bb->count.to_sreal_scale (entry_count)
++			      * change->old_cost ());
+       if (!change->is_deletion ())
+ 	{
+-	  basic_block cfg_bb = change->bb ()->cfg_bb ();
+-	  change->new_cost = insn_cost (change->rtl (),
+-					optimize_bb_for_speed_p (cfg_bb));
++	  change->new_cost = insn_cost (change->rtl (), for_speed);
+ 	  new_cost += change->new_cost;
++	  if (for_speed)
++	    weighted_new_cost += (cfg_bb->count.to_sreal_scale (entry_count)
++				  * change->new_cost);
+ 	}
+     }
+-  bool ok_p = (strict_p ? new_cost < old_cost : new_cost <= old_cost);
++  bool ok_p;
++  if (weighted_new_cost != weighted_old_cost)
++    ok_p = weighted_new_cost < weighted_old_cost;
++  else if (strict_p)
++    ok_p = new_cost < old_cost;
++  else
++    ok_p = new_cost <= old_cost;
+   if (dump_file && (dump_flags & TDF_DETAILS))
+     {
+       fprintf (dump_file, "original cost");
+@@ -192,6 +208,8 @@ rtl_ssa::changes_are_worthwhile (array_slice<insn_change *const> changes,
+ 	  fprintf (dump_file, " %c %d", sep, change->old_cost ());
+ 	  sep = '+';
+ 	}
++      if (weighted_old_cost != 0)
++	fprintf (dump_file, " (weighted: %f)", weighted_old_cost.to_double ());
+       fprintf (dump_file, ", replacement cost");
+       sep = '=';
+       for (const insn_change *change : changes)
+@@ -200,6 +218,8 @@ rtl_ssa::changes_are_worthwhile (array_slice<insn_change *const> changes,
+ 	    fprintf (dump_file, " %c %d", sep, change->new_cost);
+ 	    sep = '+';
+ 	  }
++      if (weighted_new_cost != 0)
++	fprintf (dump_file, " (weighted: %f)", weighted_new_cost.to_double ());
+       fprintf (dump_file, "; %s\n",
+ 	       ok_p ? "keeping replacement" : "rejecting replacement");
+     }
+@@ -209,6 +229,34 @@ rtl_ssa::changes_are_worthwhile (array_slice<insn_change *const> changes,
+   return true;
+ }
+ 
++// SET has been deleted.  Clean up all remaining uses.  Such uses are
++// either dead phis or now-redundant live-out uses.
++void
++function_info::process_uses_of_deleted_def (set_info *set)
++{
++  if (!set->has_any_uses ())
++    return;
++
++  auto *use = *set->all_uses ().begin ();
++  do
++    {
++      auto *next_use = use->next_use ();
++      if (use->is_in_phi ())
++	{
++	  process_uses_of_deleted_def (use->phi ());
++	  delete_phi (use->phi ());
++	}
++      else
++	{
++	  gcc_assert (use->is_live_out_use ());
++	  remove_use (use);
++	}
++      use = next_use;
++    }
++  while (use);
++  gcc_assert (!set->has_any_uses ());
++}
++
+ // Update the REG_NOTES of INSN, whose pattern has just been changed.
+ static void
+ update_notes (rtx_insn *insn)
+@@ -562,8 +610,6 @@ function_info::apply_changes_to_insn (insn_change &change)
+ 
+       insn->set_accesses (builder.finish ().begin (), num_defs, num_uses);
+     }
+-
+-  add_reg_unused_notes (insn);
+ }
+ 
+ // Add a temporary placeholder instruction after AFTER.
+@@ -662,7 +708,8 @@ function_info::change_insns (array_slice<insn_change *> changes)
+     }
+ 
+   // Remove all definitions that are no longer needed.  After the above,
+-  // such definitions should no longer have any registered users.
++  // the only uses of such definitions should be dead phis and now-redundant
++  // live-out uses.
+   //
+   // In particular, this means that consumers must handle debug
+   // instructions before removing a set.
+@@ -671,7 +718,8 @@ function_info::change_insns (array_slice<insn_change *> changes)
+       if (def->m_has_been_superceded)
+ 	{
+ 	  auto *set = dyn_cast<set_info *> (def);
+-	  gcc_assert (!set || !set->has_any_uses ());
++	  if (set && set->has_any_uses ())
++	    process_uses_of_deleted_def (set);
+ 	  remove_def (def);
+ 	}
+ 
+@@ -704,9 +752,13 @@ function_info::change_insns (array_slice<insn_change *> changes)
+ 	}
+     }
+ 
+-  // Finally apply the changes to the underlying insn_infos.
++  // Apply the changes to the underlying insn_infos.
+   for (insn_change *change : changes)
+     apply_changes_to_insn (*change);
++
++  for (insn_change *change : changes)
++    if (!change->is_deletion ())
++      add_reg_unused_notes (change->insn ());
+ }
+ 
+ // See the comment above the declaration.
+@@ -954,7 +1006,9 @@ function_info::perform_pending_updates ()
+   for (insn_info *insn : m_queued_insn_updates)
+     {
+       rtx_insn *rtl = insn->rtl ();
+-      if (JUMP_P (rtl))
++      if (NOTE_P (rtl))
++	;
++      else if (JUMP_P (rtl))
+ 	{
+ 	  if (INSN_CODE (rtl) == NOOP_MOVE_INSN_CODE)
+ 	    {
+diff --git a/gcc/rtl-ssa/functions.cc b/gcc/rtl-ssa/functions.cc
+index c35d25dbf8f..8a8108baae8 100644
+--- a/gcc/rtl-ssa/functions.cc
++++ b/gcc/rtl-ssa/functions.cc
+@@ -32,7 +32,7 @@
+ using namespace rtl_ssa;
+ 
+ function_info::function_info (function *fn)
+-  : m_fn (fn)
++  : m_fn (fn), m_clobbered_by_calls ()
+ {
+   // Force the alignment to be obstack_alignment.  Everything else is normal.
+   obstack_specify_allocation (&m_obstack, OBSTACK_CHUNK_SIZE,
+diff --git a/gcc/rtl-ssa/functions.h b/gcc/rtl-ssa/functions.h
+index 8b53b264064..bb709153237 100644
+--- a/gcc/rtl-ssa/functions.h
++++ b/gcc/rtl-ssa/functions.h
+@@ -102,6 +102,11 @@ public:
+   // definitions by things like phi nodes.
+   iterator_range<def_iterator> reg_defs (unsigned int regno) const;
+ 
++  // Return true if SET is the only set of SET->resource () and if it
++  // dominates all uses (excluding uses of SET->resource () at points
++  // where SET->resource () is always undefined).
++  bool is_single_dominating_def (const set_info *set) const;
++
+   // Check if all uses of register REGNO are either unconditionally undefined
+   // or use the same single dominating definition.  Return the definition
+   // if so, otherwise return null.
+@@ -116,6 +121,11 @@ public:
+   // scope until the change has been aborted or successfully completed.
+   obstack_watermark new_change_attempt () { return &m_temp_obstack; }
+ 
++  // SET either occurs in BB or is known to be available on entry to BB.
++  // Return true if it is also available on exit from BB.  (The value
++  // might or might not be live.)
++  bool remains_available_on_exit (const set_info *set, bb_info *bb);
++
+   // Make a best attempt to check whether the values used by USES are
+   // available on entry to BB, without solving a full dataflow problem.
+   // If all the values are already live on entry to BB or can be made
+@@ -260,6 +270,7 @@ private:
+   bb_info *create_bb_info (basic_block);
+   void append_bb (bb_info *);
+ 
++  void process_uses_of_deleted_def (set_info *);
+   insn_info *add_placeholder_after (insn_info *);
+   void possibly_queue_changes (insn_change &);
+   void finalize_new_accesses (insn_change &);
+@@ -353,6 +364,10 @@ private:
+   // on it.  As with M_QUEUED_INSN_UPDATES, these updates are queued until
+   // a convenient point.
+   auto_bitmap m_need_to_purge_dead_edges;
++
++  // The set of hard registers that are fully or partially clobbered
++  // by at least one insn_call_clobbers_note.
++  HARD_REG_SET m_clobbered_by_calls;
+ };
+ 
+ void pp_function (pretty_printer *, const function_info *);
+diff --git a/gcc/rtl-ssa/insns.cc b/gcc/rtl-ssa/insns.cc
+index a0c2fec2b70..89929bc0666 100644
+--- a/gcc/rtl-ssa/insns.cc
++++ b/gcc/rtl-ssa/insns.cc
+@@ -560,6 +560,8 @@ function_info::record_call_clobbers (build_info &bi, insn_info *insn,
+       insn->add_note (insn_clobbers);
+ 
+       ecc->insert_max_node (insn_clobbers);
++
++      m_clobbered_by_calls |= abi.full_and_partial_reg_clobbers ();
+     }
+   else
+     for (unsigned int regno = 0; regno < FIRST_PSEUDO_REGISTER; ++regno)
+diff --git a/gcc/rtl-ssa/member-fns.inl b/gcc/rtl-ssa/member-fns.inl
+index c127fab8b98..ce2db045b78 100644
+--- a/gcc/rtl-ssa/member-fns.inl
++++ b/gcc/rtl-ssa/member-fns.inl
+@@ -215,7 +215,7 @@ set_info::last_nondebug_insn_use () const
+ inline use_info *
+ set_info::first_any_insn_use () const
+ {
+-  if (m_first_use->is_in_any_insn ())
++  if (m_first_use && m_first_use->is_in_any_insn ())
+     return m_first_use;
+   return nullptr;
+ }
+@@ -916,6 +916,15 @@ function_info::reg_defs (unsigned int regno) const
+   return { m_defs[regno + 1], nullptr };
+ }
+ 
++inline bool
++function_info::is_single_dominating_def (const set_info *set) const
++{
++  return (set->is_first_def ()
++	  && set->is_last_def ()
++	  && (!HARD_REGISTER_NUM_P (set->regno ())
++	      || !TEST_HARD_REG_BIT (m_clobbered_by_calls, set->regno ())));
++}
++
+ inline set_info *
+ function_info::single_dominating_def (unsigned int regno) const
+ {
+diff --git a/gcc/rtl-ssa/movement.cc b/gcc/rtl-ssa/movement.cc
+new file mode 100644
+index 00000000000..fcf5f8bc822
+--- /dev/null
++++ b/gcc/rtl-ssa/movement.cc
+@@ -0,0 +1,40 @@
++// RTL SSA routines for moving instructions
++// Copyright (C) 2023 Free Software Foundation, Inc.
++//
++// This file is part of GCC.
++//
++// GCC is free software; you can redistribute it and/or modify it under
++// the terms of the GNU General Public License as published by the Free
++// Software Foundation; either version 3, or (at your option) any later
++// version.
++//
++// GCC is distributed in the hope that it will be useful, but WITHOUT ANY
++// WARRANTY; without even the implied warranty of MERCHANTABILITY or
++// FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++// for more details.
++//
++// You should have received a copy of the GNU General Public License
++// along with GCC; see the file COPYING3.  If not see
++// <http://www.gnu.org/licenses/>.
++
++#define INCLUDE_ALGORITHM
++#define INCLUDE_FUNCTIONAL
++#include "config.h"
++#include "system.h"
++#include "coretypes.h"
++#include "backend.h"
++#include "rtl.h"
++#include "df.h"
++#include "rtl-ssa.h"
++#include "rtl-ssa/internals.h"
++#include "rtl-ssa/internals.inl"
++
++using namespace rtl_ssa;
++
++// See the comment above the declaration.
++bool
++rtl_ssa::can_move_insn_p (insn_info *insn)
++{
++  return (!control_flow_insn_p (insn->rtl ())
++	  && !may_trap_p (PATTERN (insn->rtl ())));
++}
+diff --git a/gcc/rtl-ssa/movement.h b/gcc/rtl-ssa/movement.h
+index d9945f49172..ec076db406f 100644
+--- a/gcc/rtl-ssa/movement.h
++++ b/gcc/rtl-ssa/movement.h
+@@ -19,6 +19,10 @@
+ 
+ namespace rtl_ssa {
+ 
++// Return true if INSN can in principle be moved around, and if RTL-SSA
++// has enough information to do that.
++bool can_move_insn_p (insn_info *);
++
+ // Restrict movement range RANGE so that the instruction is placed later
+ // than INSN.  (The movement range is the range of instructions after which
+ // an instruction can be placed.)
+@@ -61,7 +65,8 @@ move_earlier_than (insn_range_info range, insn_info *insn)
+ inline bool
+ can_insert_after (insn_info *insn)
+ {
+-  return insn->is_bb_head () || (insn->is_real () && !insn->is_jump ());
++  return (insn->is_bb_head ()
++	  || (insn->is_real () && !control_flow_insn_p (insn->rtl ())));
+ }
+ 
+ // Try to restrict move range MOVE_RANGE so that it is possible to
+diff --git a/gcc/tree-pass.h b/gcc/tree-pass.h
+index eba2d54ac76..930fe9cdab3 100644
+--- a/gcc/tree-pass.h
++++ b/gcc/tree-pass.h
+@@ -611,6 +611,7 @@ extern rtl_opt_pass *make_pass_branch_prob (gcc::context *ctxt);
+ extern rtl_opt_pass *make_pass_value_profile_transformations (gcc::context
+ 							      *ctxt);
+ extern rtl_opt_pass *make_pass_postreload_cse (gcc::context *ctxt);
++extern rtl_opt_pass *make_pass_late_combine (gcc::context *ctxt);
+ extern rtl_opt_pass *make_pass_gcse2 (gcc::context *ctxt);
+ extern rtl_opt_pass *make_pass_split_after_reload (gcc::context *ctxt);
+ extern rtl_opt_pass *make_pass_thread_prologue_and_epilogue (gcc::context
+-- 
+2.25.1
+
+
