@@ -100,6 +100,11 @@ for tool in $*; do
     rm -f `cat ../patches/$tool/TOREMOVE | grep -v "^#"`
   fi
 
+  if [ -f ../patches/$tool/$TARGET/TOREMOVE ]; then
+    rm -f `cat ../patches/$tool/$TARGET/TOREMOVE | grep -v "^#"`
+  fi
+
+
   cd ..
 done
 
