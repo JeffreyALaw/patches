@@ -1,0 +1,3 @@
+gcc/testsuite/gcc.dg/torture/pr48452.c
+gcc/testsuite/gcc.c-torture/execute/20210505-1.c
+
