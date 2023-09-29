@@ -22,7 +22,7 @@ mkdir -p obj/{binutils-gdb,gcc,glibc,linux}
 export PREFIX=`pwd`/installed
 PATH=`pwd`/installed/bin:/home/law/bin:$PATH
 
-if [ $target != alpha-linux-gnu ]; then
+if [ $TARGET != alpha-linux-gnu ]; then
   pushd obj/binutils-gdb
   ../../binutils-gdb/configure --enable-warn-rwx-segments=no --enable-warn-execstack=no --disable-werror --prefix=$PREFIX ${TARGET}
   make -j $NPROC -l $NPROC all-gas all-binutils all-ld 
@@ -30,7 +30,7 @@ if [ $target != alpha-linux-gnu ]; then
   popd
 fi
 
-if [ $target == riscv64-linux-gnu ]; then
+if [ $TARGET == riscv64-linux-gnu ]; then
   DISABLE_BOOTSTRAP=--disable-bootstrap
 fi
 
