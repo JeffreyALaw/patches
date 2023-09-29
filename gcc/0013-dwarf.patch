@@ -1,0 +1,81 @@
+
+
+ping**2
+
+
+> Hi,
+>
+> This was a painful one to fix, because I hate regexps, especially when they are quoted. On darwin, we have this failure:
+>
+>    FAIL: gcc.dg/debug/dwarf2/inline4.c scan-assembler DW_TAG_inlined_subroutine[^\\\\(]*\\\\([^\\\\)]*\\\\)[^\\\\(]*\\\\(DIE \\\\(0x[0-9a-f]*\\\\) DW_TAG_formal_parameter[^\\\\(]*\\\\(DIE \\\\(0x[0-9a-f]*\\\\) DW_TAG_variable
+>
+> That hideous regexp is trying to match (generated on Linux):
+>
+>>        .uleb128 0x4    # (DIE (0x5c) DW_TAG_inlined_subroutine)
+>>        .long   0xa0    # DW_AT_abstract_origin
+>>        .quad   .LBI4   # DW_AT_entry_pc
+>>        .byte   .LVU2   # DW_AT_GNU_entry_view
+>>        .quad   .LBB4   # DW_AT_low_pc
+>>        .quad   .LBE4-.LBB4     # DW_AT_high_pc
+>>        .byte   0x1     # DW_AT_call_file (u.c)
+>>        .byte   0xf     # DW_AT_call_line
+>>        .byte   0x14    # DW_AT_call_column
+>>        .uleb128 0x5    # (DIE (0x7d) DW_TAG_formal_parameter)
+>>        .long   0xad    # DW_AT_abstract_origin
+>>        .long   .LLST0  # DW_AT_location
+>>        .long   .LVUS0  # DW_AT_GNU_locviews
+>>        .uleb128 0x6    # (DIE (0x8a) DW_TAG_variable)
+>
+> It is using the parentheses to check what is between  DW_TAG_inlined_subroutine, DW_TAG_formal_parameter and DW_TAG_variable. There’s only one block of parentheses in the middle, that "(u.c)”. However, on darwin, the generated output is more compact:
+>
+>>        .uleb128 0x4    ; (DIE (0x188) DW_TAG_inlined_subroutine)
+>>        .long   0x1b8   ; DW_AT_abstract_origin
+>>        .quad   LBB4    ; DW_AT_low_pc
+>>        .quad   LBE4    ; DW_AT_high_pc
+>>        .uleb128 0x5    ; (DIE (0x19d) DW_TAG_formal_parameter)
+>>        .long   0x1c6   ; DW_AT_abstract_origin
+>>        .uleb128 0x6    ; (DIE (0x1a2) DW_TAG_variable)
+>
+> I think that’s valid as well, and the test should pass (what the test really wants to check is that there is no DW_TAG_lexical_block emitted there, see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=37801 for its origin). It could be achieved in two ways:
+>
+> 1. making darwin emit the DW_AT_call_file
+> 2. adjusting the regexp to match, making the internal block of parentheses optional 
+>
+> I chose the second approach. It makes the test pass on darwin. If someone can test it on linux, it’d be appreciated 🙂 I don’t have ready access to such a system right now.
+>
+> Once that passes, OK to commit?
+> FX
+
+
+0001-Testsuite-DWARF2-adjust-regexp-to-match-darwin-outpu.patch
+
+From f5b8d46bb89ee7664731e611d937ddbbf58d9f6b Mon Sep 17 00:00:00 2001
+From: Francois-Xavier Coudert <fxcoudert@gmail.com>
+Date: Sun, 20 Aug 2023 12:53:19 +0200
+Subject: [PATCH] Testsuite, DWARF2: adjust regexp to match darwin output
+
+gcc/testsuite/ChangeLog:
+
+	* gcc.dg/debug/dwarf2/inline4.c: Ajdust regexp to match darwin
+	output.
+---
+ gcc/testsuite/gcc.dg/debug/dwarf2/inline4.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/gcc/testsuite/gcc.dg/debug/dwarf2/inline4.c b/gcc/testsuite/gcc.dg/debug/dwarf2/inline4.c
+index 2faef6e2a4f..22eb35fcf09 100644
+--- a/gcc/testsuite/gcc.dg/debug/dwarf2/inline4.c
++++ b/gcc/testsuite/gcc.dg/debug/dwarf2/inline4.c
+@@ -2,7 +2,7 @@
+    the DW_TAG_inlined_subroutine and the DW_TAG_variable for the local.  */
+ /* { dg-options "-O -gdwarf -dA" } */
+ /* { dg-do compile } */
+-/* { dg-final { scan-assembler "DW_TAG_inlined_subroutine\[^\\(\]*\\(\[^\\)\]*\\)\[^\\(\]*\\(DIE \\(0x\[0-9a-f\]*\\) DW_TAG_formal_parameter\[^\\(\]*\\(DIE \\(0x\[0-9a-f\]*\\) DW_TAG_variable" } } */
++/* { dg-final { scan-assembler "DW_TAG_inlined_subroutine\[^\\(\]*\(\|\\(\[^\\)\]*\\)\)\[^\\(\]*\\(DIE \\(0x\[0-9a-f\]*\\) DW_TAG_formal_parameter\[^\\(\]*\\(DIE \\(0x\[0-9a-f\]*\\) DW_TAG_variable" } } */
+ /* { dg-final { scan-assembler-times "DW_TAG_inlined_subroutine" 2 } } */
+ 
+ static int foo (int i)
+-- 
+2.39.2 (Apple Git-143)
+
+
