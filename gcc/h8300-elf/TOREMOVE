@@ -18,4 +18,17 @@ gcc/testsuite/gcc.dg/tree-ssa/loop-interchange-2.c
 gcc/testsuite/gcc.dg/tree-ssa/loop-interchange-14.c
 gcc/testsuite/gcc.dg/memcmp-1.c
 gcc/testsuite/gcc.dg/graphite/uns-interchange-12.c
+gcc/testsuite/gcc.dg/graphite/uns-interchange-14.c
+gcc/testsuite/gcc.dg/graphite/uns-interchange-15.c
+gcc/testsuite/gcc.dg/graphite/uns-interchange-mvt.c
+gcc/testsuite/gcc.dg/graphite/interchange-0.c
+gcc/testsuite/gcc.dg/graphite/interchange-1.c
+gcc/testsuite/gcc.dg/graphite/interchange-2.c
+gcc/testsuite/gcc.dg/graphite/interchange-3.c
+gcc/testsuite/gcc.dg/graphite/interchange-4.c
+gcc/testsuite/gcc.dg/graphite/interchange-5.c
+gcc/testsuite/gcc.dg/graphite/interchange-11.c
 gcc/testsuite/gcc.dg/graphite/interchange-12.c
+gcc/testsuite/gcc.dg/graphite/interchange-14.c
+gcc/testsuite/gcc.dg/graphite/interchange-15.c
+gcc/testsuite/gcc.dg/graphite/pr46185.c
