@@ -5,7 +5,7 @@ set -e
 set -o pipefail
 
 TARGET=$1
-LOGFILE=`pwd`/${TARGET}/log.gz
+LOGFILE=`pwd`/log
 
 NPROC=`nproc --all`
 
