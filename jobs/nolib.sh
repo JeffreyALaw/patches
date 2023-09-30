@@ -16,9 +16,11 @@ mkdir -p ${TARGET}-obj/binutils
 mkdir -p ${TARGET}-obj/gcc
 
 # We only need the binutils-gdb and gcc trees
+echo Setting up sources
 patches/jobs/setupsources.sh $TARGET master binutils-gdb gcc
 
 # Step 1, build binutils
+echo Building binutils
 cd ${TARGET}-obj/binutils
 ../../binutils-gdb/configure --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} >& $LOGFILE
 make -j $NPROC -l $NPROC all-gas all-binutils all-ld >& $LOGFILE
@@ -29,6 +31,7 @@ rm -f ar as ld ld.bfd nm objcopy objdump ranlib readelf strip
 cd ../..
 
 # Step 2, build gcc
+ech Building GCC
 PATH=`pwd`/${TARGET}-installed/bin:$PATH
 cd ${TARGET}-obj/gcc
 ../../gcc/configure --disable-analyzer --with-system-libunwind --with-newlib --without-headers --disable-threads --disable-shared --enable-languages=c,c++,lto --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} >& $LOGFILE
@@ -36,10 +39,11 @@ make -j $NPROC -l $NPROC all-gcc >& $LOGFILE
 make install-gcc >& $LOGFILE
 
 # We try to build and install libgcc, but don't consider a failure fatal
-(make -j $NPROC -l $NPROC all-target-libgcc && make install-target-libgcc) || /bin/true
+(make -j $NPROC -l $NPROC all-target-libgcc && make install-target-libgcc) >& $LOGFILE || /bin/true
 cd ../..
 
 # The binutils suite is run unconditionally
+echo Testing binutils
 cd ${TARGET}-obj/binutils
 make -k -j $NPROC -l $NPROC check-gas check-ld check-binutils || true
 cd ../..
