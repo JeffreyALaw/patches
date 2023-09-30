@@ -22,9 +22,9 @@ patches/jobs/setupsources.sh $TARGET master binutils-gdb gcc
 # Step 1, build binutils
 echo Building binutils
 cd ${TARGET}-obj/binutils
-../../binutils-gdb/configure --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} >& $LOGFILE
-make -j $NPROC -l $NPROC all-gas all-binutils all-ld >>& $LOGFILE
-make install-gas install-binutils install-ld >>& $LOGFILE
+../../binutils-gdb/configure --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} > $LOGFILE 2>&1
+make -j $NPROC -l $NPROC all-gas all-binutils all-ld >> $LOGFILE 2>&1
+make install-gas install-binutils install-ld >> $LOGFILE 2>& 1
 cd ../..
 cd ${TARGET}-installed/bin
 rm -f ar as ld ld.bfd nm objcopy objdump ranlib readelf strip
@@ -34,12 +34,12 @@ cd ../..
 ech Building GCC
 PATH=`pwd`/${TARGET}-installed/bin:$PATH
 cd ${TARGET}-obj/gcc
-../../gcc/configure --disable-analyzer --with-system-libunwind --with-newlib --without-headers --disable-threads --disable-shared --enable-languages=c,c++,lto --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} >>& $LOGFILE
-make -j $NPROC -l $NPROC all-gcc >>& $LOGFILE
-make install-gcc >>& $LOGFILE
+../../gcc/configure --disable-analyzer --with-system-libunwind --with-newlib --without-headers --disable-threads --disable-shared --enable-languages=c,c++,lto --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} >> $LOGFILE 2>&1
+make -j $NPROC -l $NPROC all-gcc >> $LOGFILE 2>&1
+make install-gcc &>> $LOGFILE
 
 # We try to build and install libgcc, but don't consider a failure fatal
-(make -j $NPROC -l $NPROC all-target-libgcc && make install-target-libgcc) >>& $LOGFILE || /bin/true
+(make -j $NPROC -l $NPROC all-target-libgcc && make install-target-libgcc) >> $LOGFILE 2>&1|| /bin/true
 cd ../..
 
 # The binutils suite is run unconditionally
