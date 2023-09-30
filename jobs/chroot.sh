@@ -1,4 +1,4 @@
-#!/bin/sh -x
+#!/bin/sh
 export LD_LIBRARY_PATH=/lib64:/usr/lib64:/lib:/usr/lib
 TARGET=$1
 NPROC=`nproc --all`

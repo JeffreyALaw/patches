@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/bin/bash
 TARGET=$1
 PATH=/bin:$PATH
 
