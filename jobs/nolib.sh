@@ -22,7 +22,7 @@ patches/jobs/setupsources.sh $TARGET master binutils-gdb gcc > $LOGFILE 2>&1
 # Step 1, build binutils
 echo Building binutils
 cd ${TARGET}-obj/binutils
-../../binutils-gdb/configure --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} > $LOGFILE 2>&1
+../../binutils-gdb/configure --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} >> $LOGFILE 2>&1
 make -j $NPROC -l $NPROC all-gas all-binutils all-ld >> $LOGFILE 2>&1
 make install-gas install-binutils install-ld >> $LOGFILE 2>& 1
 cd ../..
