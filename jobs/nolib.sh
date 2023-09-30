@@ -17,7 +17,7 @@ mkdir -p ${TARGET}-obj/gcc
 
 # We only need the binutils-gdb and gcc trees
 echo Setting up sources
-patches/jobs/setupsources.sh $TARGET master binutils-gdb gcc
+patches/jobs/setupsources.sh $TARGET master binutils-gdb gcc > $LOGFILE 2>&1
 
 # Step 1, build binutils
 echo Building binutils
