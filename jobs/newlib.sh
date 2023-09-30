@@ -4,10 +4,8 @@
 set -e
 set -o pipefail
 
-# To facilitate debugging if there is a hsot side issue
-#hostname
-
 TARGET=$1
+LOGFILE=`pwd`/log
 
 NPROC=`nproc --all`
 
@@ -207,32 +205,34 @@ case "${TARGET}" in
     ;;
 esac
 
-patches/jobs/setupsources.sh $TARGET master binutils-gdb gcc newlib-cygwin
+patches/jobs/setupsources.sh $TARGET master binutils-gdb gcc newlib-cygwin > LOGFILE 2>&1
 
 
 # Step 1, build binutils
+echo Building binutils
 cd ${TARGET}-obj/binutils
-${SRCDIR}/binutils-gdb/configure --enable-warn-rwx-segments=no --enable-warn-execstack=no --enable-lto --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET}
-make -j $NPROC -l $NPROC all-gas all-binutils all-ld $SIMTARG
-make install-gas install-binutils install-ld $SIMINSTALLTARG
+${SRCDIR}/binutils-gdb/configure --enable-warn-rwx-segments=no --enable-warn-execstack=no --enable-lto --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} >> LOGFILE 2>&1
+make -j $NPROC -l $NPROC all-gas all-binutils all-ld $SIMTARG >> LOGFILE 2>&1
+make install-gas install-binutils install-ld $SIMINSTALLTARG >> LOGFILE 2>&1
 cd ../..
 cd ${TARGET}-installed/bin
 rm -f ar as ld ld.bfd nm objcopy objdump ranlib readelf strip run
 cd ../..
 
 # Step 2, build gcc
+echo Building GCC
 PATH=`pwd`/${TARGET}-installed/bin:$PATH
 cd ${TARGET}-obj/gcc
-${SRCDIR}/gcc/configure --disable-analyzer --with-system-libunwind --with-newlib --without-headers --disable-threads --disable-shared --enable-languages=c,c++,lto,fortran --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET}
-make -j $NPROC -l $NPROC all-gcc
-make install-gcc
+${SRCDIR}/gcc/configure --disable-analyzer --with-system-libunwind --with-newlib --without-headers --disable-threads --disable-shared --enable-languages=c,c++,lto,fortran --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} >> LOGFILE 2>&1
+make -j $NPROC -l $NPROC all-gcc >> LOGFILE 2>&1
+make install-gcc >> LOGFILE 2>&1
 
 # We try to build and install libgcc, but don't consider a failure fatal
-(make -j $NPROC -l $NPROC all-target-libgcc && make install-target-libgcc) || /bin/true
+(make -j $NPROC -l $NPROC all-target-libgcc && make install-target-libgcc) >> LOGFILE 2>&1 || /bin/true
 
 # Conditionally build libstdc++.  Also set up to conditionally run its testsuite
 if [ x$BUILDLIBSTDCXX == "xyes" ]; then
-  (make -j $NPROC -l $NPROC all-target-libstdc++-v3 && make install-target-libstdc++-v3) || /bin/true
+  (make -j $NPROC -l $NPROC all-target-libstdc++-v3 && make install-target-libstdc++-v3) >> LOGFILE 2>&1 || /bin/true
 fi
 
 cd ../../
@@ -240,42 +240,42 @@ cd ../../
 # Step 3, build newlib
 if [ ${TARGET} != avr-elf ]; then
   cd ${TARGET}-obj/newlib
-  pushd ${SRCDIR}/newlib-cygwin
+  pushd ${SRCDIR}/newlib-cygwin >& /dev/null
   find . -name aclocal.m4 | xargs touch
   find . -name aclocal.m4 | xargs touch
   find . -name configure | xargs touch
   find . -name Makefile.am | xargs touch
   find . -name Makefile.in | xargs touch
   find . -name config.h.in | xargs touch
-  popd
-  ${SRCDIR}/newlib-cygwin/configure --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET}
-  make -j $NPROC -l $NPROC
-  make install
+  popd >& /dev/null
+  ${SRCDIR}/newlib-cygwin/configure --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} >> LOGFILE 2>&1
+  make -j $NPROC -l $NPROC >> LOGFILE 2>&1
+  make install >> LOGFILE 2>&1
   cd ../..
 else
   # We don't have bzip2 in the docker image.  My bad
   wget "https://sourceforge.net/projects/bzip2/files/bzip2-1.0.6.tar.gz/download" -O bzip2-1.0.6.tar.gz
   tar xf bzip2-1.0.6.tar.gz
-  pushd bzip2-1.0.6
-  make -j 40
-  make install PREFIX=/usr
-  popd
+  pushd bzip2-1.0.6 >& /dev/null
+  make -j 40 >> LOGFILE 2>&1
+  make install PREFIX=/usr >> LOGFILE 2>&1
+  popd >& /dev/null
 
   # avr needs a different newlib than everyone else.  boo
   wget http://download.savannah.gnu.org/releases/avr-libc/avr-libc-2.1.0.tar.bz2
   bunzip2 avr-libc-2.1.0.tar.bz2
   tar xf avr-libc-2.1.0.tar
-  pushd avr-libc-2.1.0
+  pushd avr-libc-2.1.0 >& /dev/null
   # The AVR team mucked up 30+ years of standard ways to configure cross toolchains,
   # remove that crap
   patch < ../patches/newlib-cygwin/avr-libc-hack
-  popd
-  pushd ${TARGET}-obj/newlib
+  popd >& /dev/null
+  pushd ${TARGET}-obj/newlib >& /dev/null
   # Now that the sources are all fixed up, build them in a fairly standard way
-  ${SRCDIR}/avr-libc-2.1.0/configure --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} --host=avr-elf
-  make -j $NPROC -l $NPROC
-  make install
-  popd
+  ${SRCDIR}/avr-libc-2.1.0/configure --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} --host=avr-elf >> LOGFILE 2>&1
+  make -j $NPROC -l $NPROC >> LOGFILE 2>&1
+  make install >> LOGFILE 2>&1
+  popd >& /dev/null
 
 #  # We also need to build the AVR simulator, which (of course) needs
 #  # cmake which we don't have in our newlib build docker container :(
@@ -287,7 +287,7 @@ else
 #  pushd simulavr
 #  make build -j 80
 #  cp build/app/simulavr /home/jlaw/jenkins/workspace/avr-elf/avr-elf-installed/bin/avr-elf-run
-#  popd
+#  popd >& /dev/null
 fi
 
 # Step 5, run tests
@@ -316,6 +316,7 @@ fi
 cd ${TARGET}-obj/gcc/gcc
 
 if [ $RUNGCCTESTS = "yes" ]; then
+  echo Testing GCC
   make -k -j $NPROC -l $NPROC check-gcc $CHECK_CXX RUNTESTFLAGS="$TESTARGS"
 fi
 
