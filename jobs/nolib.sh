@@ -31,7 +31,7 @@ rm -f ar as ld ld.bfd nm objcopy objdump ranlib readelf strip
 cd ../..
 
 # Step 2, build gcc
-ech Building GCC
+echo Building GCC
 PATH=`pwd`/${TARGET}-installed/bin:$PATH
 cd ${TARGET}-obj/gcc
 ../../gcc/configure --disable-analyzer --with-system-libunwind --with-newlib --without-headers --disable-threads --disable-shared --enable-languages=c,c++,lto --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} >> $LOGFILE 2>&1
@@ -39,6 +39,7 @@ make -j $NPROC -l $NPROC all-gcc >> $LOGFILE 2>&1
 make install-gcc &>> $LOGFILE
 
 # We try to build and install libgcc, but don't consider a failure fatal
+echo Building libgcc
 (make -j $NPROC -l $NPROC all-target-libgcc && make install-target-libgcc) >> $LOGFILE 2>&1|| /bin/true
 cd ../..
 
