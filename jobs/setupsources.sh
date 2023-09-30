@@ -108,6 +108,19 @@ for tool in $*; do
   cd ..
 done
 
+# Record the git hashes into a manifest
+for tool in $*; do
+  pushd $tool >& /dev/null
+  echo $tool  `git rev-parse HEAD` >> ../MANIFEST
+  popd >& /dev/null
+done
+
+# And the patches directory
+pushd patches >& /dev/null
+echo patches `git rev-parse HEAD` >> ../MANIFEST
+popd >& /dev/null
+
+
 # Now that we've checked out and patched the tree, also run a script
 # that touches various files in the gcc subdir.  This avoids problems
 # with timestamps, particularly the Pragma3 test.
