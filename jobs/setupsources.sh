@@ -44,10 +44,10 @@ for repo in $*; do
   # Then update the local copy with the latest bits.  Otherwise
   # just clone from upstream.
   if [ -d /home/jlaw/jenkins/docker-volume/$repo ]; then
-    pushd /home/jlaw/jenkins/docker-volume
+    pushd /home/jlaw/jenkins/docker-volume >& /dev/null
     tar cf - ./$repo | (cd /home/jlaw/jenkins/workspace/${TARGET} ; tar xf - )
-    popd
-    pushd $repo
+    popd >& /dev/null
+    pushd $repo >& /dev/null
     if [ "$repo" == "gcc" ]; then
       if [ "$GCC_BRANCH" == "master" ]; then
         git checkout -q master -- .
@@ -67,15 +67,15 @@ for repo in $*; do
     # we can repeat the attempt until it succeeds
     ../patches/jobs/git_pull_wrapped.sh
     git status .
-    popd
+    popd >& /dev/null
   else
     # If the repo already exists, go into it, clean & update
     if [ -d $repo ]; then
-      pushd $repo
+      pushd $repo >& /dev/null
       git clean -f
       git checkout -- .
       git pull
-      popd
+      popd >& /dev/null
     else
       git clone $url $repo
     fi
@@ -111,7 +111,7 @@ done
 # Now that we've checked out and patched the tree, also run a script
 # that touches various files in the gcc subdir.  This avoids problems
 # with timestamps, particularly the Pragma3 test.
-pushd gcc
+pushd gcc >& /dev/null
 contrib/gcc_update --touch
-popd
+popd >& /dev/null
 
