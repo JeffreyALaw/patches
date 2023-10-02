@@ -24,14 +24,3 @@ index 236128bf5de..04251018ddb 100644
  	 || [istarget pru-*-*]
  	 || [istarget bpf-*-*] } {
  	return 0;
-diff --git a/gcc/testsuite/gcc.dg/pr108095.c b/gcc/testsuite/gcc.dg/pr108095.c
-index fb76caae72e..0a487cf614a 100644
---- a/gcc/testsuite/gcc.dg/pr108095.c
-+++ b/gcc/testsuite/gcc.dg/pr108095.c
-@@ -1,5 +1,5 @@
- /* PR tree-optimization/108095 */
--/* { dg-do compile } */
-+/* { dg-do compile { target lra } } */
- /* { dg-options "-Os -g" } */
- 
- int v;
