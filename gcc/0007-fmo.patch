@@ -42,6 +42,11 @@ gcc/testsuite/ChangeLog:
 Signed-off-by: Manolis Tsamis <manolis.tsamis@vrull.eu>
 ---
 
+Changes in v6:
+        - Fix formatting issues.
+        - Compute maximum validity iterations based on
+          flag_expensive_optimizations.
+
 Changes in v5:
         - Introduce new helper function fold_offsets_1.
         - Fix bug because constants could be partially propagated
@@ -83,23 +88,23 @@ Changes in v2:
  gcc/Makefile.in                               |   1 +
  gcc/common.opt                                |   4 +
  gcc/doc/invoke.texi                           |   8 +
- gcc/fold-mem-offsets.cc                       | 891 ++++++++++++++++++
+ gcc/fold-mem-offsets.cc                       | 900 ++++++++++++++++++
  gcc/passes.def                                |   1 +
  .../gcc.target/riscv/fold-mem-offsets-1.c     |  16 +
  .../gcc.target/riscv/fold-mem-offsets-2.c     |  24 +
  .../gcc.target/riscv/fold-mem-offsets-3.c     |  17 +
  gcc/tree-pass.h                               |   1 +
- 9 files changed, 963 insertions(+)
+ 9 files changed, 972 insertions(+)
  create mode 100644 gcc/fold-mem-offsets.cc
  create mode 100644 gcc/testsuite/gcc.target/riscv/fold-mem-offsets-1.c
  create mode 100644 gcc/testsuite/gcc.target/riscv/fold-mem-offsets-2.c
  create mode 100644 gcc/testsuite/gcc.target/riscv/fold-mem-offsets-3.c
 
 diff --git a/gcc/Makefile.in b/gcc/Makefile.in
-index 6d608db4dd2..d18bef1be4b 100644
+index 9cc16268abf..747f749538d 100644
 --- a/gcc/Makefile.in
 +++ b/gcc/Makefile.in
-@@ -1435,6 +1435,7 @@ OBJS = \
+@@ -1443,6 +1443,7 @@ OBJS = \
  	fixed-value.o \
  	fold-const.o \
  	fold-const-call.o \
@@ -123,7 +128,7 @@ index f137a1f81ac..b103b8d28ed 100644
  Common Var(flag_crossjumping) Optimization
  Perform cross-jumping optimization.
 diff --git a/gcc/doc/invoke.texi b/gcc/doc/invoke.texi
-index 33befee7d6b..ce5a83a2d9c 100644
+index 4085fc90907..3ba28d6c4e5 100644
 --- a/gcc/doc/invoke.texi
 +++ b/gcc/doc/invoke.texi
 @@ -543,6 +543,7 @@ Objective-C and Objective-C++ Dialects}.
@@ -134,7 +139,7 @@ index 33befee7d6b..ce5a83a2d9c 100644
  -fcompare-elim  -fcprop-registers  -fcrossjumping
  -fcse-follow-jumps  -fcse-skip-blocks  -fcx-fortran-rules
  -fcx-limited-range
-@@ -14355,6 +14356,13 @@ the comparison operation before register allocation is complete.
+@@ -14389,6 +14390,13 @@ the comparison operation before register allocation is complete.
  
  Enabled at levels @option{-O1}, @option{-O2}, @option{-O3}, @option{-Os}.
  
@@ -150,10 +155,10 @@ index 33befee7d6b..ce5a83a2d9c 100644
  After register allocation and post-register allocation instruction splitting,
 diff --git a/gcc/fold-mem-offsets.cc b/gcc/fold-mem-offsets.cc
 new file mode 100644
-index 00000000000..981c7a5e527
+index 00000000000..268da32f19d
 --- /dev/null
 +++ b/gcc/fold-mem-offsets.cc
-@@ -0,0 +1,891 @@
+@@ -0,0 +1,900 @@
 +/* Late RTL pass to fold memory offsets.
 +   Copyright (C) 2023 Free Software Foundation, Inc.
 +
@@ -347,7 +352,7 @@ index 00000000000..981c7a5e527
 +  if (ref_chain->next)
 +    return NULL;
 +
-+  rtx_insn* def = DF_REF_INSN (ref_chain->ref);
++  rtx_insn *def = DF_REF_INSN (ref_chain->ref);
 +
 +  if (BLOCK_FOR_INSN (def) != BLOCK_FOR_INSN (insn))
 +    return NULL;
@@ -362,7 +367,7 @@ index 00000000000..981c7a5e527
 +   use is missing / irregular.  If SUCCESS is not NULL then set it to false if
 +   there are missing / irregular uses and true otherwise.  */
 +static struct df_link*
-+get_uses (rtx_insn *insn, rtx reg, bool* success)
++get_uses (rtx_insn *insn, rtx reg, bool *success)
 +{
 +  df_ref def;
 +  struct df_link *ref_chain, *ref_link;
@@ -398,7 +403,7 @@ index 00000000000..981c7a5e527
 +}
 +
 +static HOST_WIDE_INT
-+fold_offsets (rtx_insn* insn, rtx reg, bool analyze, bitmap foldable_insns);
++fold_offsets (rtx_insn *insn, rtx reg, bool analyze, bitmap foldable_insns);
 +
 +/*  Helper function for fold_offsets.
 +
@@ -413,8 +418,9 @@ index 00000000000..981c7a5e527
 +    from folding is computed and is returned through the pointer OFFSET_OUT.
 +    The instructions that can be folded are recorded in FOLDABLE_INSNS.
 +*/
-+static bool fold_offsets_1 (rtx_insn* insn, bool analyze, bool do_recursion,
-+			    HOST_WIDE_INT *offset_out, bitmap foldable_insns)
++static bool
++fold_offsets_1 (rtx_insn *insn, bool analyze, bool do_recursion,
++		HOST_WIDE_INT *offset_out, bitmap foldable_insns)
 +{
 +  /* Doesn't make sense if both DO_RECURSION and ANALYZE are false.  */
 +  gcc_checking_assert (do_recursion || analyze);
@@ -632,9 +638,9 @@ index 00000000000..981c7a5e527
 +   transitively only affect other instructions found in CAN_FOLD_INSNS.
 +   If ANALYZE is false then compute the offset required for folding.  */
 +static HOST_WIDE_INT
-+fold_offsets (rtx_insn* insn, rtx reg, bool analyze, bitmap foldable_insns)
++fold_offsets (rtx_insn *insn, rtx reg, bool analyze, bitmap foldable_insns)
 +{
-+  rtx_insn* def = get_single_def_in_bb (insn, reg);
++  rtx_insn *def = get_single_def_in_bb (insn, reg);
 +
 +  if (!def || GET_CODE (PATTERN (def)) != SET)
 +    return 0;
@@ -668,7 +674,7 @@ index 00000000000..981c7a5e527
 +
 +      for (ref_link = uses; ref_link; ref_link = ref_link->next)
 +	{
-+	  rtx_insn* use = DF_REF_INSN (ref_link->ref);
++	  rtx_insn *use = DF_REF_INSN (ref_link->ref);
 +
 +	  if (DEBUG_INSN_P (use))
 +	    continue;
@@ -722,7 +728,7 @@ index 00000000000..981c7a5e527
 +   used as a base address and the offset accordingly.
 +   All of the out pointers may be NULL in which case they will be ignored.  */
 +bool
-+get_fold_mem_root (rtx_insn* insn, rtx *mem_out, rtx *reg_out,
++get_fold_mem_root (rtx_insn *insn, rtx *mem_out, rtx *reg_out,
 +		   HOST_WIDE_INT *offset_out)
 +{
 +  rtx set = single_set (insn);
@@ -785,7 +791,7 @@ index 00000000000..981c7a5e527
 +/* If INSN is a root memory instruction then do a DFS traversal on its
 +   definitions and find folding candidates.  */
 +static void
-+do_analysis (rtx_insn* insn)
++do_analysis (rtx_insn *insn)
 +{
 +  rtx reg;
 +  if (!get_fold_mem_root (insn, NULL, &reg, NULL))
@@ -803,7 +809,7 @@ index 00000000000..981c7a5e527
 +}
 +
 +static void
-+do_fold_info_calculation (rtx_insn* insn, fold_info_map *fold_info)
++do_fold_info_calculation (rtx_insn *insn, fold_info_map *fold_info)
 +{
 +  rtx mem, reg;
 +  HOST_WIDE_INT cur_offset;
@@ -819,7 +825,7 @@ index 00000000000..981c7a5e527
 +/* If INSN is a root memory instruction then compute a potentially new offset
 +   for it and test if the resulting instruction is valid.  */
 +static void
-+do_check_validity (rtx_insn* insn, fold_mem_info *info)
++do_check_validity (rtx_insn *insn, fold_mem_info *info)
 +{
 +  rtx mem, reg;
 +  HOST_WIDE_INT cur_offset;
@@ -832,7 +838,10 @@ index 00000000000..981c7a5e527
 +  int icode = INSN_CODE (insn);
 +  rtx mem_addr = XEXP (mem, 0);
 +  machine_mode mode = GET_MODE (mem_addr);
-+  XEXP (mem, 0) = gen_rtx_PLUS (mode, reg, gen_int_mode (new_offset, mode));
++  if (new_offset != 0)
++    XEXP (mem, 0) = gen_rtx_PLUS (mode, reg, gen_int_mode (new_offset, mode));
++  else
++    XEXP (mem, 0) = reg;
 +
 +  bool illegal = insn_invalid_p (insn, false)
 +		 || !memory_address_addr_space_p (mode, XEXP (mem, 0),
@@ -871,8 +880,10 @@ index 00000000000..981c7a5e527
 +	   ...                      ...                      ...
 +  */
 +
-+  int max_iters = 5;
-+  for (int i = 0; i < max_iters; i++)
++  /* In general three iterations should be enough for most cases, but allow up
++     to five when -fexpensive-optimizations is used.  */
++  int max_iters = 3 + 2 * flag_expensive_optimizations;
++  for (int pass = 0; pass < max_iters; pass++)
 +    {
 +      bool made_changes = false;
 +      for (fold_info_map::iterator iter = fold_info->begin ();
@@ -894,7 +905,7 @@ index 00000000000..981c7a5e527
 +/* If INSN is a root memory instruction that was affected by any folding
 +   then update its offset as necessary.  */
 +static void
-+do_commit_offset (rtx_insn* insn, fold_mem_info *info)
++do_commit_offset (rtx_insn *insn, fold_mem_info *info)
 +{
 +  rtx mem, reg;
 +  HOST_WIDE_INT cur_offset;
@@ -920,7 +931,10 @@ index 00000000000..981c7a5e527
 +    }
 +
 +  machine_mode mode = GET_MODE (XEXP (mem, 0));
-+  XEXP (mem, 0) = gen_rtx_PLUS (mode, reg, gen_int_mode (new_offset, mode));
++  if (new_offset != 0)
++    XEXP (mem, 0) = gen_rtx_PLUS (mode, reg, gen_int_mode (new_offset, mode));
++  else
++    XEXP (mem, 0) = reg;
 +  INSN_CODE (insn) = recog (PATTERN (insn), insn, 0);
 +  df_insn_rescan (insn);
 +}
@@ -928,7 +942,7 @@ index 00000000000..981c7a5e527
 +/* If INSN is a move / add instruction that was folded then replace its
 +   constant part with zero.  */
 +static void
-+do_commit_insn (rtx_insn* insn)
++do_commit_insn (rtx_insn *insn)
 +{
 +  if (bitmap_bit_p (&candidate_fold_insns, INSN_UID (insn))
 +      && !bitmap_bit_p (&cannot_fold_insns, INSN_UID (insn)))
@@ -1071,4 +1085,5 @@ index eba2d54ac76..34a38dbd148 100644
  extern rtl_opt_pass *make_pass_leaf_regs (gcc::context *ctxt);
 -- 
 2.34.1
+
 
