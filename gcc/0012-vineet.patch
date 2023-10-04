@@ -1,0 +1,82 @@
+
+
+RISC-V suffers from extraneous sign extensions, despite/given the ABI
+guarantee that 32-bit quantities are sign-extended into 64-bit registers,
+meaning incoming SI function args need not be explicitly sign extended
+(so do SI return values as most ALU insns implicitly sign-extend too.)
+
+Existing REE doesn't seem to handle this well and there are various ideas
+floating around to smarten REE about it.
+
+RISC-V also seems to correctly implement middle-end hook PROMOTE_MODE
+etc.
+
+Another approach would be to prevent EXPAND from generating the
+sign_extend in the first place which this patch tries to do.
+
+The hunk being removed was introduced way back in 1994 as
+   5069803972 ("expand_expr, case CONVERT_EXPR .. clear the promotion flag")
+
+This survived full testsuite run for RISC-V rv64gc with surprisingly no
+fallouts: test results before/after are exactly same.
+
+|                               | # of unexpected case / # of unique unexpected case
+|                               |          gcc |          g++ |     gfortran |
+| rv64imafdc_zba_zbb_zbs_zicond/|  264 /    87 |    5 /     2 |   72 /    12 |
+|    lp64d/medlow
+
+Granted for something so old to have survived, there must be a valid
+reason. Unfortunately the original change didn't have additional
+commentary or a test case. That is not to say it can't/won't possibly
+break things on other arches/ABIs, hence the RFC for someone to scream
+that this is just bonkers, don't do this 🙂
+
+I've explicitly CC'ed Jakub and Roger who have last touched subreg
+promoted notes in expr.cc for insight and/or screaming 😉
+
+Thanks to Robin for narrowing this down in an amazing debugging session
+@ GNU Cauldron.
+
+```
+foo2:
+	sext.w	a6,a1             <-- this goes away
+	beq	a1,zero,.L4
+	li	a5,0
+	li	a0,0
+.L3:
+	addw	a4,a2,a5
+	addw	a5,a3,a5
+	addw	a0,a4,a0
+	bltu	a5,a6,.L3
+	ret
+.L4:
+	li	a0,0
+	ret
+```
+
+Signed-off-by: Vineet Gupta <vineetg@rivosinc.com>
+Co-developed-by: Robin Dapp <rdapp.gcc@gmail.com>
+---
+ gcc/expr.cc                               |  7 -------
+ gcc/testsuite/gcc.target/riscv/pr111466.c | 15 +++++++++++++++
+ 2 files changed, 15 insertions(+), 7 deletions(-)
+ create mode 100644 gcc/testsuite/gcc.target/riscv/pr111466.c
+
+diff --git a/gcc/expr.cc b/gcc/expr.cc
+index 308ddc09e631..d259c6e53385 100644
+--- a/gcc/expr.cc
++++ b/gcc/expr.cc
+@@ -9332,13 +9332,6 @@ expand_expr_real_2 (sepops ops, rtx target, machine_mode tmode,
+ 	  op0 = expand_expr (treeop0, target, VOIDmode,
+ 			     modifier);
+ 
+-	  /* If the signedness of the conversion differs and OP0 is
+-	     a promoted SUBREG, clear that indication since we now
+-	     have to do the proper extension.  */
+-	  if (TYPE_UNSIGNED (TREE_TYPE (treeop0)) != unsignedp
+-	      && GET_CODE (op0) == SUBREG)
+-	    SUBREG_PROMOTED_VAR_P (op0) = 0;
+-
+ 	  return REDUCE_BIT_FIELD (op0);
+ 	}
+ 
