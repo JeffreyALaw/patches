@@ -158,7 +158,7 @@ new file mode 100644
 index 00000000000..268da32f19d
 --- /dev/null
 +++ b/gcc/fold-mem-offsets.cc
-@@ -0,0 +1,900 @@
+@@ -0,0 +1,901 @@
 +/* Late RTL pass to fold memory offsets.
 +   Copyright (C) 2023 Free Software Foundation, Inc.
 +
@@ -843,6 +843,7 @@ index 00000000000..268da32f19d
 +  else
 +    XEXP (mem, 0) = reg;
 +
++  INSN_CODE (insn) = -1;
 +  bool illegal = insn_invalid_p (insn, false)
 +		 || !memory_address_addr_space_p (mode, XEXP (mem, 0),
 +						  MEM_ADDR_SPACE (mem));
