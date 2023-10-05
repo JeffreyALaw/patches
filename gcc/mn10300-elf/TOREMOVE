@@ -1,2 +1,2 @@
-gcc/testsuite/gcc.c-torture/execute/printf-2.c
+gcc/testsuite/gcc.c-torture/execute/fprintf-2.c
 gcc/testsuite/gcc.c-torture/execute/user-printf.c
