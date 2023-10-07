@@ -205,15 +205,15 @@ case "${TARGET}" in
     ;;
 esac
 
-patches/jobs/setupsources.sh $TARGET master binutils-gdb gcc newlib-cygwin > LOGFILE 2>&1
+patches/jobs/setupsources.sh $TARGET master binutils-gdb gcc newlib-cygwin > $LOGFILE 2>&1
 
 
 # Step 1, build binutils
 echo Building binutils
 cd ${TARGET}-obj/binutils
-${SRCDIR}/binutils-gdb/configure --enable-warn-rwx-segments=no --enable-warn-execstack=no --enable-lto --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} >> LOGFILE 2>&1
-make -j $NPROC -l $NPROC all-gas all-binutils all-ld $SIMTARG >> LOGFILE 2>&1
-make install-gas install-binutils install-ld $SIMINSTALLTARG >> LOGFILE 2>&1
+${SRCDIR}/binutils-gdb/configure --enable-warn-rwx-segments=no --enable-warn-execstack=no --enable-lto --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} >> $LOGFILE 2>&1
+make -j $NPROC -l $NPROC all-gas all-binutils all-ld $SIMTARG >> $LOGFILE 2>&1
+make install-gas install-binutils install-ld $SIMINSTALLTARG >> $LOGFILE 2>&1
 cd ../..
 cd ${TARGET}-installed/bin
 rm -f ar as ld ld.bfd nm objcopy objdump ranlib readelf strip run
@@ -223,16 +223,16 @@ cd ../..
 echo Building GCC
 PATH=`pwd`/${TARGET}-installed/bin:$PATH
 cd ${TARGET}-obj/gcc
-${SRCDIR}/gcc/configure --disable-analyzer --with-system-libunwind --with-newlib --without-headers --disable-threads --disable-shared --enable-languages=c,c++,lto,fortran --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} >> LOGFILE 2>&1
-make -j $NPROC -l $NPROC all-gcc >> LOGFILE 2>&1
-make install-gcc >> LOGFILE 2>&1
+${SRCDIR}/gcc/configure --disable-analyzer --with-system-libunwind --with-newlib --without-headers --disable-threads --disable-shared --enable-languages=c,c++,lto,fortran --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} >> $LOGFILE 2>&1
+make -j $NPROC -l $NPROC all-gcc >> $LOGFILE 2>&1
+make install-gcc >> $LOGFILE 2>&1
 
 # We try to build and install libgcc, but don't consider a failure fatal
-(make -j $NPROC -l $NPROC all-target-libgcc && make install-target-libgcc) >> LOGFILE 2>&1 || /bin/true
+(make -j $NPROC -l $NPROC all-target-libgcc && make install-target-libgcc) >> $LOGFILE 2>&1 || /bin/true
 
 # Conditionally build libstdc++.  Also set up to conditionally run its testsuite
 if [ x$BUILDLIBSTDCXX == "xyes" ]; then
-  (make -j $NPROC -l $NPROC all-target-libstdc++-v3 && make install-target-libstdc++-v3) >> LOGFILE 2>&1 || /bin/true
+  (make -j $NPROC -l $NPROC all-target-libstdc++-v3 && make install-target-libstdc++-v3) >> $LOGFILE 2>&1 || /bin/true
 fi
 
 cd ../../
@@ -248,17 +248,17 @@ if [ ${TARGET} != avr-elf ]; then
   find . -name Makefile.in | xargs touch
   find . -name config.h.in | xargs touch
   popd >& /dev/null
-  ${SRCDIR}/newlib-cygwin/configure --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} >> LOGFILE 2>&1
-  make -j $NPROC -l $NPROC >> LOGFILE 2>&1
-  make install >> LOGFILE 2>&1
+  ${SRCDIR}/newlib-cygwin/configure --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} >> $LOGFILE 2>&1
+  make -j $NPROC -l $NPROC >> $LOGFILE 2>&1
+  make install >> $LOGFILE 2>&1
   cd ../..
 else
   # We don't have bzip2 in the docker image.  My bad
   wget "https://sourceforge.net/projects/bzip2/files/bzip2-1.0.6.tar.gz/download" -O bzip2-1.0.6.tar.gz
   tar xf bzip2-1.0.6.tar.gz
   pushd bzip2-1.0.6 >& /dev/null
-  make -j 40 >> LOGFILE 2>&1
-  make install PREFIX=/usr >> LOGFILE 2>&1
+  make -j 40 >> $LOGFILE 2>&1
+  make install PREFIX=/usr >> $LOGFILE 2>&1
   popd >& /dev/null
 
   # avr needs a different newlib than everyone else.  boo
@@ -272,9 +272,9 @@ else
   popd >& /dev/null
   pushd ${TARGET}-obj/newlib >& /dev/null
   # Now that the sources are all fixed up, build them in a fairly standard way
-  ${SRCDIR}/avr-libc-2.1.0/configure --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} --host=avr-elf >> LOGFILE 2>&1
-  make -j $NPROC -l $NPROC >> LOGFILE 2>&1
-  make install >> LOGFILE 2>&1
+  ${SRCDIR}/avr-libc-2.1.0/configure --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} --host=avr-elf >> $LOGFILE 2>&1
+  make -j $NPROC -l $NPROC >> $LOGFILE 2>&1
+  make install >> $LOGFILE 2>&1
   popd >& /dev/null
 
 #  # We also need to build the AVR simulator, which (of course) needs
