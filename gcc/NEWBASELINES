@@ -4,3 +4,4 @@
 s390x-linux-gnu
 sh4-linux-gnu
 sh4eb-linux-gnu
+m68k-linux-gnu
