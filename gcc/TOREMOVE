@@ -19,7 +19,7 @@ gcc/testsuite/gcc.dg/plugin/poly-int-03_plugin.c
 gcc/testsuite/gcc.dg/plugin/poly-int-02_plugin.c
 # Per H-P's comments which xfailed this test, it is flakey
 gcc/testsuite/gcc.dg/pr84877.c
-# Needs deeper investigation
-#gcc/testsuite/c-c++-common/diagnostic-format-json-2.c
-#gcc/testsuite/c-c++-common/diagnostic-format-json-3.c
-#gcc/testsuite/c-c++-common/diagnostic-format-json-4.c
+# Flakey, across the board?
+gcc/testsuite/gfortran.dg/minlocval_3.f90
+gcc/testsuite/gfortran.dg/minlocval_3izeof_6.f90
+
