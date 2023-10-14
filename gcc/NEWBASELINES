@@ -4,3 +4,4 @@
 s390x-linux-gnu
 avr-elf
 aarch64-linux-gnu
+rl78-elf
