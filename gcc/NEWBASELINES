@@ -2,6 +2,6 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 s390x-linux-gnu
-avr-elf
 aarch64-linux-gnu
 rl78-elf
+msp430-elf
