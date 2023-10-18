@@ -48,9 +48,9 @@ case ${TARGET} in
   *)
     export KERNEL_TARGETS="all modules"
     pushd obj/linux
-    make -C ../../linux O=`pwd` mrproper
-    make -C ../../linux O=`pwd` -j $NPROC -l $NPROC defconfig
-    make -C ../../linux O=`pwd` -j $NPROC -l $NPROC $KERNEL_TARGETS
+#    make -C ../../linux O=`pwd` mrproper
+#    make -C ../../linux O=`pwd` -j $NPROC -l $NPROC defconfig
+#    make -C ../../linux O=`pwd` -j $NPROC -l $NPROC $KERNEL_TARGETS
     popd
     ;;
 esac
