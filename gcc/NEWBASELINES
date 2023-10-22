@@ -3,4 +3,4 @@
 # reset.  
 aarch64-linux-gnu
 sh4eb-linux-gnu
-iq2000-elf
+ppc64le-linux-gnu
