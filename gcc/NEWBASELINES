@@ -3,3 +3,4 @@
 # reset.  
 sh4eb-linux-gnu
 ppc64le-linux-gnu
+hppa-linux-gnu
