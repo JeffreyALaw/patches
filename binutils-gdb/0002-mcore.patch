@@ -2,34 +2,6 @@ diff --git a/sim/mcore/interp.c b/sim/mcore/interp.c
 index 48d9ff8645a..15f15b8563a 100644
 --- a/sim/mcore/interp.c
 +++ b/sim/mcore/interp.c
-@@ -639,10 +639,10 @@ step_once (SIM_DESC sd, SIM_CPU *cpu)
- 	      break;
- 	    case 0x5:					/* sextb */
- 	      {
--		long tmp;
-+		uint32_t tmp;
- 		tmp = gr[RD];
--		tmp <<= (sizeof (tmp) * 8) - 8;
--		tmp >>= (sizeof (tmp) * 8) - 8;
-+		tmp <<= 24;
-+		tmp >>= 24;
- 		gr[RD] = tmp;
- 	      }
- 	      break;
-@@ -651,10 +651,10 @@ step_once (SIM_DESC sd, SIM_CPU *cpu)
- 	      break;
- 	    case 0x7:					/* sexth */
- 	      {
--		long tmp;
-+		uint32_t tmp;
- 		tmp = gr[RD];
--		tmp <<= (sizeof (tmp) * 8) - 16;
--		tmp >>= (sizeof (tmp) * 8) - 16;
-+		tmp <<= 16;
-+		tmp >>= 16;
- 		gr[RD] = tmp;
- 	      }
- 	      break;
 @@ -1019,7 +1019,7 @@ step_once (SIM_DESC sd, SIM_CPU *cpu)
  	case 0x38: case 0x39:				/* xsr, rotli */
  	  {
