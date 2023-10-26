@@ -2,15 +2,6 @@ diff --git a/sim/mcore/interp.c b/sim/mcore/interp.c
 index 48d9ff8645a..15f15b8563a 100644
 --- a/sim/mcore/interp.c
 +++ b/sim/mcore/interp.c
-@@ -1019,7 +1019,7 @@ step_once (SIM_DESC sd, SIM_CPU *cpu)
- 	case 0x38: case 0x39:				/* xsr, rotli */
- 	  {
- 	    unsigned imm = IMM5;
--	    unsigned long tmp = gr[RD];
-+	    uint32_t tmp = gr[RD];
- 	    if (imm == 0)
- 	      {
- 		int32_t cbit;
 @@ -1034,7 +1034,7 @@ step_once (SIM_DESC sd, SIM_CPU *cpu)
  	case 0x3A: case 0x3B:				/* asrc, asri */
  	  {
@@ -20,15 +11,6 @@ index 48d9ff8645a..15f15b8563a 100644
  	    if (imm == 0)
  	      {
  		NEW_C (tmp);
-@@ -1047,7 +1047,7 @@ step_once (SIM_DESC sd, SIM_CPU *cpu)
- 	case 0x3C: case 0x3D:				/* lslc, lsli */
- 	  {
- 	    unsigned imm = IMM5;
--	    unsigned long tmp = gr[RD];
-+	    uint32_t tmp = gr[RD];
- 	    if (imm == 0)
- 	      {
- 		NEW_C (tmp >> 31);
 @@ -1060,7 +1060,7 @@ step_once (SIM_DESC sd, SIM_CPU *cpu)
  	case 0x3E: case 0x3F:				/* lsrc, lsri */
  	  {
