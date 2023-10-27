@@ -3,3 +3,4 @@
 # reset.  
 ppc64le-linux-gnu
 sh4-linux-gnu
+mcore-elf
