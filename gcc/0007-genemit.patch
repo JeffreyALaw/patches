@@ -1,82 +1,3 @@
-
-
-After working with Sam off-list (thanks) I managed to get hppa to
-build.  Initially it looked as if hppa just had a very small number of
-instruction patterns so we wouldn't generate all 10 output files.
-However, the actual issue (which we will only hit with a low
-pattern count) was with counting all the patterns vs only counting
-the patterns that will be output.  A wrong pattern count lead to
-prematurely stopping to write output files.
-
-With that corrected, hppa "just works" until I hit linker errors
-due to relocations - most likely unrelated:
-
-bin/ld: unwind-dw2-fde-dip_s.o(.data.rel.ro+0): cannot handle
-R_PARISC_FPTR64 for __pthread_key_create@@GLIBC_2.34
-
-Attached is v3 that has been bootstrapped and tested on x86 and power10,
-aarch64 bootstrap was ok, testsuite is still running.  A riscv build and
-testsuite run was successful as well.
-
-Regards
- Robin
-
-From 248744c328440bff9cc339d2bf622852cbaac343 Mon Sep 17 00:00:00 2001
-From: Robin Dapp <rdapp@ventanamicro.com>
-Date: Thu, 12 Oct 2023 11:23:26 +0200
-Subject: [PATCH v3] genemit: Split insn-emit.cc into several partitions.
-
-On riscv insn-emit.cc has grown to over 1.2 mio lines of code and
-compiling it takes considerable time.
-Therefore, this patch adjust genemit to create several partitions
-(insn-emit-1.cc to insn-emit-n.cc).  The available patterns are
-written to the given files in a sequential fashion.
-
-Similar to match.pd a configure option --with-emitinsn-partitions=num
-is introduced that makes the number of partition configurable.
-
-gcc/ChangeLog:
-
-	PR bootstrap/84402
-	PR target/111600
-
-	* Makefile.in: Handle split insn-emit.cc.
-	* configure: Regenerate.
-	* configure.ac: Add --with-insnemit-partitions.
-	* genemit.cc (output_peephole2_scratches): Print to file instead
-	of stdout.
-	(print_code): Ditto.
-	(gen_rtx_scratch): Ditto.
-	(gen_exp): Ditto.
-	(gen_emit_seq): Ditto.
-	(emit_c_code): Ditto.
-	(gen_insn): Ditto.
-	(gen_expand): Ditto.
-	(gen_split): Ditto.
-	(output_add_clobbers): Ditto.
-	(output_added_clobbers_hard_reg_p): Ditto.
-	(print_overload_arguments): Ditto.
-	(print_overload_test): Ditto.
-	(handle_overloaded_code_for): Ditto.
-	(handle_overloaded_gen): Ditto.
-	(print_header): New function.
-	(handle_arg): New function.
-	(main): Split output into 10 files.
-	* gensupport.cc (count_patterns): New function.
-	* gensupport.h (count_patterns): Define.
-	* read-md.cc (md_reader::print_md_ptr_loc): Add file argument.
-	* read-md.h (class md_reader): Change definition.
----
- gcc/Makefile.in   |  36 ++-
- gcc/configure     |  24 +-
- gcc/configure.ac  |  13 ++
- gcc/genemit.cc    | 542 +++++++++++++++++++++++++---------------------
- gcc/gensupport.cc |  55 +++++
- gcc/gensupport.h  |   1 +
- gcc/read-md.cc    |   4 +-
- gcc/read-md.h     |   2 +-
- 8 files changed, 422 insertions(+), 255 deletions(-)
-
 diff --git a/gcc/Makefile.in b/gcc/Makefile.in
 index 91d6bfbea4d..d8bfad8de15 100644
 --- a/gcc/Makefile.in
@@ -268,7 +189,7 @@ index 1ce0564076d..471fd46a10b 100644
  
  /* True for <X>_optab if that optab isn't allowed to fail.  */
  static bool nofail_optabs[NUM_OPTABS];
- 
+ 
  static void
 -print_code (RTX_CODE code)
 +print_code (RTX_CODE code, FILE *file)
@@ -584,7 +505,7 @@ index 1ce0564076d..471fd46a10b 100644
 +  fprintf (file, "#undef DONE\n");
 +  fprintf (file, "#undef FAIL\n");
  }
- 
+ 
  /* Generate the `gen_...' function for a DEFINE_INSN.  */
  
  static void
@@ -638,7 +559,7 @@ index 1ce0564076d..471fd46a10b 100644
 +  fprintf (file, ";\n}\n\n");
    XDELETEVEC (used);
  }
- 
+ 
  /* Generate the `gen_...' function for a DEFINE_EXPAND.  */
  
  static void
@@ -891,7 +812,7 @@ index 1ce0564076d..471fd46a10b 100644
 +  fprintf (file, "    }\n");
 +  fprintf (file, "}\n");
  }
- 
+ 
  /* Write a function, `added_clobbers_hard_reg_p' that is given an insn_code
 @@ -684,17 +685,17 @@ output_add_clobbers (md_rtx_info *info)
     SCRATCH.  */
@@ -939,7 +860,7 @@ index 1ce0564076d..471fd46a10b 100644
 +  fprintf (file, "    }\n");
 +  fprintf (file, "}\n");
  }
- 
+ 
  /* Generate code to invoke find_free_register () as needed for the
     scratch registers used by the peephole2 pattern in SPLIT.  */
  
@@ -1288,13 +1209,14 @@ index 1ce0564076d..471fd46a10b 100644
 +  return (fclose (file) != 0 ? FATAL_EXIT_CODE : SUCCESS_EXIT_CODE);
  }
 diff --git a/gcc/gensupport.cc b/gcc/gensupport.cc
-index dd920d673b4..688808c7d12 100644
+index dd920d673b4..cacc027692b 100644
 --- a/gcc/gensupport.cc
 +++ b/gcc/gensupport.cc
-@@ -3131,6 +3131,61 @@ init_rtx_reader_args (int argc, const char **argv)
+@@ -3130,6 +3130,62 @@ init_rtx_reader_args (int argc, const char **argv)
+ {
    return init_rtx_reader_args_cb (argc, argv, 0);
  }
- 
++
 +/* Count the number of patterns in all queues and return the count.  */
 +int
 +count_patterns ()
@@ -1350,9 +1272,9 @@ index dd920d673b4..688808c7d12 100644
 +  return count;
 +}
 +
+ 
  /* Try to read a single rtx from the file.  Return true on success,
     describing it in *INFO.  */
- 
 diff --git a/gcc/gensupport.h b/gcc/gensupport.h
 index 7925e22ed41..7396118714b 100644
 --- a/gcc/gensupport.h
@@ -1394,7 +1316,3 @@ index b309c9c3deb..2adcb58478f 100644
  
    struct enum_type *lookup_enum_type (const char *name);
    void traverse_enum_types (htab_trav callback, void *info);
--- 
-2.41.0
-
-
