@@ -97,7 +97,7 @@ for tool in $*; do
   done
 
   if [ -f ../patches/$tool/TOREMOVE ]; then
-    rm -f `cat ../patches/$tool/TOREMOVE | grep -v "^#"`
+    rm -rf `cat ../patches/$tool/TOREMOVE | grep -v "^#"`
   fi
 
   if [ -f ../patches/$tool/$TARGET/TOREMOVE ]; then
