@@ -62,7 +62,7 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..e29788c1c53
+index 00000000000..9b5f9c3d325
 --- /dev/null
 +++ b/gcc/ext-dce.cc
 @@ -0,0 +1,603 @@
@@ -144,7 +144,7 @@ index 00000000000..e29788c1c53
 +		    {
 +		      bit = SUBREG_BYTE (x).to_constant () * BITS_PER_UNIT;
 +		      if (WORDS_BIG_ENDIAN)
-+			bit = (GET_MODE_BITSIZE (GET_MODE (x)).to_constant ()
++			bit = (GET_MODE_BITSIZE (GET_MODE (SUBREG_REG (x))).to_constant ()
 +			       - BITS_PER_WORD - bit);
 +		      mask = GET_MODE_MASK (GET_MODE (SUBREG_REG (x))) << bit;
 +		      if (!mask)
@@ -236,7 +236,7 @@ index 00000000000..e29788c1c53
 +		    {
 +		      bit = SUBREG_BYTE (dst).to_constant () * BITS_PER_UNIT;
 +		      if (WORDS_BIG_ENDIAN)
-+			bit = (GET_MODE_BITSIZE (GET_MODE (dst)).to_constant ()
++			bit = (GET_MODE_BITSIZE (GET_MODE (SUBREG_REG (dst))).to_constant ()
 +			       - BITS_PER_WORD - bit);
 +		      if (bit >= HOST_BITS_PER_WIDE_INT)
 +			bit = HOST_BITS_PER_WIDE_INT - 1;
@@ -331,7 +331,7 @@ index 00000000000..e29788c1c53
 +				     * BITS_PER_UNIT);
 +			      if (WORDS_BIG_ENDIAN)
 +				bit = (GET_MODE_BITSIZE
-+					(GET_MODE (y)).to_constant ()
++					(GET_MODE (SUBREG_REG (y))).to_constant ()
 +					 - BITS_PER_WORD - bit);
 +			      if (mask)
 +				{
