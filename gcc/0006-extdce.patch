@@ -643,7 +643,7 @@ index 00000000000..a8d1b21f8e7
 +  {}
 +
 +  /* opt_pass methods: */
-+  virtual bool gate (function *) { return 1; }
++  virtual bool gate (function *) { return optimize > 0; }
 +  virtual unsigned int execute (function *)
 +    {
 +      ext_dce ();
