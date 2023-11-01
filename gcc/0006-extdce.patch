@@ -62,10 +62,10 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..a8d1b21f8e7
+index 00000000000..e29788c1c53
 --- /dev/null
 +++ b/gcc/ext-dce.cc
-@@ -0,0 +1,593 @@
+@@ -0,0 +1,603 @@
 +/* RTL dead zero/sign extension (code) elimination.
 +   Copyright (C) 2000-2022 Free Software Foundation, Inc.
 +
@@ -120,6 +120,9 @@ index 00000000000..a8d1b21f8e7
 +      if (!NONDEBUG_INSN_P (insn))
 +	continue;
 +
++      /* Live-out state of the destination of this insn.  We can
++	 use this to refine the live-in state of the sources of
++	 this insn in many cases.  */
 +      bitmap live_tmp = BITMAP_ALLOC (NULL);
 +      int seen_fusage = 0;
 +
@@ -180,6 +183,9 @@ index 00000000000..a8d1b21f8e7
 +		      bitmap_clear_range (livenow, 4 * rn + start, end - start);
 +		    }
 +		  else if (GET_CODE (x) == SUBREG)
++		    continue;
++		  /* Some ports generate (clobber (const_int)).  */
++		  else if (CONST_INT_P (x))
 +		    continue;
 +		  else
 +		    gcc_assert (CALL_P (insn)
@@ -247,6 +253,10 @@ index 00000000000..a8d1b21f8e7
 +			  || code == REG
 +			  || (code == SUBREG && REG_P (SUBREG_REG (src)))))
 +		    {
++		      /* Create a mask representing the bits of the output
++			 operand that are live after this insn.  We can use
++			 this information to refine the live in state of
++			 inputs to this insn.  */
 +		      unsigned HOST_WIDE_INT mask_array[]
 +			= { 0xff, 0xff00, 0xffff0000ULL, -0x100000000ULL };
 +		      HOST_WIDE_INT mask = 0;
