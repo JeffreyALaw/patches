@@ -9,9 +9,6 @@ LOGFILE=`pwd`/log
 
 NPROC=`nproc --all`
 
-export GENERATION=2
-echo $GENERATION
-
 SRCDIR=../../
 
 rm -rf ${TARGET}-obj
