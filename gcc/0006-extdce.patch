@@ -250,7 +250,7 @@ index 00000000000..a8d1b21f8e7
 +		      unsigned HOST_WIDE_INT mask_array[]
 +			= { 0xff, 0xff00, 0xffff0000ULL, -0x100000000ULL };
 +		      HOST_WIDE_INT mask = 0;
-+		      HOST_WIDE_INT rn = REGNO (src);
++		      HOST_WIDE_INT rn = REGNO (dst);
 +		      for (int i = 0; i < 4; i++)
 +			if (bitmap_bit_p (live_tmp, 4 * rn + i))
 +			  mask |= mask_array[i];
