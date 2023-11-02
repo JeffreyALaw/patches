@@ -1,3 +1,9 @@
+commit 277bb77f317c8064a5f88c5a160e85ae157200bd
+Author: Jeff Law <jlaw@ventanamicro.com>
+Date:   Wed Nov 1 18:13:03 2023 -0600
+
+    Checkpoint extension work
+
 diff --git a/gcc/Makefile.in b/gcc/Makefile.in
 index 83f294652ed..db7cc98f088 100644
 --- a/gcc/Makefile.in
@@ -62,10 +68,10 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..9b5f9c3d325
+index 00000000000..f2994e706d2
 --- /dev/null
 +++ b/gcc/ext-dce.cc
-@@ -0,0 +1,603 @@
+@@ -0,0 +1,608 @@
 +/* RTL dead zero/sign extension (code) elimination.
 +   Copyright (C) 2000-2022 Free Software Foundation, Inc.
 +
@@ -259,7 +265,7 @@ index 00000000000..9b5f9c3d325
 +			 inputs to this insn.  */
 +		      unsigned HOST_WIDE_INT mask_array[]
 +			= { 0xff, 0xff00, 0xffff0000ULL, -0x100000000ULL };
-+		      HOST_WIDE_INT mask = 0;
++		      unsigned HOST_WIDE_INT mask = 0;
 +		      HOST_WIDE_INT rn = REGNO (dst);
 +		      for (int i = 0; i < 4; i++)
 +			if (bitmap_bit_p (live_tmp, 4 * rn + i))
@@ -272,7 +278,7 @@ index 00000000000..9b5f9c3d325
 +		      if (code == SIGN_EXTEND || code == ZERO_EXTEND)
 +			{
 +			  rtx inner = XEXP (src, 0);
-+			  HOST_WIDE_INT mask2
++			  unsigned HOST_WIDE_INT mask2
 +			    = GET_MODE_MASK (GET_MODE (inner));
 +
 +			  /* Delete dead sign / zero extensions.  */
@@ -312,7 +318,7 @@ index 00000000000..9b5f9c3d325
 +				}
 +			    }
 +
-+			  mask |= mask2;
++			  mask &= mask2;
 +			  src = XEXP (src, 0);
 +			  code = GET_CODE (src);
 +			}
@@ -344,14 +350,19 @@ index 00000000000..9b5f9c3d325
 +			  if (REG_P (y))
 +			    {
 +			      rn = 4 * REGNO (y);
-+			      if (mask & 0xff)
-+				bitmap_set_bit (livenow, rn);
-+			      if (mask & 0xff00)
-+				bitmap_set_bit (livenow, rn+1);
-+			      if (mask & 0xffff0000ULL)
-+				bitmap_set_bit (livenow, rn+2);
-+			      if (mask & -0x100000000ULL)
-+				bitmap_set_bit (livenow, rn+3);
++                  if (code == LSHIFTRT || code == ASHIFTRT) {
++                    bitmap_set_range (livenow, rn, 4);
++                  }
++                   else {
++                      if (mask & 0xff)
++                          bitmap_set_bit(livenow, rn);
++                      if (mask & 0xff00)
++                          bitmap_set_bit(livenow, rn + 1);
++                      if (mask & 0xffff0000ULL)
++                          bitmap_set_bit(livenow, rn + 2);
++                      if (mask & -0x100000000ULL)
++                          bitmap_set_bit(livenow, rn + 3);
++                  }
 +			    }
 +			  else if (!CONSTANT_P (y))
 +			    break;
