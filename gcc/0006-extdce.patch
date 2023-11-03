@@ -1,4 +1,4 @@
-commit 1bc5e10f194205ba6c8d5355c524cdb54b378136
+commit 80ae9910fca37a7407b29aa5f435e26e4e98a26a
 Author: Jeff Law <jlaw@ventanamicro.com>
 Date:   Wed Nov 1 18:13:03 2023 -0600
 
@@ -68,10 +68,10 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..6ed1f5ef8af
+index 00000000000..494714545b0
 --- /dev/null
 +++ b/gcc/ext-dce.cc
-@@ -0,0 +1,681 @@
+@@ -0,0 +1,721 @@
 +/* RTL dead zero/sign extension (code) elimination.
 +   Copyright (C) 2000-2022 Free Software Foundation, Inc.
 +
@@ -115,7 +115,7 @@ index 00000000000..6ed1f5ef8af
 +   bit 32..BITS_PER_WORD-1  */
 +
 +bitmap
-+ext_dce_process_bb (basic_block bb, bitmap livenow, bool modify)
++ext_dce_process_bb (basic_block bb, bitmap livenow, bool modify, bitmap changed_pseudos)
 +{
 +  rtx_insn *insn;
 +
@@ -326,6 +326,9 @@ index 00000000000..6ed1f5ef8af
 +				{
 +				  int ok = validate_change (insn, &SET_SRC (x),
 +							    new_pattern, false);
++
++				  if (ok)
++				    bitmap_set_bit (changed_pseudos, REGNO (dst));
 +
 +				  if (dump_file)
 +				    {
@@ -610,6 +613,7 @@ index 00000000000..6ed1f5ef8af
 +  unsigned int qlen;
 +  vec<bitmap_head> livein;
 +  bitmap livenow;
++  bitmap changed_pseudos;
 +
 +  livein.create (last_basic_block_for_fn (cfun));
 +  livein.quick_grow_cleared (last_basic_block_for_fn (cfun));
@@ -628,6 +632,7 @@ index 00000000000..6ed1f5ef8af
 +    }
 +
 +  livenow = BITMAP_ALLOC (NULL);
++  changed_pseudos = BITMAP_ALLOC (NULL);
 +
 +  worklist
 +    = XNEWVEC (basic_block, n_basic_blocks_for_fn (cfun) - NUM_FIXED_BLOCKS);
@@ -678,7 +683,7 @@ index 00000000000..6ed1f5ef8af
 +	  FOR_EACH_EDGE (e, ei, bb->succs)
 +	    bitmap_ior_into (livenow, &livein[e->dest->index]);
 +
-+	  livenow = ext_dce_process_bb (bb, livenow, modify > 0);
++	  livenow = ext_dce_process_bb (bb, livenow, modify > 0, changed_pseudos);
 +
 +	  if (!bitmap_equal_p (&livein[bb->index], livenow))
 +	    {
@@ -704,7 +709,42 @@ index 00000000000..6ed1f5ef8af
 +	}
 +    } while (!modify++);
 +
++  /* If we removed an extension, that changed the promoted state
++     of the destination of that extension.  Thus we need to go
++     find any SUBREGs that reference that pseudo and adjust their
++     SUBREG_PROMOTED_P state.  */
++  for (rtx_insn *insn = get_insns(); insn; insn = NEXT_INSN (insn))
++    {
++      if (!NONDEBUG_INSN_P (insn))
++	continue;
++
++      rtx pat = PATTERN (insn);
++      subrtx_var_iterator::array_type array;
++      FOR_EACH_SUBRTX_VAR (iter, array, pat, NONCONST)
++	{
++	  rtx sub = *iter;
++
++	  /* We only care about SUBREGs.  */
++	  if (GET_CODE (sub) != SUBREG)
++	    continue;
++
++	  const_rtx x = SUBREG_REG (sub);
++
++	  /* We only care if the inner object is a REG.  */
++	  if (!REG_P (x))
++	    continue;
++
++	  /* And only if the SUBREG is a promoted var.  */
++	  if (!SUBREG_PROMOTED_VAR_P (sub))
++	    continue;
++
++	  if (bitmap_bit_p (changed_pseudos, REGNO (x)))
++	    SUBREG_PROMOTED_VAR_P (sub) = 0;
++	}
++    }
++
 +  /* Clean up.  */
++  BITMAP_FREE (changed_pseudos);
 +  BITMAP_FREE (livenow);
 +  unsigned len = livein.length ();
 +  for (unsigned i = 0; i < len; i++)
