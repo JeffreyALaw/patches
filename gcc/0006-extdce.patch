@@ -1,4 +1,4 @@
-commit 9e8fa797588006c43d5456a26ac60e4048189c1c
+commit 22d3f52fec6f0ce0ec924286875cd6d0114ba591
 Author: Jeff Law <jlaw@ventanamicro.com>
 Date:   Wed Nov 1 18:13:03 2023 -0600
 
@@ -68,10 +68,10 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..f3c6a9bb18a
+index 00000000000..898391d29ad
 --- /dev/null
 +++ b/gcc/ext-dce.cc
-@@ -0,0 +1,615 @@
+@@ -0,0 +1,649 @@
 +/* RTL dead zero/sign extension (code) elimination.
 +   Copyright (C) 2000-2022 Free Software Foundation, Inc.
 +
@@ -281,11 +281,21 @@ index 00000000000..f3c6a9bb18a
 +			  unsigned HOST_WIDE_INT mask2
 +			    = GET_MODE_MASK (GET_MODE (inner));
 +
-+			  /* We can not change the mode of a mode dependent address or
-+			     a volatile memory reference.  */
-+			  if (GET_CODE (inner) == MEM
-+			     && (mode_dependent_address_p (XEXP (inner, 0), ADDR_SPACE_GENERIC)
-+				 || MEM_VOLATILE_P (inner)))
++			  /* Pretend there is one additional higher bit set in
++			     MASK2 to account for the sign bit propagation from the
++			     input value into the output value.  */
++			  if (code == SIGN_EXTEND)
++			    {
++			      mask2 <<= 1;
++			      mask2 |= 1;
++			    }
++
++			  /* (subreg (mem)) is technically valid RTL, but is severely
++			     discouraged.  So give up if we're about to create one.
++
++			     If this were to be loosened, then we'd still need to reject
++			     mode dependent addresses and volatile memory accesses.  */
++			  if (GET_CODE (inner) == MEM)
 +			    continue;
 +
 +			  /* Delete dead sign / zero extensions.  */
@@ -357,19 +367,43 @@ index 00000000000..f3c6a9bb18a
 +			  if (REG_P (y))
 +			    {
 +			      rn = 4 * REGNO (y);
-+                  if (code == LSHIFTRT || code == ASHIFTRT) {
-+                    bitmap_set_range (livenow, rn, 4);
-+                  }
-+                   else {
-+                      if (mask & 0xff)
-+                          bitmap_set_bit(livenow, rn);
-+                      if (mask & 0xff00)
-+                          bitmap_set_bit(livenow, rn + 1);
-+                      if (mask & 0xffff0000ULL)
-+                          bitmap_set_bit(livenow, rn + 2);
-+                      if (mask & -0x100000000ULL)
-+                          bitmap_set_bit(livenow, rn + 3);
-+                  }
++			      /* ?!? What about rotates?  */
++			      if (code == LSHIFTRT || code == ASHIFTRT)
++				{
++				  /* When right shifting all the bits
++				     in the shifted value are relevant.  */
++				  bitmap_set_range (livenow, rn, 4);
++
++				  /* All the bits in the shift count are potentially
++				     relevant.  */
++				  if (REG_P (XEXP (src, 1)))
++				    {
++				      y = XEXP (src, 1);
++				      bitmap_set_range (livenow, REGNO (y) * 4, 4);
++				      break;
++				    }
++				}
++			      else
++				{
++				  if (mask & 0xff)
++				    bitmap_set_bit(livenow, rn);
++				  if (mask & 0xff00)
++				    bitmap_set_bit(livenow, rn + 1);
++				  if (mask & 0xffff0000ULL)
++				    bitmap_set_bit(livenow, rn + 2);
++				  if (mask & -0x100000000ULL)
++				    bitmap_set_bit(livenow, rn + 3);
++
++				  /* All the bits in the shift count are potentially
++				     relevant.  */
++				  /* ?!? What about rotates?  */
++				  if (code == ASHIFT && REG_P (XEXP (src, 1)))
++				    {
++				      y = XEXP (src, 1);
++				      bitmap_set_range (livenow, REGNO (y) * 4, 4);
++				      break;
++				    }
++				}
 +			    }
 +			  else if (!CONSTANT_P (y))
 +			    break;
