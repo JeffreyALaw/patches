@@ -1,4 +1,4 @@
-commit 22d3f52fec6f0ce0ec924286875cd6d0114ba591
+commit 400b29e1d51e8218ae15b6ec8bc193836deedc0f
 Author: Jeff Law <jlaw@ventanamicro.com>
 Date:   Wed Nov 1 18:13:03 2023 -0600
 
@@ -68,10 +68,10 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..898391d29ad
+index 00000000000..e0a997986b8
 --- /dev/null
 +++ b/gcc/ext-dce.cc
-@@ -0,0 +1,649 @@
+@@ -0,0 +1,671 @@
 +/* RTL dead zero/sign extension (code) elimination.
 +   Copyright (C) 2000-2022 Free Software Foundation, Inc.
 +
@@ -376,10 +376,12 @@ index 00000000000..898391d29ad
 +
 +				  /* All the bits in the shift count are potentially
 +				     relevant.  */
-+				  if (REG_P (XEXP (src, 1)))
++				  rtx x = XEXP (src, 1);
++				  if (GET_CODE (x) == SUBREG)
++				    x = SUBREG_REG (x);
++				  if (REG_P (x))
 +				    {
-+				      y = XEXP (src, 1);
-+				      bitmap_set_range (livenow, REGNO (y) * 4, 4);
++				      bitmap_set_range (livenow, REGNO (x) * 4, 4);
 +				      break;
 +				    }
 +				}
@@ -397,16 +399,36 @@ index 00000000000..898391d29ad
 +				  /* All the bits in the shift count are potentially
 +				     relevant.  */
 +				  /* ?!? What about rotates?  */
-+				  if (code == ASHIFT && REG_P (XEXP (src, 1)))
++				  if (code == ASHIFT)
 +				    {
-+				      y = XEXP (src, 1);
-+				      bitmap_set_range (livenow, REGNO (y) * 4, 4);
-+				      break;
++				      rtx x = XEXP (src, 1);
++				      if (GET_CODE (x) == SUBREG)
++					x = SUBREG_REG (x);
++				      if (REG_P (x))
++					{
++					  bitmap_set_range (livenow, REGNO (x) * 4, 4);
++					  break;
++					}
 +				    }
 +				}
 +			    }
 +			  else if (!CONSTANT_P (y))
 +			    break;
++			  /* We might have (ashift (const_int 1) (reg...)) */
++			  else if (CONSTANT_P (y)
++				   && (GET_CODE (src) == LSHIFTRT || GET_CODE (src) == ASHIFTRT
++				       || GET_CODE (src) == ASHIFT))
++			    {
++			      rtx x = XEXP (src, 1);
++			      if (GET_CODE (x) == SUBREG)
++				x = SUBREG_REG (x);
++
++			      if (REG_P (x))
++				{
++				  bitmap_set_range (livenow, REGNO (x) * 4, 4);
++				  break;
++				}
++			    }
 +			  if (!BINARY_P (src))
 +			    break;
 +			  y = XEXP (src, 1), src = pc_rtx;
