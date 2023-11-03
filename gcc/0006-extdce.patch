@@ -1,4 +1,4 @@
-commit 400b29e1d51e8218ae15b6ec8bc193836deedc0f
+commit 1bc5e10f194205ba6c8d5355c524cdb54b378136
 Author: Jeff Law <jlaw@ventanamicro.com>
 Date:   Wed Nov 1 18:13:03 2023 -0600
 
@@ -68,10 +68,10 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..e0a997986b8
+index 00000000000..6ed1f5ef8af
 --- /dev/null
 +++ b/gcc/ext-dce.cc
-@@ -0,0 +1,671 @@
+@@ -0,0 +1,681 @@
 +/* RTL dead zero/sign extension (code) elimination.
 +   Copyright (C) 2000-2022 Free Software Foundation, Inc.
 +
@@ -320,18 +320,28 @@ index 00000000000..e0a997986b8
 +
 +			      new_pattern = simplify_gen_subreg (GET_MODE (src),
 +								 inner, GET_MODE (inner), 0);
-+			      int ok = validate_change (insn, &SET_SRC (x),
-+							new_pattern, false);
-+
-+			      if (dump_file)
++			      /* simplify_gen_subreg may fail in which case NEW_PATTERN will be NULL.
++				 We must not pass that as a replacement pattern to validate_change.  */
++			      if (new_pattern)
 +				{
-+				  if (ok)
-+				    fprintf (dump_file, "Successfully transformed to:\n");
-+				  else
-+				    fprintf (dump_file, "Failed transformation to:\n");
++				  int ok = validate_change (insn, &SET_SRC (x),
++							    new_pattern, false);
 +
-+				  print_rtl_single (dump_file, new_pattern);
-+				  fprintf (dump_file, "\n");
++				  if (dump_file)
++				    {
++				      if (ok)
++					fprintf (dump_file, "Successfully transformed to:\n");
++				      else
++					fprintf (dump_file, "Failed transformation to:\n");
++
++				      print_rtl_single (dump_file, new_pattern);
++				      fprintf (dump_file, "\n");
++				    }
++				}
++			      else
++				{
++				  if (dump_file)
++				    fprintf (dump_file, "Unable to generate valid SUBREG expression.\n");
 +				}
 +			    }
 +
