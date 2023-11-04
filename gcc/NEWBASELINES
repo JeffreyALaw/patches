@@ -6,3 +6,6 @@ arc-elf
 ft32-elf
 avr-elf
 bfin-elf
+c6x-elf
+cris-elf
+csky-linux-gnu
