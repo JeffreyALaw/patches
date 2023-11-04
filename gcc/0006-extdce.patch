@@ -1,11 +1,11 @@
-commit 80ae9910fca37a7407b29aa5f435e26e4e98a26a
+commit a3766d4b507ecd7dff66883fda924ddc46867581
 Author: Jeff Law <jlaw@ventanamicro.com>
 Date:   Wed Nov 1 18:13:03 2023 -0600
 
     Checkpoint extension work
 
 diff --git a/gcc/Makefile.in b/gcc/Makefile.in
-index 83f294652ed..db7cc98f088 100644
+index 29cec21c825..2d4cdb96b7e 100644
 --- a/gcc/Makefile.in
 +++ b/gcc/Makefile.in
 @@ -1447,6 +1447,7 @@ OBJS = \
@@ -17,10 +17,10 @@ index 83f294652ed..db7cc98f088 100644
  	file-prefix-map.o \
  	final.o \
 diff --git a/gcc/common.opt b/gcc/common.opt
-index 1cf3bdd3b51..4881c4825eb 100644
+index d21db5d4a20..3e276820fed 100644
 --- a/gcc/common.opt
 +++ b/gcc/common.opt
-@@ -3770,4 +3770,12 @@ fipa-ra
+@@ -3766,4 +3766,12 @@ fipa-ra
  Common Var(flag_ipa_ra) Optimization
  Use caller save register across calls if possible.
  
@@ -68,7 +68,7 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..494714545b0
+index 00000000000..9c519234345
 --- /dev/null
 +++ b/gcc/ext-dce.cc
 @@ -0,0 +1,721 @@
@@ -151,7 +151,7 @@ index 00000000000..494714545b0
 +		      bit = SUBREG_BYTE (x).to_constant () * BITS_PER_UNIT;
 +		      if (WORDS_BIG_ENDIAN)
 +			bit = (GET_MODE_BITSIZE (GET_MODE (SUBREG_REG (x))).to_constant ()
-+			       - BITS_PER_WORD - bit);
++			       - BITS_PER_UNIT - bit);
 +		      mask = GET_MODE_MASK (GET_MODE (SUBREG_REG (x))) << bit;
 +		      if (!mask)
 +			mask = -0x100000000ULL;
@@ -243,7 +243,7 @@ index 00000000000..494714545b0
 +		      bit = SUBREG_BYTE (dst).to_constant () * BITS_PER_UNIT;
 +		      if (WORDS_BIG_ENDIAN)
 +			bit = (GET_MODE_BITSIZE (GET_MODE (SUBREG_REG (dst))).to_constant ()
-+			       - BITS_PER_WORD - bit);
++			       - BITS_PER_UNIT - bit);
 +		      if (bit >= HOST_BITS_PER_WIDE_INT)
 +			bit = HOST_BITS_PER_WIDE_INT - 1;
 +		      dst = SUBREG_REG (dst);
@@ -368,7 +368,7 @@ index 00000000000..494714545b0
 +			      if (WORDS_BIG_ENDIAN)
 +				bit = (GET_MODE_BITSIZE
 +					(GET_MODE (SUBREG_REG (y))).to_constant ()
-+					 - BITS_PER_WORD - bit);
++					 - BITS_PER_UNIT - bit);
 +			      if (mask)
 +				{
 +				  mask <<= bit;
