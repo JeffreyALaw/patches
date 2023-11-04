@@ -1,2 +1,6 @@
+# Hangs for reasons unknown
 gcc/testsuite/gcc.c-torture/execute/fprintf-2.c
+# Mixed state without unique name
+gcc/testsuite/gcc.dg/torture/pr112305.c
+
 
