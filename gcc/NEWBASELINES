@@ -2,6 +2,4 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 m68k-linux-gnu
-mcore-elf
-visium-elf
-nios2-linux-gnu
+v850e-elf
