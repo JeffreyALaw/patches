@@ -2,6 +2,7 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 m68k-linux-gnu
-v850e-elf
 arc-elf
 ft32-elf
+avr-elf
+bfin-elf
