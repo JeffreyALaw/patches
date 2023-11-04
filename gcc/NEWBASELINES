@@ -3,9 +3,9 @@
 # reset.  
 m68k-linux-gnu
 arc-elf
-ft32-elf
 avr-elf
-bfin-elf
 c6x-elf
-cris-elf
-csky-linux-gnu
+fr30-elf
+frv-elf
+iq2000-elf
+lm32-elf
