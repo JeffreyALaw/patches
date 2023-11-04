@@ -3,4 +3,4 @@
 # reset.  
 m68k-linux-gnu
 v850e-elf
-xstormy16-elf
+arc-elf
