@@ -1,4 +1,4 @@
-commit a3766d4b507ecd7dff66883fda924ddc46867581
+commit 36a2065ebda56af676e0db1bc12fbef665d2e68c
 Author: Jeff Law <jlaw@ventanamicro.com>
 Date:   Wed Nov 1 18:13:03 2023 -0600
 
@@ -68,10 +68,10 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..9c519234345
+index 00000000000..dbab42053d7
 --- /dev/null
 +++ b/gcc/ext-dce.cc
-@@ -0,0 +1,721 @@
+@@ -0,0 +1,728 @@
 +/* RTL dead zero/sign extension (code) elimination.
 +   Copyright (C) 2000-2022 Free Software Foundation, Inc.
 +
@@ -113,6 +113,32 @@ index 00000000000..9c519234345
 +   bit 8..15  (second least significant byte)
 +   bit 16..31
 +   bit 32..BITS_PER_WORD-1  */
++
++
++bool
++safe_for_live_propagation (rtx_code code)
++{
++  switch (code)
++    {
++    case REG:
++    case SUBREG:
++    case AND:
++    case IOR:
++    case XOR:
++    case NOT:
++    case PLUS:
++    case MINUS:
++    case PRE_INC:
++    case POST_INC:
++    case PRE_DEC:
++    case POST_DEC:
++    case TRUNCATE:
++    case ASHIFT:
++      return true;
++    default:
++      return false;
++    }
++}
 +
 +bitmap
 +ext_dce_process_bb (basic_block bb, bitmap livenow, bool modify, bitmap changed_pseudos)
@@ -381,14 +407,23 @@ index 00000000000..9c519234345
 +			    {
 +			      rn = 4 * REGNO (y);
 +			      /* ?!? What about rotates?  */
-+			      if (code == LSHIFTRT || code == ASHIFTRT)
-+				{
-+				  /* When right shifting all the bits
-+				     in the shifted value are relevant.  */
-+				  bitmap_set_range (livenow, rn, 4);
++			      if (!safe_for_live_propagation (GET_CODE (y)))
++				mask = GET_MODE_MASK (GET_MODE (y));
 +
-+				  /* All the bits in the shift count are potentially
-+				     relevant.  */
++			      if (mask & 0xff)
++				bitmap_set_bit(livenow, rn);
++			      if (mask & 0xff00)
++				bitmap_set_bit(livenow, rn + 1);
++			      if (mask & 0xffff0000ULL)
++				bitmap_set_bit(livenow, rn + 2);
++			      if (mask & -0x100000000ULL)
++				bitmap_set_bit(livenow, rn + 3);
++
++			      /* All the bits in the shift count are potentially
++				 relevant.  */
++			      /* ?!? What about rotates?  */
++			      if (code == ASHIFT || code == LSHIFTRT || code == ASHIFTRT)
++				{
 +				  rtx x = XEXP (src, 1);
 +				  if (GET_CODE (x) == SUBREG)
 +				    x = SUBREG_REG (x);
@@ -398,39 +433,11 @@ index 00000000000..9c519234345
 +				      break;
 +				    }
 +				}
-+			      else
-+				{
-+				  if (mask & 0xff)
-+				    bitmap_set_bit(livenow, rn);
-+				  if (mask & 0xff00)
-+				    bitmap_set_bit(livenow, rn + 1);
-+				  if (mask & 0xffff0000ULL)
-+				    bitmap_set_bit(livenow, rn + 2);
-+				  if (mask & -0x100000000ULL)
-+				    bitmap_set_bit(livenow, rn + 3);
-+
-+				  /* All the bits in the shift count are potentially
-+				     relevant.  */
-+				  /* ?!? What about rotates?  */
-+				  if (code == ASHIFT)
-+				    {
-+				      rtx x = XEXP (src, 1);
-+				      if (GET_CODE (x) == SUBREG)
-+					x = SUBREG_REG (x);
-+				      if (REG_P (x))
-+					{
-+					  bitmap_set_range (livenow, REGNO (x) * 4, 4);
-+					  break;
-+					}
-+				    }
-+				}
 +			    }
 +			  else if (!CONSTANT_P (y))
 +			    break;
 +			  /* We might have (ashift (const_int 1) (reg...)) */
-+			  else if (CONSTANT_P (y)
-+				   && (GET_CODE (src) == LSHIFTRT || GET_CODE (src) == ASHIFTRT
-+				       || GET_CODE (src) == ASHIFT))
++			  else if (CONSTANT_P (y) && GET_CODE (src) == ASHIFT)
 +			    {
 +			      rtx x = XEXP (src, 1);
 +			      if (GET_CODE (x) == SUBREG)
