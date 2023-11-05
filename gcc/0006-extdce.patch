@@ -1,4 +1,4 @@
-commit 4cc44efa944d808259f9a5f68826f3c64338add4
+commit 94c8be1f466b289adbca6a035e5fa50eb7c907d7
 Author: Jeff Law <jlaw@ventanamicro.com>
 Date:   Wed Nov 1 18:13:03 2023 -0600
 
@@ -68,10 +68,10 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..b4b80c7c743
+index 00000000000..0de1413ef28
 --- /dev/null
 +++ b/gcc/ext-dce.cc
-@@ -0,0 +1,728 @@
+@@ -0,0 +1,756 @@
 +/* RTL dead zero/sign extension (code) elimination.
 +   Copyright (C) 2000-2022 Free Software Foundation, Inc.
 +
@@ -115,6 +115,11 @@ index 00000000000..b4b80c7c743
 +   bit 32..BITS_PER_WORD-1  */
 +
 +
++/* If we know the destination of CODE only uses some low bits
++   (say just the QI bits of an SI operation), then return true
++   if we can propagate the need for just the subset of bits
++   from the destination to the sources.  */
++
 +bool
 +safe_for_live_propagation (rtx_code code)
 +{
@@ -127,12 +132,13 @@ index 00000000000..b4b80c7c743
 +    case XOR:
 +    case NOT:
 +    case PLUS:
++    case MULT:
++
++    /* ?!? These should be double-checked.  */
 +    case MINUS:
-+    case PRE_INC:
-+    case POST_INC:
-+    case PRE_DEC:
-+    case POST_DEC:
 +    case TRUNCATE:
++
++    /* This seems wrong for the shift count.  */
 +    case ASHIFT:
 +      return true;
 +    default:
@@ -171,6 +177,11 @@ index 00000000000..b4b80c7c743
 +		{
 +		  unsigned bit = 0;
 +		  x = SET_DEST (x);
++
++		  /* We don't support sizes wider than DImode.  */
++		  if (GET_MODE (x) > E_DImode)
++		    continue;
++
 +		  unsigned HOST_WIDE_INT mask = GET_MODE_MASK (GET_MODE (x));
 +		  if (GET_CODE (x) == SUBREG)
 +		    {
@@ -178,6 +189,13 @@ index 00000000000..b4b80c7c743
 +		      if (WORDS_BIG_ENDIAN)
 +			bit = (GET_MODE_BITSIZE (GET_MODE (SUBREG_REG (x))).to_constant ()
 +			       - BITS_PER_WORD - bit);
++
++		      /* We have to be careful of undefined behavior here if bit
++			 is too big.   If we reach this state, assume nothing
++			 about what is overwritten.  */
++		      if (bit >= sizeof (HOST_WIDE_INT) * 8)
++			continue;
++
 +		      mask = GET_MODE_MASK (GET_MODE (SUBREG_REG (x))) << bit;
 +		      if (!mask)
 +			mask = -0x100000000ULL;
@@ -288,15 +306,25 @@ index 00000000000..b4b80c7c743
 +		      /* Create a mask representing the bits of the output
 +			 operand that are live after this insn.  We can use
 +			 this information to refine the live in state of
-+			 inputs to this insn.  */
-+		      unsigned HOST_WIDE_INT mask_array[]
-+			= { 0xff, 0xff00, 0xffff0000ULL, -0x100000000ULL };
++			 inputs to this insn.
++
++			 If the set handling above left LIVE_TMP empty, then
++			 it means it was unable to meaningfully process the
++			 destination.  So make no assumptions about our
++			 ability to narrow the live bits in the sources.  */
 +		      unsigned HOST_WIDE_INT mask = 0;
 +		      HOST_WIDE_INT rn = REGNO (dst);
-+		      for (int i = 0; i < 4; i++)
-+			if (bitmap_bit_p (live_tmp, 4 * rn + i))
-+			  mask |= mask_array[i];
-+		      mask >>= bit;
++		      if (bitmap_empty_p (live_tmp))
++			mask = -1UL;
++		      else
++			{
++			  unsigned HOST_WIDE_INT mask_array[]
++			    = { 0xff, 0xff00, 0xffff0000ULL, -0x100000000ULL };
++			  for (int i = 0; i < 4; i++)
++			  if (bitmap_bit_p (live_tmp, 4 * rn + i))
++			    mask |= mask_array[i];
++			  mask >>= bit;
++			}
 +
 +		      /* ??? Could also handle ZERO_EXTRACT / SIGN_EXTRACT
 +			 of the source specially to improve optimization.  */
@@ -344,8 +372,9 @@ index 00000000000..b4b80c7c743
 +				  print_rtl_single (dump_file, SET_SRC (x));
 +				}
 +
++			      poly_int64 byte = subreg_lowpart_offset (GET_MODE (src), GET_MODE (inner));
 +			      new_pattern = simplify_gen_subreg (GET_MODE (src),
-+								 inner, GET_MODE (inner), 0);
++								 inner, GET_MODE (inner), byte);
 +			      /* simplify_gen_subreg may fail in which case NEW_PATTERN will be NULL.
 +				 We must not pass that as a replacement pattern to validate_change.  */
 +			      if (new_pattern)
@@ -406,7 +435,6 @@ index 00000000000..b4b80c7c743
 +			  if (REG_P (y))
 +			    {
 +			      rn = 4 * REGNO (y);
-+			      /* ?!? What about rotates?  */
 +			      if (!safe_for_live_propagation (GET_CODE (y)))
 +				mask = GET_MODE_MASK (GET_MODE (y));
 +
