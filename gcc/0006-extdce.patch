@@ -1,4 +1,4 @@
-commit 36a2065ebda56af676e0db1bc12fbef665d2e68c
+commit 4cc44efa944d808259f9a5f68826f3c64338add4
 Author: Jeff Law <jlaw@ventanamicro.com>
 Date:   Wed Nov 1 18:13:03 2023 -0600
 
@@ -68,7 +68,7 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..dbab42053d7
+index 00000000000..b4b80c7c743
 --- /dev/null
 +++ b/gcc/ext-dce.cc
 @@ -0,0 +1,728 @@
@@ -177,7 +177,7 @@ index 00000000000..dbab42053d7
 +		      bit = SUBREG_BYTE (x).to_constant () * BITS_PER_UNIT;
 +		      if (WORDS_BIG_ENDIAN)
 +			bit = (GET_MODE_BITSIZE (GET_MODE (SUBREG_REG (x))).to_constant ()
-+			       - BITS_PER_UNIT - bit);
++			       - BITS_PER_WORD - bit);
 +		      mask = GET_MODE_MASK (GET_MODE (SUBREG_REG (x))) << bit;
 +		      if (!mask)
 +			mask = -0x100000000ULL;
@@ -269,7 +269,7 @@ index 00000000000..dbab42053d7
 +		      bit = SUBREG_BYTE (dst).to_constant () * BITS_PER_UNIT;
 +		      if (WORDS_BIG_ENDIAN)
 +			bit = (GET_MODE_BITSIZE (GET_MODE (SUBREG_REG (dst))).to_constant ()
-+			       - BITS_PER_UNIT - bit);
++			       - BITS_PER_WORD - bit);
 +		      if (bit >= HOST_BITS_PER_WIDE_INT)
 +			bit = HOST_BITS_PER_WIDE_INT - 1;
 +		      dst = SUBREG_REG (dst);
@@ -394,7 +394,7 @@ index 00000000000..dbab42053d7
 +			      if (WORDS_BIG_ENDIAN)
 +				bit = (GET_MODE_BITSIZE
 +					(GET_MODE (SUBREG_REG (y))).to_constant ()
-+					 - BITS_PER_UNIT - bit);
++					 - BITS_PER_WORD - bit);
 +			      if (mask)
 +				{
 +				  mask <<= bit;
