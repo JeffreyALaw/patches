@@ -1,4 +1,4 @@
-commit 94c8be1f466b289adbca6a035e5fa50eb7c907d7
+commit ec464b1a8247e94858aff705cfb257d91869eaa4
 Author: Jeff Law <jlaw@ventanamicro.com>
 Date:   Wed Nov 1 18:13:03 2023 -0600
 
@@ -68,10 +68,10 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..0de1413ef28
+index 00000000000..1dd5371c41f
 --- /dev/null
 +++ b/gcc/ext-dce.cc
-@@ -0,0 +1,756 @@
+@@ -0,0 +1,769 @@
 +/* RTL dead zero/sign extension (code) elimination.
 +   Copyright (C) 2000-2022 Free Software Foundation, Inc.
 +
@@ -165,6 +165,7 @@ index 00000000000..0de1413ef28
 +      int seen_fusage = 0;
 +
 +      /* First, process the sets.  */
++      bool unhandled_set = false;
 +      for (rtx pat = PATTERN (insn);;)
 +	{
 +	  FOR_EACH_SUBRTX (iter, array, pat, NONCONST)
@@ -180,7 +181,10 @@ index 00000000000..0de1413ef28
 +
 +		  /* We don't support sizes wider than DImode.  */
 +		  if (GET_MODE (x) > E_DImode)
-+		    continue;
++		    {
++		      unhandled_set = true;
++		      continue;
++		    }
 +
 +		  unsigned HOST_WIDE_INT mask = GET_MODE_MASK (GET_MODE (x));
 +		  if (GET_CODE (x) == SUBREG)
@@ -194,7 +198,10 @@ index 00000000000..0de1413ef28
 +			 is too big.   If we reach this state, assume nothing
 +			 about what is overwritten.  */
 +		      if (bit >= sizeof (HOST_WIDE_INT) * 8)
-+			continue;
++			{
++			  unhandled_set = true;
++			  continue;
++			}
 +
 +		      mask = GET_MODE_MASK (GET_MODE (SUBREG_REG (x))) << bit;
 +		      if (!mask)
@@ -211,7 +218,10 @@ index 00000000000..0de1413ef28
 +			  assume nothing is.  */
 +		      if (!CONST_INT_P (XEXP (x, 1))
 +			  || !CONST_INT_P (XEXP (x, 2)))
-+			continue;
++			{
++			  unhandled_set = true;
++			  continue;
++			}
 +		      mask = (1ULL << INTVAL (XEXP (x, 1))) - 1;
 +		      bit = INTVAL (XEXP (x, 2));
 +		      if (BITS_BIG_ENDIAN)
@@ -233,7 +243,10 @@ index 00000000000..0de1413ef28
 +		      bitmap_clear_range (livenow, 4 * rn + start, end - start);
 +		    }
 +		  else if (GET_CODE (x) == SUBREG)
-+		    continue;
++		    {
++		      unhandled_set = true;
++		      continue;
++		    }
 +		  /* Some ports generate (clobber (const_int)).  */
 +		  else if (CONST_INT_P (x))
 +		    continue;
@@ -314,7 +327,7 @@ index 00000000000..0de1413ef28
 +			 ability to narrow the live bits in the sources.  */
 +		      unsigned HOST_WIDE_INT mask = 0;
 +		      HOST_WIDE_INT rn = REGNO (dst);
-+		      if (bitmap_empty_p (live_tmp))
++		      if (unhandled_set)
 +			mask = -1UL;
 +		      else
 +			{
