@@ -1,4 +1,4 @@
-commit d276420209d75a109f3e068926ba18b21d006214
+commit bb1dbb96422de2d187a607da809d4025d2ee5009
 Author: Jeff Law <jlaw@ventanamicro.com>
 Date:   Wed Nov 1 18:13:03 2023 -0600
 
@@ -68,10 +68,10 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..277d65b6de9
+index 00000000000..38a2fb95d3c
 --- /dev/null
 +++ b/gcc/ext-dce.cc
-@@ -0,0 +1,752 @@
+@@ -0,0 +1,808 @@
 +/* RTL dead zero/sign extension (code) elimination.
 +   Copyright (C) 2000-2022 Free Software Foundation, Inc.
 +
@@ -113,6 +113,32 @@ index 00000000000..277d65b6de9
 +   bit 8..15  (second least significant byte)
 +   bit 16..31
 +   bit 32..BITS_PER_WORD-1  */
++
++#define UNSPEC_P(X) (GET_CODE (X) == UNSPEC || GET_CODE (X) == UNSPEC_VOLATILE)
++
++void
++rollback_call_set (rtx_insn *insn, bitmap livenow)
++{
++  gcc_assert (CALL_P (insn));
++
++  subrtx_iterator::array_type array;
++
++  rtx pat = PATTERN (insn);
++  FOR_EACH_SUBRTX (iter, array, pat, NONCONST)
++    {
++      const_rtx x = *iter;
++      if (x == NULL_RTX)
++       continue;
++
++      if (GET_CODE (x) == SET)
++	{
++	  rtx dst = SET_DEST (x);
++	  if (REG_P (dst))
++	    bitmap_clear_range (livenow, 4 * REGNO (dst), 4);
++	  break;
++	}      
++    }
++}
 +
 +
 +/* If we know the destination of CODE only uses some low bits
@@ -172,17 +198,31 @@ index 00000000000..277d65b6de9
 +	      /* An EXPR_LIST (from call fusage) ends in NULL_RTX.  */
 +	      if (x == NULL_RTX)
 +		continue;
++
++	      if (UNSPEC_P (x))
++		goto skip_insn;
++
 +	      if (GET_CODE (x) == SET || GET_CODE (x) == CLOBBER)
 +		{
 +		  unsigned bit = 0;
 +		  x = SET_DEST (x);
++
++		  if (VECTOR_MODE_P (GET_MODE (x)))
++		    goto skip_insn;
++
++		  if (GET_CODE (x) == SET)
++		    {
++		      rtx src = SET_SRC (x);
++		      if (UNSPEC_P (src))
++			goto skip_insn;
++		    }
 +
 +		  /* We don't support sizes wider than DImode.  */
 +		  if (GET_MODE (x) > E_DImode)
 +		    continue;
 +
 +		  unsigned HOST_WIDE_INT mask = GET_MODE_MASK (GET_MODE (x));
-+		  if (GET_CODE (x) == SUBREG)
++		  if (SUBREG_P (x))
 +		    {
 +		      bit = SUBREG_BYTE (x).to_constant () * BITS_PER_UNIT;
 +		      if (WORDS_BIG_ENDIAN)
@@ -218,6 +258,10 @@ index 00000000000..277d65b6de9
 +			       - INTVAL (XEXP (x, 1)) - bit).to_constant ();
 +		      x = XEXP (x, 0);
 +		    }
++
++		  if (SUBREG_P (x))
++		    x = SUBREG_REG (x);
++
 +		  if (REG_P (x))
 +		    {
 +		      HOST_WIDE_INT rn = REGNO (x);
@@ -279,9 +323,17 @@ index 00000000000..277d65b6de9
 +		  const_rtx dst = SET_DEST (x);
 +		  rtx src = SET_SRC (x);
 +		  const_rtx y;
++
++		  if (VECTOR_MODE_P (GET_MODE (dst)))
++		    goto skip_insn;
++		
 +		  unsigned HOST_WIDE_INT bit = 0;
 +		  enum rtx_code code = GET_CODE (src);
-+		  if (GET_CODE (dst) == SUBREG)
++
++		  if (UNSPEC_P (src))
++		    goto skip_insn;
++
++		  if (SUBREG_P (dst))
 +		    {
 +		      bit = SUBREG_BYTE (dst).to_constant () * BITS_PER_UNIT;
 +		      if (WORDS_BIG_ENDIAN)
@@ -368,9 +420,8 @@ index 00000000000..277d65b6de9
 +				  print_rtl_single (dump_file, SET_SRC (x));
 +				}
 +
-+			      poly_int64 byte = subreg_lowpart_offset (GET_MODE (src), GET_MODE (inner));
 +			      new_pattern = simplify_gen_subreg (GET_MODE (src),
-+								 inner, GET_MODE (inner), byte);
++								 inner, GET_MODE (inner), 0);
 +			      /* simplify_gen_subreg may fail in which case NEW_PATTERN will be NULL.
 +				 We must not pass that as a replacement pattern to validate_change.  */
 +			      if (new_pattern)
@@ -412,7 +463,7 @@ index 00000000000..277d65b6de9
 +			y = src;
 +		      for (;;)
 +			{
-+			  if (GET_CODE (y) == SUBREG)
++			  if (SUBREG_P (y))
 +			    {
 +			      bit = (SUBREG_BYTE (y).to_constant ()
 +				     * BITS_PER_UNIT);
@@ -431,16 +482,18 @@ index 00000000000..277d65b6de9
 +			  if (REG_P (y))
 +			    {
 +			      rn = 4 * REGNO (y);
-+			      if (!safe_for_live_propagation (GET_CODE (y)))
-+				mask = GET_MODE_MASK (GET_MODE (y));
++			      unsigned HOST_WIDE_INT tmp_mask = mask;
 +
-+			      if (mask & 0xff)
++			      if (!safe_for_live_propagation (GET_CODE (y)))
++				tmp_mask = GET_MODE_MASK (GET_MODE (y));
++
++			      if (tmp_mask & 0xff)
 +				bitmap_set_bit(livenow, rn);
-+			      if (mask & 0xff00)
++			      if (tmp_mask & 0xff00)
 +				bitmap_set_bit(livenow, rn + 1);
-+			      if (mask & 0xffff0000ULL)
++			      if (tmp_mask & 0xffff0000ULL)
 +				bitmap_set_bit(livenow, rn + 2);
-+			      if (mask & -0x100000000ULL)
++			      if (tmp_mask & -0x100000000ULL)
 +				bitmap_set_bit(livenow, rn + 3);
 +
 +			      /* All the bits in the shift count are potentially
@@ -516,7 +569,10 @@ index 00000000000..277d65b6de9
 +	      if (global_regs[i])
 +		bitmap_set_range (livenow, i * 4, 4);
 +	}
-+      //BITMAP_FREE (live_tmp);
++skip_insn:
++	if (CALL_P (insn))
++	  rollback_call_set (insn, livenow);
++	BITMAP_FREE (live_tmp);
 +    }
 +  return livenow;
 +}
