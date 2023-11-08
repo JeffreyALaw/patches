@@ -59,7 +59,7 @@ index 2f7faf77c93..0e5be4540f6 100644
 +
 +  /* Special case for H8/S.  Similar to bit 31.  */
 +  if (position == 30 && TARGET_H8300S)
-+    return "rotl.l\t#2,%0\;and.l\t#1,%0", operands;
++    return "rotl.l\t#2,%0\;and.l\t#1,%0";
 +
 +  if (position <= 30 && position >= 17)
 +    {
