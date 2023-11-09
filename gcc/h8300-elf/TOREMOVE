@@ -39,3 +39,5 @@ gcc/testsuite/gcc.dg/torture/pr112305.c
 # -O0 clashes heap/stack/code
 gcc/testsuite/c-c++-common/torture/builtin-arith-overflow-14.c
 gcc/testsuite/c-c++-common/torture/builtin-arith-overflow-p-14.c
+gcc/testsuite/c-c++-common/torture/builtin-arith-overflow-3.c
+gcc/testsuite/c-c++-common/torture/builtin-arith-overflow-p-3.c
