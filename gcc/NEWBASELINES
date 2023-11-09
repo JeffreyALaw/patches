@@ -4,3 +4,4 @@
 m68k-linux-gnu
 hppa-linux-gnu
 cris-elf
+bfin-elf
