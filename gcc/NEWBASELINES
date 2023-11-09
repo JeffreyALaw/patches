@@ -3,4 +3,4 @@
 # reset.  
 m68k-linux-gnu
 hppa-linux-gnu
-msp430-elf
+cris-elf
