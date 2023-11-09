@@ -1,4 +1,4 @@
-commit 95394fc469e1088404737dd41e4931f76c4ad5e5
+commit e1ac384ca594419a3f9d0b942e3940d9b7404e19
 Author: Jeff Law <jlaw@ventanamicro.com>
 Date:   Wed Nov 1 18:13:03 2023 -0600
 
@@ -68,10 +68,10 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..6c523f4c543
+index 00000000000..a0fde218009
 --- /dev/null
 +++ b/gcc/ext-dce.cc
-@@ -0,0 +1,817 @@
+@@ -0,0 +1,819 @@
 +/* RTL dead zero/sign extension (code) elimination.
 +   Copyright (C) 2000-2022 Free Software Foundation, Inc.
 +
@@ -579,8 +579,10 @@ index 00000000000..6c523f4c543
 +#if 0
 +skip_insn:
 +#endif
++#if 0
 +	if (CALL_P (insn))
 +	  rollback_call_set (insn, livenow);
++#endif
 +	BITMAP_FREE (live_tmp);
 +    }
 +  return livenow;
