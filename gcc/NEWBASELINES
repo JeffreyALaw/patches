@@ -5,3 +5,4 @@ m68k-linux-gnu
 hppa-linux-gnu
 csky-linux-gnu
 ft32-elf
+frv-elf
