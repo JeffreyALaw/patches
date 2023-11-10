@@ -3,7 +3,6 @@
 # reset.  
 m68k-linux-gnu
 hppa-linux-gnu
-lm32-elf
-mn10300-elf
 nds32be-elf
 microblaze-linux
+nds32le-elf
