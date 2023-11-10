@@ -5,3 +5,4 @@ m68k-linux-gnu
 hppa-linux-gnu
 sh3-linux-gnu
 sh3eb-linux-gnu
+xstormy16-elf
