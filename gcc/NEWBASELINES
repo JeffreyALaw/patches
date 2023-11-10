@@ -3,5 +3,5 @@
 # reset.  
 m68k-linux-gnu
 hppa-linux-gnu
-or1k-linux-gnu
-rl78-elf
+sh3-linux-gnu
+sh3eb-linux-gnu
