@@ -1,4 +1,4 @@
-commit e1ac384ca594419a3f9d0b942e3940d9b7404e19
+commit 7ade28874bb1ef75718c107cd5764275a7ea929f
 Author: Jeff Law <jlaw@ventanamicro.com>
 Date:   Wed Nov 1 18:13:03 2023 -0600
 
@@ -68,7 +68,7 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..a0fde218009
+index 00000000000..4a5a3cd2fef
 --- /dev/null
 +++ b/gcc/ext-dce.cc
 @@ -0,0 +1,819 @@
@@ -488,7 +488,7 @@ index 00000000000..a0fde218009
 +			      rn = 4 * REGNO (y);
 +			      unsigned HOST_WIDE_INT tmp_mask = mask;
 +
-+			      if (!safe_for_live_propagation (GET_CODE (y)))
++			      if (!safe_for_live_propagation (code))
 +				tmp_mask = GET_MODE_MASK (GET_MODE (y));
 +
 +			      if (tmp_mask & 0xff)
