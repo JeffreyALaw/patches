@@ -3,5 +3,6 @@
 # reset.  
 m68k-linux-gnu
 hppa-linux-gnu
-frv-elf
-iq2000-elf
+m32r-elf
+lm32-elf
+mn10300-elf
