@@ -6,3 +6,4 @@ hppa-linux-gnu
 c6x-elf
 fr30-elf
 csky-linux-gnu
+ft32-elf
