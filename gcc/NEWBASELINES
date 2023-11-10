@@ -3,6 +3,8 @@
 # reset.  
 m68k-linux-gnu
 hppa-linux-gnu
-sh3-linux-gnu
 sh3eb-linux-gnu
-xstormy16-elf
+rx-elf
+mcore-elf
+v850e-elf
+h8300-elf
