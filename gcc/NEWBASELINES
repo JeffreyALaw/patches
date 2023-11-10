@@ -3,7 +3,5 @@
 # reset.  
 m68k-linux-gnu
 hppa-linux-gnu
-csky-linux-gnu
-ft32-elf
 frv-elf
 iq2000-elf
