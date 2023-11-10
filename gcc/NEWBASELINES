@@ -5,3 +5,4 @@ m68k-linux-gnu
 hppa-linux-gnu
 arc-elf
 c6x-elf
+fr30-elf
