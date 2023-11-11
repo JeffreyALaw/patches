@@ -3,5 +3,3 @@
 # reset.  
 m68k-linux-gnu
 hppa-linux-gnu
-mcore-elf
-h8300-elf
