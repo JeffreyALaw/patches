@@ -3,7 +3,5 @@
 # reset.  
 m68k-linux-gnu
 hppa-linux-gnu
-v850e-elf
 or1k-linux-gnu
-microblaze-linux
 nios2-linux-gnu
