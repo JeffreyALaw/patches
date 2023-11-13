@@ -7,6 +7,4 @@ v850e-elf
 nds32le-elf
 rx-elf
 or1k-linux-gnu
-mcore-elf
-rl78-elf
 microblaze-linux
