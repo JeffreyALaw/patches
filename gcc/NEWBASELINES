@@ -3,7 +3,6 @@
 # reset.  
 m68k-linux-gnu
 hppa-linux-gnu
-xstormy16-elf
 v850e-elf
 nds32le-elf
 ft32-elf
@@ -11,3 +10,4 @@ m32r-elf
 rx-elf
 or1k-linux-gnu
 mcore-elf
+rl78-elf
