@@ -3,4 +3,4 @@
 # reset.  
 m68k-linux-gnu
 hppa-linux-gnu
-nios2-linux-gnut
+moxie-elf
