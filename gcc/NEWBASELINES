@@ -3,5 +3,5 @@
 # reset.  
 m68k-linux-gnu
 hppa-linux-gnu
-or1k-linux-gnu
 nios2-linux-gnu
+nds32be-elf
