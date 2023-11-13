@@ -8,3 +8,4 @@ nds32le-elf
 rx-elf
 or1k-linux-gnu
 microblaze-linux
+nios2-linux-gnu
