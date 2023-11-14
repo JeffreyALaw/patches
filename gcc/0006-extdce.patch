@@ -62,10 +62,10 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..fbdc645597a
+index 00000000000..d26da53418a
 --- /dev/null
 +++ b/gcc/ext-dce.cc
-@@ -0,0 +1,808 @@
+@@ -0,0 +1,717 @@
 +/* RTL dead zero/sign extension (code) elimination.
 +   Copyright (C) 2000-2022 Free Software Foundation, Inc.
 +
@@ -142,7 +142,17 @@ index 00000000000..fbdc645597a
 +}
 +
 +/* Clear bits in LIVENOW and set bits in LIVE_TMP for objects
-+   set/clobbered by INSN.  */
++   set/clobbered by INSN.
++
++   Conceptually it is always safe to ignore a particular destination
++   here as that will result in more chunks of data being considered
++   live.  That's what happens when we "continue" the main loop when
++   we see something we don't know how to handle such as a vector
++   mode destination.
++
++   The more accurate we are in identifying what objects (and chunks
++   within an object) are set by INSN, the more aggressive the
++   optimziation phase during use handling will be.  */
 +
 +static void
 +ext_dce_process_sets (rtx_insn *insn, bitmap livenow, bitmap live_tmp)
@@ -173,16 +183,18 @@ index 00000000000..fbdc645597a
 +	  if (VECTOR_MODE_P (GET_MODE (x)) || GET_MODE (x) > E_DImode)
 +	    continue;
 +
-+	  /* Similarly if we have a SUBREG of a wide mode.  */
-+	  if (SUBREG_P (x) && GET_MODE (SUBREG_REG (x)) > E_DImode)
-+	    continue;
-+
 +	  /* We could have (strict_low_part (subreg ...)).  It's always safe
 +	     to leave bits live, even when they are not.  So we can just
 +	     strip the STRICT_LOW_PART for now.  Similarly for a paradoxical
 +	     SUBREG.  */
 +	  if (GET_CODE (x) == STRICT_LOW_PART || paradoxical_subreg_p (x))
 +	    x = XEXP (x, 0);
++
++	  /* Similarly if we have a SUBREG of a wide mode.  Do this after
++	     stripping STRICT_LOW_PART or a paradoxical SUBREG to catch
++	     stuff like (strict_low_part (subreg:HI (reg:TI))).  */
++	  if (SUBREG_P (x) && GET_MODE (SUBREG_REG (x)) > E_DImode)
++	    continue;
 +
 +	  /* Phase one of destination handling.  First remove any wrapper
 +	     such as SUBREG or ZERO_EXTRACT.  */
@@ -230,11 +242,17 @@ index 00000000000..fbdc645597a
 +	  /* Now handle the actual object that was changed.  */
 +	  if (REG_P (x))
 +	    {
++	      /* Transfer the appropriate bits from LIVENOW into
++		 LIVE_TMP.  */
 +	      HOST_WIDE_INT rn = REGNO (x);
 +	      for (HOST_WIDE_INT i = 4 * rn; i < 4 * rn + 4; i++)
 +		if (bitmap_bit_p (livenow, i))
 +		  bitmap_set_bit (live_tmp, i);
-+	      int start = (bit == 0 ? 0 : bit == 8 ? 1 : bit == 16 ? 2 : 3);
++
++	      /* Now clear the bits known written by this instruction.
++		 Note that BIT need not be a power of two, consider a
++		 ZERO_EXTRACT destination.  */
++	      int start = (bit < 8 ? 0 : bit < 16 ? 1 : bit < 32 ? 2 : 3);
 +	      int end = ((mask & ~0xffffffffULL) ? 4
 +			 : (mask & 0xffff0000ULL) ? 3
 +			 : (mask & 0xff00) ? 2 : 1);
@@ -572,124 +590,47 @@ index 00000000000..fbdc645597a
 +}
 +
 +static void
++reset_subreg_promoted_p (bitmap changed_pseudos)
++{
++  /* If we removed an extension, that changed the promoted state
++     of the destination of that extension.  Thus we need to go
++     find any SUBREGs that reference that pseudo and adjust their
++     SUBREG_PROMOTED_P state.  */
++  for (rtx_insn *insn = get_insns(); insn; insn = NEXT_INSN (insn))
++    {
++      if (!NONDEBUG_INSN_P (insn))
++	continue;
++
++      rtx pat = PATTERN (insn);
++      subrtx_var_iterator::array_type array;
++      FOR_EACH_SUBRTX_VAR (iter, array, pat, NONCONST)
++	{
++	  rtx sub = *iter;
++
++	  /* We only care about SUBREGs.  */
++	  if (GET_CODE (sub) != SUBREG)
++	    continue;
++
++	  const_rtx x = SUBREG_REG (sub);
++
++	  /* We only care if the inner object is a REG.  */
++	  if (!REG_P (x))
++	    continue;
++
++	  /* And only if the SUBREG is a promoted var.  */
++	  if (!SUBREG_PROMOTED_VAR_P (sub))
++	    continue;
++
++	  if (bitmap_bit_p (changed_pseudos, REGNO (x)))
++	    SUBREG_PROMOTED_VAR_P (sub) = 0;
++	}
++    }
++}
++
++
++static void
 +ext_dce (void)
 +{
-+  /* Proper PRE is hard, so for now just extend return values without
-+    checking if that'll help.
-+    (To check if it'd help, we'd have to do a dataflow computation to check
-+     if a highpart computed from an extension that could be changed into a
-+     no-op move reaches the return value copy.)
-+    If a function is inlined, the return value should already be used
-+    just in the mode needed, so normal ext-dce should work just fine.  */
-+  if (flag_ext_dce == 2)
-+    {
-+      edge_iterator ei;
-+      edge e;
-+      rtx_insn *insn;
-+      bool need_commit = false;
-+
-+      FOR_EACH_EDGE (e, ei, EXIT_BLOCK_PTR_FOR_FN (cfun)->preds)
-+	FOR_BB_INSNS (e->src, insn)
-+	  {
-+	    rtx set = single_set (insn);
-+	    if (!set
-+		|| !REG_P (SET_SRC (set))
-+		|| !REG_P (SET_DEST (set)))
-+	      continue;
-+	    tree decl = REG_EXPR (SET_SRC (set));
-+	    if (!decl || TREE_CODE (decl) != RESULT_DECL
-+		|| TREE_CODE (TREE_TYPE (decl)) != INTEGER_TYPE
-+		|| maybe_ge (TYPE_PRECISION (TREE_TYPE (decl)),
-+			     GET_MODE_BITSIZE (GET_MODE (SET_SRC (set)))))
-+	      continue;
-+
-+	    rtx ext = gen_rtx_SUBREG (TYPE_MODE (TREE_TYPE (decl)),
-+				      SET_SRC (set), 0);
-+	    ext = gen_rtx_fmt_e ((TYPE_UNSIGNED (TREE_TYPE (decl))
-+				  ? ZERO_EXTEND : SIGN_EXTEND),
-+				 GET_MODE (SET_DEST (set)), ext);
-+
-+	    /* Filter out a trivial case of a useless extension:
-+	       if the register was just set to a constant or memory value.  */
-+	    rtx_insn *prev = prev_nonnote_nondebug_insn (insn);
-+	    if ((!prev || LABEL_P (prev)) && !bb_has_abnormal_pred (e->src))
-+	      {
-+		edge_iterator ei2;
-+		edge e2;
-+		auto_vec<edge> live_preds;
-+
-+		FOR_EACH_EDGE (e2, ei2, e->src->preds)
-+		  {
-+		    prev = BB_END (e2->src);
-+		    if (NOTE_P (prev) || DEBUG_INSN_P (prev))
-+		      prev = prev_nonnote_nondebug_insn (prev);
-+		    rtx prev_set = NULL_RTX;
-+		    if (prev)
-+		      prev_set = single_set (prev);
-+		    if (prev_set
-+			&& rtx_equal_p (SET_DEST (prev_set), SET_SRC (set))
-+			&& (CONSTANT_P (SET_SRC (prev_set))
-+			    || MEM_P (SET_SRC (prev))))
-+		      continue;
-+		    live_preds.safe_push (e2);
-+		  }
-+		if (!live_preds.length ())
-+		  continue;
-+
-+		start_sequence ();
-+		rtx_insn *ext_insn
-+		  = emit_insn (gen_rtx_SET (SET_SRC (set), ext));
-+		if (recog (PATTERN (ext_insn), ext_insn, NULL) < 0)
-+		  ext_insn = NULL;
-+		end_sequence ();
-+
-+		if (ext_insn
-+		    && live_preds.length () < EDGE_COUNT (e->src->preds)
-+		    && find_regno_note (insn, REG_DEAD, REGNO (SET_SRC (set))))
-+		  {
-+		    unsigned int i;
-+		    FOR_EACH_VEC_ELT (live_preds, i, e2)
-+		      insert_insn_on_edge (copy_rtx (PATTERN (ext_insn)), e2);
-+		    need_commit = true;
-+		    continue;
-+		  }
-+	      }
-+	    else
-+	      {
-+		rtx prev_set = NULL_RTX;
-+		if (prev)
-+		  prev_set = single_set (prev);
-+		if (prev_set
-+		    && rtx_equal_p (SET_DEST (prev_set), SET_SRC (set))
-+		    && (CONSTANT_P (SET_SRC (prev_set))
-+			|| MEM_P (SET_SRC (prev))))
-+		  continue;
-+	      }
-+
-+	    if (dump_file)
-+	      {
-+		fprintf (dump_file, "Processing insn:\n");
-+		dump_insn_slim (dump_file, insn);
-+		fprintf (dump_file, "Trying to simplify pattern:\n");
-+		print_rtl_single (dump_file, SET_SRC (set));
-+	      }
-+
-+	    int ok = validate_change (insn, &SET_SRC (set), ext, false);
-+	    if (dump_file)
-+	      {
-+		if (ok)
-+		  fprintf (dump_file, "Successfully transformed to:\n");
-+		else
-+		  fprintf (dump_file, "Failed transformation to:\n");
-+
-+		print_rtl_single (dump_file, ext);
-+		fprintf (dump_file, "\n");
-+	      }
-+	  }
-+      if (need_commit)
-+	commit_edge_insertions();
-+    }
-+
 +  basic_block bb, *worklist, *qin, *qout, *qend;
 +  unsigned int qlen;
 +  vec<bitmap_head> livein;
@@ -790,39 +731,7 @@ index 00000000000..fbdc645597a
 +	}
 +    } while (!modify++);
 +
-+  /* If we removed an extension, that changed the promoted state
-+     of the destination of that extension.  Thus we need to go
-+     find any SUBREGs that reference that pseudo and adjust their
-+     SUBREG_PROMOTED_P state.  */
-+  for (rtx_insn *insn = get_insns(); insn; insn = NEXT_INSN (insn))
-+    {
-+      if (!NONDEBUG_INSN_P (insn))
-+	continue;
-+
-+      rtx pat = PATTERN (insn);
-+      subrtx_var_iterator::array_type array;
-+      FOR_EACH_SUBRTX_VAR (iter, array, pat, NONCONST)
-+	{
-+	  rtx sub = *iter;
-+
-+	  /* We only care about SUBREGs.  */
-+	  if (GET_CODE (sub) != SUBREG)
-+	    continue;
-+
-+	  const_rtx x = SUBREG_REG (sub);
-+
-+	  /* We only care if the inner object is a REG.  */
-+	  if (!REG_P (x))
-+	    continue;
-+
-+	  /* And only if the SUBREG is a promoted var.  */
-+	  if (!SUBREG_PROMOTED_VAR_P (sub))
-+	    continue;
-+
-+	  if (bitmap_bit_p (changed_pseudos, REGNO (x)))
-+	    SUBREG_PROMOTED_VAR_P (sub) = 0;
-+	}
-+    }
++  reset_subreg_promoted_p (changed_pseudos);
 +
 +  /* Clean up.  */
 +  BITMAP_FREE (changed_pseudos);
@@ -886,6 +795,42 @@ index 1e1950bdb39..c075c70d42c 100644
        NEXT_PASS (pass_combine);
        NEXT_PASS (pass_if_after_combine);
        NEXT_PASS (pass_jump_after_combine);
+diff --git a/gcc/testsuite/gcc.dg/pr111384.c b/gcc/testsuite/gcc.dg/pr111384.c
+new file mode 100644
+index 00000000000..a4e77d4aeb6
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/pr111384.c
+@@ -0,0 +1,11 @@
++/* { dg-do compile } */
++/* { dg-options "-O1 -fdump-rtl-ext_dce" } */
++/* { dg-final { scan-rtl-dump {Successfully transformed} "ext_dce" } } */
++
++void
++foo(unsigned int src, unsigned short *dst1, unsigned short *dst2)
++{
++    *dst1 = src;
++    *dst2 = src;
++}
++
+diff --git a/gcc/testsuite/gcc.target/riscv/mem-extend.c b/gcc/testsuite/gcc.target/riscv/mem-extend.c
+new file mode 100644
+index 00000000000..c67f12dfc35
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/mem-extend.c
+@@ -0,0 +1,13 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc_zbb" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" } } */
++
++void
++foo(short *d, short *tmp) {
++    int x = d[0] + d[1];
++    int y = d[2] + d[3];
++    tmp[0] = x + y;
++    tmp[1] = x - y;
++}
++
++/* { dg-final { scan-assembler-not {\mzext\.h\M} } } */
 diff --git a/gcc/tree-pass.h b/gcc/tree-pass.h
 index 09e6ada5b2f..773301d731f 100644
 --- a/gcc/tree-pass.h
