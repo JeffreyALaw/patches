@@ -6,3 +6,4 @@ h8300-elf
 iq2000-elf
 lm32-elf
 csky-linux-gnu
+frv-elf
