@@ -62,10 +62,10 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..22465dc401b
+index 00000000000..cfd2823a0f1
 --- /dev/null
 +++ b/gcc/ext-dce.cc
-@@ -0,0 +1,801 @@
+@@ -0,0 +1,802 @@
 +/* RTL dead zero/sign extension (code) elimination.
 +   Copyright (C) 2000-2022 Free Software Foundation, Inc.
 +
@@ -176,14 +176,15 @@ index 00000000000..22465dc401b
 +
 +	  /* We could have (strict_low_part (subreg ...)).  It's always safe
 +	     to leave bits live, even when they are not.  So we can just
-+	     strip the STRICT_LOW_PART for now.  */
-+	  if (GET_CODE (x) == STRICT_LOW_PART)
++	     strip the STRICT_LOW_PART for now.  Similarly for a paradoxical
++	     SUBREG.  */
++	  if (GET_CODE (x) == STRICT_LOW_PART || paradoxical_subreg_p (x))
 +	    x = XEXP (x, 0);
 +
 +	  /* Phase one of destination handling.  First remove any wrapper
 +	     such as SUBREG or ZERO_EXTRACT.  */
 +	  unsigned HOST_WIDE_INT mask = GET_MODE_MASK (GET_MODE (x));
-+	  if (SUBREG_P (x))
++	  if (SUBREG_P (x) && !paradoxical_subreg_p (x))
 +	    {
 +	      bit = SUBREG_BYTE (x).to_constant () * BITS_PER_UNIT;
 +	      if (WORDS_BIG_ENDIAN)
