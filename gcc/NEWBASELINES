@@ -3,7 +3,5 @@
 # reset.  
 m68k-linux-gnu
 h8300-elf
-mn10300-elf
-bfin-elf
-fr30-elf
+c6x-elf
 
