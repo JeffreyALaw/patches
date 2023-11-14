@@ -3,5 +3,5 @@
 # reset.  
 m68k-linux-gnu
 h8300-elf
-cris-elf
+alpha-linux-gnu
 
