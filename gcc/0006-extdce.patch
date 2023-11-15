@@ -62,7 +62,7 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..39b2224436e
+index 00000000000..30c8bb102d0
 --- /dev/null
 +++ b/gcc/ext-dce.cc
 @@ -0,0 +1,814 @@
@@ -482,7 +482,7 @@ index 00000000000..39b2224436e
 +		     If this were to be loosened, then we'd still need to
 +		     reject mode dependent addresses and volatile memory
 +		     accesses.  */
-+		  if (!REG_P (inner))
++		  if (MEM_P (inner))
 +		    continue;
 +
 +		  /* DST_MASK could be zero if we had something in the SET
