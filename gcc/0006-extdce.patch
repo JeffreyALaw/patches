@@ -62,10 +62,10 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..20eac66a6ac
+index 00000000000..939c9a2ed58
 --- /dev/null
 +++ b/gcc/ext-dce.cc
-@@ -0,0 +1,809 @@
+@@ -0,0 +1,831 @@
 +/* RTL dead zero/sign extension (code) elimination.
 +   Copyright (C) 2000-2022 Free Software Foundation, Inc.
 +
@@ -108,6 +108,9 @@ index 00000000000..20eac66a6ac
 +   bit 16..31
 +   bit 32..BITS_PER_WORD-1  */
 +
++/* Note this pass could be used to narrow memory loads too.  It's
++   not clear if that's profitable or not in general.  */
++
 +#define UNSPEC_P(X) (GET_CODE (X) == UNSPEC || GET_CODE (X) == UNSPEC_VOLATILE)
 +
 +/* If we know the destination of CODE only uses some low bits
@@ -118,26 +121,49 @@ index 00000000000..20eac66a6ac
 +static bool
 +safe_for_live_propagation (rtx_code code)
 +{
++  /* First handle rtx classes which as a whole are known to
++     be either safe or unsafe.  If the class is mixed, then
++     don't list it here and handle the codes individually.  */
++  switch (GET_RTX_CLASS (code))
++    {
++      case RTX_COMM_ARITH:
++      case RTX_OBJ:
++	return true;
++
++      case RTX_COMPARE:
++      case RTX_COMM_COMPARE:
++      case RTX_TERNARY:
++	return false;
++
++      default:
++	break;
++    }
++
++  /* What's left are specific codes.  We only need to identify those
++     which are safe.   */
 +  switch (code)
 +    {
-+    case REG:
++    /* These are trivially safe.  */
 +    case SUBREG:
-+    case AND:
-+    case IOR:
-+    case XOR:
 +    case NOT:
-+    case PLUS:
-+    case MULT:
 +    case ZERO_EXTEND:
 +    case SIGN_EXTEND:
-+
-+    /* ?!? These should be double-checked.  */
-+    case MINUS:
 +    case TRUNCATE:
++    case ABS:
++    case SS_ABS:
++    case SS_TRUNCATE:
++    case US_TRUNCATE:
++      return true;
 +
-+    /* This seems wrong for the shift count.  */
++    /* We can propagate for the shifted operand, but not the shift
++       count.  The count is handled specially.  */
++    case SS_ASHIFT:
++    case US_ASHIFT:
 +    case ASHIFT:
 +      return true;
++
++    /* There may be other safe codes.  If so they can be added
++       individually when discovered.  */
 +    default:
 +      return false;
 +    }
@@ -382,9 +408,9 @@ index 00000000000..20eac66a6ac
 +	bitmap_set_range (livenow, HARD_FRAME_POINTER_REGNUM * 4, 4);
 +    }
 +
-+ restart:
 +  subrtx_var_iterator::array_type array_var;
 +  rtx pat = PATTERN (insn);
++ restart:
 +  FOR_EACH_SUBRTX_VAR (iter, array_var, pat, NONCONST)
 +    {
 +      /* An EXPR_LIST (from call fusage) ends in NULL_RTX.  */
@@ -581,10 +607,6 @@ index 00000000000..20eac66a6ac
 +	      if (REG_P (y) || CONSTANT_P (y))
 +		iter.skip_subrtxes ();
 +	    }
-+#if 0
-+	  else if (REG_P (dst))
-+	    iter.substitute (src);
-+#endif
 +	}
 +      /* If we are reading the low part of a SUBREG, then we can
 +	 refine liveness of the input register, otherwise let the
