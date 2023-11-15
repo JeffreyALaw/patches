@@ -62,10 +62,10 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..aff9bbeb4a0
+index 00000000000..39b2224436e
 --- /dev/null
 +++ b/gcc/ext-dce.cc
-@@ -0,0 +1,812 @@
+@@ -0,0 +1,814 @@
 +/* RTL dead zero/sign extension (code) elimination.
 +   Copyright (C) 2000-2022 Free Software Foundation, Inc.
 +
@@ -128,6 +128,8 @@ index 00000000000..aff9bbeb4a0
 +    case NOT:
 +    case PLUS:
 +    case MULT:
++    case ZERO_EXTEND:
++    case SIGN_EXTEND:
 +
 +    /* ?!? These should be double-checked.  */
 +    case MINUS:
