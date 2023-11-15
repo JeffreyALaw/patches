@@ -3,4 +3,5 @@
 # reset.  
 m68k-linux-gnu
 alpha-linux-gnu
+xstormy16-elf
 
