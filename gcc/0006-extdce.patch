@@ -62,10 +62,10 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..939c9a2ed58
+index 00000000000..8a63d408494
 --- /dev/null
 +++ b/gcc/ext-dce.cc
-@@ -0,0 +1,831 @@
+@@ -0,0 +1,838 @@
 +/* RTL dead zero/sign extension (code) elimination.
 +   Copyright (C) 2000-2022 Free Software Foundation, Inc.
 +
@@ -122,11 +122,9 @@ index 00000000000..939c9a2ed58
 +safe_for_live_propagation (rtx_code code)
 +{
 +  /* First handle rtx classes which as a whole are known to
-+     be either safe or unsafe.  If the class is mixed, then
-+     don't list it here and handle the codes individually.  */
++     be either safe or unsafe.  */
 +  switch (GET_RTX_CLASS (code))
 +    {
-+      case RTX_COMM_ARITH:
 +      case RTX_OBJ:
 +	return true;
 +
@@ -149,10 +147,19 @@ index 00000000000..939c9a2ed58
 +    case ZERO_EXTEND:
 +    case SIGN_EXTEND:
 +    case TRUNCATE:
-+    case ABS:
-+    case SS_ABS:
 +    case SS_TRUNCATE:
 +    case US_TRUNCATE:
++    case PLUS:
++    case MULT:
++    case SS_MULT:
++    case US_MULT:
++    case SMUL_HIGHPART:
++    case UMUL_HIGHPART:
++    case AND:
++    case IOR:
++    case XOR:
++    case SS_PLUS:
++    case US_PLUS:
 +      return true;
 +
 +    /* We can propagate for the shifted operand, but not the shift
