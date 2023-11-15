@@ -4,4 +4,6 @@
 m68k-linux-gnu
 h8300-elf
 alpha-linux-gnu
+msp430-elf
+avr-elf
 
