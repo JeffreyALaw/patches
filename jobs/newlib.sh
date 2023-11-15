@@ -225,6 +225,7 @@ make -j $NPROC -l $NPROC all-gcc >> $LOGFILE 2>&1
 make install-gcc >> $LOGFILE 2>&1
 
 # We try to build and install libgcc, but don't consider a failure fatal
+echo Building libgcc
 (make -j $NPROC -l $NPROC all-target-libgcc && make install-target-libgcc) >> $LOGFILE 2>&1 || /bin/true
 
 # Conditionally build libstdc++.  Also set up to conditionally run its testsuite
@@ -234,6 +235,7 @@ fi
 
 cd ../../
 
+echo Building newlib
 # Step 3, build newlib
 if [ ${TARGET} != avr-elf ]; then
   cd ${TARGET}-obj/newlib
