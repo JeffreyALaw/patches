@@ -3,7 +3,4 @@
 # reset.  
 m68k-linux-gnu
 alpha-linux-gnu
-msp430-elf
-avr-elf
-rl78-elf
 
