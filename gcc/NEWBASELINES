@@ -2,8 +2,8 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 m68k-linux-gnu
-h8300-elf
 alpha-linux-gnu
 msp430-elf
 avr-elf
+rl78-elf
 
