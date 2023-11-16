@@ -951,6 +951,21 @@ index 1e1950bdb39..c075c70d42c 100644
        NEXT_PASS (pass_combine);
        NEXT_PASS (pass_if_after_combine);
        NEXT_PASS (pass_jump_after_combine);
+diff --git a/gcc/simplify-rtx.cc b/gcc/simplify-rtx.cc
+index 69d87579d9c..caaed3625f6 100644
+--- a/gcc/simplify-rtx.cc
++++ b/gcc/simplify-rtx.cc
+@@ -7545,6 +7545,10 @@ rtx
+ simplify_context::simplify_subreg (machine_mode outermode, rtx op,
+ 				   machine_mode innermode, poly_uint64 byte)
+ {
++  /* XXX */
++  if (innermode == VOIDmode)
++    return NULL_RTX;
++
+   /* Little bit of sanity checking.  */
+   gcc_assert (innermode != VOIDmode);
+   gcc_assert (outermode != VOIDmode);
 diff --git a/gcc/testsuite/gcc.dg/core_bench_list.c b/gcc/testsuite/gcc.dg/core_bench_list.c
 new file mode 100644
 index 00000000000..957e9c841ed
