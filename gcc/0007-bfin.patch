@@ -1,0 +1,16 @@
+This is a hack and should never be upstreamed
+There's either a length accounting problem or alignment accounting problem
+that shows up building newlib.
+diff --git a/gcc/config/bfin/bfin.md b/gcc/config/bfin/bfin.md
+index c6b174dc3bd..983a95a4c38 100644
+--- a/gcc/config/bfin/bfin.md
++++ b/gcc/config/bfin/bfin.md
+@@ -384,7 +384,7 @@ (define_attr "length" ""
+          (eq_attr "type" "brcc")
+ 	 (cond [(and
+ 	            (le (minus (match_dup 3) (pc)) (const_int 1020))
+-	            (ge (minus (match_dup 3) (pc)) (const_int -1024)))
++	            (ge (minus (match_dup 3) (pc)) (const_int -952)))
+ 		  (const_int 2)
+ 		(and
+ 	            (le (minus (match_dup 3) (pc)) (const_int 4092))
