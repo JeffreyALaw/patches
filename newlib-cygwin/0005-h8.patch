@@ -186,3 +186,33 @@ index c92169c69..f9563161a 100644
  	rts
 -
 -#endif
+diff --git a/newlib/libc/sys/h8300hms/crt0.S b/newlib/libc/sys/h8300hms/crt0.S
+index 6394f6841..ef923a1c7 100644
+--- a/newlib/libc/sys/h8300hms/crt0.S
++++ b/newlib/libc/sys/h8300hms/crt0.S
+@@ -11,10 +11,8 @@ _start:
+ 	mov.w	#_edata,r0
+ 	mov.w	#_end,r1
+ 	sub.w   r2,r2
+-.Loop:	mov.w	r2,@r0
+-	adds	#2,r0
+-	cmp	r1,r0
+-	blo	.Loop
++	sub.w	r0,r1
++	jsr	@_memset
+ #ifdef __ELF__
+ 	mov.l   #__fini,r0
+ 	jsr     @_atexit
+@@ -45,10 +43,8 @@ _start:
+ 	mov.l	#_edata,er0
+ 	mov.l	#_end,er1
+ 	sub.w   r2,r2           ; not sure about alignment requirements
+-.Loop:	mov.w	r2,@er0		; playing it safe for now
+-	adds	#2,er0
+-	cmp.l	er1,er0
+-	blo	.Loop
++	sub.l	er0,er1
++	jsr	@_memset
+ #ifdef __ELF__
+ 	mov.l   #__fini,er0
+ 	jsr     @_atexit
