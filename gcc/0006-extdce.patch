@@ -1,8 +1,8 @@
 diff --git a/gcc/Makefile.in b/gcc/Makefile.in
-index 29cec21c825..2d4cdb96b7e 100644
+index 7f2df4b5925..cabfffd3245 100644
 --- a/gcc/Makefile.in
 +++ b/gcc/Makefile.in
-@@ -1447,6 +1447,7 @@ OBJS = \
+@@ -1449,6 +1449,7 @@ OBJS = \
  	explow.o \
  	expmed.o \
  	expr.o \
@@ -11,10 +11,10 @@ index 29cec21c825..2d4cdb96b7e 100644
  	file-prefix-map.o \
  	final.o \
 diff --git a/gcc/common.opt b/gcc/common.opt
-index d21db5d4a20..3e276820fed 100644
+index d21db5d4a20..141dfdf14fd 100644
 --- a/gcc/common.opt
 +++ b/gcc/common.opt
-@@ -3766,4 +3766,12 @@ fipa-ra
+@@ -3766,4 +3766,8 @@ fipa-ra
  Common Var(flag_ipa_ra) Optimization
  Use caller save register across calls if possible.
  
@@ -22,11 +22,29 @@ index d21db5d4a20..3e276820fed 100644
 +Common Var(flag_ext_dce, 1) Optimization Init(0)
 +Perform dead code elimination on zero and sign extensions with special dataflow analysis.
 +
-+fext-dce-pre
-+Common Var(flag_ext_dce, 2)
-+Perform dead code elimination on zero and sign extensions with special dataflow analysis.  Insert extensions on edges for partial redundancy elimination.
-+
  ; This comment is to ensure we retain the blank line above.
+diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
+index 8f28e8e56ab..1522b0b27cc 100644
+--- a/gcc/config/riscv/riscv.md
++++ b/gcc/config/riscv/riscv.md
+@@ -3301,7 +3301,7 @@ (define_insn "gpr_restore_return"
+ 
+ (define_insn "riscv_frcsr"
+   [(set (match_operand:SI 0 "register_operand" "=r")
+-	(unspec_volatile [(const_int 0)] UNSPECV_FRCSR))]
++	(unspec_volatile:SI [(const_int 0)] UNSPECV_FRCSR))]
+   "TARGET_HARD_FLOAT || TARGET_ZFINX"
+   "frcsr\t%0"
+   [(set_attr "type" "fmove")])
+@@ -3314,7 +3314,7 @@ (define_insn "riscv_fscsr"
+ 
+ (define_insn "riscv_frflags"
+   [(set (match_operand:SI 0 "register_operand" "=r")
+-	(unspec_volatile [(const_int 0)] UNSPECV_FRFLAGS))]
++	(unspec_volatile:SI [(const_int 0)] UNSPECV_FRFLAGS))]
+   "TARGET_HARD_FLOAT || TARGET_ZFINX"
+   "frflags\t%0"
+   [(set_attr "type" "fmove")])
 diff --git a/gcc/df-scan.cc b/gcc/df-scan.cc
 index 9515740728c..87729ab0f44 100644
 --- a/gcc/df-scan.cc
@@ -62,10 +80,10 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..94335325dca
+index 00000000000..844e94406f2
 --- /dev/null
 +++ b/gcc/ext-dce.cc
-@@ -0,0 +1,884 @@
+@@ -0,0 +1,892 @@
 +/* RTL dead zero/sign extension (code) elimination.
 +   Copyright (C) 2000-2022 Free Software Foundation, Inc.
 +
@@ -214,7 +232,9 @@ index 00000000000..94335325dca
 +	  x = SET_DEST (x);
 +
 +	  /* We don't support vector destinations or destinations
-+	     wider than DImode.  */
++	     wider than DImode.   It is safe to continue this loop.
++	     At worst, it will leave things live which could have
++	     been made dead.  */
 +	  if (VECTOR_MODE_P (GET_MODE (x)) || GET_MODE (x) > E_DImode)
 +	    continue;
 +
@@ -228,7 +248,9 @@ index 00000000000..94335325dca
 +
 +	      /* The only valid operand of a STRICT_LOW_PART is a non
 +		 paradoxical SUBREG.  */
-+	      gcc_assert (SUBREG_P (x) && !paradoxical_subreg_p (x));
++	      gcc_assert (SUBREG_P (x)
++			  && !paradoxical_subreg_p (x)
++			  && SUBREG_BYTE (x).is_constant ());
 +
 +	      /* I think we should always see a REG here.  But let's
 +		 be sure.  */
@@ -249,13 +271,14 @@ index 00000000000..94335325dca
 +		  continue;
 +		}
 +
-+	      /* The mode of the SUBREG tells us how many bits we can
-+		 clear.  */
++	      /* Transfer all the LIVENOW bits for X into LIVE_TMP.  */
 +	      HOST_WIDE_INT rn = REGNO (SUBREG_REG (x));
 +	      for (HOST_WIDE_INT i = 4 * rn; i < 4 * rn + 4; i++)
 +		if (bitmap_bit_p (livenow, i))
 +		  bitmap_set_bit (live_tmp, i);
 +
++	      /* The mode of the SUBREG tells us how many bits we can
++		 clear.  */
 +	      machine_mode mode = GET_MODE (x);
 +	      HOST_WIDE_INT size = GET_MODE_SIZE (mode).to_constant ();
 +	      bitmap_clear_range (livenow, 4 * rn, size);
@@ -271,16 +294,17 @@ index 00000000000..94335325dca
 +	  if (paradoxical_subreg_p (x))
 +	    x = XEXP (x, 0);
 +
-+	  /* Similarly if we have a SUBREG of a wide mode.  Do this after
-+	     stripping STRICT_LOW_PART or a paradoxical SUBREG to catch
-+	     stuff like (strict_low_part (subreg:HI (reg:TI))).  */
++	  /* If we have a SUBREG that is too wide, just continue the loop
++	     and let the iterator go down into SUBREG_REG.  */
 +	  if (SUBREG_P (x) && GET_MODE (SUBREG_REG (x)) > E_DImode)
 +	    continue;
 +
 +	  /* Phase one of destination handling.  First remove any wrapper
 +	     such as SUBREG or ZERO_EXTRACT.  */
 +	  unsigned HOST_WIDE_INT mask = GET_MODE_MASK (GET_MODE (x));
-+	  if (SUBREG_P (x) && !paradoxical_subreg_p (x))
++	  if (SUBREG_P (x)
++	      && !paradoxical_subreg_p (x)
++	      && SUBREG_BYTE (x).is_constant ())
 +	    {
 +	      bit = SUBREG_BYTE (x).to_constant () * BITS_PER_UNIT;
 +	      if (WORDS_BIG_ENDIAN)
@@ -296,6 +320,7 @@ index 00000000000..94335325dca
 +		mask = -0x100000000ULL;
 +	      x = SUBREG_REG (x);
 +	    }
++
 +	  if (GET_CODE (x) == ZERO_EXTRACT)
 +	    {
 +	      /* If either the size or the start position is unknown,
@@ -491,8 +516,8 @@ index 00000000000..94335325dca
 +	  enum rtx_code code = GET_CODE (src);
 +
 +	  /* ?!? How much of this should mirror SET handling, potentially
-+	     being shared?  */
-+	  if (SUBREG_P (dst))
++	     being shared?   */
++	  if (SUBREG_BYTE (dst).is_constant () && SUBREG_P (dst))
 +	    {
 +	      bit = SUBREG_BYTE (dst).to_constant () * BITS_PER_UNIT;
 +	      if (WORDS_BIG_ENDIAN)
@@ -587,7 +612,7 @@ index 00000000000..94335325dca
 +		  if (GET_CODE (x) == STRICT_LOW_PART
 +		      || paradoxical_subreg_p (x))
 +		    x = XEXP (x, 0);
-+		  else if (SUBREG_P (y))
++		  else if (SUBREG_P (y) && SUBREG_BYTE (y).is_constant ())
 +		    {
 +		      /* For anything but (subreg (reg)), break the inner loop
 +			 and process normally (conservatively).  */
@@ -667,7 +692,8 @@ index 00000000000..94335325dca
 +      else if (xcode == SUBREG
 +	       && REG_P (SUBREG_REG (x))
 +	       && subreg_lowpart_p (x)
-+	       && GET_MODE_BITSIZE (GET_MODE  (x)).to_constant () <= 32)
++	       && GET_MODE_BITSIZE (GET_MODE (x)).is_constant ()
++	       && GET_MODE_BITSIZE (GET_MODE (x)).to_constant () <= 32)
 +	{
 +	  HOST_WIDE_INT size = GET_MODE_BITSIZE (GET_MODE  (x)).to_constant ();
 +	  HOST_WIDE_INT rn = 4 * REGNO (SUBREG_REG (x));
@@ -962,21 +988,6 @@ index 1e1950bdb39..c075c70d42c 100644
        NEXT_PASS (pass_combine);
        NEXT_PASS (pass_if_after_combine);
        NEXT_PASS (pass_jump_after_combine);
-diff --git a/gcc/simplify-rtx.cc b/gcc/simplify-rtx.cc
-index 69d87579d9c..caaed3625f6 100644
---- a/gcc/simplify-rtx.cc
-+++ b/gcc/simplify-rtx.cc
-@@ -7545,6 +7545,10 @@ rtx
- simplify_context::simplify_subreg (machine_mode outermode, rtx op,
- 				   machine_mode innermode, poly_uint64 byte)
- {
-+  /* XXX */
-+  if (innermode == VOIDmode)
-+    return NULL_RTX;
-+
-   /* Little bit of sanity checking.  */
-   gcc_assert (innermode != VOIDmode);
-   gcc_assert (outermode != VOIDmode);
 diff --git a/gcc/testsuite/gcc.dg/core_bench_list.c b/gcc/testsuite/gcc.dg/core_bench_list.c
 new file mode 100644
 index 00000000000..957e9c841ed
