@@ -1,0 +1,97 @@
+commit 57b3f0fda4f779b188143ad258135bfc2f39175d
+Author: Jeff Law <jlaw@ventanamicro.com>
+Date:   Sat Nov 18 19:57:48 2023 -0700
+
+    Upspec fixes
+
+diff --git a/gcc/config/c6x/c6x.md b/gcc/config/c6x/c6x.md
+index 88b9291ae23..906fdb34a82 100644
+--- a/gcc/config/c6x/c6x.md
++++ b/gcc/config/c6x/c6x.md
+@@ -1440,7 +1440,7 @@ (define_expand "doloop_end"
+ 
+ (define_insn "mvilc"
+   [(set (reg:SI REG_ILC)
+-	(unspec [(match_operand:SI 0 "register_operand" "a,b")] UNSPEC_MVILC))]
++	(unspec:SI [(match_operand:SI 0 "register_operand" "a,b")] UNSPEC_MVILC))]
+   "TARGET_INSNS_64PLUS"
+   "%|%.\\tmvc\\t%$\\t%0, ILC"
+   [(set_attr "predicable" "no")
+diff --git a/gcc/config/mips/mips.md b/gcc/config/mips/mips.md
+index a25454783fb..0666310734e 100644
+--- a/gcc/config/mips/mips.md
++++ b/gcc/config/mips/mips.md
+@@ -5732,7 +5732,7 @@ (define_insn "synci"
+ 
+ (define_insn "rdhwr_synci_step_<mode>"
+   [(set (match_operand:P 0 "register_operand" "=d")
+-        (unspec_volatile [(const_int 1)]
++        (unspec_volatile:P [(const_int 1)]
+         UNSPEC_RDHWR))]
+   "ISA_HAS_SYNCI"
+   "rdhwr\t%0,$1")
+diff --git a/gcc/config/s390/s390.md b/gcc/config/s390/s390.md
+index 4bdb679daf2..bc740a70015 100644
+--- a/gcc/config/s390/s390.md
++++ b/gcc/config/s390/s390.md
+@@ -12252,9 +12252,9 @@ (define_expand "split_stack_space_check"
+ 
+ (define_insn "@split_stack_call<mode>"
+   [(set (pc) (label_ref (match_operand 2 "" "")))     ; call done label
+-   (set (reg:P 1) (unspec_volatile [(match_operand 0 "bras_sym_operand" "X")
+-				    (reg:P 1)]
+-				   UNSPECV_SPLIT_STACK_CALL))
++   (set (reg:P 1) (unspec_volatile:P [(match_operand 0 "bras_sym_operand" "X")
++				      (reg:P 1)]
++				     UNSPECV_SPLIT_STACK_CALL))
+    (use (label_ref (match_operand 1 "" "X")))         ; parm block label
+    (use (match_operand 3 "const_int_operand" "X"))    ; frame size
+    (use (match_operand 4 "const_int_operand" "X"))]   ; arg size
+@@ -12274,9 +12274,9 @@ (define_insn "@split_stack_cond_call<mode>"
+ 	  (match_operand 5 "" "")                     ; condition
+ 	  (label_ref (match_operand 2 "" ""))         ; call done label
+ 	  (pc)))
+-   (set (reg:P 1) (unspec_volatile [(match_operand 0 "bras_sym_operand" "X")
+-				    (reg:P 1)]
+-				   UNSPECV_SPLIT_STACK_CALL))
++   (set (reg:P 1) (unspec_volatile:P [(match_operand 0 "bras_sym_operand" "X")
++				      (reg:P 1)]
++				     UNSPECV_SPLIT_STACK_CALL))
+    (use (label_ref (match_operand 1 "" "X")))         ; parm block label
+    (use (match_operand 3 "const_int_operand" "X"))    ; frame size
+    (use (match_operand 4 "const_int_operand" "X"))]   ; arg size
+diff --git a/gcc/config/sh/sh.md b/gcc/config/sh/sh.md
+index 193f40d4419..8321d9fa121 100644
+--- a/gcc/config/sh/sh.md
++++ b/gcc/config/sh/sh.md
+@@ -10936,7 +10936,7 @@ (define_peephole
+ 
+ ;; Switch to a new stack with its address in sp_switch (a SYMBOL_REF).
+ (define_insn "sp_switch_1"
+-  [(set (reg:SI SP_REG) (unspec_volatile [(match_operand:SI 0 "" "")]
++  [(set (reg:SI SP_REG) (unspec_volatile:SI [(match_operand:SI 0 "" "")]
+     UNSPECV_SP_SWITCH_B))]
+   "TARGET_SH1"
+ {
+diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
+index 8f28e8e56ab..1522b0b27cc 100644
+--- a/gcc/config/riscv/riscv.md
++++ b/gcc/config/riscv/riscv.md
+@@ -3301,7 +3301,7 @@ (define_insn "gpr_restore_return"
+ 
+ (define_insn "riscv_frcsr"
+   [(set (match_operand:SI 0 "register_operand" "=r")
+-	(unspec_volatile [(const_int 0)] UNSPECV_FRCSR))]
++	(unspec_volatile:SI [(const_int 0)] UNSPECV_FRCSR))]
+   "TARGET_HARD_FLOAT || TARGET_ZFINX"
+   "frcsr\t%0"
+   [(set_attr "type" "fmove")])
+@@ -3314,7 +3314,7 @@ (define_insn "riscv_fscsr"
+ 
+ (define_insn "riscv_frflags"
+   [(set (match_operand:SI 0 "register_operand" "=r")
+-	(unspec_volatile [(const_int 0)] UNSPECV_FRFLAGS))]
++	(unspec_volatile:SI [(const_int 0)] UNSPECV_FRFLAGS))]
+   "TARGET_HARD_FLOAT || TARGET_ZFINX"
+   "frflags\t%0"
+   [(set_attr "type" "fmove")])
