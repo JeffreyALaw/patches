@@ -23,28 +23,6 @@ index d21db5d4a20..141dfdf14fd 100644
 +Perform dead code elimination on zero and sign extensions with special dataflow analysis.
 +
  ; This comment is to ensure we retain the blank line above.
-diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index 8f28e8e56ab..1522b0b27cc 100644
---- a/gcc/config/riscv/riscv.md
-+++ b/gcc/config/riscv/riscv.md
-@@ -3301,7 +3301,7 @@ (define_insn "gpr_restore_return"
- 
- (define_insn "riscv_frcsr"
-   [(set (match_operand:SI 0 "register_operand" "=r")
--	(unspec_volatile [(const_int 0)] UNSPECV_FRCSR))]
-+	(unspec_volatile:SI [(const_int 0)] UNSPECV_FRCSR))]
-   "TARGET_HARD_FLOAT || TARGET_ZFINX"
-   "frcsr\t%0"
-   [(set_attr "type" "fmove")])
-@@ -3314,7 +3314,7 @@ (define_insn "riscv_fscsr"
- 
- (define_insn "riscv_frflags"
-   [(set (match_operand:SI 0 "register_operand" "=r")
--	(unspec_volatile [(const_int 0)] UNSPECV_FRFLAGS))]
-+	(unspec_volatile:SI [(const_int 0)] UNSPECV_FRFLAGS))]
-   "TARGET_HARD_FLOAT || TARGET_ZFINX"
-   "frflags\t%0"
-   [(set_attr "type" "fmove")])
 diff --git a/gcc/df-scan.cc b/gcc/df-scan.cc
 index 9515740728c..87729ab0f44 100644
 --- a/gcc/df-scan.cc
