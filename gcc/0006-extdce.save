@@ -1,8 +1,8 @@
 diff --git a/gcc/Makefile.in b/gcc/Makefile.in
-index 7f2df4b5925..cabfffd3245 100644
+index 753f2f36618..af6f1415507 100644
 --- a/gcc/Makefile.in
 +++ b/gcc/Makefile.in
-@@ -1449,6 +1449,7 @@ OBJS = \
+@@ -1451,6 +1451,7 @@ OBJS = \
  	explow.o \
  	expmed.o \
  	expr.o \
@@ -58,10 +58,10 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..844e94406f2
+index 00000000000..a6fe2683dcd
 --- /dev/null
 +++ b/gcc/ext-dce.cc
-@@ -0,0 +1,892 @@
+@@ -0,0 +1,880 @@
 +/* RTL dead zero/sign extension (code) elimination.
 +   Copyright (C) 2000-2022 Free Software Foundation, Inc.
 +
@@ -186,12 +186,9 @@ index 00000000000..844e94406f2
 +   optimziation phase during use handling will be.  */
 +
 +static void
-+ext_dce_process_sets (rtx_insn *insn, bitmap livenow, bitmap live_tmp)
++ext_dce_process_sets (rtx insn, bitmap livenow, bitmap live_tmp)
 +{
 +  subrtx_iterator::array_type array;
-+  bool seen_fusage = false;
-+
-+ restart:
 +  rtx pat = PATTERN (insn);
 +  FOR_EACH_SUBRTX (iter, array, pat, NONCONST)
 +    {
@@ -359,13 +356,6 @@ index 00000000000..844e94406f2
 +	  iter.skip_subrtxes ();
 +	}
 +    }
-+
-+  /* If this is CALL_INSN, then process its fusage data.  */
-+  if (GET_CODE (insn) == CALL_INSN && !seen_fusage)
-+    {
-+      seen_fusage = true;
-+      goto restart;
-+    }
 +}
 +
 +/* INSN has a sign/zero extended source inside SET that we will
@@ -451,11 +441,9 @@ index 00000000000..844e94406f2
 +   eliminated in CHANGED_PSEUDOS.  */
 +
 +static void
-+ext_dce_process_uses (rtx_insn *insn, bitmap livenow, bitmap live_tmp,
++ext_dce_process_uses (rtx insn, bitmap livenow, bitmap live_tmp,
 +		      bool modify, bitmap changed_pseudos)
 +{
-+  bool seen_fusage = false;
-+
 +  /* A nonlocal goto implicitly uses the frame pointer.  */
 +  if (JUMP_P (insn) && find_reg_note (insn, REG_NON_LOCAL_GOTO, NULL_RTX))
 +    {
@@ -466,7 +454,6 @@ index 00000000000..844e94406f2
 +
 +  subrtx_var_iterator::array_type array_var;
 +  rtx pat = PATTERN (insn);
-+ restart:
 +  FOR_EACH_SUBRTX_VAR (iter, array_var, pat, NONCONST)
 +    {
 +      /* An EXPR_LIST (from call fusage) ends in NULL_RTX.  */
@@ -553,7 +540,8 @@ index 00000000000..844e94406f2
 +		  /* DST_MASK could be zero if we had something in the SET
 +		     that we couldn't handle.  */
 +		  if (modify && dst_mask && (dst_mask & ~src_mask) == 0)
-+		    ext_dce_try_optimize_insn (insn, x, changed_pseudos);
++		    ext_dce_try_optimize_insn (as_a <rtx_insn *> (insn),
++					       x, changed_pseudos);
 +
 +		  dst_mask &= src_mask;
 +		  src = XEXP (src, 0);
@@ -690,28 +678,6 @@ index 00000000000..844e94406f2
 +      else if (REG_P (x))
 +	bitmap_set_range (livenow, REGNO (x) * 4, 4);
 +    }
-+
-+  /* A bit of special handling for CALL_INSNs.  We need to look
-+     at their fusage as well as set some implicit references.  */
-+  if (GET_CODE (insn) == CALL_INSN && !seen_fusage)
-+    {
-+      /* We only need to do this processing once per call.  */
-+      seen_fusage = true;
-+
-+      if (!FAKE_CALL_P (insn))
-+	bitmap_set_range (livenow, STACK_POINTER_REGNUM * 4, 4);
-+
-+      /* If this is not a call to a const fucntion, then assume it
-+	 can read any global register.  */
-+      if (!RTL_CONST_CALL_P (insn))
-+	for (unsigned i = 0; i < FIRST_PSEUDO_REGISTER; i++)
-+	  if (global_regs[i])
-+	    bitmap_set_range (livenow, i * 4, 4);
-+
-+      /* Process CALL_INSN_USAGE.  */
-+      pat = CALL_INSN_FUNCTION_USAGE (insn);
-+      goto restart;
-+    }
 +}
 +
 +/* Process a single basic block BB with current liveness information
@@ -740,8 +706,30 @@ index 00000000000..844e94406f2
 +      /* First process any sets/clobbers in INSN.  */
 +      ext_dce_process_sets (insn, livenow, live_tmp);
 +
++      /* CALL_INSNs need processing their fusage data.  */
++      if (GET_CODE (insn) == CALL_INSN)
++	ext_dce_process_sets (CALL_INSN_FUNCTION_USAGE (insn),
++			      livenow, live_tmp);
++
 +      /* And now uses, optimizing away SIGN/ZERO extensions as we go.  */
 +      ext_dce_process_uses (insn, livenow, live_tmp, modify, changed_pseudos);
++
++      /* And process fusage data for the use as well.  */
++      if (GET_CODE (insn) == CALL_INSN)
++	{
++	  if (!FAKE_CALL_P (insn))
++	    bitmap_set_range (livenow, STACK_POINTER_REGNUM * 4, 4);
++
++	  /* If this is not a call to a const fucntion, then assume it
++	     can read any global register.  */
++	  if (!RTL_CONST_CALL_P (insn))
++	    for (unsigned i = 0; i < FIRST_PSEUDO_REGISTER; i++)
++	      if (global_regs[i])
++		bitmap_set_range (livenow, i * 4, 4);
++
++	  ext_dce_process_uses (CALL_INSN_FUNCTION_USAGE (insn),
++				livenow, live_tmp, modify, changed_pseudos);
++	}
 +
 +      BITMAP_FREE (live_tmp);
 +    }
@@ -966,11 +954,11 @@ index 1e1950bdb39..c075c70d42c 100644
        NEXT_PASS (pass_combine);
        NEXT_PASS (pass_if_after_combine);
        NEXT_PASS (pass_jump_after_combine);
-diff --git a/gcc/testsuite/gcc.dg/core_bench_list.c b/gcc/testsuite/gcc.dg/core_bench_list.c
+diff --git a/gcc/testsuite/gcc.target/riscv/core_bench_list.c b/gcc/testsuite/gcc.target/riscv/core_bench_list.c
 new file mode 100644
 index 00000000000..957e9c841ed
 --- /dev/null
-+++ b/gcc/testsuite/gcc.dg/core_bench_list.c
++++ b/gcc/testsuite/gcc.target/riscv/core_bench_list.c
 @@ -0,0 +1,15 @@
 +/* { dg-do compile } */
 +/* { dg-options "-O2 -fdump-rtl-ext_dce" } */
@@ -987,11 +975,11 @@ index 00000000000..957e9c841ed
 +  }
 +  return a * 4;
 +}
-diff --git a/gcc/testsuite/gcc.dg/core_init_matrix.c b/gcc/testsuite/gcc.dg/core_init_matrix.c
+diff --git a/gcc/testsuite/gcc.target/riscv/core_init_matrix.c b/gcc/testsuite/gcc.target/riscv/core_init_matrix.c
 new file mode 100644
 index 00000000000..9289244c71f
 --- /dev/null
-+++ b/gcc/testsuite/gcc.dg/core_init_matrix.c
++++ b/gcc/testsuite/gcc.target/riscv/core_init_matrix.c
 @@ -0,0 +1,17 @@
 +/* { dg-do compile } */
 +/* { dg-options "-O1 -fdump-rtl-ext_dce" } */
@@ -1010,11 +998,11 @@ index 00000000000..9289244c71f
 +    }
 +  }
 +}
-diff --git a/gcc/testsuite/gcc.dg/core_list_init.c b/gcc/testsuite/gcc.dg/core_list_init.c
+diff --git a/gcc/testsuite/gcc.target/riscv/core_list_init.c b/gcc/testsuite/gcc.target/riscv/core_list_init.c
 new file mode 100644
 index 00000000000..2f36dae85aa
 --- /dev/null
-+++ b/gcc/testsuite/gcc.dg/core_list_init.c
++++ b/gcc/testsuite/gcc.target/riscv/core_list_init.c
 @@ -0,0 +1,18 @@
 +/* { dg-do compile } */
 +/* { dg-options "-O1 -fdump-rtl-ext_dce" } */
@@ -1034,11 +1022,11 @@ index 00000000000..2f36dae85aa
 +  return 0;
 +
 +}
-diff --git a/gcc/testsuite/gcc.dg/matrix_add_const.c b/gcc/testsuite/gcc.dg/matrix_add_const.c
+diff --git a/gcc/testsuite/gcc.target/riscv/matrix_add_const.c b/gcc/testsuite/gcc.target/riscv/matrix_add_const.c
 new file mode 100644
 index 00000000000..9a2dd53b17a
 --- /dev/null
-+++ b/gcc/testsuite/gcc.dg/matrix_add_const.c
++++ b/gcc/testsuite/gcc.target/riscv/matrix_add_const.c
 @@ -0,0 +1,11 @@
 +/* { dg-do compile } */
 +/* { dg-options "-O2 -fdump-rtl-ext_dce" } */
@@ -1051,23 +1039,6 @@ index 00000000000..9a2dd53b17a
 +      A[j] += val;
 +    }
 +}
-diff --git a/gcc/testsuite/gcc.dg/pr111384.c b/gcc/testsuite/gcc.dg/pr111384.c
-new file mode 100644
-index 00000000000..a4e77d4aeb6
---- /dev/null
-+++ b/gcc/testsuite/gcc.dg/pr111384.c
-@@ -0,0 +1,11 @@
-+/* { dg-do compile } */
-+/* { dg-options "-O1 -fdump-rtl-ext_dce" } */
-+/* { dg-final { scan-rtl-dump {Successfully transformed} "ext_dce" } } */
-+
-+void
-+foo(unsigned int src, unsigned short *dst1, unsigned short *dst2)
-+{
-+    *dst1 = src;
-+    *dst2 = src;
-+}
-+
 diff --git a/gcc/testsuite/gcc.target/riscv/mem-extend.c b/gcc/testsuite/gcc.target/riscv/mem-extend.c
 new file mode 100644
 index 00000000000..c67f12dfc35
@@ -1087,6 +1058,23 @@ index 00000000000..c67f12dfc35
 +}
 +
 +/* { dg-final { scan-assembler-not {\mzext\.h\M} } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/pr111384.c b/gcc/testsuite/gcc.target/riscv/pr111384.c
+new file mode 100644
+index 00000000000..a4e77d4aeb6
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr111384.c
+@@ -0,0 +1,11 @@
++/* { dg-do compile } */
++/* { dg-options "-O1 -fdump-rtl-ext_dce" } */
++/* { dg-final { scan-rtl-dump {Successfully transformed} "ext_dce" } } */
++
++void
++foo(unsigned int src, unsigned short *dst1, unsigned short *dst2)
++{
++    *dst1 = src;
++    *dst2 = src;
++}
++
 diff --git a/gcc/tree-pass.h b/gcc/tree-pass.h
 index 09e6ada5b2f..773301d731f 100644
 --- a/gcc/tree-pass.h
