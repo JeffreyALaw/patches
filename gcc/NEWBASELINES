@@ -2,3 +2,7 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 sh4eb-linux-gnu
+c6x-elf
+av4-elf
+arc-elf
+
