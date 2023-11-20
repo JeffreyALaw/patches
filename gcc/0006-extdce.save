@@ -1,3 +1,25 @@
+	PR target/95650
+	PR rtl-optimization/96031
+	PR rtl-optimization/104387
+	PR rtl-optimization/111384
+
+gcc/
+	* Makefile.in (OBJS): Add ext-dce.o.
+	* common.opt (ext-dce): Add new option.
+	* df-scan.cc (df_get_exit_block_use_set): No longer static.
+	* df.h (df_get_exit_block_use_set): Prototype.
+	* ext-dce.cc: New file.
+	* passes.def: Add ext-dce before combine.
+	* tree-pass.h (make_pass_ext_dce): Prototype..
+
+gcc/testsuite
+	* gcc.target/riscv/core_bench_list.c: New test.
+	* gcc.target/riscv/core_init_matrix.c: New test.
+	* gcc.target/riscv/core_list_init.c: New test.
+	* gcc.target/riscv/matrix_add_const.c: New test.
+	* gcc.target/riscv/mem-extend.c: New test.
+	* gcc.target/riscv/pr111384.c: New test.
+
 diff --git a/gcc/Makefile.in b/gcc/Makefile.in
 index 753f2f36618..af6f1415507 100644
 --- a/gcc/Makefile.in
