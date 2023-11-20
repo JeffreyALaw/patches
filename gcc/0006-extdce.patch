@@ -1,0 +1,82 @@
+diff --git a/gcc/Makefile.in b/gcc/Makefile.in
+index 753f2f36618..af6f1415507 100644
+--- a/gcc/Makefile.in
++++ b/gcc/Makefile.in
+@@ -1451,6 +1451,7 @@ OBJS = \
+ 	explow.o \
+ 	expmed.o \
+ 	expr.o \
++	ext-dce.o \
+ 	fibonacci_heap.o \
+ 	file-prefix-map.o \
+ 	final.o \
+diff --git a/gcc/common.opt b/gcc/common.opt
+index d21db5d4a20..141dfdf14fd 100644
+--- a/gcc/common.opt
++++ b/gcc/common.opt
+@@ -3766,4 +3766,8 @@ fipa-ra
+ Common Var(flag_ipa_ra) Optimization
+ Use caller save register across calls if possible.
+ 
++fext-dce
++Common Var(flag_ext_dce, 1) Optimization Init(0)
++Perform dead code elimination on zero and sign extensions with special dataflow analysis.
++
+ ; This comment is to ensure we retain the blank line above.
+diff --git a/gcc/df-scan.cc b/gcc/df-scan.cc
+index 9515740728c..87729ab0f44 100644
+--- a/gcc/df-scan.cc
++++ b/gcc/df-scan.cc
+@@ -78,7 +78,6 @@ static void df_get_eh_block_artificial_uses (bitmap);
+ 
+ static void df_record_entry_block_defs (bitmap);
+ static void df_record_exit_block_uses (bitmap);
+-static void df_get_exit_block_use_set (bitmap);
+ static void df_get_entry_block_def_set (bitmap);
+ static void df_grow_ref_info (struct df_ref_info *, unsigned int);
+ static void df_ref_chain_delete_du_chain (df_ref);
+@@ -3642,7 +3641,7 @@ df_epilogue_uses_p (unsigned int regno)
+ 
+ /* Set the bit for regs that are considered being used at the exit. */
+ 
+-static void
++void
+ df_get_exit_block_use_set (bitmap exit_block_uses)
+ {
+   unsigned int i;
+diff --git a/gcc/df.h b/gcc/df.h
+index 402657a7076..abcbb097734 100644
+--- a/gcc/df.h
++++ b/gcc/df.h
+@@ -1091,6 +1091,7 @@ extern bool df_epilogue_uses_p (unsigned int);
+ extern void df_set_regs_ever_live (unsigned int, bool);
+ extern void df_compute_regs_ever_live (bool);
+ extern void df_scan_verify (void);
++extern void df_get_exit_block_use_set (bitmap);
+ 
+ 
+ /*----------------------------------------------------------------------------
+diff --git a/gcc/passes.def b/gcc/passes.def
+index 1e1950bdb39..c075c70d42c 100644
+--- a/gcc/passes.def
++++ b/gcc/passes.def
+@@ -487,6 +487,7 @@ along with GCC; see the file COPYING3.  If not see
+       NEXT_PASS (pass_inc_dec);
+       NEXT_PASS (pass_initialize_regs);
+       NEXT_PASS (pass_ud_rtl_dce);
++      NEXT_PASS (pass_ext_dce);
+       NEXT_PASS (pass_combine);
+       NEXT_PASS (pass_if_after_combine);
+       NEXT_PASS (pass_jump_after_combine);
+diff --git a/gcc/tree-pass.h b/gcc/tree-pass.h
+index 09e6ada5b2f..773301d731f 100644
+--- a/gcc/tree-pass.h
++++ b/gcc/tree-pass.h
+@@ -591,6 +591,7 @@ extern rtl_opt_pass *make_pass_reginfo_init (gcc::context *ctxt);
+ extern rtl_opt_pass *make_pass_inc_dec (gcc::context *ctxt);
+ extern rtl_opt_pass *make_pass_stack_ptr_mod (gcc::context *ctxt);
+ extern rtl_opt_pass *make_pass_initialize_regs (gcc::context *ctxt);
++extern rtl_opt_pass *make_pass_ext_dce (gcc::context *ctxt);
+ extern rtl_opt_pass *make_pass_combine (gcc::context *ctxt);
+ extern rtl_opt_pass *make_pass_if_after_combine (gcc::context *ctxt);
+ extern rtl_opt_pass *make_pass_jump_after_combine (gcc::context *ctxt);
