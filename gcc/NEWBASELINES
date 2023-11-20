@@ -1,5 +1,4 @@
 # This file contains the job names that need fresh baselines.  In general it
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
-xstormy16-elf
-rl78-elf
+sh4eb-linux-gnu
