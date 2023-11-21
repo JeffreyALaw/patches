@@ -3,9 +3,6 @@
 # reset.  
 sh4eb-linux-gnu
 alpha-linux-gnu
-m32r-elf
-frv-elf
-cris-elf
 bfin-elf
 microblaze-linux
 mn10300-elf
@@ -13,4 +10,16 @@ iq2000-elf
 msp430-elf
 moxie-elf
 nds32be-elf
+mcore-elf
+xstormy16-elf
+visium-elf
+v850-elf
+sh3b-linux-gnu
+sh3-linux-gnu
+rx-elf
+or1k-linux-gnu
+nds32le-elf
+nios2-liux-gnu
+moxie-elf
+msp430-elf
 
