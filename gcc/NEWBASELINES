@@ -5,4 +5,8 @@ sh4eb-linux-gnu
 c6x-elf
 av4-elf
 arc-elf
-
+alpha-linux-gnu
+m32r-elf
+ft32-elf
+lm32-elf
+frv-elf
