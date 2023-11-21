@@ -10,8 +10,6 @@ iq2000-elf
 msp430-elf
 moxie-elf
 nds32be-elf
-mcore-elf
-xstormy16-elf
 visium-elf
 v850-elf
 sh3b-linux-gnu
@@ -20,7 +18,7 @@ rx-elf
 or1k-linux-gnu
 nds32le-elf
 nios2-liux-gnu
-moxie-elf
 msp430-elf
 h8300-elf
 sh3eb-linux-gnu
+loongarch64-linux-gnu
