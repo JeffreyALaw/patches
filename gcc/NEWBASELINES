@@ -16,9 +16,9 @@ sh3b-linux-gnu
 sh3-linux-gnu
 rx-elf
 or1k-linux-gnu
-nds32le-elf
 nios2-liux-gnu
 msp430-elf
 h8300-elf
 sh3eb-linux-gnu
 loongarch64-linux-gnu
+v850e-elf
