@@ -22,4 +22,4 @@ nds32le-elf
 nios2-liux-gnu
 moxie-elf
 msp430-elf
-
+h8300-elf
