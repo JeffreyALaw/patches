@@ -15,4 +15,7 @@ cris-elf
 csky-linux-gnu
 bfin-elf
 avr-elf
+microblaze-linux
+mn10300-elf
+iq2000-elf
 
