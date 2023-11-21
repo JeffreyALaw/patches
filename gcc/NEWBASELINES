@@ -2,20 +2,15 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 sh4eb-linux-gnu
-c6x-elf
-av4-elf
-arc-elf
 alpha-linux-gnu
 m32r-elf
-ft32-elf
 lm32-elf
 frv-elf
-fr30-elf
 cris-elf
-csky-linux-gnu
 bfin-elf
-avr-elf
 microblaze-linux
 mn10300-elf
 iq2000-elf
+msp430-elf
+moxie-elf
 
