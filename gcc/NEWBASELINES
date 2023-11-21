@@ -10,3 +10,9 @@ m32r-elf
 ft32-elf
 lm32-elf
 frv-elf
+fr30-elf
+cris-elf
+csky-linux-gnu
+bfin-elf
+avr-elf
+
