@@ -10,5 +10,5 @@ iq2000-elf
 msp430-elf
 visium-elf
 rx-elf
-nios2-liux-gnu
+nios2-linux-gnu
 h8300-elf
