@@ -1,14 +1,11 @@
 # This file contains the job names that need fresh baselines.  In general it
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
+hppa-linux-gnu
 sh4eb-linux-gnu
 alpha-linux-gnu
 bfin-elf
-microblaze-linux
 mn10300-elf
-iq2000-elf
-msp430-elf
 visium-elf
-rx-elf
-nios2-linux-gnu
 h8300-elf
+rl78-elf
