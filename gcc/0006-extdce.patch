@@ -484,7 +484,7 @@ index 00000000000..df9c756ee7d
 +	     being shared?   */
 +	  if (SUBREG_BYTE (dst).is_constant () && SUBREG_P (dst))
 +	    {
-+	      bit = subreg_lsb (x).to_constant ();
++	      bit = subreg_lsb (dst).to_constant ();
 +	      if (bit >= HOST_BITS_PER_WIDE_INT)
 +		bit = HOST_BITS_PER_WIDE_INT - 1;
 +	      dst = SUBREG_REG (dst);
