@@ -1,0 +1,92 @@
+commit 4a032a2e536b903d9d48ff4234f7b1d0a5392ed7
+Author: Jeff Law <jlaw@ventanamicro.com>
+Date:   Wed Nov 22 15:57:37 2023 -0700
+
+    Revert "tree-optimization/112344 - wrong final value replacement"
+    
+    This reverts commit 6bf66276e3e41d5d92f7b7260e98b6a111653805.
+
+diff --git a/gcc/testsuite/gcc.dg/torture/pr112344.c b/gcc/testsuite/gcc.dg/torture/pr112344.c
+deleted file mode 100644
+index c52d2c8304b..00000000000
+--- a/gcc/testsuite/gcc.dg/torture/pr112344.c
++++ /dev/null
+@@ -1,20 +0,0 @@
+-/* { dg-do run } */
+-/* { dg-require-effective-target int32plus } */
+-
+-int
+-main ()
+-{
+-  long long b = 2036854775807LL;
+-  signed char c = 3;
+-  short d = 0;
+-  int e = -2147483647 - 1, f;
+-  for (f = 0; f < 7; f++)
+-    while (e < 20)
+-      {
+-	e += 2;
+-	d = c -= b;
+-      }
+-  if (d != 13)
+-    __builtin_abort ();
+-  return 0;
+-}
+diff --git a/gcc/tree-chrec.cc b/gcc/tree-chrec.cc
+index f4ba130ba20..2f67581591a 100644
+--- a/gcc/tree-chrec.cc
++++ b/gcc/tree-chrec.cc
+@@ -613,42 +613,32 @@ chrec_apply (unsigned var,
+       if (evolution_function_is_affine_p (chrec))
+ 	{
+ 	  tree chrecr = CHREC_RIGHT (chrec);
+-	  tree chrecl = CHREC_LEFT (chrec);
+ 	  if (CHREC_VARIABLE (chrec) != var)
+-	    res = build_polynomial_chrec (CHREC_VARIABLE (chrec),
+-					  chrec_apply (var, chrecl, x),
+-					  chrec_apply (var, chrecr, x));
++	    res = build_polynomial_chrec
++	      (CHREC_VARIABLE (chrec),
++	       chrec_apply (var, CHREC_LEFT (chrec), x),
++	       chrec_apply (var, chrecr, x));
+ 
+-	  /* "{a, +, a}" (x-1) -> "a*x".  */
+-	  else if (operand_equal_p (chrecl, chrecr)
++	  /* "{a, +, b} (x)"  ->  "a + b*x".  */
++	  else if (operand_equal_p (CHREC_LEFT (chrec), chrecr)
+ 		   && TREE_CODE (x) == PLUS_EXPR
+ 		   && integer_all_onesp (TREE_OPERAND (x, 1))
+ 		   && !POINTER_TYPE_P (type)
+ 		   && TYPE_PRECISION (TREE_TYPE (x))
+ 		      >= TYPE_PRECISION (type))
+ 	    {
+-	      /* We know the number of iterations can't be negative.  */
++	      /* We know the number of iterations can't be negative.
++		 So {a, +, a} (x-1) -> "a*x".  */
+ 	      res = build_int_cst (TREE_TYPE (x), 1);
+ 	      res = chrec_fold_plus (TREE_TYPE (x), x, res);
+ 	      res = chrec_convert_rhs (type, res, NULL);
+ 	      res = chrec_fold_multiply (type, chrecr, res);
+ 	    }
+-	  /* "{a, +, b} (x)"  ->  "a + b*x".  */
+ 	  else
+ 	    {
+-	      /* The overall increment might not fit in a signed type so
+-		 use an unsigned computation to get at the final value
+-		 and avoid undefined signed overflow.  */
+-	      tree utype = TREE_TYPE (chrecr);
+-	      if (INTEGRAL_TYPE_P (utype) && !TYPE_OVERFLOW_WRAPS (utype))
+-		utype = unsigned_type_for (TREE_TYPE (chrecr));
+-	      res = chrec_convert_rhs (utype, x, NULL);
+-	      res = chrec_fold_multiply (utype,
+-					 chrec_convert (utype, chrecr, NULL),
+-					 res);
+-	      res = chrec_fold_plus (utype,
+-				     chrec_convert (utype, chrecl, NULL), res);
+-	      res = chrec_convert (type, res, NULL);
++	      res = chrec_convert_rhs (TREE_TYPE (chrecr), x, NULL);
++	      res = chrec_fold_multiply (TREE_TYPE (chrecr), chrecr, res);
++	      res = chrec_fold_plus (type, CHREC_LEFT (chrec), res);
+ 	    }
+ 	}
+       else if (TREE_CODE (x) == INTEGER_CST
