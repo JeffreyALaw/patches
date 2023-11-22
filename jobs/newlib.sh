@@ -168,6 +168,12 @@ case "${TARGET}" in
     SIMINSTALLTARG=install-sim
     TESTARGS="--target_board=or1k-sim"
     ;;
+  pru*-*)
+    RUNGCCTESTS=yes
+    SIMTARG=all-sim
+    SIMINSTALLTARG=install-sim
+    TESTARGS="--target_board=pru-sim"
+    ;;
   rl78*-*)
     RUNGCCTESTS=yes
     SIMTARG=all-sim
