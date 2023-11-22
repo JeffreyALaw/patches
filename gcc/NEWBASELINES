@@ -3,9 +3,3 @@
 # reset.  
 hppa-linux-gnu
 sh4eb-linux-gnu
-alpha-linux-gnu
-bfin-elf
-mn10300-elf
-visium-elf
-h8300-elf
-rl78-elf
