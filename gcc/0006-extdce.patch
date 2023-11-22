@@ -11,10 +11,10 @@ index 753f2f36618..af6f1415507 100644
  	file-prefix-map.o \
  	final.o \
 diff --git a/gcc/common.opt b/gcc/common.opt
-index d21db5d4a20..141dfdf14fd 100644
+index 35971c501fc..1f8bd5ba538 100644
 --- a/gcc/common.opt
 +++ b/gcc/common.opt
-@@ -3766,4 +3766,8 @@ fipa-ra
+@@ -3770,4 +3770,8 @@ fipa-ra
  Common Var(flag_ipa_ra) Optimization
  Use caller save register across calls if possible.
  
@@ -58,10 +58,10 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..1308055e0c7
+index 00000000000..df9c756ee7d
 --- /dev/null
 +++ b/gcc/ext-dce.cc
-@@ -0,0 +1,879 @@
+@@ -0,0 +1,878 @@
 +/* RTL dead zero/sign extension (code) elimination.
 +   Copyright (C) 2000-2022 Free Software Foundation, Inc.
 +
@@ -112,7 +112,10 @@ index 00000000000..1308055e0c7
 +/* If we know the destination of CODE only uses some low bits
 +   (say just the QI bits of an SI operation), then return true
 +   if we can propagate the need for just the subset of bits
-+   from the destination to the sources.  */
++   from the destination to the sources.
++
++   FIXME: This is safe for operands 1 and 2 of an IF_THEN_ELSE, but not
++   operand 0.  Thus is likely would need some special casing to handle.  */
 +
 +static bool
 +safe_for_live_propagation (rtx_code code)
@@ -143,8 +146,6 @@ index 00000000000..1308055e0c7
 +    case ZERO_EXTEND:
 +    case SIGN_EXTEND:
 +    case TRUNCATE:
-+    case SS_TRUNCATE:
-+    case US_TRUNCATE:
 +    case PLUS:
 +    case MULT:
 +    case SS_MULT:
@@ -206,11 +207,17 @@ index 00000000000..1308055e0c7
 +	  x = SET_DEST (x);
 +
 +	  /* We don't support vector destinations or destinations
-+	     wider than DImode.   It is safe to continue this loop.
-+	     At worst, it will leave things live which could have
-+	     been made dead.  */
-+	  if (VECTOR_MODE_P (GET_MODE (x)) || GET_MODE (x) > E_DImode)
-+	    continue;
++	     wider than DImode.  */
++	  scalar_int_mode outer_mode;
++	  if (!is_a <scalar_int_mode> (GET_MODE (x), &outer_mode)
++	      || GET_MODE_BITSIZE (outer_mode) > 64)
++	    {
++	      /* Skip the subrtxs of this destination.  There is
++		 little value in iterating into the subobjects, so
++		 just skip them for a bit of efficiency.  */
++	      iter.skip_subrtxes ();
++	      continue;
++	    }
 +
 +	  /* We could have (strict_low_part (subreg ...)).  We can not just
 +	     strip the STRICT_LOW_PART as that would result in clearing
@@ -230,13 +237,11 @@ index 00000000000..1308055e0c7
 +		 be sure.  */
 +	      gcc_assert (REG_P (SUBREG_REG (x)));
 +
-+	      /* We don't track values larger than DImode.  */
-+	      gcc_assert (GET_MODE (x) <= E_DImode);
-+
-+	      /* But the inner mode might be larger, just punt for
++	      /* The inner mode might be larger, just punt for
 +		 that case.  Remember, we can not just continue to process
 +		 the inner RTXs due to the STRICT_LOW_PART.  */
-+	      if (GET_MODE (SUBREG_REG (x)) > E_DImode)
++	      if (!is_a <scalar_int_mode> (GET_MODE (SUBREG_REG (x)), &outer_mode)
++		  || GET_MODE_BITSIZE (outer_mode) > 64)
 +		{
 +		  /* Skip the subrtxs of the STRICT_LOW_PART.  We can't
 +		     process them because it'll set objects as no longer
@@ -254,7 +259,8 @@ index 00000000000..1308055e0c7
 +	      /* The mode of the SUBREG tells us how many bits we can
 +		 clear.  */
 +	      machine_mode mode = GET_MODE (x);
-+	      HOST_WIDE_INT size = GET_MODE_SIZE (mode).to_constant ();
++	      HOST_WIDE_INT size
++		= exact_log2 (GET_MODE_SIZE (mode).to_constant ()) + 1;
 +	      bitmap_clear_range (livenow, 4 * rn, size);
 +
 +	      /* We have fully processed this destination.  */
@@ -270,7 +276,9 @@ index 00000000000..1308055e0c7
 +
 +	  /* If we have a SUBREG that is too wide, just continue the loop
 +	     and let the iterator go down into SUBREG_REG.  */
-+	  if (SUBREG_P (x) && GET_MODE (SUBREG_REG (x)) > E_DImode)
++	  if (SUBREG_P (x)
++	      && (!is_a <scalar_int_mode> (GET_MODE (SUBREG_REG (x)), &outer_mode)
++		  || GET_MODE_BITSIZE (outer_mode) > 64))
 +	    continue;
 +
 +	  /* Phase one of destination handling.  First remove any wrapper
@@ -280,16 +288,9 @@ index 00000000000..1308055e0c7
 +	      && !paradoxical_subreg_p (x)
 +	      && SUBREG_BYTE (x).is_constant ())
 +	    {
-+	      bit = SUBREG_BYTE (x).to_constant () * BITS_PER_UNIT;
-+	      if (WORDS_BIG_ENDIAN)
-+		bit = (GET_MODE_BITSIZE (GET_MODE (SUBREG_REG (x))).to_constant ()
-+		       - GET_MODE_BITSIZE (GET_MODE (x)).to_constant () - bit);
-+
-+	      /* Catch big endian correctness issues rather than triggering
-+		 undefined behavior.  */
-+	      gcc_assert (bit < sizeof (HOST_WIDE_INT) * 8);
-+
++	      bit = subreg_lsb (x).to_constant ();
 +	      mask = GET_MODE_MASK (GET_MODE (SUBREG_REG (x))) << bit;
++	      gcc_assert (mask);
 +	      if (!mask)
 +		mask = -0x100000000ULL;
 +	      x = SUBREG_REG (x);
@@ -365,7 +366,7 @@ index 00000000000..1308055e0c7
 +  rtx src = SET_SRC (set);
 +  rtx inner = XEXP (src, 0);
 +
-+  /* Avoid (subreg (mem)) and other constructs which may are valid RTL, but
++  /* Avoid (subreg (mem)) and other constructs which may be valid RTL, but
 +     not useful for this optimization.  */
 +  if (!REG_P (inner) && !SUBREG_P (inner))
 +    return;
@@ -436,7 +437,7 @@ index 00000000000..1308055e0c7
 +   for any chunks of pseudos that become live, potentially filtering using
 +   bits from LIVE_TMP.
 +
-+   If MODIFIED is true, then optimize sign/zero extensions to SUBREGs when
++   If MODIFY is true, then optimize sign/zero extensions to SUBREGs when
 +   the extended bits are never read and mark pseudos which had extensions
 +   eliminated in CHANGED_PSEUDOS.  */
 +
@@ -483,10 +484,7 @@ index 00000000000..1308055e0c7
 +	     being shared?   */
 +	  if (SUBREG_BYTE (dst).is_constant () && SUBREG_P (dst))
 +	    {
-+	      bit = SUBREG_BYTE (dst).to_constant () * BITS_PER_UNIT;
-+	      if (WORDS_BIG_ENDIAN)
-+		bit = (GET_MODE_BITSIZE (GET_MODE (SUBREG_REG (dst))).to_constant ()
-+		       - GET_MODE_BITSIZE (GET_MODE (dst)).to_constant () - bit);
++	      bit = subreg_lsb (x).to_constant ();
 +	      if (bit >= HOST_BITS_PER_WIDE_INT)
 +		bit = HOST_BITS_PER_WIDE_INT - 1;
 +	      dst = SUBREG_REG (dst);
@@ -573,6 +571,10 @@ index 00000000000..1308055e0c7
 +		     That has the effect of making the whole referenced
 +		     register live.  We might be able to avoid that for
 +		     STRICT_LOW_PART at some point.  */
++		  /* XXX This all looks wrong.  Note the STRICT_LOW_PART.
++		     if we're processing a dest, then why look at Y in the
++		     else clause.  If processing a src, then STRICT_LOW_PART
++		     shouldn't happen.  */
 +		  if (GET_CODE (x) == STRICT_LOW_PART
 +		      || paradoxical_subreg_p (x))
 +		    x = XEXP (x, 0);
@@ -582,11 +584,7 @@ index 00000000000..1308055e0c7
 +			 and process normally (conservatively).  */
 +		      if (!REG_P (SUBREG_REG (y)))
 +			break;
-+		      bit = (SUBREG_BYTE (y).to_constant () * BITS_PER_UNIT);
-+		      if (WORDS_BIG_ENDIAN)
-+			bit = (GET_MODE_BITSIZE
-+			       (GET_MODE (SUBREG_REG (y))).to_constant ()
-+				- GET_MODE_BITSIZE (GET_MODE (y)).to_constant () - bit);
++		      bit = subreg_lsb (y).to_constant ();
 +		      if (dst_mask)
 +			{
 +			  dst_mask <<= bit;
@@ -630,8 +628,8 @@ index 00000000000..1308055e0c7
 +		  else if (!CONSTANT_P (y))
 +		    break;
 +		  /* We might have (ashift (const_int 1) (reg...)) */
-+		  else if (CONSTANT_P (y)
-+			   && binop_implies_op2_fully_live (GET_CODE (src)))
++		  /* XXX share this logic with code below.  */
++		  else if (binop_implies_op2_fully_live (GET_CODE (src)))
 +		    break;
 +
 +		  /* If this was anything but a binary operand, break the inner
@@ -818,13 +816,13 @@ index 00000000000..1308055e0c7
 +
 +  int modify = 0;
 +
++  int *rpo = XNEWVEC (int, n_basic_blocks_for_fn (cfun));
++  int n = inverted_rev_post_order_compute (cfun, rpo);
 +  do
 +    {
 +      qin = qout = worklist;
 +
 +      /* Put every block on the worklist.  */
-+      int *rpo = XNEWVEC (int, n_basic_blocks_for_fn (cfun));
-+      int n = inverted_rev_post_order_compute (cfun, rpo);
 +      for (int i = 0; i < n; ++i)
 +	{
 +	  bb = BASIC_BLOCK_FOR_FN (cfun, rpo[i]);
@@ -834,7 +832,6 @@ index 00000000000..1308055e0c7
 +	  *qin++ = bb;
 +	  bb->aux = bb;
 +	}
-+      free (rpo);
 +
 +      qin = worklist;
 +      qend = &worklist[n_basic_blocks_for_fn (cfun) - NUM_FIXED_BLOCKS];
@@ -889,9 +886,11 @@ index 00000000000..1308055e0c7
 +	}
 +    } while (!modify++);
 +
++
 +  reset_subreg_promoted_p (changed_pseudos);
 +
 +  /* Clean up.  */
++  free (rpo);
 +  BITMAP_FREE (changed_pseudos);
 +  BITMAP_FREE (livenow);
 +  unsigned len = livein.length ();
