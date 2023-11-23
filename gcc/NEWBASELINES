@@ -3,4 +3,4 @@
 # reset.  
 hppa-linux-gnu
 sh4eb-linux-gnu
-xstormy16-elf
+pru-elf
