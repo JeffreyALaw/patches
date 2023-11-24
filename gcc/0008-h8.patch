@@ -1,202 +1,55 @@
 diff --git a/gcc/config/h8300/addsub.md b/gcc/config/h8300/addsub.md
-index b1eb0d20188..43da93288b5 100644
+index b1eb0d20188..efca4ad7c07 100644
 --- a/gcc/config/h8300/addsub.md
 +++ b/gcc/config/h8300/addsub.md
-@@ -239,3 +239,94 @@
+@@ -239,3 +239,50 @@ (define_insn "*negsf2_clobber_flags"
    "reload_completed"
    "xor.w\\t#32768,%e0"
    [(set_attr "length" "4")])
 +
-+;; Setting overflow/carry bits
-+(define_insn "*usubvqi4"
-+  [(set (reg:CCC CC_REG)
-+	(ne:CCC (minus:<OVF>
-+		   (zero_extend:<OVF>
-+		     (match_operand:QHSI 1 "register_operand" "0"))
-+		   (zero_extend:<OVF>
-+		     (match_operand:QHSI 2 "register_operand" "r")))
-+		 (zero_extend:<OVF> (minus:QHSI (match_dup 1) (match_dup 2)))))
-+  (set (match_operand:QHSI 0 "register_operand" "=r")
-+       (minus:QHSI (match_dup 1) (match_dup 2)))]
-+  ""
-+{
-+  if (GET_MODE (operands[0]) == QImode)
-+    return "sub.b\t%X2,%X0";
-+  else if (GET_MODE (operands[0]) == HImode)
-+    return "sub.w\t%T2,%T0";
-+  else if (GET_MODE (operands[0]) == SImode)
-+    return "sub.l\t%S2,%S0";
-+  else
-+   gcc_unreachable ();
-+}
-+  [(set_attr "length" "2")])
++(define_expand "uaddv<mode>4"
++  [(set (match_operand:QHSI 0 "register_operand" "")
++	(plus:QHSI (match_operand:QHSI 1 "register_operand" "")
++		   (match_operand:QHSI 2 "register_operand" "")))
++   (set (pc)
++	(if_then_else (ltu (match_dup 0) (match_dup 1))
++		      (label_ref (match_operand 3 ""))
++		      (pc)))]
++  "")
 +
-+(define_insn "*uaddvqi4"
-+  [(set (reg:CCC CC_REG)
-+	(ne:CCC (plus:<OVF>
-+		  (zero_extend:<OVF>
-+		    (match_operand:QHSI 1 "register_operand" "0"))
-+		  (zero_extend:<OVF>
-+		    (match_operand:QHSI 2 "register_operand" "r")))
-+		(zero_extend:<OVF> (plus:QHSI (match_dup 1) (match_dup 2)))))
-+  (set (match_operand:QHSI 0 "register_operand" "=r")
-+       (plus:QHSI (match_dup 1) (match_dup 2)))]
-+  ""
-+{
-+  if (GET_MODE (operands[0]) == QImode)
-+    return "add.b\t%X2,%X0";
-+  else if (GET_MODE (operands[0]) == HImode)
-+    return "add.w\t%T2,%T0";
-+  else if (GET_MODE (operands[0]) == SImode)
-+    return "add.l\t%S2,%S0";
-+  else
-+   gcc_unreachable ();
-+}
-+  [(set_attr "length" "2")])
-+
-+(define_insn "*usubvqi4_p"
-+  [(set (reg:CCC CC_REG)
-+	(ne:CCC (minus:<OVF>
-+		   (zero_extend:<OVF>
-+		     (match_operand:QHSI 1 "register_operand" "0"))
-+		   (zero_extend:<OVF>
-+		     (match_operand:QHSI 2 "register_operand" "r")))
-+		 (zero_extend:<OVF> (minus:QHSI (match_dup 1) (match_dup 2)))))
-+   (clobber (match_scratch:QHSI 0 "=r"))]
-+  ""
-+{
-+  if (GET_MODE (operands[0]) == QImode)
-+    return "sub.b\t%X2,%X0";
-+  else if (GET_MODE (operands[0]) == HImode)
-+    return "sub.w\t%T2,%T0";
-+  else if (GET_MODE (operands[0]) == SImode)
-+    return "sub.l\t%S2,%S0";
-+  else
-+   gcc_unreachable ();
-+}
-+  [(set_attr "length" "2")])
-+
-+(define_insn "*uaddvqi4_p"
-+  [(set (reg:CCC CC_REG)
-+	(ne:CCC (plus:<OVF>
-+		  (zero_extend:<OVF>
-+		    (match_operand:QHSI 1 "register_operand" "0"))
-+		  (zero_extend:<OVF>
-+		    (match_operand:QHSI 2 "register_operand" "r")))
-+		(zero_extend:<OVF> (plus:QHSI (match_dup 1) (match_dup 2)))))
-+   (clobber (match_scratch:QHSI 0 "=r"))]
-+  ""
-+{
-+  if (GET_MODE (operands[0]) == QImode)
-+    return "add.b\t%X2,%X0";
-+  else if (GET_MODE (operands[0]) == HImode)
-+    return "add.w\t%T2,%T0";
-+  else if (GET_MODE (operands[0]) == SImode)
-+    return "add.l\t%S2,%S0";
-+  else
-+   gcc_unreachable ();
-+}
-+  [(set_attr "length" "2")])
-diff --git a/gcc/config/h8300/h8300.md b/gcc/config/h8300/h8300.md
-index f592af1d5f7..91891592f9f 100644
---- a/gcc/config/h8300/h8300.md
-+++ b/gcc/config/h8300/h8300.md
-@@ -68,6 +68,20 @@
-    (FP_REG	11)
-    (CC_REG	12)])
- 
-+;; Map from an integer mode to the next wider integer mode
-+;; Useful for constructing the overflow patterns
-+(define_mode_attr OVF [(QI "HI") (HI "SI") (SI "DI")])
-+
-+;; Map from unsigned overflow checking codes to the carry bit state
-+(define_code_iterator u_ov [leu gtu])
-+(define_code_attr u_ov_to_cbit [(leu "eq") (gtu "ne")])
-+
-+;; And the set of simple arithmetic where we can support unsigned
-+;; overflow checking
-+(define_code_iterator plus_minus [plus minus])
-+(define_code_attr pm_v [(plus "ltu") (minus "gtu")])
-+
-+
- ;; ----------------------------------------------------------------------
- ;; ATTRIBUTES
- ;; ----------------------------------------------------------------------
-@@ -242,7 +256,9 @@
- ;; For storing the C flag, map from the unsigned comparison to the right
- ;; code for testing the C bit.
- (define_code_iterator geultu [geu ltu])
-+(define_code_iterator leugtu [gtu leu])
- (define_code_attr geultu_to_c [(geu "eq") (ltu "ne")])
-+(define_code_attr leugtu_to_c [(leu "eq") (gtu "ne")])
- 
- 
- (include "movepush.md")
-diff --git a/gcc/config/h8300/testcompare.md b/gcc/config/h8300/testcompare.md
-index 81dce1d0bc1..d3d777765ad 100644
---- a/gcc/config/h8300/testcompare.md
-+++ b/gcc/config/h8300/testcompare.md
-@@ -345,6 +345,19 @@
-    (set (match_dup 0)
- 	(<geultu_to_c>:QHSI (reg:CCC CC_REG) (const_int 0)))])
- 
-+;; Same as the above, but the condition is flipped.
-+(define_insn_and_split "*store_c_rev"
-+  [(set (match_operand:QHSI 0 "register_operand" "=r")
-+	(leugtu:QHSI (match_operand:QHSI2 1 "register_operand" "r")
-+		     (match_operand:QHSI2 2 "register_operand" "r")))]
++(define_insn_and_split "*uaddv"
++  [(set (match_operand:QHSI2 3 "register_operand" "=&r")
++	(ltu:QHSI2 (plus:QHSI (match_operand:QHSI 1 "register_operand" "%0")
++			   (match_operand:QHSI 2 "register_operand" "r"))
++		(match_dup 1)))
++   (set (match_operand:QHSI 0 "register_operand" "=r")
++	(plus:QHSI (match_dup 1) (match_dup 2)))]
 +  ""
 +  "#"
 +  "&& reload_completed"
-+  [(set (reg:CCC CC_REG)
-+	(ltu:CCC (match_dup 2) (match_dup 1)))
-+   (set (match_dup 0)
-+	(<leugtu_to_c>:QHSI (reg:CCC CC_REG) (const_int 0)))])
++  [(parallel [(set (match_dup 3) (ltu:QHSI2 (plus:QHSI (match_dup 1) (match_dup 2))
++					  (match_dup 1)))
++	      (set (match_dup 0) (plus:QHSI (match_dup 1) (match_dup 2)))
++	      (clobber (reg:CC CC_REG))])])
 +
- ;; We can fold in negation of the result and generate better code than
- ;; what the generic bits would do when testing for C == 1
- (define_insn_and_split "*store_neg_c"
-@@ -607,3 +620,43 @@
- 		 (const_int 0)))
-    (set (match_dup 0)
- 	(<eqne_invert>:HI (reg:CCZ CC_REG) (const_int 0)))])
-+
-+;; This is unsigned addition/subtraction with overflow state going into a
-+;; general register.  This can be done without branches.  First we
-+;; clear the overflow destination, then do the arithmetic which will
-+;; set C if it overflows, then addx to set the final overflow state
-+(define_insn_and_split ""
-+  [(set (match_operand:QHSI2 0 "register_operand" "=&r")
-+        (<pm_v>:QHSI2 (plus_minus:QHSI (match_operand:QHSI 2 "register_operand" "1")
-+			                       (match_operand:QHSI 3 "register_operand" "r"))
-+			      (match_dup 2)))
-+   (set (match_operand:QHSI 1 "register_operand" "=r")
-+	(plus_minus:QHSI (match_dup 2) (match_dup 3)))]
++(define_insn "*uaddv"
++  [(set (match_operand:QHSI2 3 "register_operand" "=&r")
++	(ltu:QHSI2 (plus:QHSI (match_operand:QHSI 1 "register_operand" "%0")
++			   (match_operand:QHSI 2 "register_operand" "r"))
++		(match_dup 1)))
++   (set (match_operand:QHSI 0 "register_operand" "=r")
++	(plus (match_dup 1) (match_dup 2)))
++   (clobber (reg:CC CC_REG))]
 +  ""
-+  "#"
-+  "&& reload_completed"
-+  [(parallel [(set (reg:CCC CC_REG)
-+		   (ne:CCC (plus_minus:<QHSI:OVF>
-+			     (zero_extend:<QHSI:OVF> (match_dup 2))
-+			     (zero_extend:<QHSI:OVF> (match_dup 3)))
-+			   (zero_extend:<QHSI:OVF> (plus_minus:QHSI (match_dup 2) (match_dup 3)))))
-+	      (set (match_dup 1) (plus_minus:QHSI (match_dup 2) (match_dup 3)))])
-+   (set (match_dup 0) (ne:QHSI2 (reg:CCC CC_REG) (const_int 0)))])
++  "xor %3,%3\;add %2,%0\;addx %s3,%s3"
++  [(set_attr "length" "10")])
 +
-+;; Same thing, but we only care about overflow status.
-+(define_insn_and_split ""
-+  [(set (match_operand:QHSI2 0 "register_operand" "=&r")
-+        (<pm_v>:QHSI2 (plus_minus:QHSI (match_operand:QHSI 2 "register_operand" "1")
-+					       (match_operand:QHSI 3 "register_operand" "r"))
-+			      (match_dup 2)))
-+   (clobber (match_scratch:QHSI 1 "=r"))]
-+  ""
-+  "#"
-+  "&& reload_completed"
-+  [(parallel [(set (reg:CCC CC_REG)
-+		   (ne:CCC (plus_minus:<QHSI:OVF>
-+			     (zero_extend:<QHSI:OVF> (match_dup 2))
-+			     (zero_extend:<QHSI:OVF> (match_dup 3)))
-+			   (zero_extend:<QHSI:OVF> (plus_minus:QHSI (match_dup 2) (match_dup 3)))))
-+	      (set (match_dup 1) (plus_minus:QHSI (match_dup 2) (match_dup 3)))])
-+   (set (match_dup 0) (ne:QHSI2 (reg:CCC CC_REG) (const_int 0)))])
++(define_expand "usubv<mode>4"
++  [(set (match_operand:QHSI 0 "register_operand" "")
++	(minus:QHSI (match_operand:QHSI 1 "register_operand" "")
++		    (match_operand:QHSI 2 "register_operand" "")))
++   (set (pc)
++	(if_then_else (ltu (match_dup 1) (match_dup 2))
++		      (label_ref (match_operand 3 ""))
++		      (pc)))]
++  "")
