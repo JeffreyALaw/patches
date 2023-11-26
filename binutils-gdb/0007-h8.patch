@@ -1,0 +1,87 @@
+diff --git a/sim/h8300/compile.c b/sim/h8300/compile.c
+index a4b39ae3380..dc4b7a9eb48 100644
+--- a/sim/h8300/compile.c
++++ b/sim/h8300/compile.c
+@@ -44,6 +44,7 @@
+ 
+ int debug;
+ 
++static int nib_indices[16];
+ static int memory_size;
+ 
+ #define X(op, size)  (op * 4 + size)
+@@ -388,14 +389,18 @@ decode (SIM_DESC sd, sim_cpu *cpu, int addr, unsigned char *data, decoded_inst *
+   int reg[3]   = {0, 0, 0};
+   int rdisp[3] = {0, 0, 0};
+   int opnum;
++  int index;
+   const struct h8_opcode *q;
+ 
+   dst->dst.type = -1;
+   dst->src.type = -1;
+   dst->op3.type = -1;
+ 
++  /* See if we have an index for the nibble.  */
++  index = nib_indices[(data[0] & 0xf0) >> 4];
++
+   /* Find the exact opcode/arg combo.  */
+-  for (q = h8_opcodes; q->name; q++)
++  for (q = &h8_opcodes[index]; q->name; q++)
+     {
+       const op_type *nib = q->data.nib;
+       unsigned int len = 0;
+@@ -1557,6 +1562,44 @@ store2 (SIM_DESC sd, ea_type *arg, int n)
+   return store_1 (sd, arg, n, 1);
+ }
+ 
++static int
++qsort_cb (const void *p1_, const void *p2_)
++{
++  struct h8_opcode *p1 = (struct h8_opcode *)p1_;
++  struct h8_opcode *p2 = (struct h8_opcode *)p2_;
++
++  return p1->data.nib[0] - p2->data.nib[0];
++}
++
++
++static void
++frob (struct h8_opcode *ops)
++{
++  const struct h8_opcode *q;
++  int *indices;
++  int i;
++
++  for (i = 0, q = ops; q->name; q++, i++)
++    ;
++
++  memset (nib_indices, -1, sizeof (int) * 16);
++
++  qsort (ops, i, sizeof (struct h8_opcode), qsort_cb);
++
++  /* First identify all the ops that are decoded solely from
++     the first nibble.  */
++  for (i = 0, q = ops; q->name; q++, i++)
++    {
++      int nib = q->data.nib[0];
++
++      /* Record the location of the first entry with the right
++	 nibble count.  */
++      if (nib_indices[nib] == -1)
++	nib_indices[nib] = i;
++    }
++}
++
++
+ /* Flag to be set whenever a new SIM_DESC object is created.  */
+ static int init_pointers_needed = 1;
+ 
+@@ -1639,6 +1682,9 @@ init_pointers (SIM_DESC sd)
+ 	  h8_set_reg (cpu, i, 0);
+ 	}
+ 
++      /* Sort the opcode table and create indices to speed up decode.  */
++      frob (ops);
++
+       init_pointers_needed = 0;
+     }
+ }
