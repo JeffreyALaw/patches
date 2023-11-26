@@ -1,5 +1,5 @@
 diff --git a/sim/h8300/compile.c b/sim/h8300/compile.c
-index a4b39ae3380..dc4b7a9eb48 100644
+index a4b39ae3380..e86da217ea7 100644
 --- a/sim/h8300/compile.c
 +++ b/sim/h8300/compile.c
 @@ -44,6 +44,7 @@
@@ -30,7 +30,7 @@ index a4b39ae3380..dc4b7a9eb48 100644
      {
        const op_type *nib = q->data.nib;
        unsigned int len = 0;
-@@ -1557,6 +1562,44 @@ store2 (SIM_DESC sd, ea_type *arg, int n)
+@@ -1557,6 +1562,60 @@ store2 (SIM_DESC sd, ea_type *arg, int n)
    return store_1 (sd, arg, n, 1);
  }
  
@@ -39,6 +39,22 @@ index a4b39ae3380..dc4b7a9eb48 100644
 +{
 +  struct h8_opcode *p1 = (struct h8_opcode *)p1_;
 +  struct h8_opcode *p2 = (struct h8_opcode *)p2_;
++
++  /* The 1st sort key is based on whether or not the
++     instruction is even available.  This reduces the
++     number of entries we have to look at in the common
++     case.  */
++
++  bool p1_available = !((p1->available == AV_H8SX && !h8300sxmode)
++		        || (p1->available == AV_H8S  && !h8300smode)
++		        || (p1->available == AV_H8H  && !h8300hmode));
++
++  bool p2_available = !((p2->available == AV_H8SX && !h8300sxmode)
++		        || (p2->available == AV_H8S  && !h8300smode)
++		        || (p2->available == AV_H8H  && !h8300hmode));
++
++  if (p1_available != p2_available)
++    return p2_available - p1_available;
 +
 +  return p1->data.nib[0] - p2->data.nib[0];
 +}
@@ -75,7 +91,7 @@ index a4b39ae3380..dc4b7a9eb48 100644
  /* Flag to be set whenever a new SIM_DESC object is created.  */
  static int init_pointers_needed = 1;
  
-@@ -1639,6 +1682,9 @@ init_pointers (SIM_DESC sd)
+@@ -1639,6 +1698,9 @@ init_pointers (SIM_DESC sd)
  	  h8_set_reg (cpu, i, 0);
  	}
  
