@@ -1,5 +1,5 @@
 diff --git a/sim/h8300/compile.c b/sim/h8300/compile.c
-index a4b39ae3380..752168d9d28 100644
+index a4b39ae3380..cc94e63c0fd 100644
 --- a/sim/h8300/compile.c
 +++ b/sim/h8300/compile.c
 @@ -44,6 +44,11 @@
@@ -101,7 +101,7 @@ index a4b39ae3380..752168d9d28 100644
 +  int *indices;
 +  int i;
 +
-+  /* First sort the OPS array.
++  /* First sort the OPS array.  */
 +  for (i = 0, q = ops; q->name; q++, i++)
 +    ;
 +  qsort (ops, i, sizeof (struct h8_opcode), instruction_comparator);
