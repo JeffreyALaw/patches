@@ -8,6 +8,7 @@ set -o pipefail
 # The target is mandatory.  The branch is not.  If no branch is
 # specified, then use master.
 TARGET=$1
+LOGFILE=`pwd`/log
 shift
 BRANCH=$1
 
@@ -22,22 +23,22 @@ mkdir -p obj/{binutils-gdb,gcc,glibc,linux}
 export PREFIX=`pwd`/installed
 PATH=`pwd`/installed/bin:/home/law/bin:$PATH
 
-if [ $TARGET != alpha-linux-gnu ]; then
-  pushd obj/binutils-gdb
-  ../../binutils-gdb/configure --enable-warn-rwx-segments=no --enable-warn-execstack=no --disable-werror --prefix=$PREFIX ${TARGET}
-  make -j $NPROC -l $NPROC all-gas all-binutils all-ld 
-  make install-gas install-binutils install-ld
-  popd
-fi
+echo Building binutils
+pushd obj/binutils-gdb
+../../binutils-gdb/configure --enable-warn-rwx-segments=no --enable-warn-execstack=no --disable-werror --prefix=$PREFIX ${TARGET} >> $LOGFILE 2>&1
+make -j $NPROC -l $NPROC all-gas all-binutils all-ld  >> $LOGFILE 2>&1
+make install-gas install-binutils install-ld >> $LOGFILE 2>&1
+popd
 
 if [ $TARGET == riscv64-linux-gnu ]; then
   DISABLE_BOOTSTRAP=--disable-bootstrap
 fi
 
+echo Building GCC
 pushd obj/gcc
-../../gcc/configure --prefix=$PREFIX --disable-analyzer --prefix=$PREFIX --enable-languages=c,c++,fortran,lto --disable-multilib --disable-libsanitizer $DISABLE_BOOTSTRAP ${TARGET}
-make -j $NPROC -l $NPROC
-make install
+../../gcc/configure --prefix=$PREFIX --disable-analyzer --prefix=$PREFIX --enable-languages=c,c++,fortran,lto --disable-multilib --disable-libsanitizer $DISABLE_BOOTSTRAP ${TARGET} >> $LOGFILE 2>&1
+make -j $NPROC -l $NPROC >> $LOGFILE 2>&1
+make install >> $LOGFILE 2>&1
 popd
 
 case ${TARGET} in
@@ -55,9 +56,10 @@ case ${TARGET} in
     ;;
 esac
 
+echo Building glibc
 pushd obj/glibc
-../../glibc/configure --disable-werror --prefix=$PREFIX --enable-add-ons ${TARGET}
-make -j $NPROC -l $NPROC
+../../glibc/configure --disable-werror --prefix=$PREFIX --enable-add-ons ${TARGET} >> $LOGFILE 2>&1
+make -j $NPROC -l $NPROC >> $LOGFILE 2>&1
 popd
 
 # The binutils suite is run unconditionally
