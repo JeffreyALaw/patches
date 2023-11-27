@@ -15,6 +15,8 @@ gcc/testsuite/gcc.dg/pr97459-5.c
 gcc/testsuite/gcc.dg/pr97459-6.c
 gcc/testsuite/gcc.dg/tree-ssa/ldist-27.c
 gcc/testsuite/gcc.dg/tree-ssa/loop-interchange-2.c
+gcc/testsuite/gcc.dg/tree-ssa/loop-interchange-9.c
+gcc/testsuite/gcc.dg/tree-ssa/loop-interchange-10.c
 gcc/testsuite/gcc.dg/tree-ssa/loop-interchange-14.c
 gcc/testsuite/gcc.dg/memcmp-1.c
 gcc/testsuite/gcc.dg/graphite/uns-interchange-12.c
@@ -34,6 +36,7 @@ gcc/testsuite/gcc.dg/graphite/interchange-12.c
 gcc/testsuite/gcc.dg/graphite/interchange-14.c
 gcc/testsuite/gcc.dg/graphite/interchange-15.c
 gcc/testsuite/gcc.dg/graphite/pr46185.c
+gcc/testsuite/gcc.dg/graphite/block-5.c
 # Times out, not investigated
 gcc/testsuite/gcc.dg/torture/pr112305.c
 # -O0 clashes heap/stack/code
