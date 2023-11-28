@@ -10,8 +10,10 @@ gcc/testsuite/gcc.dg/torture/pr112344.c
 gcc/testsuite/c-c++-common/Wattributes.c
 gcc/testsuite/gcc.dg/Wattributes-6.c
 gcc/testsuite/c-c++-common/goacc/privatization-1-compute.c
-gcc/testsuite/g++.dg/modules/xtreme-header-5_a.H
 gcc/testsuite/g++.dg/modules/xtreme-header-2_b.C
+gcc/testsuite/g++.dg/modules/xtreme-header-4_b.C
+gcc/testsuite/g++.dg/modules/xtreme-header_b.C
+gcc/testsuite/g++.dg/modules/xtreme-header-5_a.H
 # These seem to ping-pong on the cross-glibc configurations
 gcc/testsuite/gcc.dg/pie-static-1.c
 gcc/testsuite/gcc.dg/pie-static-2.c
