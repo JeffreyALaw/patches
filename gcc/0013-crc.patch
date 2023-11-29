@@ -46,7 +46,7 @@ index 43381bc8949..e33837c27d0 100644
  DEF_FUNCTION_TYPE_4 (BT_FN_SIZE_CONST_PTR_SIZE_SIZE_FILEPTR,
  		     BT_SIZE, BT_CONST_PTR, BT_SIZE, BT_SIZE, BT_FILEPTR)
 diff --git a/gcc/builtins.cc b/gcc/builtins.cc
-index 6af2a0b07aa..b286a46f6ee 100644
+index 4fc58a0bda9..bec2ce8f133 100644
 --- a/gcc/builtins.cc
 +++ b/gcc/builtins.cc
 @@ -2182,7 +2182,24 @@ associated_internal_fn (built_in_function fn, tree return_type)
@@ -75,7 +75,7 @@ index 6af2a0b07aa..b286a46f6ee 100644
      default:
        return IFN_LAST;
      }
-@@ -7302,6 +7319,37 @@ expand_speculation_safe_value (machine_mode mode, tree exp, rtx target,
+@@ -7413,6 +7430,37 @@ expand_speculation_safe_value (machine_mode mode, tree exp, rtx target,
    return targetm.speculation_safe_value (mode, target, val, failsafe);
  }
  
@@ -113,7 +113,7 @@ index 6af2a0b07aa..b286a46f6ee 100644
  /* Expand an expression EXP that calls a built-in function,
     with result going to TARGET if that's convenient
     (and in mode MODE if that's convenient).
-@@ -8445,6 +8493,54 @@ expand_builtin (tree exp, rtx target, rtx subtarget, machine_mode mode,
+@@ -8564,6 +8612,54 @@ expand_builtin (tree exp, rtx target, rtx subtarget, machine_mode mode,
        mode = get_builtin_sync_mode (fcode - BUILT_IN_SPECULATION_SAFE_VALUE_1);
        return expand_speculation_safe_value (mode, exp, target, ignore);
  
@@ -211,10 +211,10 @@ index 88a26d70cd5..0f8c2934c62 100644
  extern enum built_in_function builtin_mathfn_code (const_tree);
  extern tree fold_builtin_expect (location_t, tree, tree, tree, tree);
 diff --git a/gcc/common.opt b/gcc/common.opt
-index 736a4653578..cfabef18e5a 100644
+index 161a035d736..ce111755c4b 100644
 --- a/gcc/common.opt
 +++ b/gcc/common.opt
-@@ -3058,6 +3058,10 @@ ftree-loop-distribute-patterns
+@@ -3092,6 +3092,10 @@ ftree-loop-distribute-patterns
  Common Var(flag_tree_loop_distribute_patterns) Optimization
  Enable loop distribution for patterns transformed into a library call.
  
@@ -312,10 +312,10 @@ index 695ee24ad6f..f9968df07c4 100644
  /* Routines implemented in riscv-c.cc.  */
  void riscv_cpu_cpp_builtins (cpp_reader *);
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index a4fc858fb50..8815f6ed6f8 100644
+index 2f8d391579a..8fc80cc29c2 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
-@@ -10229,6 +10229,7 @@ riscv_preferred_else_value (unsigned ifn, tree vectype, unsigned int nops,
+@@ -10231,6 +10231,7 @@ riscv_preferred_else_value (unsigned ifn, tree vectype, unsigned int nops,
    return default_preferred_else_value (ifn, vectype, nops, ops);
  }
  
@@ -323,7 +323,7 @@ index a4fc858fb50..8815f6ed6f8 100644
  /* If MEM is in the form of "base+offset", extract the two parts
     of address and set to BASE and OFFSET, otherwise return false
     after clearing BASE and OFFSET.  */
-@@ -10263,6 +10264,226 @@ extract_base_offset_in_addr (rtx mem, rtx *base, rtx *offset)
+@@ -10265,6 +10266,226 @@ extract_base_offset_in_addr (rtx mem, rtx *base, rtx *offset)
    return false;
  }
  
@@ -551,7 +551,7 @@ index a4fc858fb50..8815f6ed6f8 100644
  #undef TARGET_ASM_ALIGNED_HI_OP
  #define TARGET_ASM_ALIGNED_HI_OP "\t.half\t"
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index 935eeb7fd8e..b8e2430136c 100644
+index 6bf2dfdf9b4..2d14ce289e5 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
 @@ -85,6 +85,10 @@ (define_c_enum "unspec" [
@@ -2081,7 +2081,7 @@ index 00000000000..b45eb242486
 +
 +#endif //GCC_CRC_VERIFICATION
 diff --git a/gcc/expr.cc b/gcc/expr.cc
-index c432170403b..bf25379bafd 100644
+index fea719028a1..528652599ba 100644
 --- a/gcc/expr.cc
 +++ b/gcc/expr.cc
 @@ -66,7 +66,6 @@ along with GCC; see the file COPYING3.  If not see
@@ -2092,7 +2092,7 @@ index c432170403b..bf25379bafd 100644
  /* If this is nonzero, we do not bother generating VOLATILE
     around volatile memory references, and we are willing to
     output indirect addresses.  If cse is to follow, we reject
-@@ -13649,3 +13648,323 @@ int_expr_size (const_tree exp)
+@@ -14011,3 +14010,328 @@ int_expr_size (const_tree exp)
  
    return tree_to_shwi (size);
  }
@@ -2219,26 +2219,31 @@ index c432170403b..bf25379bafd 100644
 +      /* crc >> (bit_size - 8).  */
 +      rtx op1 = expand_shift (RSHIFT_EXPR, word_mode, *crc, mode_bit_size - 8,
 +			      NULL_RTX, 1);
++
 +      /* data >> (8 * (GET_MODE_SIZE (data_mode).to_constant () - i - 1)).  */
 +      unsigned range_8 = 8 * (GET_MODE_SIZE (data_mode).to_constant () - i - 1);
 +      rtx data = expand_shift (RSHIFT_EXPR, word_mode, input_data, range_8,
 +			       NULL_RTX, 1);
++
 +      /* data >> (8 * (GET_MODE_SIZE (data_mode)
 +					.to_constant () - i - 1)) & 0xFF.  */
 +      rtx data_final = expand_and (word_mode, data,
 +				   gen_int_mode (255, data_mode), NULL_RTX);
++
 +      /* (crc >> (bit_size - 8)) ^ data_8bit.  */
 +      rtx in = expand_binop (word_mode, xor_optab, op1, data_final, NULL_RTX, 1,
 +			     OPTAB_WIDEN);
++
 +      /* ((crc >> (bit_size - 8)) ^ data_8bit) & 0xFF.  */
 +      rtx index = expand_and (word_mode, in, gen_int_mode (255, word_mode),
 +			      NULL_RTX);
 +      int log_crc_size = exact_log2 (GET_MODE_SIZE (crc_mode).to_constant ());
 +      index = expand_shift (LSHIFT_EXPR, word_mode, index, log_crc_size,
-+			    index, 0);
++			    NULL_RTX, 0);
 +
-+      index = expand_binop (word_mode, add_optab, index, tab, index, 0,
++      index = expand_binop (word_mode, add_optab, index, tab, NULL_RTX, 0,
 +			    OPTAB_DIRECT);
++
 +      /* crc_table[(crc >> (bit_size - 8)) ^ data_8bit]  */
 +      rtx tab_el = validize_mem (gen_rtx_MEM (crc_mode, index));
 +
@@ -2253,7 +2258,7 @@ index c432170403b..bf25379bafd 100644
 +	}
 +
 +      /* crc = (crc << 8) ^ crc_table[(crc >> (bit_size - 8)) ^ data_8bit];  */
-+      *crc = expand_binop (word_mode, xor_optab, tab_el, high, *crc, 1,
++      *crc = expand_binop (word_mode, xor_optab, tab_el, high, NULL_RTX, 1,
 +			   OPTAB_WIDEN);
 +    }
 +}
@@ -2416,12 +2421,11 @@ index c432170403b..bf25379bafd 100644
 +  gen_reflecting_code (&crc, GET_MODE_BITSIZE (word_mode) - mode_bit_size);
 +  emit_move_insn (op0, gen_lowpart (crc_mode, crc));
 +}
-\ No newline at end of file
 diff --git a/gcc/expr.h b/gcc/expr.h
-index 2a172867fdb..5a93946bd3d 100644
+index 431616d55be..f6a066438ee 100644
 --- a/gcc/expr.h
 +++ b/gcc/expr.h
-@@ -363,4 +363,10 @@ extern rtx expr_size (tree);
+@@ -366,4 +366,10 @@ extern rtx expr_size (tree);
  extern bool mem_ref_refers_to_non_mem_p (tree);
  extern bool non_mem_decl_p (tree);
  
@@ -3856,7 +3860,7 @@ index 1b0cd4b8ad8..8e51806a4e0 100644
  
  /* Return the disposition for a warning (or all warnings by default)
 diff --git a/gcc/internal-fn.cc b/gcc/internal-fn.cc
-index cce73b3b2e0..9552f6d0dd0 100644
+index cb4ef447ced..621b115bdbe 100644
 --- a/gcc/internal-fn.cc
 +++ b/gcc/internal-fn.cc
 @@ -186,6 +186,7 @@ init_internal_fns ()
@@ -3867,7 +3871,7 @@ index cce73b3b2e0..9552f6d0dd0 100644
  
  const direct_internal_fn_info direct_internal_fn_array[IFN_LAST + 1] = {
  #define DEF_INTERNAL_FN(CODE, FLAGS, FNSPEC) not_direct,
-@@ -3865,6 +3866,58 @@ expand_convert_optab_fn (internal_fn fn, gcall *stmt, convert_optab optab,
+@@ -3873,6 +3874,58 @@ expand_convert_optab_fn (internal_fn fn, gcall *stmt, convert_optab optab,
    expand_fn_using_insn (stmt, icode, 1, nargs);
  }
  
@@ -3926,7 +3930,7 @@ index cce73b3b2e0..9552f6d0dd0 100644
  /* Expanders for optabs that can use expand_direct_optab_fn.  */
  
  #define expand_unary_optab_fn(FN, STMT, OPTAB) \
-@@ -4001,6 +4054,7 @@ multi_vector_optab_supported_p (convert_optab optab, tree_pair types,
+@@ -4009,6 +4062,7 @@ multi_vector_optab_supported_p (convert_optab optab, tree_pair types,
  #define direct_cond_len_unary_optab_supported_p direct_optab_supported_p
  #define direct_cond_len_binary_optab_supported_p direct_optab_supported_p
  #define direct_cond_len_ternary_optab_supported_p direct_optab_supported_p
