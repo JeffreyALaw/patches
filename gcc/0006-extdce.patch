@@ -11,10 +11,10 @@ index 753f2f36618..af6f1415507 100644
  	file-prefix-map.o \
  	final.o \
 diff --git a/gcc/common.opt b/gcc/common.opt
-index 35971c501fc..1f8bd5ba538 100644
+index 736a4653578..1ab622270f9 100644
 --- a/gcc/common.opt
 +++ b/gcc/common.opt
-@@ -3770,4 +3770,8 @@ fipa-ra
+@@ -3778,4 +3778,8 @@ fipa-ra
  Common Var(flag_ipa_ra) Optimization
  Use caller save register across calls if possible.
  
@@ -24,7 +24,7 @@ index 35971c501fc..1f8bd5ba538 100644
 +
  ; This comment is to ensure we retain the blank line above.
 diff --git a/gcc/df-scan.cc b/gcc/df-scan.cc
-index 9515740728c..87729ab0f44 100644
+index 934c9ca2d81..93c0ba4e15c 100644
 --- a/gcc/df-scan.cc
 +++ b/gcc/df-scan.cc
 @@ -78,7 +78,6 @@ static void df_get_eh_block_artificial_uses (bitmap);
@@ -58,10 +58,10 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..df9c756ee7d
+index 00000000000..3bc24e56beb
 --- /dev/null
 +++ b/gcc/ext-dce.cc
-@@ -0,0 +1,878 @@
+@@ -0,0 +1,874 @@
 +/* RTL dead zero/sign extension (code) elimination.
 +   Copyright (C) 2000-2022 Free Software Foundation, Inc.
 +
@@ -147,16 +147,13 @@ index 00000000000..df9c756ee7d
 +    case SIGN_EXTEND:
 +    case TRUNCATE:
 +    case PLUS:
++    case MINUS:
 +    case MULT:
-+    case SS_MULT:
-+    case US_MULT:
 +    case SMUL_HIGHPART:
 +    case UMUL_HIGHPART:
 +    case AND:
 +    case IOR:
 +    case XOR:
-+    case SS_PLUS:
-+    case US_PLUS:
 +      return true;
 +
 +    /* We can propagate for the shifted operand, but not the shift
@@ -184,7 +181,7 @@ index 00000000000..df9c756ee7d
 +
 +   The more accurate we are in identifying what objects (and chunks
 +   within an object) are set by INSN, the more aggressive the
-+   optimziation phase during use handling will be.  */
++   optimization phase during use handling will be.  */
 +
 +static void
 +ext_dce_process_sets (rtx_insn *insn, rtx obj, bitmap livenow, bitmap live_tmp)
@@ -256,8 +253,7 @@ index 00000000000..df9c756ee7d
 +		if (bitmap_bit_p (livenow, i))
 +		  bitmap_set_bit (live_tmp, i);
 +
-+	      /* The mode of the SUBREG tells us how many bits we can
-+		 clear.  */
++	      /* The mode of the SUBREG tells us how many bits we can clear.  */
 +	      machine_mode mode = GET_MODE (x);
 +	      HOST_WIDE_INT size
 +		= exact_log2 (GET_MODE_SIZE (mode).to_constant ()) + 1;
@@ -268,32 +264,35 @@ index 00000000000..df9c756ee7d
 +	      continue;
 +	    }
 +
-+	  /* We can safely strip a paradoxical subreg.  The inner mode will
-+	     be narrower than the outer mode.  We'll clear fewer bits in
-+	     LIVENOW than we'd like, but that's always safe.  */
-+	  if (paradoxical_subreg_p (x))
-+	    x = XEXP (x, 0);
-+
-+	  /* If we have a SUBREG that is too wide, just continue the loop
-+	     and let the iterator go down into SUBREG_REG.  */
-+	  if (SUBREG_P (x)
-+	      && (!is_a <scalar_int_mode> (GET_MODE (SUBREG_REG (x)), &outer_mode)
-+		  || GET_MODE_BITSIZE (outer_mode) > 64))
-+	    continue;
 +
 +	  /* Phase one of destination handling.  First remove any wrapper
 +	     such as SUBREG or ZERO_EXTRACT.  */
 +	  unsigned HOST_WIDE_INT mask = GET_MODE_MASK (GET_MODE (x));
-+	  if (SUBREG_P (x)
-+	      && !paradoxical_subreg_p (x)
-+	      && SUBREG_BYTE (x).is_constant ())
++
++	  if (SUBREG_P (x))
 +	    {
-+	      bit = subreg_lsb (x).to_constant ();
-+	      mask = GET_MODE_MASK (GET_MODE (SUBREG_REG (x))) << bit;
-+	      gcc_assert (mask);
-+	      if (!mask)
-+		mask = -0x100000000ULL;
-+	      x = SUBREG_REG (x);
++
++	      /* If we have a SUBREG that is too wide, just continue the loop
++		 and let the iterator go down into SUBREG_REG.  */
++	      if (!is_a <scalar_int_mode> (GET_MODE (SUBREG_REG (x)), &outer_mode)
++		   || GET_MODE_BITSIZE (outer_mode) > 64)
++		continue;
++
++	      /* We can safely strip a paradoxical subreg.  The inner mode will
++		 be narrower than the outer mode.  We'll clear fewer bits in
++		 LIVENOW than we'd like, but that's always safe.  */
++	      if (paradoxical_subreg_p (x))
++		x = SUBREG_REG (x);
++	      else if (SUBREG_BYTE (x).is_constant ())
++		{
++		  bit = subreg_lsb (x).to_constant ();
++		  mask = GET_MODE_MASK (GET_MODE (SUBREG_REG (x))) << bit;
++		  gcc_assert (mask);
++		  x = SUBREG_REG (x);
++		}
++	      else
++		/* Needs testing.  */
++		gcc_assert (false);
 +	    }
 +
 +	  if (GET_CODE (x) == ZERO_EXTRACT)
@@ -313,7 +312,7 @@ index 00000000000..df9c756ee7d
 +	      /* We can certainly get (zero_extract (subreg ...)).  The
 +		 mode of the zero_extract and location should be sufficient
 +		 and we can just strip the SUBREG.  */
-+	      if (GET_CODE (x) == SUBREG)
++	      if (SUBREG_P (x))
 +		x = SUBREG_REG (x);
 +	    }
 +
@@ -411,7 +410,7 @@ index 00000000000..df9c756ee7d
 +
 +/* Some operators imply that their second operand is fully live,
 +   regardless of how many bits in the output are live.  An example
-+   would be the shift count on a target without SHIFT_COUNT_TRUCATED
++   would be the shift count on a target without SHIFT_COUNT_TRUNCATED
 +   defined.
 +
 +   Return TRUE if CODE is such an operator.  FALSE otherwise.  */
@@ -433,6 +432,69 @@ index 00000000000..df9c756ee7d
 +    }
 +}
 +
++static void
++ext_dce_process_operand (rtx op, rtx_code code, unsigned HOST_WIDE_INT dst_mask,
++			 bitmap livenow)
++{
++  unsigned HOST_WIDE_INT bit = 0;
++
++  /* Strip an outer STRICT_LOW_PART or paradoxical subreg.
++     That has the effect of making the whole referenced
++     register live.  We might be able to avoid that for
++     STRICT_LOW_PART at some point.  */
++
++  /* XXX This all looks wrong.  Note the STRICT_LOW_PART.
++     if we're processing a dest, then why look at Y in the
++     else clause.  If processing a src, then STRICT_LOW_PART
++     shouldn't happen.  */
++  /* XXX Needs testing.  */
++  if (GET_CODE (op) == STRICT_LOW_PART || paradoxical_subreg_p (op))
++    op = XEXP (op, 0);
++  else if (SUBREG_P (op) && SUBREG_BYTE (op).is_constant ())
++    {
++
++      /* TODO: Needs testing.  */
++      /* For anything but (subreg (reg)), break the inner loop
++	 and process normally (conservatively).  */
++      if (!REG_P (SUBREG_REG (op)))
++       return;
++
++      bit = subreg_lsb (op).to_constant ();
++      if (dst_mask)
++       {
++	 dst_mask <<= bit;
++	 if (!dst_mask)
++	   dst_mask = -0x100000000ULL;
++       }
++      op = SUBREG_REG (op);
++    }
++
++  if (REG_P (op))
++    {
++      /* We have found the use of a register.  We need to mark
++	 the appropriate chunks of the register live.  The mode
++	 of the REG is a starting point.  We may refine that
++	 based on what chunks in the output were live.  */
++      unsigned HOST_WIDE_INT rn = 4 * REGNO (op);
++      unsigned HOST_WIDE_INT mask = dst_mask;
++
++      /* If the RTX code for the SET_SRC is not one we can
++	 propagate destination liveness through, then just
++	 set the mask to the mode's mask.  */
++      if (!safe_for_live_propagation (code))
++	mask = GET_MODE_MASK (GET_MODE (op));
++
++      if (mask & 0xff)
++	bitmap_set_bit (livenow, rn);
++      if (mask & 0xff00)
++	bitmap_set_bit (livenow, rn + 1);
++      if (mask & 0xffff0000ULL)
++	bitmap_set_bit (livenow, rn + 2);
++      if (mask & -0x100000000ULL)
++	bitmap_set_bit (livenow, rn + 3);
++    }
++}
++
 +/* Process uses in INSN contained in OBJ.  Set appropriate bits in LIVENOW
 +   for any chunks of pseudos that become live, potentially filtering using
 +   bits from LIVE_TMP.
@@ -445,14 +507,6 @@ index 00000000000..df9c756ee7d
 +ext_dce_process_uses (rtx_insn *insn, rtx obj, bitmap livenow,
 +		      bitmap live_tmp, bool modify, bitmap changed_pseudos)
 +{
-+  /* A nonlocal goto implicitly uses the frame pointer.  */
-+  if (JUMP_P (insn) && find_reg_note (insn, REG_NON_LOCAL_GOTO, NULL_RTX))
-+    {
-+      bitmap_set_range (livenow, FRAME_POINTER_REGNUM * 4, 4);
-+      if (!HARD_FRAME_POINTER_IS_FRAME_POINTER)
-+	bitmap_set_range (livenow, HARD_FRAME_POINTER_REGNUM * 4, 4);
-+    }
-+
 +  subrtx_var_iterator::array_type array_var;
 +  FOR_EACH_SUBRTX_VAR (iter, array_var, obj, NONCONST)
 +    {
@@ -469,20 +523,19 @@ index 00000000000..df9c756ee7d
 +	 iteration into the next level of RTL.  Breaking from the loop
 +	 is never safe as it can lead us to fail to process some of the
 +	 RTL and thus not make objects live when necessary.  */
-+      enum rtx_code xcode = GET_CODE (x);
++      rtx_code xcode = GET_CODE (x);
 +      if (xcode == SET)
 +	{
 +	  const_rtx dst = SET_DEST (x);
 +	  rtx src = SET_SRC (x);
-+	  const_rtx y;
 +	  unsigned HOST_WIDE_INT bit = 0;
 +
 +	  /* The code of the RHS of a SET.  */
-+	  enum rtx_code code = GET_CODE (src);
++	  rtx_code code = GET_CODE (src);
 +
 +	  /* ?!? How much of this should mirror SET handling, potentially
 +	     being shared?   */
-+	  if (SUBREG_BYTE (dst).is_constant () && SUBREG_P (dst))
++	  if (SUBREG_P (dst) && SUBREG_BYTE (dst).is_constant ())
 +	    {
 +	      bit = subreg_lsb (dst).to_constant ();
 +	      if (bit >= HOST_BITS_PER_WIDE_INT)
@@ -554,104 +607,40 @@ index 00000000000..df9c756ee7d
 +		dst_mask
 +		  = dst_mask ? ((2ULL << floor_log2 (dst_mask)) - 1) : 0;
 +
-+	      /* We will handle the other operand of a binary operator
-+		 at the bottom of the loop by resetting Y.  */
-+	      if (BINARY_P (src))
-+		y = XEXP (src, 0);
-+	      else
-+		y = src;
 +
 +	      /* We're inside a SET and want to process the source operands
 +		 making things live.  Breaking from this loop will cause
 +		 the iterator to work on sub-rtxs, so it is safe to break
-+		 if we see something we don't know how to handle.  */
-+	      for (;;)
++		 if we see something we don't know how to handle.
++
++		 If we have a binary operator, we may be able to propagate
++		 liveness from the destination to the source.  */
++	      if (BINARY_P (src))
 +		{
-+		  /* Strip an outer STRICT_LOW_PART or paradoxical subreg.
-+		     That has the effect of making the whole referenced
-+		     register live.  We might be able to avoid that for
-+		     STRICT_LOW_PART at some point.  */
-+		  /* XXX This all looks wrong.  Note the STRICT_LOW_PART.
-+		     if we're processing a dest, then why look at Y in the
-+		     else clause.  If processing a src, then STRICT_LOW_PART
-+		     shouldn't happen.  */
-+		  if (GET_CODE (x) == STRICT_LOW_PART
-+		      || paradoxical_subreg_p (x))
-+		    x = XEXP (x, 0);
-+		  else if (SUBREG_P (y) && SUBREG_BYTE (y).is_constant ())
-+		    {
-+		      /* For anything but (subreg (reg)), break the inner loop
-+			 and process normally (conservatively).  */
-+		      if (!REG_P (SUBREG_REG (y)))
-+			break;
-+		      bit = subreg_lsb (y).to_constant ();
-+		      if (dst_mask)
-+			{
-+			  dst_mask <<= bit;
-+			  if (!dst_mask)
-+			    dst_mask = -0x100000000ULL;
-+			}
-+		      y = SUBREG_REG (y);
-+		    }
++		  rtx op0 = XEXP (src, 0);
++		  rtx op1 = XEXP (src, 1);
 +
-+		  if (REG_P (y))
-+		    {
-+		      /* We have found the use of a register.  We need to mark
-+			 the appropriate chunks of the register live.  The mode
-+			 of the REG is a starting point.  We may refine that
-+			 based on what chunks in the output were live.  */
-+		      rn = 4 * REGNO (y);
-+		      unsigned HOST_WIDE_INT tmp_mask = dst_mask;
++		  ext_dce_process_operand (op0, code, dst_mask, livenow);
 +
-+		      /* If the RTX code for the SET_SRC is not one we can
-+			 propagate destination liveness through, then just
-+			 set the mask to the mode's mask.  */
-+		      if (!safe_for_live_propagation (code))
-+			tmp_mask = GET_MODE_MASK (GET_MODE (y));
++		  /* Some operators imply their second operand is fully live,
++		     break this inner loop which  will cause the iterator to
++		     descent into the sub-rtxs outside the SET processing.
 +
-+		      if (tmp_mask & 0xff)
-+			bitmap_set_bit (livenow, rn);
-+		      if (tmp_mask & 0xff00)
-+			bitmap_set_bit (livenow, rn + 1);
-+		      if (tmp_mask & 0xffff0000ULL)
-+			bitmap_set_bit (livenow, rn + 2);
-+		      if (tmp_mask & -0x100000000ULL)
-+			bitmap_set_bit (livenow, rn + 3);
-+
-+		      /* Some operators imply their second operand
-+			 is fully live, break this inner loop which
-+			 will cause the iterator to descent into the
-+			 sub-rtxs outside the SET processing.  */
-+		      if (binop_implies_op2_fully_live (code))
-+			break;
-+		    }
-+		  else if (!CONSTANT_P (y))
-+		    break;
-+		  /* We might have (ashift (const_int 1) (reg...)) */
-+		  /* XXX share this logic with code below.  */
-+		  else if (binop_implies_op2_fully_live (GET_CODE (src)))
-+		    break;
-+
-+		  /* If this was anything but a binary operand, break the inner
-+		     loop.  This is conservatively correct as it will cause the
-+		     iterator to look at the sub-rtxs outside the SET context.  */
-+		  if (!BINARY_P (src))
-+		    break;
-+
-+		  /* We processed the first operand of a binary operator.  Now
-+		     handle the second.  */
-+		  y = XEXP (src, 1), src = pc_rtx;
++		     We might have (ashift (const_int 1) (reg...)) */
++		  if (!binop_implies_op2_fully_live (code) && !CONSTANT_P (op0))
++		    ext_dce_process_operand (op1, code, dst_mask, livenow);
 +		}
++	      else
++		ext_dce_process_operand (src, code, dst_mask, livenow);
 +
 +	      /* These are leaf nodes, no need to iterate down into them.  */
-+	      if (REG_P (y) || CONSTANT_P (y))
-+		iter.skip_subrtxes ();
++	      iter.skip_subrtxes ();
 +	    }
 +	}
 +      /* If we are reading the low part of a SUBREG, then we can
 +	 refine liveness of the input register, otherwise let the
 +	 iterator continue into SUBREG_REG.  */
-+      else if (xcode == SUBREG
++      else if (SUBREG_P (x)
 +	       && REG_P (SUBREG_REG (x))
 +	       && subreg_lowpart_p (x)
 +	       && GET_MODE_BITSIZE (GET_MODE (x)).is_constant ()
@@ -703,7 +692,7 @@ index 00000000000..df9c756ee7d
 +      ext_dce_process_sets (insn, PATTERN (insn), livenow, live_tmp);
 +
 +      /* CALL_INSNs need processing their fusage data.  */
-+      if (GET_CODE (insn) == CALL_INSN)
++      if (CALL_P (insn))
 +	ext_dce_process_sets (insn, CALL_INSN_FUNCTION_USAGE (insn),
 +			      livenow, live_tmp);
 +
@@ -711,13 +700,20 @@ index 00000000000..df9c756ee7d
 +      ext_dce_process_uses (insn, PATTERN (insn), livenow, live_tmp,
 +			    modify, changed_pseudos);
 +
++      /* A nonlocal goto implicitly uses the frame pointer.  */
++      if (JUMP_P (insn) && find_reg_note (insn, REG_NON_LOCAL_GOTO, NULL_RTX))
++	{
++	  bitmap_set_range (livenow, FRAME_POINTER_REGNUM * 4, 4);
++	  if (!HARD_FRAME_POINTER_IS_FRAME_POINTER)
++	    bitmap_set_range (livenow, HARD_FRAME_POINTER_REGNUM * 4, 4);
++	}
 +      /* And process fusage data for the use as well.  */
-+      if (GET_CODE (insn) == CALL_INSN)
++      else if (CALL_P (insn))
 +	{
 +	  if (!FAKE_CALL_P (insn))
 +	    bitmap_set_range (livenow, STACK_POINTER_REGNUM * 4, 4);
 +
-+	  /* If this is not a call to a const fucntion, then assume it
++	  /* If this is not a call to a const function, then assume it
 +	     can read any global register.  */
 +	  if (!RTL_CONST_CALL_P (insn))
 +	    for (unsigned i = 0; i < FIRST_PSEUDO_REGISTER; i++)
@@ -734,7 +730,7 @@ index 00000000000..df9c756ee7d
 +}
 +
 +/* We optimize away sign/zero extensions in this pass and replace
-+   them with SUBREGs indicating certain bits are don't cares.
++   them with SUBREGs indicating certain bits don't care.
 +
 +   This changes the SUBREG_PROMOTED_VAR_P state of the object.
 +   It is fairly painful to fix this on the fly, so we have
