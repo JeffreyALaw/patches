@@ -1,3 +1,9 @@
+commit e67d97c54ca230b000f9e8ced596300fce55aadc
+Author: Jeff Law <jlaw@ventanamicro.com>
+Date:   Thu Nov 30 07:08:50 2023 -0700
+
+    Initial patch from Mariam + expand_* fixes + printf format fixes
+
 diff --git a/gcc/Makefile.in b/gcc/Makefile.in
 index b79421e7252..3f975ad8667 100644
 --- a/gcc/Makefile.in
@@ -2438,7 +2444,7 @@ index 431616d55be..f6a066438ee 100644
  #endif /* GCC_EXPR_H */
 diff --git a/gcc/gimple-crc-optimization.cc b/gcc/gimple-crc-optimization.cc
 new file mode 100644
-index 00000000000..da42f0596ca
+index 00000000000..cf8e8e06b59
 --- /dev/null
 +++ b/gcc/gimple-crc-optimization.cc
 @@ -0,0 +1,1354 @@
@@ -2683,7 +2689,7 @@ index 00000000000..da42f0596ca
 +  if (dump_file)
 +    {
 +      fprintf (dump_file,
-+	       "Loop iteration number is %ld.\n",
++	       "Loop iteration number is " HOST_WIDE_INT_PRINT_UNSIGNED ".\n",
 +	       tree_to_uhwi (m_crc_loop->nb_iterations));
 +      if (m_is_bit_forward)
 +	fprintf (dump_file, "Bit forward.\n");
@@ -3300,7 +3306,7 @@ index 00000000000..da42f0596ca
 +      unsigned HOST_WIDE_INT
 +      loop_iteration_number = tree_to_uhwi (n_inters);
 +      if (dump_file && (dump_flags & TDF_DETAILS))
-+	fprintf (dump_file, "Loop iteration number is %ld.\n",
++	fprintf (dump_file, "Loop iteration number is " HOST_WIDE_INT_PRINT_UNSIGNED "%ld.\n",
 +		 loop_iteration_number);
 +
 +      if ((loop_iteration_number == 7 || loop_iteration_number == 15
