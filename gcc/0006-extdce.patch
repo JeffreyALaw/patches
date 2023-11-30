@@ -58,10 +58,10 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..0b0aa574e16
+index 00000000000..f584a8066fd
 --- /dev/null
 +++ b/gcc/ext-dce.cc
-@@ -0,0 +1,969 @@
+@@ -0,0 +1,970 @@
 +/* RTL dead zero/sign extension (code) elimination.
 +   Copyright (C) 2000-2022 Free Software Foundation, Inc.
 +
@@ -269,7 +269,8 @@ index 00000000000..0b0aa574e16
 +
 +	  /* Phase one of destination handling.  First remove any wrapper
 +	     such as SUBREG or ZERO_EXTRACT.  */
-+	  unsigned HOST_WIDE_INT mask = GET_MODE_MASK (GET_MODE (x));
++	  unsigned HOST_WIDE_INT mask
++	    = GET_MODE_MASK (GET_MODE_INNER (GET_MODE (x)));
 +	  if (SUBREG_P (x))
 +	    {
 +	      /* If we have a SUBREG that is too wide, just continue the loop
