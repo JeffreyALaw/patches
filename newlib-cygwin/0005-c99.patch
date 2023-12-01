@@ -1,3 +1,16 @@
+diff --git a/libgloss/config/default.mh b/libgloss/config/default.mh
+index 4e7f106f9..229dd920f 100644
+--- a/libgloss/config/default.mh
++++ b/libgloss/config/default.mh
+@@ -4,7 +4,7 @@ NEWLIB_LDFLAGS = `if [ -d ${objroot}/newlib ]; then echo -B${objroot}/newlib/ -L
+ INCLUDES = -I. -I$(srcdir)/.. -I$(objdir)/..
+ # Note that when building the library, ${MULTILIB} is not the way multilib
+ # options are passed; they're passed in $(CFLAGS).
+-CFLAGS_FOR_TARGET = -O2 -g ${MULTILIB} ${INCLUDES} ${NEWLIB_CFLAGS}
++CFLAGS_FOR_TARGET = -O2 -g ${MULTILIB} ${INCLUDES} ${NEWLIB_CFLAGS}  -fpermissive
+ LDFLAGS_FOR_TARGET = ${MULTILIB} ${NEWLIB_LDFLAGS}
+ AR_FLAGS = rc
+ 
 diff --git a/libgloss/epiphany/_isatty.c b/libgloss/epiphany/_isatty.c
 index cfb1bf6e4..f05aba3c3 100644
 --- a/libgloss/epiphany/_isatty.c
@@ -122,6 +135,19 @@ index c78af284d..653f24b95 100644
  
  
  /* ------------------------------------------------------------------------- */
+diff --git a/libgloss/fr30/syscalls.c b/libgloss/fr30/syscalls.c
+index 2558556b6..36702b03d 100644
+--- a/libgloss/fr30/syscalls.c
++++ b/libgloss/fr30/syscalls.c
+@@ -5,6 +5,8 @@
+ #include <sys/stat.h>
+ #include "../syscall.h"
+ 
++#pragma GCC diagnostic ignored "-Wreturn-mismatch"
++
+ int
+ _read (file, ptr, len)
+      int    file;
 diff --git a/libgloss/glue.h b/libgloss/glue.h
 index 0a7e36db2..17d060728 100644
 --- a/libgloss/glue.h
