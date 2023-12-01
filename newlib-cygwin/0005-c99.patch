@@ -1,0 +1,12 @@
+diff --git a/libgloss/glue.h b/libgloss/glue.h
+index 0a7e36db2..17d060728 100644
+--- a/libgloss/glue.h
++++ b/libgloss/glue.h
+@@ -13,6 +13,7 @@
+  * they apply.
+  */
+ #include <_ansi.h>
++#include <stdlib.h>
+ 
+ #ifndef NULL
+ #  define NULL 0
