@@ -64,3 +64,127 @@ index 844958984..27cb1e74d 100644
  caddr_t
  _sbrk (size_t incr)
  {
+diff --git a/libgloss/epiphany/_isatty.c b/libgloss/epiphany/_isatty.c
+index cfb1bf6e4..f05aba3c3 100644
+--- a/libgloss/epiphany/_isatty.c
++++ b/libgloss/epiphany/_isatty.c
+@@ -18,6 +18,7 @@
+ 
+ #include <sys/stat.h>
+ #include <errno.h>
++#include "epiphany-syscalls.h"
+ 
+ int
+ _isatty (int fd)
+diff --git a/libgloss/epiphany/epiphany-syscalls.c b/libgloss/epiphany/epiphany-syscalls.c
+index e6ebcee24..4c03fe291 100644
+--- a/libgloss/epiphany/epiphany-syscalls.c
++++ b/libgloss/epiphany/epiphany-syscalls.c
+@@ -253,7 +253,7 @@ int __attribute__ ((section ("libgloss_epiphany")))  e_raise(int signum) {
+ 		__asm__ __volatile__ ("wand");
+ 		//ilatst = 1 << WAND_IVT_N;
+ 		//break;
+-		return;
++		return 0;
+ 
+ 	case SIG_USR1:
+ 		ilatst = 1 << USR_SOFT_IVT_N;
+diff --git a/libgloss/epiphany/epiphany-syscalls.h b/libgloss/epiphany/epiphany-syscalls.h
+index 3af1c6f7b..b46587573 100644
+--- a/libgloss/epiphany/epiphany-syscalls.h
++++ b/libgloss/epiphany/epiphany-syscalls.h
+@@ -35,5 +35,7 @@ int asm_open(const char* FILE, int FLAGS, int MODE);
+ void asm_exit(int STATUS);
+ int asm_close(int CHAN);
+ int asm_syscall(void *P1, void *P2, void *P3, int SUBFUN);
++int _fstat (int, struct stat *st);
++
+ 
+ #endif
+diff --git a/libgloss/epiphany/fstat.c b/libgloss/epiphany/fstat.c
+index 5a20b57f3..d126c2de8 100644
+--- a/libgloss/epiphany/fstat.c
++++ b/libgloss/epiphany/fstat.c
+@@ -31,6 +31,7 @@
+ 
+ #include <sys/stat.h>
+ #include <syscall.h>
++#include "epiphany-syscalls.h"
+ 
+ 
+ /* ------------------------------------------------------------------------- */
+@@ -44,6 +45,6 @@
+ int __attribute__ ((section ("libgloss_epiphany")))
+ _fstat (int fildes, struct stat *st)
+ {
+-  return asm_syscall (fildes, st, NULL, SYS_fstat);
++  return asm_syscall ((void *)fildes, st, NULL, SYS_fstat);
+ 
+ }	/* _fstat () */
+diff --git a/libgloss/epiphany/gettimeofday.c b/libgloss/epiphany/gettimeofday.c
+index e169385ea..36f17b8b0 100644
+--- a/libgloss/epiphany/gettimeofday.c
++++ b/libgloss/epiphany/gettimeofday.c
+@@ -31,6 +31,7 @@
+ #include <errno.h>
+ #include <sys/time.h>
+ #include "syscall.h"
++#include "epiphany-syscalls.h"
+ 
+ int
+ _gettimeofday (struct timeval *tp, void *tzp)
+diff --git a/libgloss/epiphany/link.c b/libgloss/epiphany/link.c
+index d87637e39..fd0d8b9cb 100644
+--- a/libgloss/epiphany/link.c
++++ b/libgloss/epiphany/link.c
+@@ -31,6 +31,7 @@
+ 
+ #include <unistd.h>
+ #include <syscall.h>
++#include "epiphany-syscalls.h"
+ 
+ 
+ /* ------------------------------------------------------------------------- */
+diff --git a/libgloss/epiphany/lseek.c b/libgloss/epiphany/lseek.c
+index 64ffcdd28..65d7e52da 100644
+--- a/libgloss/epiphany/lseek.c
++++ b/libgloss/epiphany/lseek.c
+@@ -30,6 +30,7 @@
+ 
+ #include <syscall.h>
+ #include <sys/types.h>
++#include "epiphany-syscalls.h"
+ 
+ /* ------------------------------------------------------------------------- */
+ /*!Set a position in a file
+@@ -43,5 +44,5 @@
+ off_t __attribute__ ((section ("libgloss_epiphany")))
+ _lseek (int  fildes, off_t offset, int  whence)
+ {
+-  return asm_syscall (fildes, offset, whence, SYS_lseek);
++  return asm_syscall ((void *)fildes, (void *)offset, (void *)whence, SYS_lseek);
+ }	/* _lseek () */
+diff --git a/libgloss/epiphany/stat.c b/libgloss/epiphany/stat.c
+index 988f28dba..f9a3872a8 100644
+--- a/libgloss/epiphany/stat.c
++++ b/libgloss/epiphany/stat.c
+@@ -31,6 +31,7 @@
+ 
+ #include <sys/stat.h>
+ #include <syscall.h>
++#include "epiphany-syscalls.h"
+ 
+ 
+ /* ------------------------------------------------------------------------- */
+diff --git a/libgloss/epiphany/unlink.c b/libgloss/epiphany/unlink.c
+index c78af284d..653f24b95 100644
+--- a/libgloss/epiphany/unlink.c
++++ b/libgloss/epiphany/unlink.c
+@@ -31,6 +31,7 @@
+ 
+ #include <unistd.h>
+ #include <syscall.h>
++#include "epiphany-syscalls.h"
+ 
+ 
+ /* ------------------------------------------------------------------------- */
