@@ -24,14 +24,15 @@ index 833fe89d7..848668eaa 100644
   * kill -- go out via exit...
   */
 diff --git a/libgloss/mcore/putnum.c b/libgloss/mcore/putnum.c
-index 10e298b95..a1ef99063 100644
+index 10e298b95..924a1705a 100644
 --- a/libgloss/mcore/putnum.c
 +++ b/libgloss/mcore/putnum.c
-@@ -13,6 +13,8 @@
+@@ -13,6 +13,9 @@
   * they apply.
   */
  #include "glue.h"
-+extern _print (char *ptr);
++extern void print (char *ptr);
++
 +
  
  /*
