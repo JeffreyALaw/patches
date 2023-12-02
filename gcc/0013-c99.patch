@@ -113,3 +113,28 @@ index 4379fe70e9c..6be63c097ac 100644
 -main(){ exit (0); }
 +int main(){ exit (0); }
  #endif
+diff --git a/gcc/testsuite/gcc.target/nios2/cdx-ldstwm-1.c b/gcc/testsuite/gcc.target/nios2/cdx-ldstwm-1.c
+index 7beeea15e2f..6b7a7d0e7f4 100644
+--- a/gcc/testsuite/gcc.target/nios2/cdx-ldstwm-1.c
++++ b/gcc/testsuite/gcc.target/nios2/cdx-ldstwm-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do assemble } */
+-/* { dg-options "-O3 -fomit-frame-pointer -funroll-all-loops -finline-functions -march=r2 -mcdx -w" } */
++/* { dg-options "-O3 -fomit-frame-pointer -funroll-all-loops -finline-functions -march=r2 -mcdx -w -fpermissive" } */
+ 
+ /* Based on gcc.c-torture/compile/920501-23.c.
+    This test used to result in assembler errors with R2 CDX because of
+diff --git a/gcc/testsuite/gcc.target/nios2/cdx-ldstwm-2.c b/gcc/testsuite/gcc.target/nios2/cdx-ldstwm-2.c
+index 0e69534dcc1..eb273bbc5ec 100644
+--- a/gcc/testsuite/gcc.target/nios2/cdx-ldstwm-2.c
++++ b/gcc/testsuite/gcc.target/nios2/cdx-ldstwm-2.c
+@@ -1,6 +1,9 @@
+ /* { dg-do assemble } */
+ /* { dg-options "-O3 -fomit-frame-pointer -funroll-loops -march=r2 -mcdx -w" } */
+ 
++extern void abort (void);
++extern int exit (int);
++
+ /* Based on gcc.c-torture/execute/20021120-1.c.
+    This test used to result in assembler errors with R2 CDX because of
+    a bug in regrename; it wasn't re-validating insns after renaming, so
