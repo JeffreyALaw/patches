@@ -441,19 +441,6 @@ index 6dfd93b02..15bd8c8b9 100644
  
  caddr_t
  _sbrk (size_t incr)
-diff --git a/libgloss/bfin/syscalls.c b/libgloss/bfin/syscalls.c
-index 7bd0bede1..db9e95cb5 100644
---- a/libgloss/bfin/syscalls.c
-+++ b/libgloss/bfin/syscalls.c
-@@ -27,6 +27,8 @@
- #include <reent.h>
- #include <unistd.h>
- 
-+int main (int, char **, char **);
-+
- register char *stack_ptr asm ("SP");
- 
- static inline int
 diff --git a/libgloss/m32r/exit.c b/libgloss/m32r/exit.c
 index 5251f0d62..63a64b718 100644
 --- a/libgloss/m32r/exit.c
@@ -666,3 +653,25 @@ index f4dd201d9..3b3a7e012 100644
  /* GCC will not generate code calling this function, since the corresponding
     builtin will produce code that uses simple ops only.  In order to support
     linking against TI CLPRU objects, though, provide the function mandated
+diff --git a/libgloss/bfin/syscalls.c b/libgloss/bfin/syscalls.c
+index 7bd0bede1..8bb0f746c 100644
+--- a/libgloss/bfin/syscalls.c
++++ b/libgloss/bfin/syscalls.c
+@@ -27,6 +27,8 @@
+ #include <reent.h>
+ #include <unistd.h>
+ 
++int main (int, char **, char **);
++
+ register char *stack_ptr asm ("SP");
+ 
+ static inline int
+@@ -254,7 +256,7 @@ __setup_argv_for_main (int argc)
+     do_syscall (SYS_argn, (void *)block);
+   }
+ 
+-  return main (argc, argv);
++  return main (argc, argv, NULL);
+ }
+ 
+ int
