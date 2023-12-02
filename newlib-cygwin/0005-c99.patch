@@ -352,3 +352,37 @@ index 9df0e1fe4..f56890dcc 100644
  
  int
  inbyte ()
+diff --git a/newlib/libc/stdlib/system.c b/newlib/libc/stdlib/system.c
+index f30b7df80..04b285bcc 100644
+--- a/newlib/libc/stdlib/system.c
++++ b/newlib/libc/stdlib/system.c
+@@ -56,6 +56,10 @@ Supporting OS subroutines required: <<_exit>>, <<_execve>>, <<_fork_r>>,
+ static int do_system (struct _reent *ptr, const char *s);
+ #endif
+ 
++#if defined(HAVE_SYSTEM)
++int _system(const char *command);
++#endif
++
+ int
+ _system_r (struct _reent *ptr,
+      const char *s)
+diff --git a/libgloss/glue.h b/libgloss/glue.h
+index 0a7e36db2..784fa5067 100644
+--- a/libgloss/glue.h
++++ b/libgloss/glue.h
+@@ -13,6 +13,7 @@
+  * they apply.
+  */
+ #include <_ansi.h>
++#include <stdlib.h>
+ 
+ #ifndef NULL
+ #  define NULL 0
+@@ -28,4 +29,6 @@ extern char _end[];                /* _end is set in the linker command file */
+ /* only one prcess support, as this is OS dependant */
+ #define __MYPID 1
+ 
++void _exit (int) __attribute ((__noreturn__));
++int outbyte (char);
+ 
