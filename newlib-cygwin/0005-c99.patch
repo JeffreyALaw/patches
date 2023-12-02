@@ -441,3 +441,16 @@ index 6dfd93b02..15bd8c8b9 100644
  
  caddr_t
  _sbrk (size_t incr)
+diff --git a/libgloss/bfin/syscalls.c b/libgloss/bfin/syscalls.c
+index 7bd0bede1..db9e95cb5 100644
+--- a/libgloss/bfin/syscalls.c
++++ b/libgloss/bfin/syscalls.c
+@@ -27,6 +27,8 @@
+ #include <reent.h>
+ #include <unistd.h>
+ 
++int main (int, char **, char **);
++
+ register char *stack_ptr asm ("SP");
+ 
+ static inline int
