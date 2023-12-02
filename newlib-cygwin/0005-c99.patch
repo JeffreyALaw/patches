@@ -340,3 +340,15 @@ index 9d15b0cb7..59fc81850 100644
  /*
   * PACKAGE:  hashing
   *
+diff --git a/libgloss/ft32/sim-inbyte.c b/libgloss/ft32/sim-inbyte.c
+index 9df0e1fe4..f56890dcc 100644
+--- a/libgloss/ft32/sim-inbyte.c
++++ b/libgloss/ft32/sim-inbyte.c
+@@ -13,6 +13,7 @@
+  * the new terms are clearly indicated on the first page of each file where
+  * they apply.
+  */
++#include <unistd.h>
+ 
+ int
+ inbyte ()
