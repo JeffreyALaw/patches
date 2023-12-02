@@ -6,7 +6,7 @@ index 3f98c93589a..1d4702a0773 100644
    return p;
  }
  
-+extern _Unwind_Ptr Unwind_gnu_Find_got (_Unwind_Ptr);
++extern _Unwind_Ptr _Unwind_gnu_Find_got (_Unwind_Ptr);
 +
  /* Load an encoded value from memory at P.  The value is returned in VAL;
     The function returns P incremented past the value.  BASE is as given
