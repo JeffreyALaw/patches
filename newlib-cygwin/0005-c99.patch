@@ -1022,3 +1022,83 @@ index 27636c004..ada971c42 100644
 +volatile int __trap0 ();
  
  #define TRAP0(f, p1, p2, p3) __trap0(f, (p1), (p2), (p3))
+diff --git a/libgloss/v850/_exit.c b/libgloss/v850/_exit.c
+index 44d4132bd..7e1b09262 100644
+--- a/libgloss/v850/_exit.c
++++ b/libgloss/v850/_exit.c
+@@ -23,7 +23,7 @@ static void _do_dtors()
+ }
+ 
+ 
+-void _exit (n)
++void _exit (int n)
+ {
+   /* Destructors should be done earlier because they need to be done before the
+      files are closed, but here is better than nowhere (and this balances the
+diff --git a/libgloss/v850/getpid.c b/libgloss/v850/getpid.c
+index 32ac7fbfb..9a2fcc15f 100644
+--- a/libgloss/v850/getpid.c
++++ b/libgloss/v850/getpid.c
+@@ -9,7 +9,8 @@ int __trap0 (int function, int p1, int p2, int p3);
+ 
+ #define TRAP0(f, p1, p2, p3) __trap0(f, (int)(p1), (int)(p2), (int)(p3))
+ 
+-_getpid (n)
++int 
++_getpid (int n)
+ {
+   return 1;
+ }
+diff --git a/libgloss/v850/isatty.c b/libgloss/v850/isatty.c
+index 248ab5248..6e4f205f0 100644
+--- a/libgloss/v850/isatty.c
++++ b/libgloss/v850/isatty.c
+@@ -9,8 +9,8 @@ int __trap0 (int function, int p1, int p2, int p3);
+ 
+ #define TRAP0(f, p1, p2, p3) __trap0(f, (int)(p1), (int)(p2), (int)(p3))
+ 
+-_isatty (fd)
+-     int fd;
++int
++_isatty (int fd)
+ {
+   return 1;
+ }
+diff --git a/libgloss/v850/kill.c b/libgloss/v850/kill.c
+index 34e5db793..704aa9acc 100644
+--- a/libgloss/v850/kill.c
++++ b/libgloss/v850/kill.c
+@@ -10,6 +10,7 @@ int __trap0 (int function, int p1, int p2, int p3);
+ 
+ #define TRAP0(f, p1, p2, p3) __trap0(f, (int)(p1), (int)(p2), (int)(p3))
+ 
++int
+ _kill (pid, sig)
+      pid_t pid;
+      int sig;
+diff --git a/libgloss/v850/read.c b/libgloss/v850/read.c
+index b55d1cb9e..5ae2c9799 100644
+--- a/libgloss/v850/read.c
++++ b/libgloss/v850/read.c
+@@ -9,6 +9,7 @@ int __trap0 (int function, int p1, int p2, int p3);
+ 
+ #define TRAP0(f, p1, p2, p3) __trap0(f, (int)(p1), (int)(p2), (int)(p3))
+ 
++int
+ _read (int file,
+        char *ptr,
+        int len)
+diff --git a/libgloss/v850/sbrk.c b/libgloss/v850/sbrk.c
+index 248a092b6..65114b0b7 100644
+--- a/libgloss/v850/sbrk.c
++++ b/libgloss/v850/sbrk.c
+@@ -2,6 +2,9 @@
+ #include <sys/types.h>
+ #include <sys/stat.h>
+ #include "sys/syscall.h"
++#include <stdlib.h>
++
++extern int _write (int, char *, int);
+ 
+ caddr_t
+ _sbrk (int incr)
