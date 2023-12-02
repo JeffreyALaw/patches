@@ -374,3 +374,70 @@ index 0a7e36db2..784fa5067 100644
 +void _exit (int) __attribute ((__noreturn__));
 +int outbyte (char);
  
+diff --git a/libgloss/iq2000/getpid.c b/libgloss/iq2000/getpid.c
+index 20ab1866e..fea57daff 100644
+--- a/libgloss/iq2000/getpid.c
++++ b/libgloss/iq2000/getpid.c
+@@ -4,7 +4,8 @@
+ #include "trap.h"
+ 
+ 
+-_getpid (n)
++int
++_getpid (int n)
+ {
+   return 1;
+ }
+diff --git a/libgloss/iq2000/isatty.c b/libgloss/iq2000/isatty.c
+index 7e63a8c7c..3d8eb1910 100644
+--- a/libgloss/iq2000/isatty.c
++++ b/libgloss/iq2000/isatty.c
+@@ -4,8 +4,8 @@
+ #include "trap.h"
+ 
+ 
+-_isatty (fd)
+-     int fd;
++int
++_isatty (int fd)
+ {
+   return 1;
+ }
+diff --git a/libgloss/iq2000/kill.c b/libgloss/iq2000/kill.c
+index 40afa6a2c..d63a2f82c 100644
+--- a/libgloss/iq2000/kill.c
++++ b/libgloss/iq2000/kill.c
+@@ -4,7 +4,8 @@
+ #include "trap.h"
+ 
+ 
+-_kill (n, m)
++int
++_kill (int n, int m)
+ {
+   return TRAP0 (SYS_exit, 0xdead, 0, 0);
+ }
+diff --git a/libgloss/iq2000/read.c b/libgloss/iq2000/read.c
+index 31d24cce9..2f1878c06 100644
+--- a/libgloss/iq2000/read.c
++++ b/libgloss/iq2000/read.c
+@@ -4,6 +4,7 @@
+ #include "trap.h"
+ 
+ 
++int
+ _read (int file,
+        char *ptr,
+        size_t len)
+diff --git a/libgloss/iq2000/sbrk.c b/libgloss/iq2000/sbrk.c
+index 6dfd93b02..15bd8c8b9 100644
+--- a/libgloss/iq2000/sbrk.c
++++ b/libgloss/iq2000/sbrk.c
+@@ -4,6 +4,7 @@
+ #include <sys/stat.h>
+ #include "trap.h"
+ 
++int _write (int, char *, size_t);
+ 
+ caddr_t
+ _sbrk (size_t incr)
