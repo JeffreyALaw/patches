@@ -454,3 +454,202 @@ index 7bd0bede1..db9e95cb5 100644
  register char *stack_ptr asm ("SP");
  
  static inline int
+diff --git a/libgloss/m32r/exit.c b/libgloss/m32r/exit.c
+index 5251f0d62..63a64b718 100644
+--- a/libgloss/m32r/exit.c
++++ b/libgloss/m32r/exit.c
+@@ -4,7 +4,7 @@
+ #include "eit.h"
+ 
+ void
+-_exit (n)
++_exit (int n)
+ {
+   TRAP0 (SYS_exit, n, 0, 0);
+ }
+diff --git a/libgloss/m32r/kill.c b/libgloss/m32r/kill.c
+index d7aaee9ab..48eb0fb18 100644
+--- a/libgloss/m32r/kill.c
++++ b/libgloss/m32r/kill.c
+@@ -3,7 +3,8 @@
+ #include "syscall.h"
+ #include "eit.h"
+ 
+-_kill (n, m)
++int
++_kill (int n, int m)
+ {
+   return TRAP0 (SYS_exit, 0xdead, 0, 0);
+ }
+diff --git a/libgloss/m32r/m32r-stub.c b/libgloss/m32r/m32r-stub.c
+index 4d54f72d6..0b15d2e18 100644
+--- a/libgloss/m32r/m32r-stub.c
++++ b/libgloss/m32r/m32r-stub.c
+@@ -160,6 +160,8 @@ static int *stackPtr = &remcomStack[STACKSIZE / sizeof (int) - 1];
+ 
+ static unsigned int save_vectors[18];	/* previous exception vectors */
+ 
++extern unsigned int getExceptionHandler (int);
++
+ /* Indicate to caller of mem2hex or hex2mem that there has been an error. */
+ static volatile int mem_err = 0;
+ 
+@@ -198,8 +200,8 @@ static unsigned long crc32 (unsigned char *, int, unsigned long);
+ static void gdb_error (char *, char *);
+ static int gdb_putchar (int), gdb_puts (char *), gdb_write (char *, int);
+ 
+-static unsigned char *strcpy (unsigned char *, const unsigned char *);
+-static int strlen (const unsigned char *);
++static unsigned char *my_strcpy (unsigned char *, const unsigned char *);
++static int my_strlen (const unsigned char *);
+ 
+ /*
+  * This function does all command procesing for interfacing to gdb.
+@@ -326,10 +328,10 @@ handle_exception (int exceptionVector)
+ 	case 'R':
+ 	  if (hexToInt (&ptr, &addr))
+ 	    registers[PC] = addr;
+-	  strcpy (remcomOutBuffer, "OK");
++	  my_strcpy (remcomOutBuffer, "OK");
+ 	  break;
+ 	case '!':
+-	  strcpy (remcomOutBuffer, "OK");
++	  my_strcpy (remcomOutBuffer, "OK");
+ 	  break;
+ 	case 'X':		/* XAA..AA,LLLL:<binary data>#cs */
+ 	  binary = 1;
+@@ -348,18 +350,18 @@ handle_exception (int exceptionVector)
+ 			hex2mem (ptr, (unsigned char *) addr, length, 1);
+ 		      if (mem_err)
+ 			{
+-			  strcpy (remcomOutBuffer, "E03");
++			  my_strcpy (remcomOutBuffer, "E03");
+ 			  gdb_error ("memory fault", "");
+ 			}
+ 		      else
+ 			{
+-			  strcpy (remcomOutBuffer, "OK");
++			  my_strcpy (remcomOutBuffer, "OK");
+ 			}
+ 		      ptr = 0;
+ 		    }
+ 	    if (ptr)
+ 	      {
+-		strcpy (remcomOutBuffer, "E02");
++		my_strcpy (remcomOutBuffer, "E02");
+ 	      }
+ 	  }
+ 	  break;
+@@ -375,13 +377,13 @@ handle_exception (int exceptionVector)
+ 			   1);
+ 		  if (mem_err)
+ 		    {
+-		      strcpy (remcomOutBuffer, "E03");
++		      my_strcpy (remcomOutBuffer, "E03");
+ 		      gdb_error ("memory fault", "");
+ 		    }
+ 		}
+ 	  if (ptr)
+ 	    {
+-	      strcpy (remcomOutBuffer, "E01");
++	      my_strcpy (remcomOutBuffer, "E01");
+ 	    }
+ 	  break;
+ 	case '?':
+@@ -436,15 +438,15 @@ handle_exception (int exceptionVector)
+ 		      else	/* stack in interrupt mode */
+ 			registers[R15] = registers[SPU];
+ 		    }
+-		  strcpy (remcomOutBuffer, "OK");
++		  my_strcpy (remcomOutBuffer, "OK");
+ 		  break;
+ 		}
+-	    strcpy (remcomOutBuffer, "E01");
++	    my_strcpy (remcomOutBuffer, "E01");
+ 	    break;
+ 	  }
+ 	case 'G':		/* set the value of the CPU registers - return OK */
+ 	  hex2mem (ptr, (unsigned char *) registers, NUMREGBYTES, 0);
+-	  strcpy (remcomOutBuffer, "OK");
++	  my_strcpy (remcomOutBuffer, "OK");
+ 	  break;
+ 	case 's':		/* sAA..AA      Step one instruction from AA..AA(optional) */
+ 	  stepping = 1;
+@@ -511,7 +513,7 @@ handle_exception (int exceptionVector)
+ 	  putpacket ("OK");
+ 	  return;		/* continue the inferior */
+ #else
+-	  strcpy (remcomOutBuffer, "OK");
++	  my_strcpy (remcomOutBuffer, "OK");
+ 	  break;
+ #endif
+ 	case 'q':
+@@ -1692,7 +1694,7 @@ gdb_write (char *data, int len)
+ static int
+ gdb_puts (char *str)
+ {
+-  return gdb_write (str, strlen (str));
++  return gdb_write (str, my_strlen (str));
+ }
+ 
+ /* Function: gdb_error(char *, char *)
+@@ -1709,12 +1711,12 @@ gdb_error (char *format, char *parm)
+   if (remote_debug)
+     {
+       if (format && *format)
+-	len = strlen (format);
++	len = my_strlen (format);
+       else
+ 	return;			/* empty input */
+ 
+       if (parm && *parm)
+-	len += strlen (parm);
++	len += my_strlen (parm);
+ 
+       for (cpy = buf; *format;)
+ 	{
+@@ -1733,7 +1735,7 @@ gdb_error (char *format, char *parm)
+ }
+ 
+ static unsigned char *
+-strcpy (unsigned char *dest, const unsigned char *src)
++my_strcpy (unsigned char *dest, const unsigned char *src)
+ {
+   unsigned char *ret = dest;
+ 
+@@ -1747,7 +1749,7 @@ strcpy (unsigned char *dest, const unsigned char *src)
+ }
+ 
+ static int
+-strlen (const unsigned char *src)
++my_strlen (const unsigned char *src)
+ {
+   int ret;
+ 
+diff --git a/libgloss/m32r/raise.c b/libgloss/m32r/raise.c
+index b2dc2f65d..be79df21f 100644
+--- a/libgloss/m32r/raise.c
++++ b/libgloss/m32r/raise.c
+@@ -1,5 +1,6 @@
+ /* ??? Needed?  */
+ 
+-_raise ()
++int
++_raise (void)
+ {
+ }
+diff --git a/libgloss/m32r/sbrk.c b/libgloss/m32r/sbrk.c
+index bc8209104..92a9b60a1 100644
+--- a/libgloss/m32r/sbrk.c
++++ b/libgloss/m32r/sbrk.c
+@@ -2,6 +2,10 @@
+ #include <sys/stat.h>
+ #include "syscall.h"
+ #include "eit.h"
++#include <stdlib.h>
++
++
++extern int _write (int, char *, int);
+ 
+ caddr_t
+ _sbrk (int incr)
