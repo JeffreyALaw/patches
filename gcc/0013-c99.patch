@@ -138,3 +138,35 @@ index 0e69534dcc1..eb273bbc5ec 100644
  /* Based on gcc.c-torture/execute/20021120-1.c.
     This test used to result in assembler errors with R2 CDX because of
     a bug in regrename; it wasn't re-validating insns after renaming, so
+diff --git a/libgcc/config/rx/rx-abi-functions.c b/libgcc/config/rx/rx-abi-functions.c
+index f505d7d24c3..fc96e4ff171 100644
+--- a/libgcc/config/rx/rx-abi-functions.c
++++ b/libgcc/config/rx/rx-abi-functions.c
+@@ -33,6 +33,13 @@
+ 
+ #ifdef __RX_64BIT_DOUBLES__
+ 
++extern int __ltdf2 (double, double);
++extern int __gtdf2 (double, double);
++extern int __ledf2 (double, double);
++extern int __gedf2 (double, double);
++extern int __eqdf2 (double, double);
++extern int __nedf2 (double, double);
++
+ int _COM_CMPLTd (double a, double b) { return __ltdf2 (a, b) == -1; }
+ int _COM_CMPGTd (double a, double b) { return __gtdf2 (a, b) == 1; }
+ int _COM_CMPLEd (double a, double b) { return __ledf2 (a, b) != 1; }
+@@ -49,6 +56,13 @@ int _COM_CMPNEf (double, double) __attribute__ ((weak, alias ("_COM_CMPNEd")));
+ 
+ #else /* 32-bit doubles.  */
+ 
++extern int __ltsf2 (float, float);
++extern int __gtsf2 (float, float);
++extern int __lesf2 (float, float);
++extern int __gesf2 (float, float);
++extern int __eqsf2 (float, float);
++extern int __nesf2 (float, float);
++
+ double _COM_CONVfd (float a) { return a; }
+ float  _COM_CONVdf (double a) { return a; }
+ 
