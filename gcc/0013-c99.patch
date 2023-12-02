@@ -102,3 +102,14 @@ index 9fa25f0dd13..8fe4efbdd98 100644
  
  int fabsd32 (void);
  int fabsd64 (void);
+diff --git a/gcc/testsuite/gcc.c-torture/execute/comp-goto-1.c b/gcc/testsuite/gcc.c-torture/execute/comp-goto-1.c
+index 4379fe70e9c..6be63c097ac 100644
+--- a/gcc/testsuite/gcc.c-torture/execute/comp-goto-1.c
++++ b/gcc/testsuite/gcc.c-torture/execute/comp-goto-1.c
+@@ -163,5 +163,5 @@ main ()
+   exit (0);
+ }
+ #else
+-main(){ exit (0); }
++int main(){ exit (0); }
+ #endif
