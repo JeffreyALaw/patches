@@ -8067,12 +8067,13 @@ new file mode 100644
 index 00000000000..be3e1866b21
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-15.c
-@@ -0,0 +1,30 @@
+@@ -0,0 +1,31 @@
 +/* { dg-do compile } */
 +/* { dg-options "-O2 -w -fdump-tree-crc-details" } */
 +
 +/* Test from busybox, we don't verify as it depends on endian variable.  */
 +#include <stdint.h>
++#include <stdlib.h>
 +
 +uint32_t* crc32_filltable(uint32_t *crc_table, int endian)
 +{
@@ -8081,7 +8082,7 @@ index 00000000000..be3e1866b21
 +  unsigned i, j;
 +
 +  if (!crc_table)
-+    crc_table = xmalloc (256 * sizeof (uint32_t));
++    crc_table = malloc (256 * sizeof (uint32_t));
 +
 +  for (i = 0; i < 256; i++)
 +    {
