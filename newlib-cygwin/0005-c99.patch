@@ -675,3 +675,217 @@ index 7bd0bede1..8bb0f746c 100644
  }
  
  int
+diff --git a/newlib/libm/complex/cargl.c b/newlib/libm/complex/cargl.c
+index 790cffe8f..ac6ba1e7d 100644
+--- a/newlib/libm/complex/cargl.c
++++ b/newlib/libm/complex/cargl.c
+@@ -7,6 +7,8 @@
+ #include <complex.h>
+ #include <math.h>
+ 
++long double atan2l(long double y, long double x);
++
+ long double
+ cargl(long double complex z)
+ {     
+diff --git a/newlib/libm/complex/catanl.c b/newlib/libm/complex/catanl.c
+index 13839ac73..78172d8c4 100644
+--- a/newlib/libm/complex/catanl.c
++++ b/newlib/libm/complex/catanl.c
+@@ -33,6 +33,9 @@
+ #include <math.h>
+ #include "cephes_subrl.h"
+ 
++long double logl(long double x);
++long double atan2l(long double x, long double y);
++
+ #ifdef __weak_alias
+ __weak_alias(catanl, _catanl)
+ #endif
+diff --git a/newlib/libm/complex/ccoshl.c b/newlib/libm/complex/ccoshl.c
+index f59fadf7a..2ee4ca364 100644
+--- a/newlib/libm/complex/ccoshl.c
++++ b/newlib/libm/complex/ccoshl.c
+@@ -32,6 +32,11 @@
+ #include <complex.h>
+ #include <math.h>
+ 
++long double coshl(long double x);
++long double sinhl(long double x);
++long double sinl(long double x);
++long double cosl(long double x);
++
+ long double complex
+ ccoshl(long double complex z)
+ {
+diff --git a/newlib/libm/complex/ccosl.c b/newlib/libm/complex/ccosl.c
+index c310f4024..f71d94385 100644
+--- a/newlib/libm/complex/ccosl.c
++++ b/newlib/libm/complex/ccosl.c
+@@ -33,6 +33,9 @@
+ #include <math.h>
+ #include "cephes_subrl.h"
+ 
++long double cosl(long double x);
++long double sinl(long double x);
++
+ long double complex
+ ccosl(long double complex z)
+ {
+diff --git a/newlib/libm/complex/cephes_subrl.c b/newlib/libm/complex/cephes_subrl.c
+index 8af11df76..f890447c7 100644
+--- a/newlib/libm/complex/cephes_subrl.c
++++ b/newlib/libm/complex/cephes_subrl.c
+@@ -33,6 +33,13 @@
+ #include <math.h>
+ #include "cephes_subrl.h"
+ 
++long double expl(long double x);
++long double cosl(long double x);
++long double sinl(long double x);
++long double coshl(long double x);
++long double sinhl(long double x);
++long double fabsl(long double x);
++
+ /* calculate cosh and sinh */
+ 
+ void
+diff --git a/newlib/libm/complex/cexpl.c b/newlib/libm/complex/cexpl.c
+index 8b56634ba..627b4f33b 100644
+--- a/newlib/libm/complex/cexpl.c
++++ b/newlib/libm/complex/cexpl.c
+@@ -32,6 +32,10 @@
+ #include <complex.h>
+ #include <math.h>
+ 
++long double expl(long double x);
++long double cosl(long double x);
++long double sinl(long double x);
++
+ long double complex
+ cexpl(long double complex z)
+ {
+diff --git a/newlib/libm/complex/clogl.c b/newlib/libm/complex/clogl.c
+index 3644a44fc..48b9f3ac9 100644
+--- a/newlib/libm/complex/clogl.c
++++ b/newlib/libm/complex/clogl.c
+@@ -32,6 +32,9 @@
+ #include <complex.h>
+ #include <math.h>
+ 
++long double logl (long double);
++long double atan2l(long double y, long double x);
++
+ long double complex
+ clogl(long double complex z)
+ {
+diff --git a/newlib/libm/complex/cpowl.c b/newlib/libm/complex/cpowl.c
+index 85c2c20f2..b6695c179 100644
+--- a/newlib/libm/complex/cpowl.c
++++ b/newlib/libm/complex/cpowl.c
+@@ -32,6 +32,13 @@
+ #include <complex.h>
+ #include <math.h>
+ 
++long double powl(long double, long double);
++long double expl(long double x);
++long double logl(long double x);
++long double cosl(long double x);
++long double sinl(long double x);
++
++
+ long double complex
+ cpowl(long double complex a, long double complex z)
+ {
+diff --git a/newlib/libm/complex/cprojl.c b/newlib/libm/complex/cprojl.c
+index e71c77353..d82516a62 100644
+--- a/newlib/libm/complex/cprojl.c
++++ b/newlib/libm/complex/cprojl.c
+@@ -33,6 +33,8 @@ __RCSID("$NetBSD: cprojl.c,v 1.7 2014/10/10 00:48:18 christos Exp $");
+ 
+ #include "../common/fdlibm.h"
+ 
++long double copysignl(long double x, long double y);
++
+ /*
+  * cprojl(long double complex z)
+  *
+diff --git a/newlib/libm/complex/csinhl.c b/newlib/libm/complex/csinhl.c
+index 44ed05037..e9865f995 100644
+--- a/newlib/libm/complex/csinhl.c
++++ b/newlib/libm/complex/csinhl.c
+@@ -32,6 +32,11 @@
+ #include <complex.h>
+ #include <math.h>
+ 
++long double cosl(long double x);
++long double sinl(long double x);
++long double coshl(long double x);
++long double sinhl(long double x);
++
+ long double complex
+ csinhl(long double complex z)
+ {
+diff --git a/newlib/libm/complex/csinl.c b/newlib/libm/complex/csinl.c
+index 2b96c7225..2c1997cae 100644
+--- a/newlib/libm/complex/csinl.c
++++ b/newlib/libm/complex/csinl.c
+@@ -33,6 +33,9 @@
+ #include <math.h>
+ #include "cephes_subrl.h"
+ 
++long double cosl(long double x);
++long double sinl(long double x);
++
+ long double complex
+ csinl(long double complex z)
+ {
+diff --git a/newlib/libm/complex/csqrtl.c b/newlib/libm/complex/csqrtl.c
+index c10a1264a..985aad4b0 100644
+--- a/newlib/libm/complex/csqrtl.c
++++ b/newlib/libm/complex/csqrtl.c
+@@ -35,6 +35,11 @@ __RCSID("$NetBSD: csqrtl.c,v 1.2 2014/10/11 00:43:51 christos Exp $");
+ #include <float.h>
+ #include <math.h>
+ #include <stdbool.h>
++
++long double fabsl(long double x);
++long double copysignl(long double x, long double y);
++
++
+ /*
+  * gcc doesn't implement complex multiplication or division correctly,
+  * so we need to handle infinities specially. We turn on this pragma to
+diff --git a/newlib/libm/complex/ctanhl.c b/newlib/libm/complex/ctanhl.c
+index 1db886f63..619a03f72 100644
+--- a/newlib/libm/complex/ctanhl.c
++++ b/newlib/libm/complex/ctanhl.c
+@@ -32,6 +32,11 @@
+ #include <complex.h>
+ #include <math.h>
+ 
++long double cosl(long double x);
++long double sinl(long double x);
++long double coshl(long double x);
++long double sinhl(long double x);
++
+ long double complex
+ ctanhl(long double complex z)
+ {
+diff --git a/newlib/libm/complex/ctanl.c b/newlib/libm/complex/ctanl.c
+index c5c887c74..5fe76a718 100644
+--- a/newlib/libm/complex/ctanl.c
++++ b/newlib/libm/complex/ctanl.c
+@@ -34,6 +34,12 @@
+ #include <math.h>
+ #include "cephes_subrl.h"
+ 
++long double cosl(long double x);
++long double sinl(long double x);
++long double coshl(long double x);
++long double sinhl(long double x);
++long double fabsl(long double x);
++
+ long double complex
+ ctanl(long double complex z)
+ {
