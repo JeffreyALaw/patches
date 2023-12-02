@@ -278,3 +278,75 @@ index 9d15b0cb7..1fa1eb911 100644
  
  /*
   * PACKAGE:  hashing
+diff --git a/newlib/libc/reent/signalr.c b/newlib/libc/reent/signalr.c
+index 863ae7400..2a33e333e 100644
+--- a/newlib/libc/reent/signalr.c
++++ b/newlib/libc/reent/signalr.c
+@@ -6,6 +6,8 @@
+ #include <unistd.h>
+ #include <_syslist.h>
+ 
++int _kill (pid_t, int); 
++
+ /* Some targets provides their own versions of these functions.  Those
+    targets should define REENTRANT_SYSCALLS_PROVIDED in TARGET_CFLAGS.  */
+ 
+diff --git a/newlib/libc/search/hash_page.c b/newlib/libc/search/hash_page.c
+index 9d15b0cb7..0f820187a 100644
+--- a/newlib/libc/search/hash_page.c
++++ b/newlib/libc/search/hash_page.c
+@@ -36,6 +36,10 @@ static char sccsid[] = "@(#)hash_page.c	8.7 (Berkeley) 8/16/94";
+ #endif /* LIBC_SCCS and not lint */
+ #include <sys/cdefs.h>
+ 
++#include <signal.h>
++int sigfillset (sigset_t *); 
++
++
+ /*
+  * PACKAGE:  hashing
+  *
+diff --git a/libgloss/cris/gensyscalls b/libgloss/cris/gensyscalls
+index c36f28488..0be9bbd79 100644
+--- a/libgloss/cris/gensyscalls
++++ b/libgloss/cris/gensyscalls
+@@ -257,6 +257,7 @@ cat > unlink.c <<EOF
+ $lui _unlink (const char *f${r}unlink (f))
+ EOF
+ cat > wait.c <<EOF
++$lui _getpid (void);
+ $lui _wait (int *status${r}wait4 (_getpid(), status, 0, 0))
+ EOF
+ cat > write.c <<EOF
+diff --git a/libgloss/cris/lcrt0.c b/libgloss/cris/lcrt0.c
+index 48489edd3..a4f598858 100644
+--- a/libgloss/cris/lcrt0.c
++++ b/libgloss/cris/lcrt0.c
+@@ -27,6 +27,7 @@
+    POSSIBILITY OF SUCH DAMAGE.  */
+ 
+ #include "linunistd.h"
++#include <stdlib.h>
+ #include "newlib.h"
+ 
+ #ifdef _HAVE_INITFINI_ARRAY
+@@ -99,6 +100,7 @@ extern void _Libdtors (void);
+ 
+ extern void __init__start (void) __attribute ((weak));
+ extern void __aout__ctors (void) __attribute ((weak));
++extern int main (int, char **, char **);
+ 
+ static void start1 () __asm__ ("__start1") __attribute ((__used__));
+ static void
+diff --git a/libgloss/cris/outbyte.c b/libgloss/cris/outbyte.c
+index 1cb686b96..48ac10f76 100644
+--- a/libgloss/cris/outbyte.c
++++ b/libgloss/cris/outbyte.c
+@@ -2,6 +2,7 @@
+    function.  Too small and obvious to warrant a copyright notice.  */
+ 
+ #include <stdio.h>
++#include <unistd.h>
+ void
+ outbyte (int ch)
+ {
