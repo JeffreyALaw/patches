@@ -279,21 +279,6 @@ index 863ae7400..2a33e333e 100644
  /* Some targets provides their own versions of these functions.  Those
     targets should define REENTRANT_SYSCALLS_PROVIDED in TARGET_CFLAGS.  */
  
-diff --git a/newlib/libc/search/hash_page.c b/newlib/libc/search/hash_page.c
-index 9d15b0cb7..0f820187a 100644
---- a/newlib/libc/search/hash_page.c
-+++ b/newlib/libc/search/hash_page.c
-@@ -36,6 +36,10 @@ static char sccsid[] = "@(#)hash_page.c	8.7 (Berkeley) 8/16/94";
- #endif /* LIBC_SCCS and not lint */
- #include <sys/cdefs.h>
- 
-+#include <signal.h>
-+int sigfillset (sigset_t *); 
-+
-+
- /*
-  * PACKAGE:  hashing
-  *
 diff --git a/libgloss/cris/gensyscalls b/libgloss/cris/gensyscalls
 index c36f28488..0be9bbd79 100644
 --- a/libgloss/cris/gensyscalls
