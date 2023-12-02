@@ -266,3 +266,15 @@ index 98cd3c40e..c44c64a44 100644
  /*
   * kill -- go out via exit...
   */
+diff --git a/newlib/libc/search/hash_page.c b/newlib/libc/search/hash_page.c
+index 9d15b0cb7..1fa1eb911 100644
+--- a/newlib/libc/search/hash_page.c
++++ b/newlib/libc/search/hash_page.c
+@@ -35,6 +35,7 @@
+ static char sccsid[] = "@(#)hash_page.c	8.7 (Berkeley) 8/16/94";
+ #endif /* LIBC_SCCS and not lint */
+ #include <sys/cdefs.h>
++#include <signal.h>
+ 
+ /*
+  * PACKAGE:  hashing
