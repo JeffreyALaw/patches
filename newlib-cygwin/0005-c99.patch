@@ -653,28 +653,6 @@ index f4dd201d9..3b3a7e012 100644
  /* GCC will not generate code calling this function, since the corresponding
     builtin will produce code that uses simple ops only.  In order to support
     linking against TI CLPRU objects, though, provide the function mandated
-diff --git a/libgloss/bfin/syscalls.c b/libgloss/bfin/syscalls.c
-index 7bd0bede1..8bb0f746c 100644
---- a/libgloss/bfin/syscalls.c
-+++ b/libgloss/bfin/syscalls.c
-@@ -27,6 +27,8 @@
- #include <reent.h>
- #include <unistd.h>
- 
-+int main (int, char **, char **);
-+
- register char *stack_ptr asm ("SP");
- 
- static inline int
-@@ -254,7 +256,7 @@ __setup_argv_for_main (int argc)
-     do_syscall (SYS_argn, (void *)block);
-   }
- 
--  return main (argc, argv);
-+  return main (argc, argv, NULL);
- }
- 
- int
 diff --git a/newlib/libm/complex/cargl.c b/newlib/libm/complex/cargl.c
 index 790cffe8f..ac6ba1e7d 100644
 --- a/newlib/libm/complex/cargl.c
@@ -907,3 +885,34 @@ index 849470c94..4bc74ae3e 100644
  
 -char * write (int) __attribute__((weak, alias ("_write")));
 +int write (int, char *, int) __attribute__((weak, alias ("_write")));
+diff --git a/libgloss/bfin/syscalls.c b/libgloss/bfin/syscalls.c
+index 7bd0bede1..2282049e9 100644
+--- a/libgloss/bfin/syscalls.c
++++ b/libgloss/bfin/syscalls.c
+@@ -27,6 +27,8 @@
+ #include <reent.h>
+ #include <unistd.h>
+ 
++int main (int, char **, char **);
++
+ register char *stack_ptr asm ("SP");
+ 
+ static inline int
+@@ -254,7 +256,7 @@ __setup_argv_for_main (int argc)
+     do_syscall (SYS_argn, (void *)block);
+   }
+ 
+-  return main (argc, argv);
++  return main (argc, argv, NULL);
+ }
+ 
+ int
+@@ -263,7 +265,7 @@ __setup_argv_and_call_main ()
+   int argc = do_syscall (SYS_argc, 0);
+ 
+   if (argc <= 0)
+-    return main (argc, NULL);
++    return main (argc, NULL, NULL);
+   else
+     return __setup_argv_for_main (argc);
+ }
