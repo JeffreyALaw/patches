@@ -11,3 +11,16 @@ index 3f98c93589a..1d4702a0773 100644
  /* Load an encoded value from memory at P.  The value is returned in VAL;
     The function returns P incremented past the value.  BASE is as given
     by base_of_encoded_value for this encoding in the appropriate context.  */
+diff --git a/gcc/testsuite/gcc.c-torture/execute/pr65369.c b/gcc/testsuite/gcc.c-torture/execute/pr65369.c
+index 017fe1b01ce..548b48fa43f 100644
+--- a/gcc/testsuite/gcc.c-torture/execute/pr65369.c
++++ b/gcc/testsuite/gcc.c-torture/execute/pr65369.c
+@@ -6,7 +6,7 @@ static const char data[] =
+   "123456789012345678901234567890";
+ 
+ __attribute__ ((noinline))
+-static void foo (const unsigned int *buf)
++static void foo (const uint32_t *buf)
+ {
+   if (__builtin_memcmp (buf, data, 64))
+     __builtin_abort ();
