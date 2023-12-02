@@ -24,3 +24,81 @@ index 017fe1b01ce..548b48fa43f 100644
  {
    if (__builtin_memcmp (buf, data, 64))
      __builtin_abort ();
+diff --git a/gcc/testsuite/gcc.target/arc/lra-1.c b/gcc/testsuite/gcc.target/arc/lra-1.c
+index 27336d1a6af..3c936453663 100644
+--- a/gcc/testsuite/gcc.target/arc/lra-1.c
++++ b/gcc/testsuite/gcc.target/arc/lra-1.c
+@@ -4,12 +4,16 @@
+ /* ap is replaced with an address like base+offset by lra,
+    where offset is larger than s9, resulting into an ICE.  */
+ 
+-typedef struct { char a[500] } b;
+-c;
++typedef struct { char a[500]; } b;
++int c;
+ struct d {
+   short e;
+-  b f
+-} g(int h, int i, int j, int k, char l, int m, int n, char *p) {
++  b f;
++};
++
++int q (struct d);
++
++struct d g(int h, int i, int j, int k, char l, int m, int n, char *p) {
+ again:;
+   struct d o;
+   *p = c = ({ q(o); });
+diff --git a/gcc/testsuite/gcc.target/arc/pic-1.c b/gcc/testsuite/gcc.target/arc/pic-1.c
+index ab24763b67f..ed1e4d3765e 100644
+--- a/gcc/testsuite/gcc.target/arc/pic-1.c
++++ b/gcc/testsuite/gcc.target/arc/pic-1.c
+@@ -3,6 +3,9 @@
+ /* { dg-skip-if "PIC not available for ARC6xx" { arc6xx } } */
+ /* { dg-options "-mno-sdata -w -Os -fpic" } */
+ 
++void e (char);
++
++void 
+ a() {
+   char *b = "";
+   char c;
+diff --git a/gcc/testsuite/gcc.target/arc/pr9001191897.c b/gcc/testsuite/gcc.target/arc/pr9001191897.c
+index fc3642629d3..d51b0429044 100644
+--- a/gcc/testsuite/gcc.target/arc/pr9001191897.c
++++ b/gcc/testsuite/gcc.target/arc/pr9001191897.c
+@@ -1,7 +1,8 @@
+ /* { dg-do compile } */
+ /* { dg-skip-if "" { ! { clmcpu } } } */
+ /* { dg-options "-mcpu=archs -Os -fpic -mno-sdata -mno-indexed-loads -w" } */
+-a;
++int a;
++void
+ c() {
+   static char b[25];
+   for (; a >= 0; a--)
+diff --git a/gcc/testsuite/gcc.target/arc/pr9001195952.c b/gcc/testsuite/gcc.target/arc/pr9001195952.c
+index 252438d8d78..f820960d5e3 100644
+--- a/gcc/testsuite/gcc.target/arc/pr9001195952.c
++++ b/gcc/testsuite/gcc.target/arc/pr9001195952.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-skip-if "" { ! { clmcpu } } } */
+-/* { dg-options "-mcpu=archs -Os -w -fpic" } */
++/* { dg-options "-mcpu=archs -Os -w -fpic -fpermissive" } */
+ 
+ /* tst_movb split pattern is wrong for anything else than NPS
+    chip.  */
+diff --git a/gcc/testsuite/gcc.dg/gnu23-builtins-no-dfp-1.c b/gcc/testsuite/gcc.dg/gnu23-builtins-no-dfp-1.c
+index 9fa25f0dd13..8fe4efbdd98 100644
+--- a/gcc/testsuite/gcc.dg/gnu23-builtins-no-dfp-1.c
++++ b/gcc/testsuite/gcc.dg/gnu23-builtins-no-dfp-1.c
+@@ -1,7 +1,7 @@
+ /* Test C23 built-in functions: test DFP built-in functions are not
+    available when no DFP support.  Bug 91985.  */
+ /* { dg-do compile { target { ! dfp } } } */
+-/* { dg-options "-std=gnu23" } */
++/* { dg-options "-std=gnu23 -fpermissive" } */
+ 
+ int fabsd32 (void);
+ int fabsd64 (void);
