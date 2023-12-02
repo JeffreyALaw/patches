@@ -1102,3 +1102,73 @@ index 248a092b6..65114b0b7 100644
  
  caddr_t
  _sbrk (int incr)
+diff --git a/newlib/libc/sys/h8300hms/crt0.S b/newlib/libc/sys/h8300hms/crt0.S
+index 6394f6841..05634113c 100644
+--- a/newlib/libc/sys/h8300hms/crt0.S
++++ b/newlib/libc/sys/h8300hms/crt0.S
+@@ -9,12 +9,10 @@
+ _start:
+ 	mov.w	#_stack,sp
+ 	mov.w	#_edata,r0
+-	mov.w	#_end,r1
+-	sub.w   r2,r2
+-.Loop:	mov.w	r2,@r0
+-	adds	#2,r0
+-	cmp	r1,r0
+-	blo	.Loop
++	mov.w	#_end,r2
++	sub.w   r1,r1
++	sub.w	r0,r2
++	jsr	@_memset
+ #ifdef __ELF__
+ 	mov.l   #__fini,r0
+ 	jsr     @_atexit
+@@ -43,12 +41,10 @@ _stack:	.word 	1
+ _start:
+ 	mov.l	#_stack,sp
+ 	mov.l	#_edata,er0
+-	mov.l	#_end,er1
+-	sub.w   r2,r2           ; not sure about alignment requirements
+-.Loop:	mov.w	r2,@er0		; playing it safe for now
+-	adds	#2,er0
+-	cmp.l	er1,er0
+-	blo	.Loop
++	mov.l	#_end,er2
++	sub.w   r1,r1
++	sub.l	er0,er2
++	jsr	@_memset
+ #ifdef __ELF__
+ 	mov.l   #__fini,er0
+ 	jsr     @_atexit
+@@ -77,12 +73,10 @@ _stack:	.long 	1
+ _start:
+ 	mov.l	#_stack,sp
+ 	mov.l	#_edata,er0
+-	mov.l	#_end,er1
+-	sub.w   r2,r2           ; not sure about alignment requirements
+-.Loop:	mov.w	r2,@er0		; playing it safe for now
+-	adds	#2,er0
+-	cmp.l	er1,er0
+-	blo	.Loop
++	mov.l	#_end,er2
++	sub.w   r1,r1
++	sub.l	er0,er2
++	jsr	@_memset
+ #ifdef __ELF__
+ 	mov.l   #__fini,er0
+ 	jsr     @_atexit
+diff --git a/newlib/libc/sys/h8300hms/sbrk.c b/newlib/libc/sys/h8300hms/sbrk.c
+index 1456a67eb..a99ae2904 100644
+--- a/newlib/libc/sys/h8300hms/sbrk.c
++++ b/newlib/libc/sys/h8300hms/sbrk.c
+@@ -1,8 +1,10 @@
+ #include <_ansi.h>
+ #include <sys/types.h>
+ #include <sys/stat.h>
++#include <stdlib.h>
+ 
+ register char *stack_ptr asm ("sp");
++extern int _write (int, char *, int);
+ 
+ caddr_t 
+   _sbrk(incr)
