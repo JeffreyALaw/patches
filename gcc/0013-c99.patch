@@ -170,3 +170,27 @@ index f505d7d24c3..fc96e4ff171 100644
  double _COM_CONVfd (float a) { return a; }
  float  _COM_CONVdf (double a) { return a; }
  
+diff --git a/gcc/testsuite/gcc.target/h8300/pr17306-2.c b/gcc/testsuite/gcc.target/h8300/pr17306-2.c
+index a407c74b4cd..8c79f31b9db 100644
+--- a/gcc/testsuite/gcc.target/h8300/pr17306-2.c
++++ b/gcc/testsuite/gcc.target/h8300/pr17306-2.c
+@@ -8,6 +8,8 @@ struct x {
+   char y;
+ };
+ 
++void oof (void);
++
+ struct x __attribute__ ((eightbit_data)) foo;
+ 
+ int bar ()
+diff --git a/gcc/testsuite/gcc.target/h8300/pr58400.c b/gcc/testsuite/gcc.target/h8300/pr58400.c
+index 496626f4b48..9d1ad7a2202 100644
+--- a/gcc/testsuite/gcc.target/h8300/pr58400.c
++++ b/gcc/testsuite/gcc.target/h8300/pr58400.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile }  */
+-/* { dg-options "-Os -mh -mint32 -w" }  */
++/* { dg-options "-Os -mh -mint32 -w -fpermissive" }  */
+ 
+  typedef unsigned short __u16;
+  typedef __signed__ int __s32;
