@@ -1295,3 +1295,15 @@ index 9d39751b3..32440b11d 100644
  int
  inbyte ()
  {
+diff --git a/libgloss/xstormy16/eva_app.c b/libgloss/xstormy16/eva_app.c
+index f6069fc7c..fa543fbd6 100644
+--- a/libgloss/xstormy16/eva_app.c
++++ b/libgloss/xstormy16/eva_app.c
+@@ -12,6 +12,7 @@
+  * the new terms are clearly indicated on the first page of each file where
+  * they apply.
+  */
++#include <string.h>
+ #include "glue.h"
+ 
+ typedef void (*write_proc_t)(char *buf, int nbytes);
