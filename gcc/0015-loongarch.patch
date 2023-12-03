@@ -1,0 +1,14 @@
+
+diff --git a/gcc/testsuite/gcc.target/loongarch/vector/loongarch-vector.exp b/gcc/testsuite/gcc.target/loongarch/vector/loongarch-vector.exp
+index d53bee52ab1..cea5bc5e8c5 100644
+--- a/gcc/testsuite/gcc.target/loongarch/vector/loongarch-vector.exp
++++ b/gcc/testsuite/gcc.target/loongarch/vector/loongarch-vector.exp
+@@ -44,7 +44,7 @@ if {[check_effective_target_loongarch_sx_hw]} then {
+ 
+ #Main loop.
+ dg-runtest [lsort [glob -nocomplain $srcdir/$subdir/lsx/*.\[cS\]]] \
+-	" -mlsx" $DEFAULT_CFLAGS
++	" -mlsx -fpermissive" $DEFAULT_CFLAGS
+ 
+ dg-finish
+ 
