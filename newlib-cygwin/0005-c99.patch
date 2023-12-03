@@ -1269,3 +1269,29 @@ index 1e7466a8d..57d058741 100644
  int
  inbyte ()
  {
+diff --git a/libgloss/frv/putnum.c b/libgloss/frv/putnum.c
+index a07315e13..b2b2c4435 100644
+--- a/libgloss/frv/putnum.c
++++ b/libgloss/frv/putnum.c
+@@ -14,6 +14,8 @@
+  */
+ #include "glue.h"
+ 
++extern void print (char *ptr);
++
+ /*
+  * putnum -- print a 32 bit number in hex
+  */
+diff --git a/libgloss/frv/sim-inbyte.c b/libgloss/frv/sim-inbyte.c
+index 9d39751b3..32440b11d 100644
+--- a/libgloss/frv/sim-inbyte.c
++++ b/libgloss/frv/sim-inbyte.c
+@@ -14,6 +14,8 @@
+  * they apply.
+  */
+ 
++extern int read (int, void *, int);
++
+ int
+ inbyte ()
+ {
