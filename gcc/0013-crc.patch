@@ -1,11 +1,5 @@
-commit e67d97c54ca230b000f9e8ced596300fce55aadc
-Author: Jeff Law <jlaw@ventanamicro.com>
-Date:   Thu Nov 30 07:08:50 2023 -0700
-
-    Initial patch from Mariam + expand_* fixes + printf format fixes
-
 diff --git a/gcc/Makefile.in b/gcc/Makefile.in
-index b79421e7252..3f975ad8667 100644
+index e154f7c0055..f88f3371d4b 100644
 --- a/gcc/Makefile.in
 +++ b/gcc/Makefile.in
 @@ -1711,6 +1711,11 @@ OBJS = \
@@ -318,10 +312,10 @@ index 695ee24ad6f..f9968df07c4 100644
  /* Routines implemented in riscv-c.cc.  */
  void riscv_cpu_cpp_builtins (cpp_reader *);
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 2f8d391579a..8fc80cc29c2 100644
+index 3f111fa0393..8af210d4343 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
-@@ -10231,6 +10231,7 @@ riscv_preferred_else_value (unsigned ifn, tree vectype, unsigned int nops,
+@@ -10251,6 +10251,7 @@ riscv_preferred_else_value (unsigned ifn, tree vectype, unsigned int nops,
    return default_preferred_else_value (ifn, vectype, nops, ops);
  }
  
@@ -329,7 +323,7 @@ index 2f8d391579a..8fc80cc29c2 100644
  /* If MEM is in the form of "base+offset", extract the two parts
     of address and set to BASE and OFFSET, otherwise return false
     after clearing BASE and OFFSET.  */
-@@ -10265,6 +10266,226 @@ extract_base_offset_in_addr (rtx mem, rtx *base, rtx *offset)
+@@ -10285,6 +10286,226 @@ extract_base_offset_in_addr (rtx mem, rtx *base, rtx *offset)
    return false;
  }
  
@@ -557,7 +551,7 @@ index 2f8d391579a..8fc80cc29c2 100644
  #undef TARGET_ASM_ALIGNED_HI_OP
  #define TARGET_ASM_ALIGNED_HI_OP "\t.half\t"
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index 6bf2dfdf9b4..2d14ce289e5 100644
+index 4c6f63677df..9f630dd00ff 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
 @@ -85,6 +85,10 @@ (define_c_enum "unspec" [
@@ -586,7 +580,7 @@ index de72cb1e1fe..f781dac3152 100755
    done ;;
 diff --git a/gcc/crc-verification.cc b/gcc/crc-verification.cc
 new file mode 100644
-index 00000000000..d6412c491a3
+index 00000000000..ad08a20132e
 --- /dev/null
 +++ b/gcc/crc-verification.cc
 @@ -0,0 +1,1326 @@
@@ -1643,7 +1637,7 @@ index 00000000000..d6412c491a3
 +  else if (sb_index == 0)
 +    {
 +      if (dump_file && (dump_flags & TDF_DETAILS))
-+	fprintf (dump_file, "Checking %lu bit.\n", it_end);
++	fprintf (dump_file, "Checking %zu bit.\n", it_end);
 +
 +      if (!given_sb_match ((*crc_value)[it_end], (*lfsr)[it_end], value))
 +	return false;
@@ -1672,7 +1666,7 @@ index 00000000000..d6412c491a3
 +  for (; i < it_end; i++)
 +    {
 +      if (dump_file && (dump_flags & TDF_DETAILS))
-+	fprintf (dump_file, "Checking %lu bit.\n", i);
++	fprintf (dump_file, "Checking %zu bit.\n", i);
 +
 +      /* Check the case when in lfsr we have LFSR (i)^LFSR (SBi),
 +	 where 0<i<LFSR_size and SBi is the index of MSB/LSB (LFSR_size-1/0).
@@ -1916,7 +1910,6 @@ index 00000000000..d6412c491a3
 +
 +  return true;
 +}
-\ No newline at end of file
 diff --git a/gcc/crc-verification.h b/gcc/crc-verification.h
 new file mode 100644
 index 00000000000..b45eb242486
@@ -2444,7 +2437,7 @@ index 431616d55be..f6a066438ee 100644
  #endif /* GCC_EXPR_H */
 diff --git a/gcc/gimple-crc-optimization.cc b/gcc/gimple-crc-optimization.cc
 new file mode 100644
-index 00000000000..cf8e8e06b59
+index 00000000000..749d50ef66e
 --- /dev/null
 +++ b/gcc/gimple-crc-optimization.cc
 @@ -0,0 +1,1354 @@
@@ -3306,7 +3299,7 @@ index 00000000000..cf8e8e06b59
 +      unsigned HOST_WIDE_INT
 +      loop_iteration_number = tree_to_uhwi (n_inters);
 +      if (dump_file && (dump_flags & TDF_DETAILS))
-+	fprintf (dump_file, "Loop iteration number is " HOST_WIDE_INT_PRINT_UNSIGNED "%ld.\n",
++	fprintf (dump_file, "Loop iteration number is " HOST_WIDE_INT_PRINT_UNSIGNED ".\n",
 +		 loop_iteration_number);
 +
 +      if ((loop_iteration_number == 7 || loop_iteration_number == 15
@@ -4309,7 +4302,7 @@ index 00000000000..9931254c36e
 \ No newline at end of file
 diff --git a/gcc/sym-exec/expression.cc b/gcc/sym-exec/expression.cc
 new file mode 100644
-index 00000000000..e5006c31da1
+index 00000000000..c521e482539
 --- /dev/null
 +++ b/gcc/sym-exec/expression.cc
 @@ -0,0 +1,374 @@
@@ -4607,7 +4600,7 @@ index 00000000000..e5006c31da1
 +  if (dump_file)
 +    {
 +      print_generic_expr (dump_file, m_origin, dump_flags);
-+      fprintf (dump_file, "[%lu]", m_index);
++      fprintf (dump_file, "[%zu]", m_index);
 +    }
 +}
 +
@@ -4687,7 +4680,6 @@ index 00000000000..e5006c31da1
 +	fprintf (dump_file, "null");
 +    }
 +}
-\ No newline at end of file
 diff --git a/gcc/sym-exec/expression.h b/gcc/sym-exec/expression.h
 new file mode 100644
 index 00000000000..da17b8042c7
@@ -4901,7 +4893,7 @@ index 00000000000..da17b8042c7
 \ No newline at end of file
 diff --git a/gcc/sym-exec/state.cc b/gcc/sym-exec/state.cc
 new file mode 100644
-index 00000000000..2668d1aa3f3
+index 00000000000..f8817e28fa6
 --- /dev/null
 +++ b/gcc/sym-exec/state.cc
 @@ -0,0 +1,2330 @@
@@ -4964,7 +4956,7 @@ index 00000000000..2668d1aa3f3
 +		   "Declaring var ");
 +	  print_generic_expr (dump_file, var, dump_flags);
 +	  fprintf (dump_file,
-+		   " with size %ld\n", size);
++		   " with size %zd\n", size);
 +	}
 +    }
 +}
@@ -5255,7 +5247,7 @@ index 00000000000..2668d1aa3f3
 +
 +value_bit *
 +state::operate_bits (bit_func bit_op, value_bit *bit1, value_bit *bit2,
-+		     value_bit **bit3)
++		     value_bit **)
 +{
 +  return (bit_op) (bit1, bit2);
 +}
@@ -7235,7 +7227,6 @@ index 00000000000..2668d1aa3f3
 +  complement_all_vars_bits_with_origin (origin);
 +  complement_conditions_with_origin (origin);
 +}
-\ No newline at end of file
 diff --git a/gcc/sym-exec/state.h b/gcc/sym-exec/state.h
 new file mode 100644
 index 00000000000..b20c8deab2f
@@ -8064,7 +8055,7 @@ index 00000000000..80dcafafca9
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-15.c b/gcc/testsuite/gcc.dg/crc-15.c
 new file mode 100644
-index 00000000000..be3e1866b21
+index 00000000000..6acd5e78259
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-15.c
 @@ -0,0 +1,31 @@
