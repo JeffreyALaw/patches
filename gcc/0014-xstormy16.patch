@@ -1,0 +1,35 @@
+
+diff --git a/include/longlong.h b/include/longlong.h
+index 32d2048d353..dca14448beb 100644
+--- a/include/longlong.h
++++ b/include/longlong.h
+@@ -1564,6 +1564,7 @@ extern UDItype __umulsidi3 (USItype, USItype);
+ 
+ #if defined xstormy16
+ extern UHItype __stormy16_count_leading_zeros (UHItype);
++extern UHItype __clzhi2 (USItype);
+ #define count_leading_zeros(count, x)					\
+   do									\
+     {									\
+diff --git a/libgcc/config/stormy16/lib2funcs.c b/libgcc/config/stormy16/lib2funcs.c
+index 1c8dd4e67c4..e23c6d75a82 100644
+--- a/libgcc/config/stormy16/lib2funcs.c
++++ b/libgcc/config/stormy16/lib2funcs.c
+@@ -72,8 +72,6 @@ extern SItype __ashrsi3 (SItype, SItype);
+ extern USItype __lshrsi3 (USItype, USItype);
+ extern int __popcounthi2 (UHWtype);
+ extern int __parityhi2 (UHWtype);
+-extern int __clzhi2 (UHWtype);
+-extern int __ctzhi2 (UHWtype);
+ 
+ 
+ #ifdef XSTORMY16_UDIVMODSI4
+@@ -261,7 +259,7 @@ __parityhi2 (UHWtype x)
+    FIXME:  The return type really should be "unsigned int" but this is
+    not how the builtin is prototyped.  */
+ #undef unsigned
+-int
++UHItype
+ __clzhi2 (UHWtype x)
+ {
+   unsigned int i;
