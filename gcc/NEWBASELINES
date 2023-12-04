@@ -2,6 +2,3 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 aarch64-linux-gnu
-arc-elf
-ft32-elf
-cris-elf
