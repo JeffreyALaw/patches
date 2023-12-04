@@ -2216,7 +2216,7 @@ index fea719028a1..528652599ba 100644
 +  for (int i = 0; i < GET_MODE_SIZE (data_mode).to_constant (); i++)
 +    {
 +      /* crc >> (bit_size - 8).  */
-+      rtx op1 = expand_shift (RSHIFT_EXPR, word_mode, *crc, mode_bit_size - 8,
++      rtx op1 = expand_shift (RSHIFT_EXPR, crc_mode, *crc, mode_bit_size - 8,
 +			      NULL_RTX, 1);
 +
 +      /* data >> (8 * (GET_MODE_SIZE (data_mode).to_constant () - i - 1)).  */
@@ -2247,17 +2247,17 @@ index fea719028a1..528652599ba 100644
 +      rtx tab_el = validize_mem (gen_rtx_MEM (crc_mode, index));
 +
 +      /* (crc << 8)  */
-+      rtx high = expand_shift (LSHIFT_EXPR, word_mode, *crc, 8, NULL_RTX, 0);
++      rtx high = expand_shift (LSHIFT_EXPR, crc_mode, *crc, 8, NULL_RTX, 0);
 +
 +      if (crc_mode != word_mode)
 +	{
 +	  rtx crc_mode_mask = gen_int_mode (GET_MODE_MASK (crc_mode),
 +					    word_mode);
-+	  high = expand_and (word_mode, high, crc_mode_mask, high);
++	  high = expand_and (crc_mode, high, crc_mode_mask, high);
 +	}
 +
 +      /* crc = (crc << 8) ^ crc_table[(crc >> (bit_size - 8)) ^ data_8bit];  */
-+      *crc = expand_binop (word_mode, xor_optab, tab_el, high, NULL_RTX, 1,
++      *crc = expand_binop (crc_mode, xor_optab, tab_el, high, NULL_RTX, 1,
 +			   OPTAB_WIDEN);
 +    }
 +}
