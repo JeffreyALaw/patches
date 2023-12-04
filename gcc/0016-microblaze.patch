@@ -8,8 +8,8 @@ index 671667b537c..c2f4444f786 100644
     addk\t%0,%1,r0
 -   lhui\t%0,%1
 -   lhui\t%0,%1
-+   lhu%i\t%0,%1
-+   lhu%i\t%0,%1
++   lhu%i1\t%0,%1
++   lhu%i1\t%0,%1
     sh%i0\t%z1,%0
     sh%i0\t%z1,%0"
    [(set_attr "type"	"arith,move,load,no_delay_load,store,no_delay_store")
