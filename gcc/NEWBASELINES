@@ -3,3 +3,4 @@
 # reset.  
 aarch64-linux-gnu
 arc-elf
+ft32-elf
