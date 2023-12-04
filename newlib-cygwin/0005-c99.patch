@@ -627,19 +627,6 @@ index bc8209104..92a9b60a1 100644
  
  caddr_t
  _sbrk (int incr)
-diff --git a/newlib/libm/machine/pru/fpclassifyf.c b/newlib/libm/machine/pru/fpclassifyf.c
-index f4dd201d9..3b3a7e012 100644
---- a/newlib/libm/machine/pru/fpclassifyf.c
-+++ b/newlib/libm/machine/pru/fpclassifyf.c
-@@ -26,6 +26,8 @@
- 
- #include <math.h>
- 
-+int fpclassifyf (float);
-+
- /* GCC will not generate code calling this function, since the corresponding
-    builtin will produce code that uses simple ops only.  In order to support
-    linking against TI CLPRU objects, though, provide the function mandated
 diff --git a/newlib/libm/complex/cargl.c b/newlib/libm/complex/cargl.c
 index 790cffe8f..ac6ba1e7d 100644
 --- a/newlib/libm/complex/cargl.c
