@@ -551,7 +551,7 @@ index 3f111fa0393..8af210d4343 100644
  #undef TARGET_ASM_ALIGNED_HI_OP
  #define TARGET_ASM_ALIGNED_HI_OP "\t.half\t"
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index 4c6f63677df..9f630dd00ff 100644
+index a98918dfd43..2ddaf80eb34 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
 @@ -85,6 +85,10 @@ (define_c_enum "unspec" [
@@ -2080,7 +2080,7 @@ index 00000000000..b45eb242486
 +
 +#endif //GCC_CRC_VERIFICATION
 diff --git a/gcc/expr.cc b/gcc/expr.cc
-index fea719028a1..528652599ba 100644
+index fea719028a1..29cd37d76e7 100644
 --- a/gcc/expr.cc
 +++ b/gcc/expr.cc
 @@ -66,7 +66,6 @@ along with GCC; see the file COPYING3.  If not see
@@ -2091,7 +2091,7 @@ index fea719028a1..528652599ba 100644
  /* If this is nonzero, we do not bother generating VOLATILE
     around volatile memory references, and we are willing to
     output indirect addresses.  If cse is to follow, we reject
-@@ -14011,3 +14010,328 @@ int_expr_size (const_tree exp)
+@@ -14011,3 +14010,336 @@ int_expr_size (const_tree exp)
  
    return tree_to_shwi (size);
  }
@@ -2246,14 +2246,22 @@ index fea719028a1..528652599ba 100644
 +      /* crc_table[(crc >> (bit_size - 8)) ^ data_8bit]  */
 +      rtx tab_el = validize_mem (gen_rtx_MEM (crc_mode, index));
 +
-+      /* (crc << 8)  */
-+      rtx high = expand_shift (LSHIFT_EXPR, crc_mode, *crc, 8, NULL_RTX, 0);
-+
-+      if (crc_mode != word_mode)
++      /* (crc << 8) if CRC is larger than 8, otherwise crc = 8.  */
++      rtx high = NULL_RTX;
++      if (GET_MODE_BITSIZE (crc_mode).to_contant () != 8)
 +	{
-+	  rtx crc_mode_mask = gen_int_mode (GET_MODE_MASK (crc_mode),
-+					    crc_mode);
-+	  high = expand_and (crc_mode, high, crc_mode_mask, NULL_RTX);
++	  high = expand_shift (LSHIFT_EXPR, crc_mode, *crc, 8, NULL_RTX, 0);
++
++	  if (crc_mode != word_mode)
++	    {
++	      rtx crc_mode_mask = gen_int_mode (GET_MODE_MASK (crc_mode),
++						word_mode);
++	      high = expand_and (crc_mode, high, crc_mode_mask, NULL_RTX);
++	    }
++	}
++      else
++	{
++	  high = gen_int_mode (0, crc_mode);
 +	}
 +
 +      /* crc = (crc << 8) ^ crc_table[(crc >> (bit_size - 8)) ^ data_8bit];  */
@@ -2437,7 +2445,7 @@ index 431616d55be..f6a066438ee 100644
  #endif /* GCC_EXPR_H */
 diff --git a/gcc/gimple-crc-optimization.cc b/gcc/gimple-crc-optimization.cc
 new file mode 100644
-index 00000000000..749d50ef66e
+index 00000000000..d1805b47bbf
 --- /dev/null
 +++ b/gcc/gimple-crc-optimization.cc
 @@ -0,0 +1,1354 @@
