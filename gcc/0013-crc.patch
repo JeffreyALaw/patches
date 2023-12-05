@@ -2252,7 +2252,7 @@ index fea719028a1..528652599ba 100644
 +      if (crc_mode != word_mode)
 +	{
 +	  rtx crc_mode_mask = gen_int_mode (GET_MODE_MASK (crc_mode),
-+					    word_mode);
++					    crc_mode);
 +	  high = expand_and (crc_mode, high, crc_mode_mask, NULL_RTX);
 +	}
 +
