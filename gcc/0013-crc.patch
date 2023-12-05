@@ -2891,7 +2891,7 @@ index 00000000000..749d50ef66e
 +{
 +  /* Check whether PRED_BB contains condition.  We will consider only those
 +     cases when xor is done immediately under the condition.  */
-+  gcond *cond = safe_dyn_cast<gcond *> (*gsi_last_bb (pred_bb));
++  gcond *cond = as_a<gcond *> (gsi_stmt (gsi_last_bb (pred_bb)));
 +  if (!cond)
 +    {
 +      if (dump_file && (dump_flags & TDF_DETAILS))
