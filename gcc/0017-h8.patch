@@ -1,0 +1,34 @@
+diff --git a/gcc/config/h8300/combiner.md b/gcc/config/h8300/combiner.md
+index e1179b5fea6..bbbf1ad4c54 100644
+--- a/gcc/config/h8300/combiner.md
++++ b/gcc/config/h8300/combiner.md
+@@ -1270,6 +1270,29 @@ (define_insn ""
+ ;;   "")
+ 
+ ;; Various ways to extract a single bit bitfield and sign extend it
++
++;; This is a sign extension from an arbitrary known bit.  For many
++;; cases we can do better than a pair of shifts.
++(define_insn_and_split "*extvsi_n_0"
++  [(set (match_operand:SI 0 "register_operand" "=r")
++	(sign_extract:SI (match_operand:SI 1 "register_operand" "0")
++			 (match_operand 2 "const_int_operand")
++			 (const_int 0)))]
++  "INTVAL (operands[2]) > 1 && INTVAL (operands[2]) < (TARGET_H8300S ? 25 : 29)"
++  "#"
++  "&& reload_completed"
++[(parallel [(set (match_dup 0) (and:SI (match_dup 0) (match_dup 3)))
++	    (clobber (reg:CC CC_REG))])
++ (parallel [(set (match_dup 0) (xor:SI (match_dup 0) (match_dup 4)))
++	    (clobber (reg:CC CC_REG))])
++ (parallel [(set (match_dup 0) (minus:SI (match_dup 0) (match_dup 4)))
++	    (clobber (reg:CC CC_REG))])]
++{
++  int tmp = INTVAL (operands[2]);
++  operands[3] = GEN_INT (~(HOST_WIDE_INT_M1U << tmp));
++  operands[4] = GEN_INT (HOST_WIDE_INT_1U << tmp);
++})
++
+ ;;
+ ;; Testing showed this only triggering with SImode, probably because
+ ;; of how insv/extv are defined.
