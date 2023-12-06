@@ -2248,7 +2248,7 @@ index fea719028a1..29cd37d76e7 100644
 +
 +      /* (crc << 8) if CRC is larger than 8, otherwise crc = 8.  */
 +      rtx high = NULL_RTX;
-+      if (GET_MODE_BITSIZE (crc_mode).to_contant () != 8)
++      if (GET_MODE_BITSIZE (crc_mode).to_constant () != 8)
 +	{
 +	  high = expand_shift (LSHIFT_EXPR, crc_mode, *crc, 8, NULL_RTX, 0);
 +
