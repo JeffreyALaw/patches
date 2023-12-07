@@ -26,7 +26,7 @@ index e1179b5fea6..bbbf1ad4c54 100644
 +{
 +  int tmp = INTVAL (operands[2]);
 +  operands[3] = GEN_INT (~(HOST_WIDE_INT_M1U << tmp));
-+  operands[4] = GEN_INT (HOST_WIDE_INT_1U << tmp);
++  operands[4] = GEN_INT (HOST_WIDE_INT_1U << (tmp - 1));
 +})
 +
  ;;
