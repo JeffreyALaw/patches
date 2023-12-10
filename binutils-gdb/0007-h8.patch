@@ -108,7 +108,7 @@ index a4b39ae3380..cc94e63c0fd 100644
 +
 +  /* Now walk the array caching the index of the first
 +     occurrence of each 4 bit nibble.  */
-+  memset (nib_indices, -1, sizeof (int) * 16);
++  memset (nib_indices, -1, sizeof (nib_indices));
 +  for (i = 0, q = ops; q->name; q++, i++)
 +    {
 +      int nib = q->data.nib[0];
