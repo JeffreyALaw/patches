@@ -93,7 +93,7 @@ index 5936cdca177..a148217fd63 100644
 +	      if (code == LSHIFTRT)
 +		return 4;
 +
-+	      return (exact_log2 (n) >= 0);
++	      return (exact_log2 (n) >= 0) ? 2 : 4;
 +	    }
 +
  	  n = info.remainder;
