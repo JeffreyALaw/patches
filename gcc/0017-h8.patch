@@ -1,20 +1,23 @@
 diff --git a/gcc/config/h8300/combiner.md b/gcc/config/h8300/combiner.md
-index e1179b5fea6..bbbf1ad4c54 100644
+index e1179b5fea6..d5f26b50983 100644
 --- a/gcc/config/h8300/combiner.md
 +++ b/gcc/config/h8300/combiner.md
-@@ -1270,6 +1270,29 @@ (define_insn ""
+@@ -1269,7 +1269,54 @@ (define_insn ""
+ ;; 		      (pc)))]
  ;;   "")
  
- ;; Various ways to extract a single bit bitfield and sign extend it
-+
-+;; This is a sign extension from an arbitrary known bit.  For many
-+;; cases we can do better than a pair of shifts.
+-;; Various ways to extract a single bit bitfield and sign extend it
++;; This is a signed bitfield extraction starting at bit 0
++;; It's usually faster than using shifts, but not always,
++;; particularly on the H8/S and H8/SX variants.
 +(define_insn_and_split "*extvsi_n_0"
 +  [(set (match_operand:SI 0 "register_operand" "=r")
 +	(sign_extract:SI (match_operand:SI 1 "register_operand" "0")
 +			 (match_operand 2 "const_int_operand")
 +			 (const_int 0)))]
-+  "INTVAL (operands[2]) > 1 && INTVAL (operands[2]) < (TARGET_H8300S ? 25 : 29)"
++  "INTVAL (operands[2]) > 1
++   && INTVAL (operands[2]) < (TARGET_H8300S ? 26 - TARGET_H8300SX : 29)
++   && (!TARGET_H8300SX || (INTVAL (operands[2]) != 24 && INTVAL (operands[2]) != 17))"
 +  "#"
 +  "&& reload_completed"
 +[(parallel [(set (match_dup 0) (and:SI (match_dup 0) (match_dup 3)))
@@ -29,6 +32,141 @@ index e1179b5fea6..bbbf1ad4c54 100644
 +  operands[4] = GEN_INT (HOST_WIDE_INT_1U << (tmp - 1));
 +})
 +
++(define_insn_and_split "*extvsi_n_n"
++  [(set (match_operand:SI 0 "register_operand" "=r")
++	(sign_extract:SI (match_operand:SI 1 "register_operand" "0")
++			 (match_operand 2 "const_int_operand")
++			 (match_operand 3 "const_int_operand")))]
++  "(!h8300_shift_needs_scratch_p (INTVAL (operands[3]), SImode, LSHIFTRT)
++    && use_extvsi (INTVAL (operands[2]), INTVAL (operands[3])))"
++  "#"
++  "&& reload_completed"
++[(parallel [(set (match_dup 0) (lshiftrt:SI (match_dup 0) (match_dup 3)))
++	    (clobber (reg:CC CC_REG))])
++ (parallel [(set (match_dup 0) (and:SI (match_dup 0) (match_dup 4)))
++	    (clobber (reg:CC CC_REG))])
++ (parallel [(set (match_dup 0) (xor:SI (match_dup 0) (match_dup 5)))
++	    (clobber (reg:CC CC_REG))])
++ (parallel [(set (match_dup 0) (minus:SI (match_dup 0) (match_dup 5)))
++	    (clobber (reg:CC CC_REG))])]
++{
++  int tmp = INTVAL (operands[2]);
++  operands[4] = gen_int_mode (~(HOST_WIDE_INT_M1U << tmp), SImode);
++  operands[5] = gen_int_mode (HOST_WIDE_INT_1U << (tmp - 1), SImode);
++})
++
  ;;
  ;; Testing showed this only triggering with SImode, probably because
  ;; of how insv/extv are defined.
+@@ -1358,7 +1405,7 @@ (define_insn ""
+      to get that bit into the destination, properly extended.  */
+   return "subx\t%s0,%s0\;exts.w %T0\;exts.l %0";
+ }
+-  [(set_attr "length" "10")])
++  [(set (attr "length") (symbol_ref "INTVAL (operands[2]) >= 16 ? 10 : 8"))])
+ 
+ ;; For shift counts >= 16 we can always do better than the
+ ;; generic sequences.  Other patterns handle smaller counts.
+diff --git a/gcc/config/h8300/h8300-protos.h b/gcc/config/h8300/h8300-protos.h
+index 3376bd06032..480a152432d 100644
+--- a/gcc/config/h8300/h8300-protos.h
++++ b/gcc/config/h8300/h8300-protos.h
+@@ -111,5 +111,6 @@ extern const char *    output_h8sx_shift (rtx *, int, int);
+ extern bool            h8300_operands_match_p (rtx *);
+ extern bool            h8sx_mergeable_memrefs_p (rtx, rtx);
+ extern poly_int64      h8300_push_rounding (poly_int64);
++extern bool use_extsvi (int, int);
+ 
+ #endif /* ! GCC_H8300_PROTOS_H */
+diff --git a/gcc/config/h8300/h8300.cc b/gcc/config/h8300/h8300.cc
+index 5936cdca177..a148217fd63 100644
+--- a/gcc/config/h8300/h8300.cc
++++ b/gcc/config/h8300/h8300.cc
+@@ -4299,6 +4299,16 @@ compute_a_shift_length (rtx operands[3], rtx_code code)
+ 	  /* Fall through.  */
+ 
+ 	case SHIFT_INLINE:
++	  /* H8/SX has a richer set of logical shifts.  */
++	  if (TARGET_H8300SX
++	      && (code == ASHIFT || code == LSHIFTRT))
++	    {
++	      if (code == LSHIFTRT)
++		return 4;
++
++	      return (exact_log2 (n) >= 0);
++	    }
++
+ 	  n = info.remainder;
+ 
+ 	  if (info.shift2 != NULL)
+@@ -5498,6 +5508,70 @@ h8300_trampoline_init (rtx m_tramp, tree fndecl, rtx cxt)
+     }
+ }
+ 
++/* Return true if a signed bitfield extraction with length COUNT
++   starting at position POS should be optimized by first shifting
++   right to put the field in the LSB, then using a 3 operand sequence
++   to sign extend from an arbitrary position.  Return false
++   otherwise.
++
++   The basic idea here is to compute the length of each sequence
++   and use that as a proxy for performance.  It's not strictly
++   correct on the H8/SX which has variable timed shifts and some
++   lengths may be incorrect, but this is pretty close.
++
++   There may be cases where the length computations are inaccurate
++   which may in turn lead to a sub-optimal sequence, but that
++   should be rare.
++
++   We do not try to balance avoiding a loop with burning an extra
++   couple bytes.   Those probably couple be handled with special
++   cases.  */
++
++bool
++use_extvsi (int count, int pos)
++{
++  rtx operands[3];
++  operands[0] = gen_rtx_REG (SImode, 0);
++  operands[1] = gen_rtx_REG (SImode, 0);
++
++  /* We have a special sequence to sign extract a single bit
++     object, otherwise compute it as a pair of shifts, first
++     left, then arithmetic right.  The cost of that special
++     sequence is 8/10 depending on where the bit is.  */
++  unsigned shift_cost;
++  if (count == 1)
++    shift_cost = pos >= 16 ? 10 : 8;
++  else
++    {
++      unsigned lshift = 32 - (count + pos);
++      unsigned rshift = 32 - count;
++      operands[2] = GEN_INT (lshift);
++      shift_cost = compute_a_shift_length (operands, ASHIFT);
++      operands[2] = GEN_INT (rshift);
++      shift_cost += compute_a_shift_length (operands, ASHIFTRT);
++    }
++
++  /* Cost of hopefully optimized sequence.  First we logically shift right
++     by an adjusted count.  Logicals are generally better than arith,
++     particularly for H8/SX.  */
++  operands[2] = GEN_INT (pos);
++  unsigned opt_cost = compute_a_shift_length (operands, LSHIFTRT);
++  operands[2] = gen_int_mode (~(HOST_WIDE_INT_M1U << count), SImode);
++  opt_cost += compute_logical_op_length (SImode, AND, operands, NULL);
++  operands[2] = gen_int_mode (HOST_WIDE_INT_1U << (count - 1), SImode);
++  opt_cost += compute_logical_op_length (SImode, XOR, operands, NULL);
++
++  /* H8/SX has short form subtraction.  */
++  if (TARGET_H8300SX && (INTVAL (operands[2]) >= 1 && INTVAL (operands[2]) <= 7))
++    opt_cost += 2;
++  else if (TARGET_H8300SX && (INTVAL (operands[2]) >= 8 && INTVAL (operands[2]) <= 32767))
++    opt_cost += 4;
++  else
++    opt_cost += 6;
++
++  return opt_cost <= shift_cost;
++}
++
+ /* Implement PUSH_ROUNDING.
+ 
+    On the H8/300, @-sp really pushes a byte if you ask it to - but that's
