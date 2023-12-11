@@ -1,8 +1,8 @@
 diff --git a/gcc/Makefile.in b/gcc/Makefile.in
-index e154f7c0055..f88f3371d4b 100644
+index f284c1387e2..1290f550f40 100644
 --- a/gcc/Makefile.in
 +++ b/gcc/Makefile.in
-@@ -1711,6 +1711,11 @@ OBJS = \
+@@ -1712,6 +1712,11 @@ OBJS = \
  	tree-iterator.o \
  	tree-logical-location.o \
  	tree-loop-distribution.o \
@@ -15,7 +15,7 @@ index e154f7c0055..f88f3371d4b 100644
  	tree-nrv.o \
  	tree-object-size.o \
 diff --git a/gcc/builtin-types.def b/gcc/builtin-types.def
-index 43381bc8949..e33837c27d0 100644
+index 183ef62bad2..db2ca897785 100644
 --- a/gcc/builtin-types.def
 +++ b/gcc/builtin-types.def
 @@ -829,6 +829,26 @@ DEF_FUNCTION_TYPE_3 (BT_FN_PTR_SIZE_SIZE_PTRMODE,
@@ -46,10 +46,10 @@ index 43381bc8949..e33837c27d0 100644
  DEF_FUNCTION_TYPE_4 (BT_FN_SIZE_CONST_PTR_SIZE_SIZE_FILEPTR,
  		     BT_SIZE, BT_CONST_PTR, BT_SIZE, BT_SIZE, BT_FILEPTR)
 diff --git a/gcc/builtins.cc b/gcc/builtins.cc
-index 4fc58a0bda9..bec2ce8f133 100644
+index 38b0acff131..02222ccd36d 100644
 --- a/gcc/builtins.cc
 +++ b/gcc/builtins.cc
-@@ -2182,7 +2182,24 @@ associated_internal_fn (built_in_function fn, tree return_type)
+@@ -2187,7 +2187,24 @@ associated_internal_fn (built_in_function fn, tree return_type)
        if (REAL_MODE_FORMAT (TYPE_MODE (return_type))->b == 2)
  	return IFN_LDEXP;
        return IFN_LAST;
@@ -75,7 +75,7 @@ index 4fc58a0bda9..bec2ce8f133 100644
      default:
        return IFN_LAST;
      }
-@@ -7413,6 +7430,37 @@ expand_speculation_safe_value (machine_mode mode, tree exp, rtx target,
+@@ -7664,6 +7681,37 @@ expand_speculation_safe_value (machine_mode mode, tree exp, rtx target,
    return targetm.speculation_safe_value (mode, target, val, failsafe);
  }
  
@@ -113,7 +113,7 @@ index 4fc58a0bda9..bec2ce8f133 100644
  /* Expand an expression EXP that calls a built-in function,
     with result going to TARGET if that's convenient
     (and in mode MODE if that's convenient).
-@@ -8564,6 +8612,54 @@ expand_builtin (tree exp, rtx target, rtx subtarget, machine_mode mode,
+@@ -8836,6 +8884,54 @@ expand_builtin (tree exp, rtx target, rtx subtarget, machine_mode mode,
        mode = get_builtin_sync_mode (fcode - BUILT_IN_SPECULATION_SAFE_VALUE_1);
        return expand_speculation_safe_value (mode, exp, target, ignore);
  
@@ -169,7 +169,7 @@ index 4fc58a0bda9..bec2ce8f133 100644
        break;
      }
 diff --git a/gcc/builtins.def b/gcc/builtins.def
-index 33e6cad8ce1..9089fd3ec91 100644
+index f03df32f980..0c7e71613a8 100644
 --- a/gcc/builtins.def
 +++ b/gcc/builtins.def
 @@ -704,7 +704,22 @@ DEF_EXT_LIB_BUILTIN    (BUILT_IN_Y1L, "y1l", BT_FN_LONGDOUBLE_LONGDOUBLE, ATTR_M
@@ -211,10 +211,10 @@ index 88a26d70cd5..0f8c2934c62 100644
  extern enum built_in_function builtin_mathfn_code (const_tree);
  extern tree fold_builtin_expect (location_t, tree, tree, tree, tree);
 diff --git a/gcc/common.opt b/gcc/common.opt
-index 161a035d736..ce111755c4b 100644
+index 5eb5ecff04b..18c357215e5 100644
 --- a/gcc/common.opt
 +++ b/gcc/common.opt
-@@ -3092,6 +3092,10 @@ ftree-loop-distribute-patterns
+@@ -3125,6 +3125,10 @@ ftree-loop-distribute-patterns
  Common Var(flag_tree_loop_distribute_patterns) Optimization
  Enable loop distribution for patterns transformed into a library call.
  
@@ -298,7 +298,7 @@ index 92bcdc30fe4..35d85df2eb2 100644
 +})
 \ No newline at end of file
 diff --git a/gcc/config/riscv/riscv-protos.h b/gcc/config/riscv/riscv-protos.h
-index 695ee24ad6f..f9968df07c4 100644
+index 20bbb5b859c..7e64d10ac27 100644
 --- a/gcc/config/riscv/riscv-protos.h
 +++ b/gcc/config/riscv/riscv-protos.h
 @@ -161,6 +161,9 @@ extern bool riscv_shamt_matches_mask_p (int, HOST_WIDE_INT);
@@ -551,7 +551,7 @@ index 3f111fa0393..8af210d4343 100644
  #undef TARGET_ASM_ALIGNED_HI_OP
  #define TARGET_ASM_ALIGNED_HI_OP "\t.half\t"
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index a98918dfd43..2ddaf80eb34 100644
+index eed997116b0..900db20d1d6 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
 @@ -85,6 +85,10 @@ (define_c_enum "unspec" [
@@ -2080,7 +2080,7 @@ index 00000000000..b45eb242486
 +
 +#endif //GCC_CRC_VERIFICATION
 diff --git a/gcc/expr.cc b/gcc/expr.cc
-index fea719028a1..29cd37d76e7 100644
+index 6da51f2aca2..718aafdfdd9 100644
 --- a/gcc/expr.cc
 +++ b/gcc/expr.cc
 @@ -66,7 +66,6 @@ along with GCC; see the file COPYING3.  If not see
@@ -2091,7 +2091,7 @@ index fea719028a1..29cd37d76e7 100644
  /* If this is nonzero, we do not bother generating VOLATILE
     around volatile memory references, and we are willing to
     output indirect addresses.  If cse is to follow, we reject
-@@ -14011,3 +14010,336 @@ int_expr_size (const_tree exp)
+@@ -14012,3 +14011,338 @@ int_expr_size (const_tree exp)
  
    return tree_to_shwi (size);
  }
@@ -2209,14 +2209,16 @@ index fea719028a1..29cd37d76e7 100644
 +			   const rtx &input_data, const rtx &polynomial,
 +			   machine_mode crc_mode, machine_mode data_mode)
 +{
-+  unsigned HOST_WIDE_INT mode_bit_size = GET_MODE_BITSIZE (crc_mode)
-+      .to_constant ();
-+  rtx tab = generate_crc_table (UINTVAL (polynomial),
-+				mode_bit_size);
++  unsigned HOST_WIDE_INT crc_size = GET_MODE_BITSIZE (crc_mode).to_constant ();
++  rtx tab = generate_crc_table (UINTVAL (polynomial),crc_size);
++
++  rtx wide_crc = gen_reg_rtx (word_mode);
++  convert_move (wide_crc, *crc, 0);
++
 +  for (int i = 0; i < GET_MODE_SIZE (data_mode).to_constant (); i++)
 +    {
 +      /* crc >> (bit_size - 8).  */
-+      rtx op1 = expand_shift (RSHIFT_EXPR, crc_mode, *crc, mode_bit_size - 8,
++      rtx op1 = expand_shift (RSHIFT_EXPR, crc_mode, wide_crc, crc_size - 8,
 +			      NULL_RTX, 1);
 +
 +      /* data >> (8 * (GET_MODE_SIZE (data_mode).to_constant () - i - 1)).  */
@@ -2237,8 +2239,9 @@ index fea719028a1..29cd37d76e7 100644
 +      rtx index = expand_and (word_mode, in, gen_int_mode (255, word_mode),
 +			      NULL_RTX);
 +      int log_crc_size = exact_log2 (GET_MODE_SIZE (crc_mode).to_constant ());
++      /* ??? Should we just pass NULL for the target?  */
 +      index = expand_shift (LSHIFT_EXPR, word_mode, index, log_crc_size,
-+			    NULL_RTX, 0);
++			    index, 0);
 +
 +      index = expand_binop (word_mode, add_optab, index, tab, NULL_RTX, 0,
 +			    OPTAB_DIRECT);
@@ -2250,13 +2253,13 @@ index fea719028a1..29cd37d76e7 100644
 +      rtx high = NULL_RTX;
 +      if (GET_MODE_BITSIZE (crc_mode).to_constant () != 8)
 +	{
-+	  high = expand_shift (LSHIFT_EXPR, crc_mode, *crc, 8, NULL_RTX, 0);
++	  high = expand_shift (LSHIFT_EXPR, word_mode, wide_crc, 8, NULL_RTX, 0);
 +
 +	  if (crc_mode != word_mode)
 +	    {
 +	      rtx crc_mode_mask = gen_int_mode (GET_MODE_MASK (crc_mode),
 +						crc_mode);
-+	      high = expand_and (crc_mode, high, crc_mode_mask, NULL_RTX);
++	      high = expand_and (word_mode, high, crc_mode_mask, NULL_RTX);
 +	    }
 +	}
 +      else
@@ -2265,9 +2268,10 @@ index fea719028a1..29cd37d76e7 100644
 +	}
 +
 +      /* crc = (crc << 8) ^ crc_table[(crc >> (bit_size - 8)) ^ data_8bit];  */
-+      *crc = expand_binop (crc_mode, xor_optab, tab_el, high, NULL_RTX, 1,
-+			   OPTAB_WIDEN);
++      wide_crc = expand_binop (word_mode, xor_optab, tab_el, high, NULL_RTX, 1,
++			       OPTAB_WIDEN);
 +    }
++  *crc = wide_crc;
 +}
 +
 +/* Generate table-based CRC code for the given CRC, INPUT_DATA AND the
@@ -2413,19 +2417,17 @@ index fea719028a1..29cd37d76e7 100644
 +  gcc_assert (CONST_INT_P (op3));
 +  machine_mode crc_mode = GET_MODE (op0);
 +
-+  unsigned HOST_WIDE_INT mode_bit_size = GET_MODE_BITSIZE (crc_mode)
-+      .to_constant ();
-+  unsigned HOST_WIDE_INT data_mode_bit_size = GET_MODE_BITSIZE (data_mode)
++  unsigned HOST_WIDE_INT crc_size = GET_MODE_BITSIZE (crc_mode).to_constant ();
++  unsigned HOST_WIDE_INT data_size = GET_MODE_BITSIZE (data_mode)
 +      .to_constant ();
 +  rtx crc = op1;
-+  gen_reflecting_code (&crc, GET_MODE_BITSIZE (word_mode) - mode_bit_size);
++  gen_reflecting_code (&crc, GET_MODE_BITSIZE (word_mode) - crc_size);
 +  rtx data = op2;
-+  gen_reflecting_code (&data,
-+		       GET_MODE_BITSIZE (word_mode) - data_mode_bit_size);
++  gen_reflecting_code (&data, GET_MODE_BITSIZE (word_mode) - data_size);
 +
 +  calculate_table_based_CRC (&crc, data, op3, crc_mode, data_mode);
 +
-+  gen_reflecting_code (&crc, GET_MODE_BITSIZE (word_mode) - mode_bit_size);
++  gen_reflecting_code (&crc, GET_MODE_BITSIZE (word_mode) - crc_size);
 +  emit_move_insn (op0, gen_lowpart (crc_mode, crc));
 +}
 diff --git a/gcc/expr.h b/gcc/expr.h
@@ -3804,10 +3806,10 @@ index 00000000000..d1805b47bbf
 +  return new pass_crc_optimization (ctxt);
 +}
 diff --git a/gcc/gimple.cc b/gcc/gimple.cc
-index 7924d900b35..9ef53a6e0d7 100644
+index 67f3fb2dabf..0a95d04006b 100644
 --- a/gcc/gimple.cc
 +++ b/gcc/gimple.cc
-@@ -3424,6 +3424,44 @@ gimple_or_expr_nonartificial_location (gimple *stmt, tree expr)
+@@ -3426,6 +3426,44 @@ gimple_or_expr_nonartificial_location (gimple *stmt, tree expr)
    return expansion_point_location_if_in_system_header (loc);
  }
  
@@ -3972,7 +3974,7 @@ index 07c06ba8cbb..02a7aab4125 100644
  OPTAB_CD(vec_store_lanes_optab, "vec_store_lanes$a$b")
  OPTAB_CD(vec_mask_load_lanes_optab, "vec_mask_load_lanes$a$b")
 diff --git a/gcc/opts.cc b/gcc/opts.cc
-index 5d5efaf1b9e..a56b2ab8950 100644
+index 7a3830caaa3..b21c090463b 100644
 --- a/gcc/opts.cc
 +++ b/gcc/opts.cc
 @@ -655,6 +655,7 @@ static const struct default_options default_options_table[] =
@@ -3993,10 +3995,10 @@ index 5d5efaf1b9e..a56b2ab8950 100644
  
  /* -f{,no-}sanitize{,-recover}= suboptions.  */
 diff --git a/gcc/passes.def b/gcc/passes.def
-index 1e1950bdb39..3dac42e9432 100644
+index d3fccdf0a4a..51b6bcba3bd 100644
 --- a/gcc/passes.def
 +++ b/gcc/passes.def
-@@ -293,6 +293,7 @@ along with GCC; see the file COPYING3.  If not see
+@@ -295,6 +295,7 @@ along with GCC; see the file COPYING3.  If not see
  	  NEXT_PASS (pass_cd_dce, false /* update_address_taken_p */);
  	  NEXT_PASS (pass_iv_canon);
  	  NEXT_PASS (pass_loop_distribution);
@@ -13650,7 +13652,7 @@ index 95c1eea65be..f851165fb5a 100644
  
  static bool 
 diff --git a/gcc/tree-pass.h b/gcc/tree-pass.h
-index 09e6ada5b2f..acc4a80ec6c 100644
+index de2820b3a3c..2fdc4652a32 100644
 --- a/gcc/tree-pass.h
 +++ b/gcc/tree-pass.h
 @@ -387,6 +387,7 @@ extern gimple_opt_pass *make_pass_graphite_transforms (gcc::context *ctxt);
