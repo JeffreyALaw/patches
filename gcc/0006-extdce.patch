@@ -480,7 +480,7 @@ index 00000000000..f584a8066fd
 +	  HOST_WIDE_INT sign = 0;
 +	  if (HOST_BITS_PER_WIDE_INT - clz_hwi (mask) + INTVAL (XEXP (x, 1))
 +	      > GET_MODE_BITSIZE (mode).to_constant ())
-+	    sign = (1ULL << GET_MODE_BITSIZE (mode).to_constant ()) - 1;
++	    sign = 1ULL << (GET_MODE_BITSIZE (mode).to_constant () - 1);
 +	  return sign | (mmask & (mask << INTVAL (XEXP (x, 1))));
 +	}
 +      return mmask;
