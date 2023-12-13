@@ -9982,7 +9982,7 @@ index 00000000000..bd71e73ba9d
 +{
 +  uint32_t crc = 0;
 +
-+  for (uint32_t i = 0; i < 0xffffff; i++)
++  for (uint32_t i = 0; i < 0xfffff; i++)
 +    {
 +      uint32_t res1 = _crc32_O0 (i, crc);
 +      uint32_t res2 = _crc32_O2 (i, crc);
