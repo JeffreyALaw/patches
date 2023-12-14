@@ -26,3 +26,6 @@ gcc/testsuite/gcc.dg/pr84877.c
 # Flakey, across the board?
 gcc/testsuite/gfortran.dg/minlocval_3.f90
 gcc/testsuite/gfortran.dg/minlocval_3izeof_6.f90
+# Timing out on some target (m68k native for example)
+gcc/testsuite/gfortran.dg/sizeof_6.f90
+
