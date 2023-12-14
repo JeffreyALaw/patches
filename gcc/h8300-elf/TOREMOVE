@@ -37,8 +37,6 @@ gcc/testsuite/gcc.dg/graphite/interchange-14.c
 gcc/testsuite/gcc.dg/graphite/interchange-15.c
 gcc/testsuite/gcc.dg/graphite/pr46185.c
 gcc/testsuite/gcc.dg/graphite/block-5.c
-# Times out, not investigated
-gcc/testsuite/gcc.dg/torture/pr112305.c
 # -O0 clashes heap/stack/code
 gcc/testsuite/c-c++-common/torture/builtin-arith-overflow-14.c
 gcc/testsuite/c-c++-common/torture/builtin-arith-overflow-p-14.c

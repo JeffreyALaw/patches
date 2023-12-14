@@ -28,4 +28,6 @@ gcc/testsuite/gfortran.dg/minlocval_3.f90
 gcc/testsuite/gfortran.dg/minlocval_3izeof_6.f90
 # Timing out on some target (m68k native for example)
 gcc/testsuite/gfortran.dg/sizeof_6.f90
+# Times out on various targets (bfin, h8, v850, moxie, cris, etc)
+gcc/testsuite/gcc.dg/torture/pr112305.c
 
