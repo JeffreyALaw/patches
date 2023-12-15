@@ -7710,10 +7710,10 @@ index 00000000000..b20c8deab2f
 +#endif /* SYM_EXEC_STATE_H.  */
 diff --git a/gcc/testsuite/gcc.dg/crc-1.c b/gcc/testsuite/gcc.dg/crc-1.c
 new file mode 100644
-index 00000000000..7e0f9689be0
+index 00000000000..7f0ee392ce3
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-1.c
-@@ -0,0 +1,81 @@
+@@ -0,0 +1,78 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details -fdisable-tree-phiopt2 -fdisable-tree-phiopt3" } */
 +
@@ -7782,9 +7782,6 @@ index 00000000000..7e0f9689be0
 +      uint16_t res2 = gen_crc16_O2 (&i, 1);
 +      if (res1 != res2)
 +	{
-+	  printf ("Warning outputs differ! "
-+		  "Input data %0X, gen_crc16_O0 result %0X,"
-+		  " gen_crc16_O2 result %0X\n", i, res1, res2);
 +	  abort ();
 +	}
 +    }
@@ -7795,13 +7792,12 @@ index 00000000000..7e0f9689be0
 +/* { dg-final { scan-tree-dump "Polynomial's value is \\\{\[0, \]*1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1\\\}" "crc" } } */
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
-\ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-10.c b/gcc/testsuite/gcc.dg/crc-10.c
 new file mode 100644
-index 00000000000..a2f8f779954
+index 00000000000..7d6c8ff73d6
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-10.c
-@@ -0,0 +1,47 @@
+@@ -0,0 +1,44 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +
@@ -7836,9 +7832,6 @@ index 00000000000..a2f8f779954
 +      u8 res2 = crc8_O2 (i);
 +      if (res1 != res2)
 +	{
-+	  printf ("Warning outputs differ! "
-+		  "Input data %0X, crc8_O0 result %0X,"
-+		  " crc8_O2 result %0X\n", i, res1, res2);
 +	  abort ();
 +	}
 +    }
@@ -7849,7 +7842,6 @@ index 00000000000..a2f8f779954
 +/* { dg-final { scan-tree-dump "Polynomial's value is \\\{0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0\\\}" "crc" } } */
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
-\ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-11.c b/gcc/testsuite/gcc.dg/crc-11.c
 new file mode 100644
 index 00000000000..10fa47c5f5b
@@ -7878,10 +7870,10 @@ index 00000000000..10fa47c5f5b
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-12.c b/gcc/testsuite/gcc.dg/crc-12.c
 new file mode 100644
-index 00000000000..d22f82a4eee
+index 00000000000..9faad359de8
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-12.c
-@@ -0,0 +1,78 @@
+@@ -0,0 +1,74 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc -fdisable-tree-phiopt2 -fdisable-tree-phiopt3" } */
 +
@@ -7896,7 +7888,6 @@ index 00000000000..d22f82a4eee
 +    uint16_t out = 0;\
 +    int bits_read = 0, bit_flag;\
 +\
-+    printf("buffer in function %s\n", data);\
 +\
 +    if (data == NULL)\
 +        return 0;\
@@ -7948,9 +7939,6 @@ index 00000000000..d22f82a4eee
 +      uint16_t res2 = gen_crc16_O2 (&i, 1);
 +      if (res1 != res2)
 +	{
-+	  printf ("Warning outputs differ! "
-+		  "Input data %0X, gen_crc16_O0 result %0X,"
-+		  " gen_crc16_O2 result %0X\n", i, res1, res2);
 +	  abort ();
 +	}
 +    }
@@ -7960,13 +7948,12 @@ index 00000000000..d22f82a4eee
 +/* { dg-final { scan-tree-dump "Bit forward" "crc"} } */
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
-\ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-13.c b/gcc/testsuite/gcc.dg/crc-13.c
 new file mode 100644
-index 00000000000..f3c8bca89a7
+index 00000000000..c5ec1a5b1e5
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-13.c
-@@ -0,0 +1,51 @@
+@@ -0,0 +1,48 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +
@@ -8005,9 +7992,6 @@ index 00000000000..f3c8bca89a7
 +      unsigned short res2 = crc16_O2 (crc, i);
 +      if (res1 != res2)
 +	{
-+	  printf ("Warning outputs differ! "
-+		  "Input crc %0X, input data %0X, crc16_O0 result %0X,"
-+		  " crc16_O2 result %0X\n", crc, i, res1, res2);
 +	  abort ();
 +	}
 +      crc = res1;
@@ -8018,13 +8002,12 @@ index 00000000000..f3c8bca89a7
 +/* { dg-final { scan-tree-dump "Bit forward" "crc"} } */
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
-\ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-14.c b/gcc/testsuite/gcc.dg/crc-14.c
 new file mode 100644
-index 00000000000..80dcafafca9
+index 00000000000..e5fc384b2d2
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-14.c
-@@ -0,0 +1,49 @@
+@@ -0,0 +1,46 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +
@@ -8061,9 +8044,6 @@ index 00000000000..80dcafafca9
 +      uint8_t res2 = gencrc_O2 (&i);
 +      if (res1 != res2)
 +	{
-+	  printf ("Warning outputs differ! "
-+		  "Input data %0X, gencrc_O0 result %0X,"
-+		  " gencrc_O2 result %0X\n", i, res1, res2);
 +	  abort ();
 +	}
 +    }
@@ -8074,7 +8054,6 @@ index 00000000000..80dcafafca9
 +/* { dg-final { scan-tree-dump "Bit forward" "crc"} } */
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
-\ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-15.c b/gcc/testsuite/gcc.dg/crc-15.c
 new file mode 100644
 index 00000000000..6acd5e78259
@@ -8160,10 +8139,10 @@ index 00000000000..6715cd238d5
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-17.c b/gcc/testsuite/gcc.dg/crc-17.c
 new file mode 100644
-index 00000000000..4bba71a1756
+index 00000000000..0615b4e1101
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-17.c
-@@ -0,0 +1,58 @@
+@@ -0,0 +1,55 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +
@@ -8208,9 +8187,6 @@ index 00000000000..4bba71a1756
 +      unsigned short res2 = calc_crc_O2 (crc, i);
 +      if (res1 != res2)
 +	{
-+	  printf ("Warning outputs differ! "
-+		  "Input crc %0X, input data %0X, calc_crc_O0 result %0X,"
-+		  " calc_crc_O2 result %0X\n", crc, i, res1, res2);
 +	  abort ();
 +	}
 +      crc = res1;
@@ -8222,13 +8198,12 @@ index 00000000000..4bba71a1756
 +/* { dg-final { scan-tree-dump-times "Polynomial's value is \\\{\[0, \]*1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1\\\}" 1 "crc"} } */
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
-\ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-18.c b/gcc/testsuite/gcc.dg/crc-18.c
 new file mode 100644
-index 00000000000..fe3310a7269
+index 00000000000..8cfab470eee
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-18.c
-@@ -0,0 +1,42 @@
+@@ -0,0 +1,39 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +
@@ -8257,9 +8232,6 @@ index 00000000000..fe3310a7269
 +      unsigned char res2 = crc8_O2 (i);
 +      if (res1 != res2)
 +	{
-+	  printf ("Warning outputs differ! "
-+		  "Input data %0X, crc8_O0 result %0X,"
-+		  " crc8_O2 result %0X\n", i, res1, res2);
 +	  abort ();
 +	}
 +    }
@@ -8271,7 +8243,6 @@ index 00000000000..fe3310a7269
 +/* { dg-final { scan-tree-dump "Polynomial's value is \\\{\[0, \]*0, 0, 1, 1, 0, 0, 0, 1\\\}" "crc"} } */
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
-\ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-19.c b/gcc/testsuite/gcc.dg/crc-19.c
 new file mode 100644
 index 00000000000..2be78692656
@@ -8447,10 +8418,10 @@ index 00000000000..9fa68ae4b79
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-22.c b/gcc/testsuite/gcc.dg/crc-22.c
 new file mode 100644
-index 00000000000..cca58cbe972
+index 00000000000..291c57a7a54
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-22.c
-@@ -0,0 +1,56 @@
+@@ -0,0 +1,53 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +
@@ -8493,9 +8464,6 @@ index 00000000000..cca58cbe972
 +      ee_u16 res2 = crcu16_O2 (i, crc);
 +      if (res1 != res2)
 +	{
-+	  printf ("Warning outputs differ! "
-+		  "Input crc %0X, input data %0X, crcu16_O0 result %0X,"
-+		  " crcu16_O2 result %0X\n", crc, i, res1, res2);
 +	  abort ();
 +	}
 +      crc = res1;
@@ -8507,13 +8475,12 @@ index 00000000000..cca58cbe972
 +/* { dg-final { scan-tree-dump "Bit reversed" "crc"} } */
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
-\ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-23.c b/gcc/testsuite/gcc.dg/crc-23.c
 new file mode 100644
-index 00000000000..7c02ad9adcd
+index 00000000000..369b30b4ca7
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-23.c
-@@ -0,0 +1,61 @@
+@@ -0,0 +1,58 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details -ftree-cselim" } */
 +
@@ -8561,9 +8528,6 @@ index 00000000000..7c02ad9adcd
 +
 +      if (res1 != res2)
 +	{
-+	  printf ("Warning outputs differ! "
-+		  "Input crc %0X, input data %0X, crc_byte_O0 result %0X,"
-+		  " crc_byte_O2 result %0X\n", crc, i, res1, res2);
 +	  abort ();
 +	}
 +      crc = res1;
@@ -8575,7 +8539,6 @@ index 00000000000..7c02ad9adcd
 +/* { dg-final { scan-tree-dump "Bit forward" "crc"} } */
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
-\ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-24.c b/gcc/testsuite/gcc.dg/crc-24.c
 new file mode 100644
 index 00000000000..e8c0164a73c
@@ -8614,10 +8577,10 @@ index 00000000000..e8c0164a73c
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-25.c b/gcc/testsuite/gcc.dg/crc-25.c
 new file mode 100644
-index 00000000000..63216ef90aa
+index 00000000000..f770464983c
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-25.c
-@@ -0,0 +1,64 @@
+@@ -0,0 +1,61 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +
@@ -8670,9 +8633,6 @@ index 00000000000..63216ef90aa
 +      u32 res2 = mpc512x_fec_set_hwaddr_O2 (st);
 +      if (res1 != res2)
 +	{
-+	  printf ("Warning outputs differ! "
-+		  "Input data %0X, mpc512x_fec_set_hwaddr_O0 result %0X,"
-+		  " mpc512x_fec_set_hwaddr_O2 result %0X\n", i, res1, res2);
 +	  abort ();
 +	}
 +    }
@@ -8682,13 +8642,12 @@ index 00000000000..63216ef90aa
 +/* { dg-final { scan-tree-dump "Bit reversed" "crc"} } */
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
-\ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-26.c b/gcc/testsuite/gcc.dg/crc-26.c
 new file mode 100644
-index 00000000000..22cd61b09aa
+index 00000000000..53751579441
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-26.c
-@@ -0,0 +1,57 @@
+@@ -0,0 +1,54 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +
@@ -8733,9 +8692,6 @@ index 00000000000..22cd61b09aa
 +      u32 res2 = crc32_le_O2 (crc, st, 2);
 +      if (res1 != res2)
 +	{
-+	  printf ("Warning outputs differ! "
-+		  "Input data %0X, crc32_le_O0 result %0X,"
-+		  " crc32_le_O2 result %0X\n", i, res1, res2);
 +	  abort ();
 +	}
 +      crc = res1;
@@ -8746,7 +8702,6 @@ index 00000000000..22cd61b09aa
 +/* { dg-final { scan-tree-dump "Bit reversed" "crc"} } */
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
-\ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-27.c b/gcc/testsuite/gcc.dg/crc-27.c
 new file mode 100644
 index 00000000000..f36999b3751
@@ -8782,10 +8737,10 @@ index 00000000000..f36999b3751
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-28.c b/gcc/testsuite/gcc.dg/crc-28.c
 new file mode 100644
-index 00000000000..f9c60c5b018
+index 00000000000..e9b1d77c53a
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-28.c
-@@ -0,0 +1,81 @@
+@@ -0,0 +1,78 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +
@@ -8854,9 +8809,6 @@ index 00000000000..f9c60c5b018
 +      u16 res2 = ddr3_crc16_modified_O2 (st, 2);
 +      if (res1 != res2)
 +	{
-+	  printf ("Warning outputs differ! "
-+		  "Input data %0X, ddr3_crc16_modified_O0 result %0X,"
-+		  " ddr3_crc16_modified_O2 result %0X\n", i, res1, res2);
 +	  abort ();
 +	}
 +    }
@@ -8867,7 +8819,6 @@ index 00000000000..f9c60c5b018
 +/* { dg-final { scan-tree-dump "Bit forward" "crc"} } */
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
-\ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-29.c b/gcc/testsuite/gcc.dg/crc-29.c
 new file mode 100644
 index 00000000000..f9225afcb8c
@@ -8944,10 +8895,10 @@ index 00000000000..77395e1ab1b
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-4.c b/gcc/testsuite/gcc.dg/crc-4.c
 new file mode 100644
-index 00000000000..15e4a3caaec
+index 00000000000..81698988952
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-4.c
-@@ -0,0 +1,48 @@
+@@ -0,0 +1,45 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +
@@ -8981,9 +8932,6 @@ index 00000000000..15e4a3caaec
 +      uint16_t res2 = crc16_update_O0 (crc, i);
 +      if (res1 != res2)
 +	{
-+	  printf ("Warning outputs differ! "
-+		  "Input crc %0X, input data %0X, crc16_update_O0 result %0X,"
-+		  " crc16_update_O2 result %0X\n", crc, i, res1, res2);
 +	  abort ();
 +	}
 +      crc = res1;
@@ -8996,7 +8944,6 @@ index 00000000000..15e4a3caaec
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump "Polynomial's value is \\\{1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1\\\}" "crc" } } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
-\ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-5-16bitdata.c b/gcc/testsuite/gcc.dg/crc-5-16bitdata.c
 new file mode 100644
 index 00000000000..80ed38818b0
@@ -9098,10 +9045,10 @@ index 00000000000..1be74e47d87
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-6.c b/gcc/testsuite/gcc.dg/crc-6.c
 new file mode 100644
-index 00000000000..49371ef8edc
+index 00000000000..06e96334d81
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-6.c
-@@ -0,0 +1,55 @@
+@@ -0,0 +1,52 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +
@@ -9144,9 +9091,6 @@ index 00000000000..49371ef8edc
 +      crc res2 = crcSlow_O2 (&i, 1);
 +      if (res1 != res2)
 +	{
-+	  printf ("Warning outputs differ! "
-+		  "Input data %0X, crcSlow_O0 result %0X,"
-+		  " crcSlow_O2 result %0X\n", i, res1, res2);
 +	  abort ();
 +	}
 +    }
@@ -9157,13 +9101,12 @@ index 00000000000..49371ef8edc
 +/* { dg-final { scan-tree-dump "Polynomial's value is \\\{1, 1, 0, 1, 0, 0, 1, 0\\\}" "crc" } } */
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
-\ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-7.c b/gcc/testsuite/gcc.dg/crc-7.c
 new file mode 100644
-index 00000000000..ed4f7df04a9
+index 00000000000..68b6277d326
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-7.c
-@@ -0,0 +1,47 @@
+@@ -0,0 +1,44 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +
@@ -9197,9 +9140,6 @@ index 00000000000..ed4f7df04a9
 +      uint16_t res2 = crc_xmodem_update_O2 (i, crc);
 +      if (res1 != res2)
 +	{
-+	  printf ("Warning outputs differ! "
-+		  "Input crc %0X, input data %0X, crc_xmodem_update_O0 result %0X,"
-+		  " crc_xmodem_update_O2 result %0X\n", crc, i, res1, res2);
 +	  abort ();
 +	}
 +      crc = res1;
@@ -9211,13 +9151,12 @@ index 00000000000..ed4f7df04a9
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump "Polynomial's value is \\\{0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1\\\}" "crc"} } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
-\ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-8.c b/gcc/testsuite/gcc.dg/crc-8.c
 new file mode 100644
-index 00000000000..32dbd6ef132
+index 00000000000..f840874eee4
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-8.c
-@@ -0,0 +1,47 @@
+@@ -0,0 +1,44 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +
@@ -9251,9 +9190,6 @@ index 00000000000..32dbd6ef132
 +      uint8_t res2 = _crc_ibutton_update_O2 (i, crc);
 +      if (res1 != res2)
 +	{
-+	  printf ("Warning outputs differ! "
-+		  "Input crc %0X, input data %0X, _crc_ibutton_update_O0 result %0X,"
-+		  " _crc_ibutton_update_O2 result %0X\n", crc, i, res1, res2);
 +	  abort ();
 +	}
 +      crc = res1;
@@ -9265,13 +9201,12 @@ index 00000000000..32dbd6ef132
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump "Polynomial's value is \\\{\[0, \]*1, 0, 0, 0, 1, 1, 0, 0\\\}" "crc" } } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
-\ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-9.c b/gcc/testsuite/gcc.dg/crc-9.c
 new file mode 100644
-index 00000000000..1773732edac
+index 00000000000..156b82dffce
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-9.c
-@@ -0,0 +1,51 @@
+@@ -0,0 +1,48 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +
@@ -9309,9 +9244,6 @@ index 00000000000..1773732edac
 +      uint8_t res2 = gencrc_O2 (&i, 1);
 +      if (res1 != res2)
 +	{
-+	  printf ("Warning outputs differ! "
-+		  "Input data %0X, gencrc_O0 result %0X,"
-+		  " gencrc_O2 result %0X\n", i, res1, res2);
 +	  abort ();
 +	}
 +    }
@@ -9323,7 +9255,6 @@ index 00000000000..1773732edac
 +/* { dg-final { scan-tree-dump "Polynomial's value is \\\{\[0, \]*0, 0, 1, 1, 0, 0, 0, 1\\\}" "crc" } } */
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
-\ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-CCIT-data16-xorOutside_InsideFor.c b/gcc/testsuite/gcc.dg/crc-CCIT-data16-xorOutside_InsideFor.c
 new file mode 100644
 index 00000000000..d7a034fb699
@@ -9438,10 +9369,10 @@ index 00000000000..ae148e7146d
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/crc-CCIT-data8.c b/gcc/testsuite/gcc.dg/crc-CCIT-data8.c
 new file mode 100644
-index 00000000000..64cefbaa670
+index 00000000000..43fde622f81
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-CCIT-data8.c
-@@ -0,0 +1,44 @@
+@@ -0,0 +1,41 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +
@@ -9473,9 +9404,6 @@ index 00000000000..64cefbaa670
 +      uint16_t res2 = crc16_O2 (i, crc);
 +      if (res1 != res2)
 +	{
-+	  printf ("Warning outputs differ! "
-+		  "Input crc %0X, input data %0x, crc16_O0 result %0x,"
-+		  " crc16_O2 result %0X\n", crc, i, res1, res2);
 +	  abort ();
 +	}
 +      crc = res1;
@@ -10221,10 +10149,10 @@ index 00000000000..306b5d6ffad
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-crc8-data8-xorOustideFor.c b/gcc/testsuite/gcc.dg/crc-crc8-data8-xorOustideFor.c
 new file mode 100644
-index 00000000000..4dbeb5c24e0
+index 00000000000..5417de4833b
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-crc8-data8-xorOustideFor.c
-@@ -0,0 +1,46 @@
+@@ -0,0 +1,43 @@
 +/* { dg-do compile } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +
@@ -10260,9 +10188,6 @@ index 00000000000..4dbeb5c24e0
 +      uint8_t res2 = gencrc_O2 (crc, i);
 +      if (res1 != res2)
 +	{
-+	  printf ("Warning outputs differ! "
-+		  "Input crc %0X, input data %0X, gencrc_O0 result %0X,"
-+		  " gencrc_O2 result %0X\n", crc, i, res1, res2);
 +	  abort ();
 +	}
 +      crc = res1;
@@ -10271,7 +10196,6 @@ index 00000000000..4dbeb5c24e0
 +
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
-\ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-crc8.c b/gcc/testsuite/gcc.dg/crc-crc8.c
 new file mode 100644
 index 00000000000..ad4ed99afcc
