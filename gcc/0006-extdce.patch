@@ -1,5 +1,5 @@
 diff --git a/gcc/Makefile.in b/gcc/Makefile.in
-index b79421e7252..257fc457c35 100644
+index 754eceb23bb..3450eb860c6 100644
 --- a/gcc/Makefile.in
 +++ b/gcc/Makefile.in
 @@ -1451,6 +1451,7 @@ OBJS = \
@@ -11,10 +11,10 @@ index b79421e7252..257fc457c35 100644
  	file-prefix-map.o \
  	final.o \
 diff --git a/gcc/common.opt b/gcc/common.opt
-index 161a035d736..a788c63fc7b 100644
+index d263a959df3..8bbcaad2ec4 100644
 --- a/gcc/common.opt
 +++ b/gcc/common.opt
-@@ -3812,4 +3812,8 @@ fipa-ra
+@@ -3846,4 +3846,8 @@ fipa-ra
  Common Var(flag_ipa_ra) Optimization
  Use caller save register across calls if possible.
  
@@ -58,10 +58,10 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..f584a8066fd
+index 00000000000..cbe9db2bbc8
 --- /dev/null
 +++ b/gcc/ext-dce.cc
-@@ -0,0 +1,970 @@
+@@ -0,0 +1,969 @@
 +/* RTL dead zero/sign extension (code) elimination.
 +   Copyright (C) 2000-2022 Free Software Foundation, Inc.
 +
@@ -97,6 +97,13 @@ index 00000000000..f584a8066fd
 +#include "rtl-iter.h"
 +#include "df.h"
 +#include "print-rtl.h"
++
++/* These should probably move into a C++ class.  */
++static vec<bitmap_head> livein;
++static bitmap all_blocks;
++static bitmap livenow;
++static bitmap changed_pseudos;
++static bool modify;
 +
 +/* We consider four bit groups for liveness:
 +   bit 0..7   (least significant byte)
@@ -186,7 +193,7 @@ index 00000000000..f584a8066fd
 +   optimization phase during use handling will be.  */
 +
 +static void
-+ext_dce_process_sets (rtx_insn *insn, rtx obj, bitmap livenow, bitmap live_tmp)
++ext_dce_process_sets (rtx_insn *insn, rtx obj, bitmap live_tmp)
 +{
 +  subrtx_iterator::array_type array;
 +  FOR_EACH_SUBRTX (iter, array, obj, NONCONST)
@@ -360,7 +367,7 @@ index 00000000000..f584a8066fd
 +/* INSN has a sign/zero extended source inside SET that we will
 +   try to turn into a SUBREG.  */
 +static void
-+ext_dce_try_optimize_insn (rtx_insn *insn, rtx set, bitmap changed_pseudos)
++ext_dce_try_optimize_insn (rtx_insn *insn, rtx set)
 +{
 +  rtx src = SET_SRC (set);
 +  rtx inner = XEXP (src, 0);
@@ -537,8 +544,7 @@ index 00000000000..f584a8066fd
 +   eliminated in CHANGED_PSEUDOS.  */
 +
 +static void
-+ext_dce_process_uses (rtx_insn *insn, rtx obj, bitmap livenow,
-+		      bitmap live_tmp, bool modify, bitmap changed_pseudos)
++ext_dce_process_uses (rtx_insn *insn, rtx obj, bitmap live_tmp)
 +{
 +  subrtx_var_iterator::array_type array_var;
 +  FOR_EACH_SUBRTX_VAR (iter, array_var, obj, NONCONST)
@@ -624,7 +630,7 @@ index 00000000000..f584a8066fd
 +		  /* DST_MASK could be zero if we had something in the SET
 +		     that we couldn't handle.  */
 +		  if (modify && dst_mask && (dst_mask & ~src_mask) == 0)
-+		    ext_dce_try_optimize_insn (insn, x, changed_pseudos);
++		    ext_dce_try_optimize_insn (insn, x);
 +
 +		  dst_mask &= src_mask;
 +		  src = XEXP (src, 0);
@@ -767,9 +773,8 @@ index 00000000000..f584a8066fd
 +   extensions should be eliminated when possible.  If an extension
 +   is removed, the source pseudo is marked in CHANGED_PSEUDOS.  */
 +
-+static bitmap
-+ext_dce_process_bb (basic_block bb, bitmap livenow,
-+		    bool modify, bitmap changed_pseudos)
++static void
++ext_dce_process_bb (basic_block bb)
 +{
 +  rtx_insn *insn;
 +
@@ -784,16 +789,14 @@ index 00000000000..f584a8066fd
 +      bitmap live_tmp = BITMAP_ALLOC (NULL);
 +
 +      /* First process any sets/clobbers in INSN.  */
-+      ext_dce_process_sets (insn, PATTERN (insn), livenow, live_tmp);
++      ext_dce_process_sets (insn, PATTERN (insn), live_tmp);
 +
 +      /* CALL_INSNs need processing their fusage data.  */
 +      if (CALL_P (insn))
-+	ext_dce_process_sets (insn, CALL_INSN_FUNCTION_USAGE (insn),
-+			      livenow, live_tmp);
++	ext_dce_process_sets (insn, CALL_INSN_FUNCTION_USAGE (insn), live_tmp);
 +
 +      /* And now uses, optimizing away SIGN/ZERO extensions as we go.  */
-+      ext_dce_process_uses (insn, PATTERN (insn), livenow, live_tmp,
-+			    modify, changed_pseudos);
++      ext_dce_process_uses (insn, PATTERN (insn), live_tmp);
 +
 +      /* A nonlocal goto implicitly uses the frame pointer.  */
 +      if (JUMP_P (insn) && find_reg_note (insn, REG_NON_LOCAL_GOTO, NULL_RTX))
@@ -816,13 +819,11 @@ index 00000000000..f584a8066fd
 +	      if (global_regs[i])
 +		bitmap_set_range (livenow, i * 4, 4);
 +
-+	  ext_dce_process_uses (insn, CALL_INSN_FUNCTION_USAGE (insn),
-+				livenow, live_tmp, modify, changed_pseudos);
++	  ext_dce_process_uses (insn, CALL_INSN_FUNCTION_USAGE (insn), live_tmp);
 +	}
 +
 +      BITMAP_FREE (live_tmp);
 +    }
-+  return livenow;
 +}
 +
 +/* We optimize away sign/zero extensions in this pass and replace
@@ -834,7 +835,7 @@ index 00000000000..f584a8066fd
 +   of those pseudos and fix them up.  */
 +
 +static void
-+reset_subreg_promoted_p (bitmap changed_pseudos)
++reset_subreg_promoted_p (void)
 +{
 +  /* If we removed an extension, that changed the promoted state
 +     of the destination of that extension.  Thus we need to go
@@ -871,18 +872,12 @@ index 00000000000..f584a8066fd
 +    }
 +}
 +
-+/* Use lifetime analyis to identify extensions that set bits that
-+   are never read.  Turn such extensions into SUBREGs instead which
-+   can often be propagated away.  */
++/* Initialization of the ext-dce pass.  Primarily this means
++   setting up the various bitmaps we utilize.  */
 +
 +static void
-+ext_dce (void)
++ext_dce_init (void)
 +{
-+  basic_block bb, *worklist, *qin, *qout, *qend;
-+  unsigned int qlen;
-+  vec<bitmap_head> livein;
-+  bitmap livenow;
-+  bitmap changed_pseudos;
 +
 +  livein.create (last_basic_block_for_fn (cfun));
 +  livein.quick_grow_cleared (last_basic_block_for_fn (cfun));
@@ -901,97 +896,101 @@ index 00000000000..f584a8066fd
 +    }
 +
 +  livenow = BITMAP_ALLOC (NULL);
++  all_blocks = BITMAP_ALLOC (NULL);
 +  changed_pseudos = BITMAP_ALLOC (NULL);
 +
-+  worklist
-+    = XNEWVEC (basic_block, n_basic_blocks_for_fn (cfun) - NUM_FIXED_BLOCKS);
++  for (int i = 0; i < n_basic_blocks_for_fn (cfun); i++)
++    if (i != ENTRY_BLOCK && i != EXIT_BLOCK)
++      bitmap_set_bit (all_blocks, i);
 +
-+  int modify = 0;
++  modify = false;
 +
-+  int *rpo = XNEWVEC (int, n_basic_blocks_for_fn (cfun));
-+  int n = inverted_rev_post_order_compute (cfun, rpo);
-+  do
-+    {
-+      qin = qout = worklist;
++}
 +
-+      /* Put every block on the worklist.  */
-+      for (int i = 0; i < n; ++i)
-+	{
-+	  bb = BASIC_BLOCK_FOR_FN (cfun, rpo[i]);
-+	  if (bb == EXIT_BLOCK_PTR_FOR_FN (cfun)
-+	      || bb == ENTRY_BLOCK_PTR_FOR_FN (cfun))
-+	    continue;
-+	  *qin++ = bb;
-+	  bb->aux = bb;
-+	}
++/* Finalization of the ext-dce pass.  Primarily this means
++   releasing up the various bitmaps we utilize.  */
 +
-+      qin = worklist;
-+      qend = &worklist[n_basic_blocks_for_fn (cfun) - NUM_FIXED_BLOCKS];
-+      qlen = n_basic_blocks_for_fn (cfun) - NUM_FIXED_BLOCKS;
++static void
++ext_dce_finish (void)
++{
 +
-+      /* Iterate until the worklist is empty.  */
-+      while (qlen)
-+	{
-+	  /* Take the first entry off the worklist.  */
-+	  bb = *qout++;
-+	  qlen--;
-+
-+	  if (qout >= qend)
-+	    qout = worklist;
-+
-+	  /* Clear the aux field of this block so that it can be added to
-+	     the worklist again if necessary.  */
-+	  bb->aux = NULL;
-+
-+	  bitmap_clear (livenow);
-+	  /* Make everything live that's live in the successors.  */
-+	  edge_iterator ei;
-+	  edge e;
-+
-+	  FOR_EACH_EDGE (e, ei, bb->succs)
-+	    bitmap_ior_into (livenow, &livein[e->dest->index]);
-+
-+	  livenow = ext_dce_process_bb (bb, livenow,
-+					modify > 0, changed_pseudos);
-+
-+	  if (!bitmap_equal_p (&livein[bb->index], livenow))
-+	    {
-+	      gcc_assert (!modify);
-+	      bitmap tmp = BITMAP_ALLOC (NULL);
-+	      gcc_assert (!bitmap_and_compl (tmp, &livein[bb->index], livenow));
-+
-+	      bitmap_copy (&livein[bb->index], livenow);
-+
-+	      edge_iterator ei;
-+	      edge e;
-+
-+	      FOR_EACH_EDGE (e, ei, bb->preds)
-+		if (!e->src->aux && e->src != ENTRY_BLOCK_PTR_FOR_FN (cfun))
-+		  {
-+		    *qin++ = e->src;
-+		    e->src->aux = e;
-+		    qlen++;
-+		    if (qin >= qend)
-+		      qin = worklist;
-+		  }
-+	    }
-+	}
-+    } while (!modify++);
-+
-+
-+  reset_subreg_promoted_p (changed_pseudos);
-+
-+  /* Clean up.  */
-+  free (rpo);
-+  BITMAP_FREE (changed_pseudos);
-+  BITMAP_FREE (livenow);
-+  unsigned len = livein.length ();
-+  for (unsigned i = 0; i < len; i++)
++  for (unsigned i = 0; i < livein.length (); i++)
 +    bitmap_clear (&livein[i]);
 +  livein.release ();
-+  clear_aux_for_blocks ();
-+  free (worklist);
++
++  BITMAP_FREE (livenow);
++  BITMAP_FREE (changed_pseudos);
++  BITMAP_FREE (all_blocks);
 +}
++
++/* Process block number BB_INDEX as part of the backward
++   simple dataflow analysis.  Return TRUE if something in
++   this block change or FALSE otherwise.  */
++
++static bool
++ext_dce_rd_transfer_n (int bb_index)
++{
++  /* The ENTRY/EXIT blocks never change.  */
++  if (bb_index == ENTRY_BLOCK || bb_index == EXIT_BLOCK)
++    return false;
++
++  basic_block bb = BASIC_BLOCK_FOR_FN (cfun, bb_index);
++
++  /* Make everything live that's live in the successors.  */
++  bitmap_clear (livenow);
++  edge_iterator ei;
++  edge e;
++
++  FOR_EACH_EDGE (e, ei, bb->succs)
++    bitmap_ior_into (livenow, &livein[e->dest->index]);
++
++  ext_dce_process_bb (bb);
++
++  /* We may have narrowed the set of live objects at the start
++     of this block.  If so, update the bitmaps and indicate to
++     the generic dataflow code that something changed.  */
++  if (!bitmap_equal_p (&livein[bb_index], livenow))
++    {
++      bitmap tmp = BITMAP_ALLOC (NULL);
++      gcc_assert (!bitmap_and_compl (tmp, &livein[bb_index], livenow));
++      BITMAP_FREE (tmp);
++
++      bitmap_copy (&livein[bb_index], livenow);
++      return true;
++    }
++
++  return false;
++}
++
++/* Dummy function for the df_simple_dataflow API.  */
++static bool ext_dce_rd_confluence_n (edge) { return true; }
++
++/* Use lifetime analyis to identify extensions that set bits that
++   are never read.  Turn such extensions into SUBREGs instead which
++   can often be propagated away.  */
++
++static void
++ext_dce (void)
++{
++
++  ext_dce_init ();
++
++  do
++    {
++      df_simple_dataflow (DF_BACKWARD, NULL, NULL,
++			  ext_dce_rd_confluence_n, ext_dce_rd_transfer_n,
++			  all_blocks, df_get_postorder (DF_BACKWARD),
++			  df_get_n_blocks (DF_BACKWARD));
++      modify = !modify;
++    }
++  while (modify);
++
++  reset_subreg_promoted_p ();
++
++  ext_dce_finish ();
++
++}
++
 +
 +namespace {
 +
@@ -1033,10 +1032,10 @@ index 00000000000..f584a8066fd
 +  return new pass_ext_dce (ctxt);
 +}
 diff --git a/gcc/passes.def b/gcc/passes.def
-index 1e1950bdb39..c075c70d42c 100644
+index 43b416f98f7..48bde575cf0 100644
 --- a/gcc/passes.def
 +++ b/gcc/passes.def
-@@ -487,6 +487,7 @@ along with GCC; see the file COPYING3.  If not see
+@@ -491,6 +491,7 @@ along with GCC; see the file COPYING3.  If not see
        NEXT_PASS (pass_inc_dec);
        NEXT_PASS (pass_initialize_regs);
        NEXT_PASS (pass_ud_rtl_dce);
@@ -1166,10 +1165,10 @@ index 00000000000..a4e77d4aeb6
 +}
 +
 diff --git a/gcc/tree-pass.h b/gcc/tree-pass.h
-index 09e6ada5b2f..773301d731f 100644
+index 52fd57fd4c6..501501560ec 100644
 --- a/gcc/tree-pass.h
 +++ b/gcc/tree-pass.h
-@@ -591,6 +591,7 @@ extern rtl_opt_pass *make_pass_reginfo_init (gcc::context *ctxt);
+@@ -593,6 +593,7 @@ extern rtl_opt_pass *make_pass_reginfo_init (gcc::context *ctxt);
  extern rtl_opt_pass *make_pass_inc_dec (gcc::context *ctxt);
  extern rtl_opt_pass *make_pass_stack_ptr_mod (gcc::context *ctxt);
  extern rtl_opt_pass *make_pass_initialize_regs (gcc::context *ctxt);
