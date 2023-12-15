@@ -10711,7 +10711,7 @@ index 00000000000..5aa534ab8e7
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-18.c b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-18.c
 new file mode 100644
-index 00000000000..25b6e52854c
+index 00000000000..de25909d12a
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-18.c
 @@ -0,0 +1,31 @@
@@ -10725,7 +10725,7 @@ index 00000000000..25b6e52854c
 +unsigned long crc24(int len) {
 +
 +  if (sizeof (long) < 4)
-+    exit (0);
++    __builtin_exit (0);
 +
 +  long crc;
 +  crc = 0xB704CE;
@@ -10748,7 +10748,7 @@ index 00000000000..25b6e52854c
 +" "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-19.c b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-19.c
 new file mode 100644
-index 00000000000..6a3275a9800
+index 00000000000..c2eb5d82b6b
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-19.c
 @@ -0,0 +1,61 @@
@@ -10779,7 +10779,7 @@ index 00000000000..6a3275a9800
 +    PUINT32 f_pulCrcResult )
 +{
 +  if (sizeof (UINT32) < 4)
-+    exit (0);
++    __builtin_exit (0);
 +
 +  UINT32 ulWidth = 32;
 +  UINT32 ulKey, i, j;
@@ -10813,7 +10813,6 @@ index 00000000000..6a3275a9800
 +
 +  return 0x00000000;
 +}
-\ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-2.c b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-2.c
 new file mode 100644
 index 00000000000..756bcd7db7b
