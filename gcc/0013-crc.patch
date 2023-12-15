@@ -1,8 +1,8 @@
 diff --git a/gcc/Makefile.in b/gcc/Makefile.in
-index f284c1387e2..1290f550f40 100644
+index 754eceb23bb..1971712212b 100644
 --- a/gcc/Makefile.in
 +++ b/gcc/Makefile.in
-@@ -1712,6 +1712,11 @@ OBJS = \
+@@ -1713,6 +1713,11 @@ OBJS = \
  	tree-iterator.o \
  	tree-logical-location.o \
  	tree-loop-distribution.o \
@@ -46,10 +46,10 @@ index 183ef62bad2..db2ca897785 100644
  DEF_FUNCTION_TYPE_4 (BT_FN_SIZE_CONST_PTR_SIZE_SIZE_FILEPTR,
  		     BT_SIZE, BT_CONST_PTR, BT_SIZE, BT_SIZE, BT_FILEPTR)
 diff --git a/gcc/builtins.cc b/gcc/builtins.cc
-index 38b0acff131..02222ccd36d 100644
+index 7c2732ab79e..9e73547d968 100644
 --- a/gcc/builtins.cc
 +++ b/gcc/builtins.cc
-@@ -2187,7 +2187,24 @@ associated_internal_fn (built_in_function fn, tree return_type)
+@@ -2199,7 +2199,24 @@ associated_internal_fn (built_in_function fn, tree return_type)
        if (REAL_MODE_FORMAT (TYPE_MODE (return_type))->b == 2)
  	return IFN_LDEXP;
        return IFN_LAST;
@@ -75,7 +75,7 @@ index 38b0acff131..02222ccd36d 100644
      default:
        return IFN_LAST;
      }
-@@ -7664,6 +7681,37 @@ expand_speculation_safe_value (machine_mode mode, tree exp, rtx target,
+@@ -7715,6 +7732,37 @@ expand_speculation_safe_value (machine_mode mode, tree exp, rtx target,
    return targetm.speculation_safe_value (mode, target, val, failsafe);
  }
  
@@ -113,7 +113,7 @@ index 38b0acff131..02222ccd36d 100644
  /* Expand an expression EXP that calls a built-in function,
     with result going to TARGET if that's convenient
     (and in mode MODE if that's convenient).
-@@ -8836,6 +8884,54 @@ expand_builtin (tree exp, rtx target, rtx subtarget, machine_mode mode,
+@@ -8887,6 +8935,54 @@ expand_builtin (tree exp, rtx target, rtx subtarget, machine_mode mode,
        mode = get_builtin_sync_mode (fcode - BUILT_IN_SPECULATION_SAFE_VALUE_1);
        return expand_speculation_safe_value (mode, exp, target, ignore);
  
@@ -197,10 +197,10 @@ index f03df32f980..0c7e71613a8 100644
  DEF_C99_COMPL_BUILTIN        (BUILT_IN_CABS, "cabs", BT_FN_DOUBLE_COMPLEX_DOUBLE, ATTR_MATHFN_FPROUNDING)
  DEF_C99_COMPL_BUILTIN        (BUILT_IN_CABSF, "cabsf", BT_FN_FLOAT_COMPLEX_FLOAT, ATTR_MATHFN_FPROUNDING)
 diff --git a/gcc/builtins.h b/gcc/builtins.h
-index 88a26d70cd5..0f8c2934c62 100644
+index 1a26fc63a6d..aca3916cffb 100644
 --- a/gcc/builtins.h
 +++ b/gcc/builtins.h
-@@ -126,6 +126,9 @@ extern void expand_builtin_trap (void);
+@@ -133,6 +133,9 @@ extern void expand_builtin_trap (void);
  extern void expand_ifn_atomic_bit_test_and (gcall *);
  extern void expand_ifn_atomic_compare_exchange (gcall *);
  extern void expand_ifn_atomic_op_fetch_cmp_0 (gcall *);
@@ -211,10 +211,10 @@ index 88a26d70cd5..0f8c2934c62 100644
  extern enum built_in_function builtin_mathfn_code (const_tree);
  extern tree fold_builtin_expect (location_t, tree, tree, tree, tree);
 diff --git a/gcc/common.opt b/gcc/common.opt
-index 5eb5ecff04b..18c357215e5 100644
+index d263a959df3..d48ce76909f 100644
 --- a/gcc/common.opt
 +++ b/gcc/common.opt
-@@ -3125,6 +3125,10 @@ ftree-loop-distribute-patterns
+@@ -3126,6 +3126,10 @@ ftree-loop-distribute-patterns
  Common Var(flag_tree_loop_distribute_patterns) Optimization
  Enable loop distribution for patterns transformed into a library call.
  
@@ -298,10 +298,10 @@ index 92bcdc30fe4..35d85df2eb2 100644
 +})
 \ No newline at end of file
 diff --git a/gcc/config/riscv/riscv-protos.h b/gcc/config/riscv/riscv-protos.h
-index 20bbb5b859c..7e64d10ac27 100644
+index eaee53ce94e..7760724a0fa 100644
 --- a/gcc/config/riscv/riscv-protos.h
 +++ b/gcc/config/riscv/riscv-protos.h
-@@ -161,6 +161,9 @@ extern bool riscv_shamt_matches_mask_p (int, HOST_WIDE_INT);
+@@ -162,6 +162,9 @@ extern bool riscv_shamt_matches_mask_p (int, HOST_WIDE_INT);
  extern void riscv_subword_address (rtx, rtx *, rtx *, rtx *, rtx *);
  extern void riscv_lshift_subword (machine_mode, rtx, rtx, rtx *);
  extern enum memmodel riscv_union_memmodels (enum memmodel, enum memmodel);
@@ -312,10 +312,10 @@ index 20bbb5b859c..7e64d10ac27 100644
  /* Routines implemented in riscv-c.cc.  */
  void riscv_cpu_cpp_builtins (cpp_reader *);
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 3f111fa0393..8af210d4343 100644
+index f60726711e8..9d4f53f86eb 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
-@@ -10251,6 +10251,7 @@ riscv_preferred_else_value (unsigned ifn, tree vectype, unsigned int nops,
+@@ -10354,6 +10354,7 @@ riscv_preferred_else_value (unsigned ifn, tree vectype, unsigned int nops,
    return default_preferred_else_value (ifn, vectype, nops, ops);
  }
  
@@ -323,7 +323,7 @@ index 3f111fa0393..8af210d4343 100644
  /* If MEM is in the form of "base+offset", extract the two parts
     of address and set to BASE and OFFSET, otherwise return false
     after clearing BASE and OFFSET.  */
-@@ -10285,6 +10286,226 @@ extract_base_offset_in_addr (rtx mem, rtx *base, rtx *offset)
+@@ -10388,6 +10389,226 @@ extract_base_offset_in_addr (rtx mem, rtx *base, rtx *offset)
    return false;
  }
  
@@ -580,7 +580,7 @@ index de72cb1e1fe..f781dac3152 100755
    done ;;
 diff --git a/gcc/crc-verification.cc b/gcc/crc-verification.cc
 new file mode 100644
-index 00000000000..ad08a20132e
+index 00000000000..4d33c12c10b
 --- /dev/null
 +++ b/gcc/crc-verification.cc
 @@ -0,0 +1,1326 @@
@@ -1910,6 +1910,7 @@ index 00000000000..ad08a20132e
 +
 +  return true;
 +}
+\ No newline at end of file
 diff --git a/gcc/crc-verification.h b/gcc/crc-verification.h
 new file mode 100644
 index 00000000000..b45eb242486
@@ -2080,7 +2081,7 @@ index 00000000000..b45eb242486
 +
 +#endif //GCC_CRC_VERIFICATION
 diff --git a/gcc/expr.cc b/gcc/expr.cc
-index 6da51f2aca2..718aafdfdd9 100644
+index 9fef2bf6585..d1006675b48 100644
 --- a/gcc/expr.cc
 +++ b/gcc/expr.cc
 @@ -66,7 +66,6 @@ along with GCC; see the file COPYING3.  If not see
@@ -2091,7 +2092,7 @@ index 6da51f2aca2..718aafdfdd9 100644
  /* If this is nonzero, we do not bother generating VOLATILE
     around volatile memory references, and we are willing to
     output indirect addresses.  If cse is to follow, we reject
-@@ -14012,3 +14011,338 @@ int_expr_size (const_tree exp)
+@@ -14011,3 +14010,346 @@ int_expr_size (const_tree exp)
  
    return tree_to_shwi (size);
  }
@@ -2214,11 +2215,10 @@ index 6da51f2aca2..718aafdfdd9 100644
 +
 +  rtx wide_crc = gen_reg_rtx (word_mode);
 +  convert_move (wide_crc, *crc, 0);
-+
 +  for (int i = 0; i < GET_MODE_SIZE (data_mode).to_constant (); i++)
 +    {
 +      /* crc >> (bit_size - 8).  */
-+      rtx op1 = expand_shift (RSHIFT_EXPR, crc_mode, wide_crc, crc_size - 8,
++      rtx op1 = expand_shift (RSHIFT_EXPR, word_mode, wide_crc, crc_size - 8,
 +			      NULL_RTX, 1);
 +
 +      /* data >> (8 * (GET_MODE_SIZE (data_mode).to_constant () - i - 1)).  */
@@ -2239,9 +2239,8 @@ index 6da51f2aca2..718aafdfdd9 100644
 +      rtx index = expand_and (word_mode, in, gen_int_mode (255, word_mode),
 +			      NULL_RTX);
 +      int log_crc_size = exact_log2 (GET_MODE_SIZE (crc_mode).to_constant ());
-+      /* ??? Should we just pass NULL for the target?  */
 +      index = expand_shift (LSHIFT_EXPR, word_mode, index, log_crc_size,
-+			    index, 0);
++			    NULL_RTX, 0);
 +
 +      index = expand_binop (word_mode, add_optab, index, tab, NULL_RTX, 0,
 +			    OPTAB_DIRECT);
@@ -2249,27 +2248,25 @@ index 6da51f2aca2..718aafdfdd9 100644
 +      /* crc_table[(crc >> (bit_size - 8)) ^ data_8bit]  */
 +      rtx tab_el = validize_mem (gen_rtx_MEM (crc_mode, index));
 +
-+      /* (crc << 8) if CRC is larger than 8, otherwise crc = 8.  */
++      /* (crc << 8) if CRC is larger than 8, otherwise crc = 0.  */
 +      rtx high = NULL_RTX;
 +      if (GET_MODE_BITSIZE (crc_mode).to_constant () != 8)
 +	{
-+	  high = expand_shift (LSHIFT_EXPR, word_mode, wide_crc, 8, NULL_RTX, 0);
-+
-+	  if (crc_mode != word_mode)
-+	    {
-+	      rtx crc_mode_mask = gen_int_mode (GET_MODE_MASK (crc_mode),
-+						crc_mode);
-+	      high = expand_and (word_mode, high, crc_mode_mask, NULL_RTX);
-+	    }
++	   high = expand_shift (LSHIFT_EXPR, word_mode, wide_crc, 8, NULL_RTX,
++				0);
++	   if (crc_mode != word_mode)
++	     {
++	       rtx crc_mode_mask = gen_int_mode (GET_MODE_MASK (crc_mode),
++						 word_mode);
++	       high = expand_and (word_mode, high, crc_mode_mask, NULL_RTX);
++	     }
 +	}
 +      else
-+	{
-+	  high = gen_int_mode (0, crc_mode);
-+	}
++	high = gen_int_mode (0, word_mode);
 +
 +      /* crc = (crc << 8) ^ crc_table[(crc >> (bit_size - 8)) ^ data_8bit];  */
 +      wide_crc = expand_binop (word_mode, xor_optab, tab_el, high, NULL_RTX, 1,
-+			       OPTAB_WIDEN);
++			   OPTAB_DIRECT);
 +    }
 +  *crc = wide_crc;
 +}
@@ -2364,6 +2361,16 @@ index 6da51f2aca2..718aafdfdd9 100644
 +  gen_common_operation_to_reflect (op, 0x5555, 0xAAAA, 1);
 +}
 +
++/* Reflect 8-bit value for the 8-bit target.  */
++
++void
++reflect_8_bit_value (rtx *op)
++{
++  gen_common_operation_to_reflect (op, 0x0F, 0xF0, 4);
++  gen_common_operation_to_reflect (op, 0x33, 0xCC, 2);
++  gen_common_operation_to_reflect (op, 0x55, 0xAA, 1);
++}
++
 +/* Generate instruction sequence
 +   which reflects the value of the OP using shift, and, or.
 +   OP's mode may be less than word_mode, to get the correct number,
@@ -2375,14 +2382,16 @@ index 6da51f2aca2..718aafdfdd9 100644
 +void
 +generate_reflecting_code_standard (rtx *op, int shift_val)
 +{
-+  gcc_assert (BITS_PER_WORD >= 16 && BITS_PER_WORD <= 64);
++  gcc_assert (BITS_PER_WORD >= 8 && BITS_PER_WORD <= 64);
 +
 +  if (BITS_PER_WORD == 64)
 +    reflect_64_bit_value (op);
 +  else if (BITS_PER_WORD == 32)
 +    reflect_32_bit_value (op);
-+  else
++  else if (BITS_PER_WORD == 16)
 +    reflect_16_bit_value (op);
++  else
++    reflect_8_bit_value (op);
 +
 +  *op = expand_shift (RSHIFT_EXPR, word_mode, *op, shift_val, *op, 1);
 +}
@@ -2430,6 +2439,7 @@ index 6da51f2aca2..718aafdfdd9 100644
 +  gen_reflecting_code (&crc, GET_MODE_BITSIZE (word_mode) - crc_size);
 +  emit_move_insn (op0, gen_lowpart (crc_mode, crc));
 +}
+\ No newline at end of file
 diff --git a/gcc/expr.h b/gcc/expr.h
 index 431616d55be..f6a066438ee 100644
 --- a/gcc/expr.h
@@ -2447,7 +2457,7 @@ index 431616d55be..f6a066438ee 100644
  #endif /* GCC_EXPR_H */
 diff --git a/gcc/gimple-crc-optimization.cc b/gcc/gimple-crc-optimization.cc
 new file mode 100644
-index 00000000000..d1805b47bbf
+index 00000000000..4ebdf35e80a
 --- /dev/null
 +++ b/gcc/gimple-crc-optimization.cc
 @@ -0,0 +1,1354 @@
@@ -2901,7 +2911,7 @@ index 00000000000..d1805b47bbf
 +{
 +  /* Check whether PRED_BB contains condition.  We will consider only those
 +     cases when xor is done immediately under the condition.  */
-+  gcond *cond = as_a<gcond *> (gsi_stmt (gsi_last_bb (pred_bb)));
++  gcond *cond = safe_dyn_cast<gcond *> (*gsi_last_bb (pred_bb));
 +  if (!cond)
 +    {
 +      if (dump_file && (dump_flags & TDF_DETAILS))
@@ -3309,8 +3319,8 @@ index 00000000000..d1805b47bbf
 +      unsigned HOST_WIDE_INT
 +      loop_iteration_number = tree_to_uhwi (n_inters);
 +      if (dump_file && (dump_flags & TDF_DETAILS))
-+	fprintf (dump_file, "Loop iteration number is " HOST_WIDE_INT_PRINT_UNSIGNED ".\n",
-+		 loop_iteration_number);
++	fprintf (dump_file, "Loop iteration number is "
++		 HOST_WIDE_INT_PRINT_UNSIGNED ".\n", loop_iteration_number);
 +
 +      if ((loop_iteration_number == 7 || loop_iteration_number == 15
 +	   || loop_iteration_number == 23 || loop_iteration_number == 31
@@ -3995,10 +4005,10 @@ index 7a3830caaa3..b21c090463b 100644
  
  /* -f{,no-}sanitize{,-recover}= suboptions.  */
 diff --git a/gcc/passes.def b/gcc/passes.def
-index d3fccdf0a4a..51b6bcba3bd 100644
+index 43b416f98f7..638cda4c6a1 100644
 --- a/gcc/passes.def
 +++ b/gcc/passes.def
-@@ -295,6 +295,7 @@ along with GCC; see the file COPYING3.  If not see
+@@ -296,6 +296,7 @@ along with GCC; see the file COPYING3.  If not see
  	  NEXT_PASS (pass_cd_dce, false /* update_address_taken_p */);
  	  NEXT_PASS (pass_iv_canon);
  	  NEXT_PASS (pass_loop_distribution);
@@ -4312,7 +4322,7 @@ index 00000000000..9931254c36e
 \ No newline at end of file
 diff --git a/gcc/sym-exec/expression.cc b/gcc/sym-exec/expression.cc
 new file mode 100644
-index 00000000000..c521e482539
+index 00000000000..0f885550ab8
 --- /dev/null
 +++ b/gcc/sym-exec/expression.cc
 @@ -0,0 +1,374 @@
@@ -4690,6 +4700,7 @@ index 00000000000..c521e482539
 +	fprintf (dump_file, "null");
 +    }
 +}
+\ No newline at end of file
 diff --git a/gcc/sym-exec/expression.h b/gcc/sym-exec/expression.h
 new file mode 100644
 index 00000000000..da17b8042c7
@@ -4903,7 +4914,7 @@ index 00000000000..da17b8042c7
 \ No newline at end of file
 diff --git a/gcc/sym-exec/state.cc b/gcc/sym-exec/state.cc
 new file mode 100644
-index 00000000000..f8817e28fa6
+index 00000000000..4fd29237c5b
 --- /dev/null
 +++ b/gcc/sym-exec/state.cc
 @@ -0,0 +1,2330 @@
@@ -7237,6 +7248,7 @@ index 00000000000..f8817e28fa6
 +  complement_all_vars_bits_with_origin (origin);
 +  complement_conditions_with_origin (origin);
 +}
+\ No newline at end of file
 diff --git a/gcc/sym-exec/state.h b/gcc/sym-exec/state.h
 new file mode 100644
 index 00000000000..b20c8deab2f
@@ -7698,7 +7710,7 @@ index 00000000000..b20c8deab2f
 +#endif /* SYM_EXEC_STATE_H.  */
 diff --git a/gcc/testsuite/gcc.dg/crc-1.c b/gcc/testsuite/gcc.dg/crc-1.c
 new file mode 100644
-index 00000000000..cce81c4ac97
+index 00000000000..7e0f9689be0
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-1.c
 @@ -0,0 +1,81 @@
@@ -7780,7 +7792,7 @@ index 00000000000..cce81c4ac97
 +/* { dg-final { scan-tree-dump "function maybe contains CRC calculation." "crc"} } */
 +/* { dg-final { scan-tree-dump "Loop iteration number is 15" "crc"} } */
 +/* { dg-final { scan-tree-dump "Bit forward" "crc"} } */
-+/* { dg-final { scan-tree-dump "Polynomial's value is \\\{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1\\\}" "crc" } } */
++/* { dg-final { scan-tree-dump "Polynomial's value is \\\{\[0, \]*1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1\\\}" "crc" } } */
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 \ No newline at end of file
@@ -7840,14 +7852,14 @@ index 00000000000..a2f8f779954
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-11.c b/gcc/testsuite/gcc.dg/crc-11.c
 new file mode 100644
-index 00000000000..e25e930ca01
+index 00000000000..10fa47c5f5b
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-11.c
 @@ -0,0 +1,19 @@
 +/* { dg-do compile } */
 +/* { dg-options "-O2 -fdump-tree-crc-details" } */
 +
-+//We just don't check the cases when the polynomial is a variable, as we can't replace it.
++//We just don't check cases when the polynomial is a variable, as we can't replace it.
 +#include <stdint.h>
 +
 +uint16_t crc16(uint16_t crc, uint8_t a, uint16_t polynom) {
@@ -8148,7 +8160,7 @@ index 00000000000..6715cd238d5
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-17.c b/gcc/testsuite/gcc.dg/crc-17.c
 new file mode 100644
-index 00000000000..dd598f21d14
+index 00000000000..4bba71a1756
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-17.c
 @@ -0,0 +1,58 @@
@@ -8207,13 +8219,13 @@ index 00000000000..dd598f21d14
 +/* { dg-final { scan-tree-dump "calc_crc_O2 function maybe contains CRC calculation." "crc"} } */
 +/* { dg-final { scan-tree-dump "Loop iteration number is 7" "crc"} } */
 +/* { dg-final { scan-tree-dump "Bit forward" "crc"} } */
-+/* { dg-final { scan-tree-dump-times "Polynomial's value is \\\{0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1\\\}" 1 "crc"} } */
++/* { dg-final { scan-tree-dump-times "Polynomial's value is \\\{\[0, \]*1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1\\\}" 1 "crc"} } */
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-18.c b/gcc/testsuite/gcc.dg/crc-18.c
 new file mode 100644
-index 00000000000..217404548d4
+index 00000000000..fe3310a7269
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-18.c
 @@ -0,0 +1,42 @@
@@ -8256,7 +8268,7 @@ index 00000000000..217404548d4
 +/* { dg-final { scan-tree-dump "crc8_O2 function maybe contains CRC calculation." "crc"} } */
 +/* { dg-final { scan-tree-dump "Loop iteration number is 7" "crc"} } */
 +/* { dg-final { scan-tree-dump "Bit forward" "crc"} } */
-+/* { dg-final { scan-tree-dump "Polynomial's value is \\\{0, 0, 1, 1, 0, 0, 0, 1\\\}" "crc"} } */
++/* { dg-final { scan-tree-dump "Polynomial's value is \\\{\[0, \]*0, 0, 1, 1, 0, 0, 0, 1\\\}" "crc"} } */
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 \ No newline at end of file
@@ -8297,7 +8309,7 @@ index 00000000000..2be78692656
 +/* { dg-final { scan-tree-dump "Bit forward" "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/crc-2.c b/gcc/testsuite/gcc.dg/crc-2.c
 new file mode 100644
-index 00000000000..f453888e146
+index 00000000000..84fba4d92f1
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-2.c
 @@ -0,0 +1,27 @@
@@ -8327,7 +8339,7 @@ index 00000000000..f453888e146
 +/* { dg-final { scan-tree-dump "function maybe contains CRC calculation." "crc"} } */
 +/* { dg-final { scan-tree-dump "Loop iteration number is 7" "crc"} } */
 +/* { dg-final { scan-tree-dump "Bit forward" "crc"} } */
-+/* { dg-final { scan-tree-dump "Polynomial's value is \\\{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0\\\}" "crc" } } */
++/* { dg-final { scan-tree-dump "Polynomial's value is \\\{\[0, \]*1, 0, 0, 0, 0, 0, 0, 1, 0\\\}" "crc" } } */
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-20.c b/gcc/testsuite/gcc.dg/crc-20.c
 new file mode 100644
@@ -8375,10 +8387,10 @@ index 00000000000..944d2444e4e
 +}
 diff --git a/gcc/testsuite/gcc.dg/crc-21.c b/gcc/testsuite/gcc.dg/crc-21.c
 new file mode 100644
-index 00000000000..d0e81312434
+index 00000000000..9fa68ae4b79
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-21.c
-@@ -0,0 +1,48 @@
+@@ -0,0 +1,53 @@
 +/* { dg-do run { target { lp64 } } } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +
@@ -8389,6 +8401,8 @@ index 00000000000..d0e81312434
 +#define CRC(x) uint32_t _crc32_##x (uint32_t crc, uint32_t data);\
 +__attribute__ ((noinline,optimize(#x)))\
 +uint32_t _crc32_##x (uint32_t crc, uint32_t data) {\
++  if (sizeof (uint32_t) < 4)\
++    exit (0);\
 +  int i;\
 +  crc = crc ^ data;\
 +\
@@ -8407,6 +8421,9 @@ index 00000000000..d0e81312434
 +
 +int main ()
 +{
++  if (sizeof (uint32_t) < 4)
++    exit (0);
++
 +  uint32_t crc = 0x0D800D80;
 +  for (uint32_t i = 0; i < 0xffffff; i++)
 +    {
@@ -8493,12 +8510,12 @@ index 00000000000..cca58cbe972
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-23.c b/gcc/testsuite/gcc.dg/crc-23.c
 new file mode 100644
-index 00000000000..8dee610ef98
+index 00000000000..7c02ad9adcd
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-23.c
 @@ -0,0 +1,61 @@
 +/* { dg-do run } */
-+/* { dg-options "-fdump-tree-crc-details" } */
++/* { dg-options "-fdump-tree-crc-details -ftree-cselim" } */
 +
 +// Modified example from crc-from-fedora-packages-24.c
 +
@@ -8668,16 +8685,15 @@ index 00000000000..63216ef90aa
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-26.c b/gcc/testsuite/gcc.dg/crc-26.c
 new file mode 100644
-index 00000000000..651ae6b4d05
+index 00000000000..22cd61b09aa
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-26.c
-@@ -0,0 +1,54 @@
+@@ -0,0 +1,57 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +
 +//Test from roms/u-boot-sam460ex/drivers/mtd/ubi/crc32.c
 +#include <stdint.h>
-+#include <stddef.h>
 +#include <stdio.h>
 +#include <stdlib.h>
 +
@@ -8690,6 +8706,8 @@ index 00000000000..651ae6b4d05
 +__attribute__ ((noinline,optimize(#x)))\
 +u32 crc32_le_##x (u32 crc, unsigned char const *p, size_t len)\
 +{\
++  if (sizeof (u32) < 4)\
++    exit (0);\
 +  int i;\
 +  while (len--) {\
 +      crc ^= *p++;\
@@ -8704,6 +8722,8 @@ index 00000000000..651ae6b4d05
 +
 +int main ()
 +{
++  if (sizeof (u32) < 4)
++    exit (0);
 +  u32 crc = 0x0D800D80;
 +  unsigned char st[2] = {'H','i'};
 +  for (unsigned char i = 0; i < 255; i++)
@@ -8882,7 +8902,7 @@ index 00000000000..f9225afcb8c
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-3.c b/gcc/testsuite/gcc.dg/crc-3.c
 new file mode 100644
-index 00000000000..b34be271343
+index 00000000000..77395e1ab1b
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-3.c
 @@ -0,0 +1,35 @@
@@ -8920,7 +8940,7 @@ index 00000000000..b34be271343
 +/* { dg-final { scan-tree-dump "function maybe contains CRC calculation." "crc"} } */
 +/* { dg-final { scan-tree-dump "Loop iteration number is 7" "crc"} } */
 +/* { dg-final { scan-tree-dump "Bit reversed" "crc"} } */
-+/* { dg-final { scan-tree-dump "Polynomial's value is \\\{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0\\\}" "crc" } } */
++/* { dg-final { scan-tree-dump "Polynomial's value is \\\{\[0, \]*1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0\\\}" "crc" } } */
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-4.c b/gcc/testsuite/gcc.dg/crc-4.c
 new file mode 100644
@@ -9015,7 +9035,7 @@ index 00000000000..80ed38818b0
 +/* { dg-final { scan-tree-dump "Bit reversed" "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/crc-5.c b/gcc/testsuite/gcc.dg/crc-5.c
 new file mode 100644
-index 00000000000..9d0f6ed588a
+index 00000000000..1be74e47d87
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-5.c
 @@ -0,0 +1,56 @@
@@ -9073,7 +9093,7 @@ index 00000000000..9d0f6ed588a
 +/* { dg-final { scan-tree-dump "Loop iteration number is 7" "crc"} } */
 +/* { dg-final { scan-tree-dump "Bit reversed" "crc"} } */
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
-+/* { dg-final { scan-tree-dump "Polynomial's value is \\\{1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1\\\}" "crc" } } */
++/* { dg-final { scan-tree-dump "Polynomial's value is \\\{\[0, \]*1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1\\\}" "crc" } } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-6.c b/gcc/testsuite/gcc.dg/crc-6.c
@@ -9194,7 +9214,7 @@ index 00000000000..ed4f7df04a9
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-8.c b/gcc/testsuite/gcc.dg/crc-8.c
 new file mode 100644
-index 00000000000..ce1e2a1260c
+index 00000000000..32dbd6ef132
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-8.c
 @@ -0,0 +1,47 @@
@@ -9243,12 +9263,12 @@ index 00000000000..ce1e2a1260c
 +/* { dg-final { scan-tree-dump "Loop iteration number is 7" "crc"} } */
 +/* { dg-final { scan-tree-dump "Bit reversed" "crc"} } */
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
-+/* { dg-final { scan-tree-dump "Polynomial's value is \\\{1, 0, 0, 0, 1, 1, 0, 0\\\}" "crc" } } */
++/* { dg-final { scan-tree-dump "Polynomial's value is \\\{\[0, \]*1, 0, 0, 0, 1, 1, 0, 0\\\}" "crc" } } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-9.c b/gcc/testsuite/gcc.dg/crc-9.c
 new file mode 100644
-index 00000000000..5f64cd41f9d
+index 00000000000..1773732edac
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-9.c
 @@ -0,0 +1,51 @@
@@ -9300,16 +9320,16 @@ index 00000000000..5f64cd41f9d
 +/* { dg-final { scan-tree-dump "gencrc_O2 function maybe contains CRC calculation." "crc"} } */
 +/* { dg-final { scan-tree-dump "Loop iteration number is 7" "crc"} } */
 +/* { dg-final { scan-tree-dump "Bit forward" "crc"} } */
-+/* { dg-final { scan-tree-dump "Polynomial's value is \\\{0, 0, 1, 1, 0, 0, 0, 1\\\}" "crc" } } */
++/* { dg-final { scan-tree-dump "Polynomial's value is \\\{\[0, \]*0, 0, 1, 1, 0, 0, 0, 1\\\}" "crc" } } */
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-CCIT-data16-xorOutside_InsideFor.c b/gcc/testsuite/gcc.dg/crc-CCIT-data16-xorOutside_InsideFor.c
 new file mode 100644
-index 00000000000..1b4a245149d
+index 00000000000..d7a034fb699
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-CCIT-data16-xorOutside_InsideFor.c
-@@ -0,0 +1,55 @@
+@@ -0,0 +1,54 @@
 +/* { dg-do run } */
 +/* { dg-options "-O2 -fdump-tree-crc-details" } */
 +
@@ -9364,7 +9384,6 @@ index 00000000000..1b4a245149d
 +/* { dg-final { scan-tree-dump "Loop iteration number is 15" "crc"} } */
 +/* { dg-final { scan-tree-dump "Bit forward" "crc"} } */
 +/* { dg-final { scan-tree-dump-times "calculates CRC!" 4 "crc"} } */
-+/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/crc-CCIT-data16.c b/gcc/testsuite/gcc.dg/crc-CCIT-data16.c
 new file mode 100644
 index 00000000000..ae148e7146d
@@ -9469,7 +9488,7 @@ index 00000000000..64cefbaa670
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/crc-coremark16-data16.c b/gcc/testsuite/gcc.dg/crc-coremark16-data16.c
 new file mode 100644
-index 00000000000..a6a0d227e53
+index 00000000000..2c06add8bbb
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-coremark16-data16.c
 @@ -0,0 +1,54 @@
@@ -9526,7 +9545,7 @@ index 00000000000..a6a0d227e53
 +/* { dg-final { scan-tree-dump "Loop iteration number is 15" "crc"} } */
 +/* { dg-final { scan-tree-dump "Bit reversed" "crc"} } */
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
-+/* { dg-final { scan-tree-dump "Polynomial's value is \\\{1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1\\\}" "crc" } } */
++/* { dg-final { scan-tree-dump "Polynomial's value is \\\{\[0, \]*1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1\\\}" "crc" } } */
 diff --git a/gcc/testsuite/gcc.dg/crc-coremark32-data16.c b/gcc/testsuite/gcc.dg/crc-coremark32-data16.c
 new file mode 100644
 index 00000000000..dd0fdb1a420
@@ -9821,10 +9840,10 @@ index 00000000000..f291e54480c
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/crc-crc32-data16.c b/gcc/testsuite/gcc.dg/crc-crc32-data16.c
 new file mode 100644
-index 00000000000..11aed650f62
+index 00000000000..805042e6da9
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-crc32-data16.c
-@@ -0,0 +1,45 @@
+@@ -0,0 +1,50 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details -w" } */
 +
@@ -9833,6 +9852,8 @@ index 00000000000..11aed650f62
 +#include <stdlib.h>
 +#define CRC(x) static uint32_t _crc32_##x (uint16_t data, uint32_t crc); static \
 +__attribute__ ((noinline,optimize(#x))) uint32_t _crc32_##x (uint16_t data, uint32_t crc) {\
++  if (sizeof (uint32_t) < 4)\
++    exit (0);\
 +  int i;\
 +  for (i = 0; i < 16; i++) {\
 +      if ((crc & 0x80000000) >> 16 ^ (data & 0x8000))\
@@ -9849,6 +9870,9 @@ index 00000000000..11aed650f62
 +
 +int main ()
 +{
++  if (sizeof (uint32_t) < 4)
++    exit (0);
++
 +  uint32_t crc = 0;
 +
 +  for (uint16_t i = 0; i < 0xfff; i++)
@@ -9873,16 +9897,14 @@ index 00000000000..11aed650f62
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-crc32-data24.c b/gcc/testsuite/gcc.dg/crc-crc32-data24.c
 new file mode 100644
-index 00000000000..ef9fb708704
+index 00000000000..5105e3c3a3c
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-crc32-data24.c
-@@ -0,0 +1,21 @@
+@@ -0,0 +1,19 @@
 +/* { dg-do compile } */
 +/* { dg-options "-O2 -fdump-tree-crc-details" } */
 +
 +#include <stdint.h>
-+#include <stdio.h>
-+#include <stdlib.h>
 +uint32_t _crc32 (uint32_t data, uint32_t crc) {
 +  int i;
 +  for (i = 0; i < 24; i++) {
@@ -9900,10 +9922,10 @@ index 00000000000..ef9fb708704
 +/* { dg-final { scan-tree-dump "Bit forward" "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/crc-crc32-data8.c b/gcc/testsuite/gcc.dg/crc-crc32-data8.c
 new file mode 100644
-index 00000000000..8e9778ee40e
+index 00000000000..43d42430169
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-crc32-data8.c
-@@ -0,0 +1,45 @@
+@@ -0,0 +1,50 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details -w" } */
 +
@@ -9912,6 +9934,8 @@ index 00000000000..8e9778ee40e
 +#include <stdlib.h>
 +#define CRC(x) static uint32_t _crc32_##x (uint8_t data, uint32_t crc); static \
 +__attribute__ ((noinline,optimize(#x))) uint32_t _crc32_##x (uint8_t data, uint32_t crc) {\
++  if (sizeof (uint32_t) < 4)\
++    exit (0);\
 +  int i;\
 +  for (i = 0; i < 8; i++) {\
 +      if ((crc & 0x80000000) >> 24 ^ (data & 0x80))\
@@ -9928,6 +9952,9 @@ index 00000000000..8e9778ee40e
 +
 +int main ()
 +{
++  if (sizeof (uint32_t) < 4)
++    exit (0);
++
 +  uint32_t crc = 0;
 +
 +  for (uint8_t i = 0; i < 0xff; i++)
@@ -9952,10 +9979,10 @@ index 00000000000..8e9778ee40e
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-crc32.c b/gcc/testsuite/gcc.dg/crc-crc32.c
 new file mode 100644
-index 00000000000..bd71e73ba9d
+index 00000000000..111b3689d59
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-crc32.c
-@@ -0,0 +1,45 @@
+@@ -0,0 +1,50 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details -w" } */
 +
@@ -9964,6 +9991,8 @@ index 00000000000..bd71e73ba9d
 +#include <stdlib.h>
 +#define CRC(x) static uint32_t _crc32_##x (uint32_t data, uint32_t crc); static \
 +__attribute__ ((noinline,optimize(#x))) uint32_t _crc32_##x (uint32_t data, uint32_t crc) {\
++  if (sizeof (uint32_t) < 4)\
++    exit (0);\
 +  int i;\
 +  for (i = 0; i < 32; i++) {\
 +      if ((crc & 0x80000000) ^ (data & 0x80000000))\
@@ -9980,9 +10009,12 @@ index 00000000000..bd71e73ba9d
 +
 +int main ()
 +{
++  if (sizeof (uint32_t) < 4)
++    exit (0);
++
 +  uint32_t crc = 0;
 +
-+  for (uint32_t i = 0; i < 0xfffff; i++)
++  for (uint32_t i = 0; i < 0xffff; i++)
 +    {
 +      uint32_t res1 = _crc32_O0 (i, crc);
 +      uint32_t res2 = _crc32_O2 (i, crc);
@@ -10399,66 +10431,82 @@ index 00000000000..b753b4e47d9
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-12.c b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-12.c
 new file mode 100644
-index 00000000000..17ac01d965e
+index 00000000000..22d1d7a12e8
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-12.c
-@@ -0,0 +1,59 @@
+@@ -0,0 +1,75 @@
 +/* { dg-do compile } */
-+/* { dg-options "-O2 -fdump-tree-crc-details" } */
++/* { dg-options "-O2 -fdump-tree-crc-details -w" } */
 +
-+// File - wifi
++// File - wifi.  Sizeof check is added for the test.
++
++#include <stdlib.h>
 +#include <stdbool.h>
 +#include <stdio.h>
 +typedef unsigned int u32;
 +typedef unsigned char u8;
 +u32 WIFI_CRC32Table[256];
 +bool initialized;
-+u32 reflect(u32 ref, char ch)
++u32 reflect (u32 ref, char ch)
 +{
-+    u32 value = 0;
++  if (sizeof (u32) < 4)
++    exit (0);
 +
-+    for(int i = 1; i < (ch + 1); i++)
++  u32 value = 0;
++
++  for (int i = 1; i < (ch + 1); i++)
 +    {
-+        if (ref & 1)
-+            value |= 1 << (ch - i);
-+        ref >>= 1;
++      if (ref & 1)
++	value |= 1 << (ch - i);
++      ref >>= 1;
 +    }
 +
-+    return value;
++  return value;
 +}
 +
-+u32 WIFI_calcCRC32(u8 *data, int len)
++u32 WIFI_calcCRC32 (u8 *data, int len)
 +{
-+    u32 crc = 0xFFFFFFFF;
++  if (sizeof (u32) < 4)
++    exit (0);
 +
-+    while(len--)
-+        crc = (crc >> 8) ^ WIFI_CRC32Table[(crc & 0xFF) ^ *data++];
++  u32 crc = 0xFFFFFFFF;
 +
-+    return (crc ^ 0xFFFFFFFF);
++  while (len--)
++    crc = (crc >> 8) ^ WIFI_CRC32Table[(crc & 0xFF) ^ *data++];
++
++  return (crc ^ 0xFFFFFFFF);
 +}
 +
-+void WIFI_initCRC32Table()
++void WIFI_initCRC32Table ()
 +{
-+    initialized = false;
-+    if(initialized) return;
-+    initialized = true;
++  if (sizeof (u32) < 4)
++    exit (0);
 +
-+    u32 polynomial = 0x04C11DB7;
++  initialized = false;
++  if (initialized) return;
++  initialized = true;
 +
-+    for(int i = 0; i < 0x100; i++)
++  u32 polynomial = 0x04C11DB7;
++
++  for (int i = 0; i < 0x100; i++)
 +    {
-+        WIFI_CRC32Table[i] = reflect(i, 8) << 24;
-+        for(int j = 0; j < 8; j++)
-+            WIFI_CRC32Table[i] = (WIFI_CRC32Table[i] << 1) ^ (WIFI_CRC32Table[i] & (1 << 31) ? polynomial : 0);
-+        WIFI_CRC32Table[i] = reflect(WIFI_CRC32Table[i], 32);
++      WIFI_CRC32Table[i] = reflect (i, 8) << 24;
++      for (int j = 0; j < 8; j++)
++	WIFI_CRC32Table[i] = (WIFI_CRC32Table[i] << 1)
++			     ^ (WIFI_CRC32Table[i] & (1 << 31) ? polynomial
++							       : 0);
++      WIFI_CRC32Table[i] = reflect (WIFI_CRC32Table[i], 32);
 +    }
 +}
 +
 +int main ()
 +{
-+    WIFI_initCRC32Table();
-+    WIFI_calcCRC32 ("dfsf", 4);
-+    printf ("%d", WIFI_CRC32Table[0]);
++  if (sizeof (u32) < 4)
++    exit (0);
++
++  WIFI_initCRC32Table ();
++  WIFI_calcCRC32 ("dfsf", 4);
++  printf ("%d", WIFI_CRC32Table[0]);
 +}
 +
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
@@ -10499,23 +10547,25 @@ index 00000000000..c1247632ec1
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-14.c b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-14.c
 new file mode 100644
-index 00000000000..b79c727666c
+index 00000000000..c67db8b24e6
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-14.c
-@@ -0,0 +1,33 @@
+@@ -0,0 +1,35 @@
 +/* { dg-do compile } */
-+/* { dg-options "-O2 -fdump-tree-crc-details" } */
++/* { dg-options "-O2 -fdump-tree-crc-details -w" } */
 +
 +// File - base64, slightly modified
 +// We don't support the case when leading bit of the polynomial is kept.
 +
 +#include <stddef.h>
 +#include <stdint.h>
-+#include <string.h>
 +#include <stdlib.h>
 +
 +uint32_t b64crc (const unsigned char* data, size_t ns)
 +{
++  if (sizeof (unsigned int) < 4)
++    exit (0);
++
 +  const unsigned char *s = data;
 +  uint32_t crc = 0xb704ceL;
 +
@@ -10535,7 +10585,7 @@ index 00000000000..b79c727666c
 +  return crc;
 +}
 +
-+/* { dg-final { scan-tree-dump "Polynomial's value is \\\{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0\\\}" "crc"} } */
++/* { dg-final { scan-tree-dump "Polynomial's value is \\\{\[0, \]*0\\\}" "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-15.c b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-15.c
 new file mode 100644
 index 00000000000..a5b823c8b9c
@@ -10596,21 +10646,25 @@ index 00000000000..112b0cb7381
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-17.c b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-17.c
 new file mode 100644
-index 00000000000..f19e6bbf72b
+index 00000000000..5aa534ab8e7
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-17.c
-@@ -0,0 +1,51 @@
+@@ -0,0 +1,58 @@
 +/* { dg-do compile } */
-+/* { dg-options "-O2 -fdump-tree-crc-details" } */
++/* { dg-options "-O2 -fdump-tree-crc-details -w" } */
 +
-+// File - crc.i
++// File - crc.i.  Sizeof check is added for the test.
 +// We don't support this case.
 +
++#include <stdlib.h>
 +#include <stdint.h>
 +uint32_t crc24_calculate(uint32_t preset, const uint8_t *data, uint8_t len)
 +{
 +  uint32_t state = preset;
 +  uint8_t i;
++
++  if (sizeof (state) <= 3 && sizeof (1) <= 3)
++    exit (0);
 +
 +  for (i = 0; i < len; i++) {
 +      uint8_t n, cur = data[i];
@@ -10635,6 +10689,9 @@ index 00000000000..f19e6bbf72b
 +  uint32_t state = crc;
 +  uint8_t i;
 +
++  if (sizeof (state) <= 3 && sizeof (1) <= 3)
++    exit (0);
++
 +  for (i = 0; i < len; i++) {
 +      uint8_t n, cur = data[len - i - 1];
 +
@@ -10654,18 +10711,22 @@ index 00000000000..f19e6bbf72b
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-18.c b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-18.c
 new file mode 100644
-index 00000000000..c2f9354671c
+index 00000000000..25b6e52854c
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-18.c
-@@ -0,0 +1,27 @@
+@@ -0,0 +1,31 @@
 +/* { dg-do compile } */
-+/* { dg-options "-O2 -fdump-tree-crc-details" } */
++/* { dg-options "-O2 -fdump-tree-crc-details -w" } */
 +
 +// File - cryptobonrrxternd.i
 +// We don't support this case.
 +
-+unsigned char PGP_input[2*50001];
++unsigned char PGP_input[2*100];
 +unsigned long crc24(int len) {
++
++  if (sizeof (long) < 4)
++    exit (0);
++
 +  long crc;
 +  crc = 0xB704CE;
 +  int i,j;
@@ -10683,16 +10744,16 @@ index 00000000000..c2f9354671c
 +  return crc & 0xFFFFFF;
 +}
 +
-+/* { dg-final { scan-tree-dump "Polynomial's value is \\\{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0\\\}
++/* { dg-final { scan-tree-dump "Polynomial's value is \\\{\[0, \]*0\\\}
 +" "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-19.c b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-19.c
 new file mode 100644
-index 00000000000..1b3d5e62282
+index 00000000000..6a3275a9800
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-19.c
-@@ -0,0 +1,58 @@
+@@ -0,0 +1,61 @@
 +/* { dg-do compile } */
-+/* { dg-options "-O2 -fdump-tree-crc-details" } */
++/* { dg-options "-O2 -fdump-tree-crc-details -w" } */
 +
 +// File - liboctasic_la-oct6100_chip_open
 +// We don't support this case.
@@ -10717,6 +10778,9 @@ index 00000000000..1b3d5e62282
 +    UINT32 f_ulMessageLength,
 +    PUINT32 f_pulCrcResult )
 +{
++  if (sizeof (UINT32) < 4)
++    exit (0);
++
 +  UINT32 ulWidth = 32;
 +  UINT32 ulKey, i, j;
 +  UINT32 ulRemainder = 0;
@@ -10752,12 +10816,12 @@ index 00000000000..1b3d5e62282
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-2.c b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-2.c
 new file mode 100644
-index 00000000000..67533a2a6a1
+index 00000000000..756bcd7db7b
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-2.c
 @@ -0,0 +1,24 @@
 +/* { dg-do compile } */
-+/* { dg-options "-O2 -fdump-tree-crc-details" } */
++/* { dg-options "-O2 -fdump-tree-crc-details -ftree-cselim" } */
 +//File - Ac3 from Fedora, polynomial made const. Original crc-side-instr-21.c test
 +#include <stddef.h>
 +typedef unsigned short int16u;
@@ -10783,15 +10847,15 @@ index 00000000000..67533a2a6a1
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-20.c b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-20.c
 new file mode 100644
-index 00000000000..c6363b65ecd
+index 00000000000..7995f99cd48
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-20.c
-@@ -0,0 +1,42 @@
+@@ -0,0 +1,45 @@
 +/* { dg-do compile } */
-+/* { dg-options "-O2 -fdump-tree-crc-details" } */
-+
++/* { dg-options "-O2 -fdump-tree-crc-details -w" } */
 +// File - scorelayout.i
 +
++#include <stdlib.h>
 +typedef unsigned char guchar;
 +typedef unsigned int guint32;
 +guint32
@@ -10807,6 +10871,9 @@ index 00000000000..c6363b65ecd
 +guint32
 +crc32 (guchar * message)
 +{
++  if (sizeof (int) < 4)
++    exit (0);
++
 +  int i, j;
 +  guint32 byte, crc;
 +  i = 0;
@@ -10962,12 +11029,12 @@ index 00000000000..c3ccc098e7b
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-24.c b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-24.c
 new file mode 100644
-index 00000000000..af7b6d4dbdc
+index 00000000000..6b1acfbd389
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-24.c
-@@ -0,0 +1,30 @@
+@@ -0,0 +1,28 @@
 +/* { dg-do compile } */
-+/* { dg-options "-O2 -fdump-tree-crc-details" } */
++/* { dg-options "-O2 -fdump-tree-crc-details -ftree-cselim" } */
 +
 +// File - utils.ii
 +/* We don't support the case when CRC variable's size is different from the
@@ -10994,8 +11061,6 @@ index 00000000000..af7b6d4dbdc
 +      c = d;
 +    }
 +}
-+
-+/* { dg-final { scan-tree-dump "Polynomial's value is \\\{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0\\\}" "crc"} } */
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-3.c b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-3.c
 new file mode 100644
@@ -11223,15 +11288,15 @@ index 00000000000..0e23db7d445
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-9.c b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-9.c
 new file mode 100644
-index 00000000000..c2ebaa71696
+index 00000000000..d946f561d34
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-9.c
-@@ -0,0 +1,44 @@
+@@ -0,0 +1,48 @@
 +/* { dg-do compile } */
-+/* { dg-options "-O2 -fdump-tree-crc-details" } */
++/* { dg-options "-O2 -fdump-tree-crc-details -w" } */
 +
 +// File - nvme_mi
-+#include <stddef.h>
++#include <stdlib.h>
 +typedef unsigned int __u32;
 +typedef unsigned char __u8;
 +struct nvme_mi_msg_hdr {
@@ -11248,40 +11313,43 @@ index 00000000000..c2ebaa71696
 +    size_t data_len;
 +    __u32 mic;
 +};
-+__u32 nvme_mi_crc32_update(__u32 crc, void *data, size_t len)
++__u32 nvme_mi_crc32_update (__u32 crc, void *data, size_t len)
 +{
-+    int i;
++  int i;
 +
-+    while (len--) {
-+        crc ^= *(unsigned char *)(data++);
-+        for (i = 0; i < 8; i++)
-+            crc = (crc >> 1) ^ ((crc & 1) ? 0x82F63B78 : 0);
++  while (len--)
++    {
++      crc ^= *(unsigned char *) (data++);
++      for (i = 0; i < 8; i++)
++	crc = (crc >> 1) ^ ((crc & 1) ? 0x82F63B78 : 0);
 +    }
-+    return crc;
++  return crc;
 +}
 +
-+void nvme_mi_calc_req_mic(struct nvme_mi_req *req)
++void nvme_mi_calc_req_mic (struct nvme_mi_req *req)
 +{
-+    __u32 crc = 0xffffffff;
++  if (sizeof (__u32) < 4)
++    exit (0);
 +
-+    crc = nvme_mi_crc32_update(crc, req->hdr, req->hdr_len);
-+    crc = nvme_mi_crc32_update(crc, req->data, req->data_len);
++  __u32 crc = 0xffffffff;
 +
-+    req->mic = ~crc;
++  crc = nvme_mi_crc32_update (crc, req->hdr, req->hdr_len);
++  crc = nvme_mi_crc32_update (crc, req->data, req->data_len);
++
++  req->mic = ~crc;
 +}
 +
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-linux-1.c b/gcc/testsuite/gcc.dg/crc-linux-1.c
 new file mode 100644
-index 00000000000..a3d8bba0d67
+index 00000000000..f85e4fd12f0
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-linux-1.c
-@@ -0,0 +1,41 @@
+@@ -0,0 +1,43 @@
 +/* { dg-do compile } */
-+/* { dg-options "-O2 -fdump-tree-crc-details" } */
++/* { dg-options "-O2 -fdump-tree-crc-details -w" } */
 +#include <stdlib.h>
-+#include <stddef.h>
 +#define CRC32_POLY_BE 0x04c11db7
 +#define RETVAL_OUT_OF_MEMORY		(-6)
 +#define RETVAL_NOT_BZIP_DATA		(-2)
@@ -11295,6 +11363,9 @@ index 00000000000..a3d8bba0d67
 +int start_bunzip(struct bunzip_data **bdp, void *inbuf, long len,
 +			     long (*fill)(void*, unsigned long))
 +{
++  if (sizeof (unsigned int) <= 3)
++    exit (0);
++
 +  struct bunzip_data *bd;
 +  unsigned int i, j, c;
 +
@@ -11448,10 +11519,13 @@ index 00000000000..301f6d22b65
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-linux-4.c b/gcc/testsuite/gcc.dg/crc-linux-4.c
 new file mode 100644
-index 00000000000..7456d5e38bd
+index 00000000000..ad3b15bcd84
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-linux-4.c
-@@ -0,0 +1,26 @@
+@@ -0,0 +1,29 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -fdump-tree-crc-details -w" } */
++
 +/* We don't detect, it's optimized to branch-less CRC.  */
 +#define CRC32_POLY_LE 0xedb88320
 +typedef unsigned int u32;
@@ -12328,14 +12402,13 @@ index 00000000000..18068cd0a89
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-10.c b/gcc/testsuite/gcc.dg/crc-side-instr-10.c
 new file mode 100644
-index 00000000000..39bda3130c9
+index 00000000000..f99244eff69
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-side-instr-10.c
-@@ -0,0 +1,31 @@
+@@ -0,0 +1,30 @@
 +/* { dg-do compile } */
 +/* { dg-options "-O2 -fdump-tree-crc-details" } */
 +
-+#include <stdint.h>
 +typedef unsigned short ee_u16;
 +typedef unsigned char ee_u8;
 +
@@ -12366,14 +12439,13 @@ index 00000000000..39bda3130c9
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-11.c b/gcc/testsuite/gcc.dg/crc-side-instr-11.c
 new file mode 100644
-index 00000000000..9b557b29141
+index 00000000000..15601e17f0d
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-side-instr-11.c
-@@ -0,0 +1,31 @@
+@@ -0,0 +1,30 @@
 +/* { dg-do compile } */
 +/* { dg-options "-O2 -fdump-tree-crc-details" } */
 +
-+#include <stdint.h>
 +typedef unsigned short ee_u16;
 +typedef unsigned char ee_u8;
 +
@@ -12404,14 +12476,13 @@ index 00000000000..9b557b29141
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-12.c b/gcc/testsuite/gcc.dg/crc-side-instr-12.c
 new file mode 100644
-index 00000000000..53702fbff28
+index 00000000000..147ad60d3a0
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-side-instr-12.c
-@@ -0,0 +1,33 @@
+@@ -0,0 +1,32 @@
 +/* { dg-do compile } */
 +/* { dg-options "-O2 -fdump-tree-crc-details" } */
 +
-+#include <stdint.h>
 +typedef unsigned short ee_u16;
 +typedef unsigned char ee_u8;
 +
@@ -12444,15 +12515,13 @@ index 00000000000..53702fbff28
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-13.c b/gcc/testsuite/gcc.dg/crc-side-instr-13.c
 new file mode 100644
-index 00000000000..51cb24494db
+index 00000000000..24f1483e0df
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-side-instr-13.c
-@@ -0,0 +1,32 @@
+@@ -0,0 +1,30 @@
 +/* { dg-do compile } */
 +/* { dg-options "-O2 -fdump-tree-crc-details" } */
 +
-+#include <stdint.h>
-+#include <stdio.h>
 +typedef unsigned short ee_u16;
 +typedef unsigned char ee_u8;
 +
@@ -12483,14 +12552,13 @@ index 00000000000..51cb24494db
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-14.c b/gcc/testsuite/gcc.dg/crc-side-instr-14.c
 new file mode 100644
-index 00000000000..16e24c00f8b
+index 00000000000..e9e8077810a
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-side-instr-14.c
-@@ -0,0 +1,35 @@
+@@ -0,0 +1,34 @@
 +/* { dg-do compile } */
 +/* { dg-options "-O2 -fdump-tree-crc-details" } */
 +
-+#include <stdint.h>
 +#include <stdio.h>
 +typedef unsigned short ee_u16;
 +typedef unsigned char ee_u8;
@@ -12525,15 +12593,13 @@ index 00000000000..16e24c00f8b
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-15.c b/gcc/testsuite/gcc.dg/crc-side-instr-15.c
 new file mode 100644
-index 00000000000..f98216a5da9
+index 00000000000..189eb4c4f76
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-side-instr-15.c
-@@ -0,0 +1,38 @@
+@@ -0,0 +1,36 @@
 +/* { dg-do compile } */
 +/* { dg-options "-O2 -fdump-tree-crc-details" } */
 +
-+#include <stdint.h>
-+#include <stdio.h>
 +typedef unsigned short ee_u16;
 +typedef unsigned char ee_u8;
 +
@@ -12570,15 +12636,13 @@ index 00000000000..f98216a5da9
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-16.c b/gcc/testsuite/gcc.dg/crc-side-instr-16.c
 new file mode 100644
-index 00000000000..d142a425855
+index 00000000000..c54a8fe86b5
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-side-instr-16.c
-@@ -0,0 +1,39 @@
+@@ -0,0 +1,37 @@
 +/* { dg-do compile } */
 +/* { dg-options "-O2 -fdump-tree-crc-details" } */
 +
-+#include <stdint.h>
-+#include <stdio.h>
 +typedef unsigned short ee_u16;
 +typedef unsigned char ee_u8;
 +
@@ -12616,15 +12680,13 @@ index 00000000000..d142a425855
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-17.c b/gcc/testsuite/gcc.dg/crc-side-instr-17.c
 new file mode 100644
-index 00000000000..f52029a4687
+index 00000000000..a48d19407ef
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-side-instr-17.c
-@@ -0,0 +1,38 @@
+@@ -0,0 +1,36 @@
 +/* { dg-do compile } */
 +/* { dg-options "-O2 -fdump-tree-crc-details" } */
 +
-+#include <stdint.h>
-+#include <stdio.h>
 +typedef unsigned short ee_u16;
 +typedef unsigned char ee_u8;
 +
@@ -12758,15 +12820,14 @@ index 00000000000..37dc5d1679b
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-5.c b/gcc/testsuite/gcc.dg/crc-side-instr-5.c
 new file mode 100644
-index 00000000000..9c7901d6b70
+index 00000000000..bb2c5cd3b9b
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-side-instr-5.c
-@@ -0,0 +1,26 @@
+@@ -0,0 +1,25 @@
 +/* { dg-do compile } */
 +/* { dg-options "-O2 -fdump-tree-crc-details" } */
 +
 +#include <stdint.h>
-+#include <stdio.h>
 +
 +uint16_t crc16_update(uint16_t crc, uint8_t a) {
 +  int i;
@@ -12791,7 +12852,7 @@ index 00000000000..9c7901d6b70
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-6.c b/gcc/testsuite/gcc.dg/crc-side-instr-6.c
 new file mode 100644
-index 00000000000..6a93c4f3b0f
+index 00000000000..53aa9786a81
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-side-instr-6.c
 @@ -0,0 +1,41 @@
@@ -12835,18 +12896,17 @@ index 00000000000..6a93c4f3b0f
 +/* { dg-final { scan-tree-dump "Loop iteration number is 7" "crc"} } */
 +/* { dg-final { scan-tree-dump "Bit reversed" "crc"} } */
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
-+/* { dg-final { scan-tree-dump "Polynomial's value is \\\{1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1\\\}" "crc" } } */
++/* { dg-final { scan-tree-dump "Polynomial's value is \\\{\[0, \]*1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1\\\}" "crc" } } */
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-7.c b/gcc/testsuite/gcc.dg/crc-side-instr-7.c
 new file mode 100644
-index 00000000000..33a2cbf08e4
+index 00000000000..12764c9387c
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-side-instr-7.c
-@@ -0,0 +1,40 @@
+@@ -0,0 +1,39 @@
 +/* { dg-do compile } */
 +/* { dg-options "-O2 -fdump-tree-crc-details" } */
 +
-+#include <stdint.h>
 +#include <stdio.h>
 +typedef unsigned short ee_u16;
 +typedef unsigned char ee_u8;
@@ -12886,14 +12946,13 @@ index 00000000000..33a2cbf08e4
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-8.c b/gcc/testsuite/gcc.dg/crc-side-instr-8.c
 new file mode 100644
-index 00000000000..ac73d86b42f
+index 00000000000..921f439f03c
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-side-instr-8.c
-@@ -0,0 +1,36 @@
+@@ -0,0 +1,35 @@
 +/* { dg-do compile } */
 +/* { dg-options "-O2 -fdump-tree-crc-details" } */
 +
-+#include <stdint.h>
 +#include <stdio.h>
 +typedef unsigned short ee_u16;
 +typedef unsigned char ee_u8;
@@ -12929,15 +12988,13 @@ index 00000000000..ac73d86b42f
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-9.c b/gcc/testsuite/gcc.dg/crc-side-instr-9.c
 new file mode 100644
-index 00000000000..66ddf49f170
+index 00000000000..6f6f7dd39aa
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-side-instr-9.c
-@@ -0,0 +1,32 @@
+@@ -0,0 +1,30 @@
 +/* { dg-do compile } */
 +/* { dg-options "-O2 -fdump-tree-crc-details" } */
 +
-+#include <stdint.h>
-+#include <stdio.h>
 +typedef unsigned short ee_u16;
 +typedef unsigned char ee_u8;
 +
@@ -13652,7 +13709,7 @@ index 95c1eea65be..f851165fb5a 100644
  
  static bool 
 diff --git a/gcc/tree-pass.h b/gcc/tree-pass.h
-index de2820b3a3c..2fdc4652a32 100644
+index 52fd57fd4c6..5831b7e673b 100644
 --- a/gcc/tree-pass.h
 +++ b/gcc/tree-pass.h
 @@ -387,6 +387,7 @@ extern gimple_opt_pass *make_pass_graphite_transforms (gcc::context *ctxt);
