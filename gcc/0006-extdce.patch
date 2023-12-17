@@ -58,10 +58,10 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..cbe9db2bbc8
+index 00000000000..c3efe9b56cd
 --- /dev/null
 +++ b/gcc/ext-dce.cc
-@@ -0,0 +1,969 @@
+@@ -0,0 +1,963 @@
 +/* RTL dead zero/sign extension (code) elimination.
 +   Copyright (C) 2000-2022 Free Software Foundation, Inc.
 +
@@ -656,17 +656,11 @@ index 00000000000..cbe9db2bbc8
 +		 if we see something we don't know how to handle.  */
 +	      for (;;)
 +		{
-+		  /* Strip an outer STRICT_LOW_PART or paradoxical subreg.
-+		     That has the effect of making the whole referenced
-+		     register live.  We might be able to avoid that for
-+		     STRICT_LOW_PART at some point.  */
-+		  /* XXX This all looks wrong.  Note the STRICT_LOW_PART.
-+		     if we're processing a dest, then why look at Y in the
-+		     else clause.  If processing a src, then STRICT_LOW_PART
-+		     shouldn't happen.  */
-+		  if (GET_CODE (x) == STRICT_LOW_PART
-+		      || paradoxical_subreg_p (x))
-+		    x = XEXP (x, 0);
++		  /* Strip an outer paradoxical subreg.  The bits outside
++		     the inner mode are don't cares.  So we can just strip
++		     and process the inner object.  */
++		  if (paradoxical_subreg_p (y))
++		    y = XEXP (y, 0);
 +		  else if (SUBREG_P (y) && SUBREG_BYTE (y).is_constant ())
 +		    {
 +		      /* For anything but (subreg (reg)), break the inner loop
