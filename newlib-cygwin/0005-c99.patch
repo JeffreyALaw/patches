@@ -1181,7 +1181,7 @@ index 9d39751b3..32440b11d 100644
   * they apply.
   */
  
-+extern int read (int, void *, int);
++include <unistd.h>
 +
  int
  inbyte ()
