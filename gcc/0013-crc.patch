@@ -7710,12 +7710,12 @@ index 00000000000..b20c8deab2f
 +#endif /* SYM_EXEC_STATE_H.  */
 diff --git a/gcc/testsuite/gcc.dg/crc-1.c b/gcc/testsuite/gcc.dg/crc-1.c
 new file mode 100644
-index 00000000000..7f0ee392ce3
+index 00000000000..b71d4705810
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-1.c
 @@ -0,0 +1,78 @@
 +/* { dg-do run } */
-+/* { dg-options "-fdump-tree-crc-details -fdisable-tree-phiopt2 -fdisable-tree-phiopt3" } */
++/* { dg-options "-fdump-tree-crc-details -fdisable-tree-phiopt2 -fdisable-tree-phiopt3 -w" } */
 +
 +#include <stddef.h>
 +#include <stdint.h>
@@ -7794,12 +7794,12 @@ index 00000000000..7f0ee392ce3
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/crc-10.c b/gcc/testsuite/gcc.dg/crc-10.c
 new file mode 100644
-index 00000000000..7d6c8ff73d6
+index 00000000000..12d5d612de1
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-10.c
 @@ -0,0 +1,44 @@
 +/* { dg-do run } */
-+/* { dg-options "-fdump-tree-crc-details" } */
++/* { dg-options "-fdump-tree-crc-details -w" } */
 +
 +#include <stdint.h>
 +#include <stdio.h>
@@ -7870,12 +7870,12 @@ index 00000000000..10fa47c5f5b
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-12.c b/gcc/testsuite/gcc.dg/crc-12.c
 new file mode 100644
-index 00000000000..9faad359de8
+index 00000000000..23850c037b5
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-12.c
 @@ -0,0 +1,74 @@
 +/* { dg-do run } */
-+/* { dg-options "-fdump-tree-crc -fdisable-tree-phiopt2 -fdisable-tree-phiopt3" } */
++/* { dg-options "-fdump-tree-crc -fdisable-tree-phiopt2 -fdisable-tree-phiopt3 -w" } */
 +
 +#include <stdio.h>
 +#include <stdint.h>
@@ -7950,12 +7950,12 @@ index 00000000000..9faad359de8
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/crc-13.c b/gcc/testsuite/gcc.dg/crc-13.c
 new file mode 100644
-index 00000000000..c5ec1a5b1e5
+index 00000000000..9aac081a7ee
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-13.c
 @@ -0,0 +1,48 @@
 +/* { dg-do run } */
-+/* { dg-options "-fdump-tree-crc-details" } */
++/* { dg-options "-fdump-tree-crc-details -w" } */
 +
 +#include <stdio.h>
 +#include <stdlib.h>
@@ -8004,12 +8004,12 @@ index 00000000000..c5ec1a5b1e5
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/crc-14.c b/gcc/testsuite/gcc.dg/crc-14.c
 new file mode 100644
-index 00000000000..e5fc384b2d2
+index 00000000000..851de3fa5ce
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-14.c
 @@ -0,0 +1,46 @@
 +/* { dg-do run } */
-+/* { dg-options "-fdump-tree-crc-details" } */
++/* { dg-options "-fdump-tree-crc-details -w" } */
 +
 +#include <stdio.h>
 +#include <stdio.h>
@@ -8139,12 +8139,12 @@ index 00000000000..6715cd238d5
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-17.c b/gcc/testsuite/gcc.dg/crc-17.c
 new file mode 100644
-index 00000000000..0615b4e1101
+index 00000000000..ff41c36bafd
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-17.c
 @@ -0,0 +1,55 @@
 +/* { dg-do run } */
-+/* { dg-options "-fdump-tree-crc-details" } */
++/* { dg-options "-fdump-tree-crc-details -w" } */
 +
 +#include <stdio.h>
 +#include <stdlib.h>
@@ -8200,12 +8200,12 @@ index 00000000000..0615b4e1101
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/crc-18.c b/gcc/testsuite/gcc.dg/crc-18.c
 new file mode 100644
-index 00000000000..8cfab470eee
+index 00000000000..b080d618e0e
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-18.c
 @@ -0,0 +1,39 @@
 +/* { dg-do run } */
-+/* { dg-options "-fdump-tree-crc-details" } */
++/* { dg-options "-fdump-tree-crc-details -w" } */
 +
 +#include <stdio.h>
 +#include <stdlib.h>
@@ -8414,12 +8414,12 @@ index 00000000000..8e884a6d472
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/crc-22.c b/gcc/testsuite/gcc.dg/crc-22.c
 new file mode 100644
-index 00000000000..291c57a7a54
+index 00000000000..0e87a9703d6
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-22.c
 @@ -0,0 +1,53 @@
 +/* { dg-do run } */
-+/* { dg-options "-fdump-tree-crc-details" } */
++/* { dg-options "-fdump-tree-crc-details -w" } */
 +
 +#include <stdio.h>
 +#include <stdlib.h>
@@ -8473,12 +8473,12 @@ index 00000000000..291c57a7a54
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/crc-23.c b/gcc/testsuite/gcc.dg/crc-23.c
 new file mode 100644
-index 00000000000..369b30b4ca7
+index 00000000000..13927140b17
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-23.c
 @@ -0,0 +1,58 @@
 +/* { dg-do run } */
-+/* { dg-options "-fdump-tree-crc-details -ftree-cselim" } */
++/* { dg-options "-fdump-tree-crc-details -ftree-cselim -w" } */
 +
 +// Modified example from crc-from-fedora-packages-24.c
 +
@@ -8573,12 +8573,12 @@ index 00000000000..e8c0164a73c
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-25.c b/gcc/testsuite/gcc.dg/crc-25.c
 new file mode 100644
-index 00000000000..f770464983c
+index 00000000000..84df6d87492
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-25.c
 @@ -0,0 +1,61 @@
 +/* { dg-do run } */
-+/* { dg-options "-fdump-tree-crc-details" } */
++/* { dg-options "-fdump-tree-crc-details -w" } */
 +
 +//Test from roms/u-boot-sam460ex/drivers/net/mpc512x_fec.c(fsl_mcdmafec.c)
 +
@@ -8640,12 +8640,12 @@ index 00000000000..f770464983c
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/crc-26.c b/gcc/testsuite/gcc.dg/crc-26.c
 new file mode 100644
-index 00000000000..53751579441
+index 00000000000..d29e7ab5c73
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-26.c
 @@ -0,0 +1,54 @@
 +/* { dg-do run } */
-+/* { dg-options "-fdump-tree-crc-details" } */
++/* { dg-options "-fdump-tree-crc-details -w" } */
 +
 +//Test from roms/u-boot-sam460ex/drivers/mtd/ubi/crc32.c
 +#include <stdint.h>
@@ -8733,12 +8733,12 @@ index 00000000000..f36999b3751
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-28.c b/gcc/testsuite/gcc.dg/crc-28.c
 new file mode 100644
-index 00000000000..e9b1d77c53a
+index 00000000000..7f260931885
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-28.c
 @@ -0,0 +1,78 @@
 +/* { dg-do run } */
-+/* { dg-options "-fdump-tree-crc-details" } */
++/* { dg-options "-fdump-tree-crc-details -w" } */
 +
 +// Test from roms/u-boot/drivers/ram/octeon/dimm_spd_eeprom.c
 +
@@ -8891,12 +8891,12 @@ index 00000000000..77395e1ab1b
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-4.c b/gcc/testsuite/gcc.dg/crc-4.c
 new file mode 100644
-index 00000000000..81698988952
+index 00000000000..516c9d7b9a7
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-4.c
 @@ -0,0 +1,45 @@
 +/* { dg-do run } */
-+/* { dg-options "-fdump-tree-crc-details" } */
++/* { dg-options "-fdump-tree-crc-details -w" } */
 +
 +#include <stdint.h>
 +#include <stdio.h>
@@ -9037,12 +9037,12 @@ index 00000000000..6e4d3f59a3c
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/crc-6.c b/gcc/testsuite/gcc.dg/crc-6.c
 new file mode 100644
-index 00000000000..06e96334d81
+index 00000000000..fecf3475589
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-6.c
 @@ -0,0 +1,52 @@
 +/* { dg-do run } */
-+/* { dg-options "-fdump-tree-crc-details" } */
++/* { dg-options "-fdump-tree-crc-details -w" } */
 +
 +#include <stdint.h>
 +#include <stdio.h>
@@ -9095,12 +9095,12 @@ index 00000000000..06e96334d81
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/crc-7.c b/gcc/testsuite/gcc.dg/crc-7.c
 new file mode 100644
-index 00000000000..68b6277d326
+index 00000000000..ef56967b712
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-7.c
 @@ -0,0 +1,44 @@
 +/* { dg-do run } */
-+/* { dg-options "-fdump-tree-crc-details" } */
++/* { dg-options "-fdump-tree-crc-details -w" } */
 +
 +#include <stdint.h>
 +#include <stdio.h>
@@ -9145,12 +9145,12 @@ index 00000000000..68b6277d326
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/crc-8.c b/gcc/testsuite/gcc.dg/crc-8.c
 new file mode 100644
-index 00000000000..f840874eee4
+index 00000000000..4407f417111
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-8.c
 @@ -0,0 +1,44 @@
 +/* { dg-do run } */
-+/* { dg-options "-fdump-tree-crc-details" } */
++/* { dg-options "-fdump-tree-crc-details -w" } */
 +
 +#include <stdint.h>
 +#include <stdio.h>
@@ -9195,12 +9195,12 @@ index 00000000000..f840874eee4
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/crc-9.c b/gcc/testsuite/gcc.dg/crc-9.c
 new file mode 100644
-index 00000000000..156b82dffce
+index 00000000000..084ecd5555e
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-9.c
 @@ -0,0 +1,48 @@
 +/* { dg-do run } */
-+/* { dg-options "-fdump-tree-crc-details" } */
++/* { dg-options "-fdump-tree-crc-details -w" } */
 +
 +#include <stddef.h>
 +#include <stdio.h>
@@ -9249,12 +9249,12 @@ index 00000000000..156b82dffce
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/crc-CCIT-data16-xorOutside_InsideFor.c b/gcc/testsuite/gcc.dg/crc-CCIT-data16-xorOutside_InsideFor.c
 new file mode 100644
-index 00000000000..d7a034fb699
+index 00000000000..f9239ca3461
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-CCIT-data16-xorOutside_InsideFor.c
 @@ -0,0 +1,54 @@
 +/* { dg-do run } */
-+/* { dg-options "-O2 -fdump-tree-crc-details" } */
++/* { dg-options "-O2 -fdump-tree-crc-details -w" } */
 +
 +#include <stdlib.h>
 +#include <stdint.h>
@@ -9358,12 +9358,12 @@ index 00000000000..c6443dd7310
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/crc-CCIT-data8.c b/gcc/testsuite/gcc.dg/crc-CCIT-data8.c
 new file mode 100644
-index 00000000000..43fde622f81
+index 00000000000..086e7466649
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-CCIT-data8.c
 @@ -0,0 +1,41 @@
 +/* { dg-do run } */
-+/* { dg-options "-fdump-tree-crc-details" } */
++/* { dg-options "-fdump-tree-crc-details -w" } */
 +
 +#include <stdint.h>
 +#include <stdio.h>
