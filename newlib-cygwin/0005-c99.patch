@@ -1160,32 +1160,6 @@ index 2893c322f..b5673d467 100644
  caddr_t
  _sbrk (int incr)
  {
-diff --git a/libgloss/moxie/putnum.c b/libgloss/moxie/putnum.c
-index 0f7e89453..9af5b4d4c 100644
---- a/libgloss/moxie/putnum.c
-+++ b/libgloss/moxie/putnum.c
-@@ -14,6 +14,8 @@
-  */
- #include "glue.h"
- 
-+void print (char *);
-+
- /*
-  * putnum -- print a 32 bit number in hex
-  */
-diff --git a/libgloss/moxie/sim-inbyte.c b/libgloss/moxie/sim-inbyte.c
-index 1e7466a8d..57d058741 100644
---- a/libgloss/moxie/sim-inbyte.c
-+++ b/libgloss/moxie/sim-inbyte.c
-@@ -14,6 +14,8 @@
-  * they apply.
-  */
- 
-+#include <unistd.h>
-+
- int
- inbyte ()
- {
 diff --git a/libgloss/frv/putnum.c b/libgloss/frv/putnum.c
 index a07315e13..b2b2c4435 100644
 --- a/libgloss/frv/putnum.c
