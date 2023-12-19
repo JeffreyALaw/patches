@@ -789,37 +789,6 @@ index 849470c94..4bc74ae3e 100644
  
 -char * write (int) __attribute__((weak, alias ("_write")));
 +int write (int, char *, int) __attribute__((weak, alias ("_write")));
-diff --git a/libgloss/bfin/syscalls.c b/libgloss/bfin/syscalls.c
-index 7bd0bede1..2282049e9 100644
---- a/libgloss/bfin/syscalls.c
-+++ b/libgloss/bfin/syscalls.c
-@@ -27,6 +27,8 @@
- #include <reent.h>
- #include <unistd.h>
- 
-+int main (int, char **, char **);
-+
- register char *stack_ptr asm ("SP");
- 
- static inline int
-@@ -254,7 +256,7 @@ __setup_argv_for_main (int argc)
-     do_syscall (SYS_argn, (void *)block);
-   }
- 
--  return main (argc, argv);
-+  return main (argc, argv, NULL);
- }
- 
- int
-@@ -263,7 +265,7 @@ __setup_argv_and_call_main ()
-   int argc = do_syscall (SYS_argc, 0);
- 
-   if (argc <= 0)
--    return main (argc, NULL);
-+    return main (argc, NULL, NULL);
-   else
-     return __setup_argv_for_main (argc);
- }
 diff --git a/libgloss/mn10300/_exit.c b/libgloss/mn10300/_exit.c
 index ec51d4088..2b548e82e 100644
 --- a/libgloss/mn10300/_exit.c
