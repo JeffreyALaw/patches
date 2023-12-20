@@ -30,7 +30,9 @@ gcc/testsuite/gfortran.dg/minlocval_3izeof_6.f90
 gcc/testsuite/gfortran.dg/sizeof_6.f90
 # Times out on various targets (bfin, h8, v850, moxie, cris, etc)
 gcc/testsuite/gcc.dg/torture/pr112305.c
-# Times out, needs to have timeout factor applied
-gcc/testsuite/gcc.dg/torture/inline-mem-cmp-1.c
-gcc/testsuite/gcc.dg/torture/inline-mem-cpy-1.c
+# Test name is duplicated as it gets run for C/C++, and we have 
+# some tests that pass in one context and fail in the other, not good.
+gcc/testsuite/c-c++-common/torture/strub-ptrfn2.c
+gcc/testsuite/c-c++-common/torture/strub-ptrfn3.c
+
 
