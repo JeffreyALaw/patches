@@ -884,17 +884,6 @@ index 9ea873adf..a61dbb797 100644
  
  static void
  send_msg1 (void)
-diff --git a/libgloss/mn10300/trap.h b/libgloss/mn10300/trap.h
-index 27636c004..ada971c42 100644
---- a/libgloss/mn10300/trap.h
-+++ b/libgloss/mn10300/trap.h
-@@ -1,5 +1,5 @@
- #include "syscall.h"
- 
--int __trap0 ();
-+volatile int __trap0 ();
- 
- #define TRAP0(f, p1, p2, p3) __trap0(f, (p1), (p2), (p3))
 diff --git a/libgloss/v850/_exit.c b/libgloss/v850/_exit.c
 index 44d4132bd..7e1b09262 100644
 --- a/libgloss/v850/_exit.c
