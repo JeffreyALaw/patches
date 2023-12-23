@@ -777,32 +777,6 @@ index 6394f6841..05634113c 100644
  #ifdef __ELF__
  	mov.l   #__fini,er0
  	jsr     @_atexit
-diff --git a/libgloss/frv/putnum.c b/libgloss/frv/putnum.c
-index a07315e13..b2b2c4435 100644
---- a/libgloss/frv/putnum.c
-+++ b/libgloss/frv/putnum.c
-@@ -14,6 +14,8 @@
-  */
- #include "glue.h"
- 
-+extern void print (char *ptr);
-+
- /*
-  * putnum -- print a 32 bit number in hex
-  */
-diff --git a/libgloss/frv/sim-inbyte.c b/libgloss/frv/sim-inbyte.c
-index 9d39751b3..32440b11d 100644
---- a/libgloss/frv/sim-inbyte.c
-+++ b/libgloss/frv/sim-inbyte.c
-@@ -14,6 +14,8 @@
-  * they apply.
-  */
- 
-+extern int read (int, void *, int);
-+
- int
- inbyte ()
- {
 diff --git a/libgloss/xstormy16/eva_app.c b/libgloss/xstormy16/eva_app.c
 index f6069fc7c..fa543fbd6 100644
 --- a/libgloss/xstormy16/eva_app.c
