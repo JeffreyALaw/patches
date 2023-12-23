@@ -69,25 +69,6 @@ index f30b7df80..04b285bcc 100644
  int
  _system_r (struct _reent *ptr,
       const char *s)
-diff --git a/libgloss/glue.h b/libgloss/glue.h
-index 0a7e36db2..784fa5067 100644
---- a/libgloss/glue.h
-+++ b/libgloss/glue.h
-@@ -13,6 +13,7 @@
-  * they apply.
-  */
- #include <_ansi.h>
-+#include <stdlib.h>
- 
- #ifndef NULL
- #  define NULL 0
-@@ -28,4 +29,6 @@ extern char _end[];                /* _end is set in the linker command file */
- /* only one prcess support, as this is OS dependant */
- #define __MYPID 1
- 
-+void _exit (int) __attribute ((__noreturn__));
-+int outbyte (char);
- 
 diff --git a/libgloss/m32r/m32r-stub.c b/libgloss/m32r/m32r-stub.c
 index 4d54f72d6..0b15d2e18 100644
 --- a/libgloss/m32r/m32r-stub.c
@@ -502,3 +483,21 @@ index 6394f6841..05634113c 100644
  #ifdef __ELF__
  	mov.l   #__fini,er0
  	jsr     @_atexit
+diff --git a/libgloss/glue.h b/libgloss/glue.h
+index 0a7e36db2..98c0a6ad2 100644
+--- a/libgloss/glue.h
++++ b/libgloss/glue.h
+@@ -13,6 +13,7 @@
+  * they apply.
+  */
+ #include <_ansi.h>
++#include <unistd.h>
+ 
+ #ifndef NULL
+ #  define NULL 0
+@@ -28,4 +29,5 @@ extern char _end[];                /* _end is set in the linker command file */
+ /* only one prcess support, as this is OS dependant */
+ #define __MYPID 1
+ 
++int outbyte (char);
+ 
