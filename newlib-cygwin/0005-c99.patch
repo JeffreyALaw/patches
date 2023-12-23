@@ -1,9 +1,9 @@
 diff --git a/libgloss/config/default.mh b/libgloss/config/default.mh
-index 4e7f106f9..229dd920f 100644
+index 64dc02f05..dc36ea95f 100644
 --- a/libgloss/config/default.mh
 +++ b/libgloss/config/default.mh
 @@ -4,7 +4,7 @@ NEWLIB_LDFLAGS = `if [ -d ${objroot}/newlib ]; then echo -B${objroot}/newlib/ -L
- INCLUDES = -I. -I$(srcdir)/.. -I$(objdir)/..
+ INCLUDES = -I. -I$(srcdir)/.. -I$(objdir)/.. -idirafter $(srcroot)/include
  # Note that when building the library, ${MULTILIB} is not the way multilib
  # options are passed; they're passed in $(CFLAGS).
 -CFLAGS_FOR_TARGET = -O2 -g ${MULTILIB} ${INCLUDES} ${NEWLIB_CFLAGS}
@@ -11,64 +11,24 @@ index 4e7f106f9..229dd920f 100644
  LDFLAGS_FOR_TARGET = ${MULTILIB} ${NEWLIB_LDFLAGS}
  AR_FLAGS = rc
  
-diff --git a/libgloss/putnum.c b/libgloss/putnum.c
-index c368c4136..6e1051e24 100644
---- a/libgloss/putnum.c
-+++ b/libgloss/putnum.c
-@@ -14,6 +14,8 @@
+diff --git a/libgloss/glue.h b/libgloss/glue.h
+index 0a7e36db2..98c0a6ad2 100644
+--- a/libgloss/glue.h
++++ b/libgloss/glue.h
+@@ -13,6 +13,7 @@
+  * they apply.
   */
- #include "glue.h"
+ #include <_ansi.h>
++#include <unistd.h>
  
-+extern void print (char *ptr);
-+
- /*
-  * putnum -- print a 32 bit number in hex
-  */
-diff --git a/newlib/libc/reent/signalr.c b/newlib/libc/reent/signalr.c
-index 863ae7400..2a33e333e 100644
---- a/newlib/libc/reent/signalr.c
-+++ b/newlib/libc/reent/signalr.c
-@@ -6,6 +6,8 @@
- #include <unistd.h>
- #include <_syslist.h>
+ #ifndef NULL
+ #  define NULL 0
+@@ -28,4 +29,5 @@ extern char _end[];                /* _end is set in the linker command file */
+ /* only one prcess support, as this is OS dependant */
+ #define __MYPID 1
  
-+int _kill (pid_t, int); 
-+
- /* Some targets provides their own versions of these functions.  Those
-    targets should define REENTRANT_SYSCALLS_PROVIDED in TARGET_CFLAGS.  */
++int outbyte (char);
  
-diff --git a/newlib/libc/search/hash_page.c b/newlib/libc/search/hash_page.c
-index 9d15b0cb7..59fc81850 100644
---- a/newlib/libc/search/hash_page.c
-+++ b/newlib/libc/search/hash_page.c
-@@ -36,6 +36,12 @@ static char sccsid[] = "@(#)hash_page.c	8.7 (Berkeley) 8/16/94";
- #endif /* LIBC_SCCS and not lint */
- #include <sys/cdefs.h>
- 
-+#include <signal.h>
-+#ifndef sigfillset
-+int sigfillset (sigset_t *); 
-+#endif
-+
-+
- /*
-  * PACKAGE:  hashing
-  *
-diff --git a/newlib/libc/stdlib/system.c b/newlib/libc/stdlib/system.c
-index f30b7df80..04b285bcc 100644
---- a/newlib/libc/stdlib/system.c
-+++ b/newlib/libc/stdlib/system.c
-@@ -56,6 +56,10 @@ Supporting OS subroutines required: <<_exit>>, <<_execve>>, <<_fork_r>>,
- static int do_system (struct _reent *ptr, const char *s);
- #endif
- 
-+#if defined(HAVE_SYSTEM)
-+int _system(const char *command);
-+#endif
-+
- int
- _system_r (struct _reent *ptr,
-      const char *s)
 diff --git a/libgloss/m32r/m32r-stub.c b/libgloss/m32r/m32r-stub.c
 index 4d54f72d6..0b15d2e18 100644
 --- a/libgloss/m32r/m32r-stub.c
@@ -214,6 +174,162 @@ index 4d54f72d6..0b15d2e18 100644
  {
    int ret;
  
+diff --git a/libgloss/mcore/sbrk.c b/libgloss/mcore/sbrk.c
+index 1eb8047fc..c6860194c 100644
+--- a/libgloss/mcore/sbrk.c
++++ b/libgloss/mcore/sbrk.c
+@@ -14,6 +14,7 @@
+  */
+ #include <sys/types.h>
+ #include <sys/stat.h>
++#include <stdlib.h>
+ #include "glue.h"
+ 
+ extern int _write (int, char *, int);
+diff --git a/libgloss/putnum.c b/libgloss/putnum.c
+index c368c4136..6e1051e24 100644
+--- a/libgloss/putnum.c
++++ b/libgloss/putnum.c
+@@ -14,6 +14,8 @@
+  */
+ #include "glue.h"
+ 
++extern void print (char *ptr);
++
+ /*
+  * putnum -- print a 32 bit number in hex
+  */
+diff --git a/libgloss/read.c b/libgloss/read.c
+index 24108ce0d..83a3b549b 100644
+--- a/libgloss/read.c
++++ b/libgloss/read.c
+@@ -22,10 +22,11 @@ extern char inbyte (void);
+  */
+ int
+ read (int fd,
+-       char *buf,
+-       int nbytes)
++       void *buf_,
++       size_t nbytes)
+ {
+   int i = 0;
++  char *buf = buf_;
+ 
+   for (i = 0; i < nbytes; i++) {
+     *(buf + i) = inbyte();
+diff --git a/libgloss/unlink.c b/libgloss/unlink.c
+index 76c1a4fef..af06c51d7 100644
+--- a/libgloss/unlink.c
++++ b/libgloss/unlink.c
+@@ -20,7 +20,7 @@
+  *           we just return an error.
+  */
+ int
+-unlink (char * path)
++unlink (const char * path)
+ {
+   errno = EIO;
+   return (-1);
+diff --git a/newlib/libc/reent/signalr.c b/newlib/libc/reent/signalr.c
+index 863ae7400..2a33e333e 100644
+--- a/newlib/libc/reent/signalr.c
++++ b/newlib/libc/reent/signalr.c
+@@ -6,6 +6,8 @@
+ #include <unistd.h>
+ #include <_syslist.h>
+ 
++int _kill (pid_t, int); 
++
+ /* Some targets provides their own versions of these functions.  Those
+    targets should define REENTRANT_SYSCALLS_PROVIDED in TARGET_CFLAGS.  */
+ 
+diff --git a/newlib/libc/search/hash_page.c b/newlib/libc/search/hash_page.c
+index 9d15b0cb7..59fc81850 100644
+--- a/newlib/libc/search/hash_page.c
++++ b/newlib/libc/search/hash_page.c
+@@ -36,6 +36,12 @@ static char sccsid[] = "@(#)hash_page.c	8.7 (Berkeley) 8/16/94";
+ #endif /* LIBC_SCCS and not lint */
+ #include <sys/cdefs.h>
+ 
++#include <signal.h>
++#ifndef sigfillset
++int sigfillset (sigset_t *); 
++#endif
++
++
+ /*
+  * PACKAGE:  hashing
+  *
+diff --git a/newlib/libc/stdlib/system.c b/newlib/libc/stdlib/system.c
+index f30b7df80..04b285bcc 100644
+--- a/newlib/libc/stdlib/system.c
++++ b/newlib/libc/stdlib/system.c
+@@ -56,6 +56,10 @@ Supporting OS subroutines required: <<_exit>>, <<_execve>>, <<_fork_r>>,
+ static int do_system (struct _reent *ptr, const char *s);
+ #endif
+ 
++#if defined(HAVE_SYSTEM)
++int _system(const char *command);
++#endif
++
+ int
+ _system_r (struct _reent *ptr,
+      const char *s)
+diff --git a/newlib/libc/sys/h8300hms/crt0.S b/newlib/libc/sys/h8300hms/crt0.S
+index 6394f6841..05634113c 100644
+--- a/newlib/libc/sys/h8300hms/crt0.S
++++ b/newlib/libc/sys/h8300hms/crt0.S
+@@ -9,12 +9,10 @@
+ _start:
+ 	mov.w	#_stack,sp
+ 	mov.w	#_edata,r0
+-	mov.w	#_end,r1
+-	sub.w   r2,r2
+-.Loop:	mov.w	r2,@r0
+-	adds	#2,r0
+-	cmp	r1,r0
+-	blo	.Loop
++	mov.w	#_end,r2
++	sub.w   r1,r1
++	sub.w	r0,r2
++	jsr	@_memset
+ #ifdef __ELF__
+ 	mov.l   #__fini,r0
+ 	jsr     @_atexit
+@@ -43,12 +41,10 @@ _stack:	.word 	1
+ _start:
+ 	mov.l	#_stack,sp
+ 	mov.l	#_edata,er0
+-	mov.l	#_end,er1
+-	sub.w   r2,r2           ; not sure about alignment requirements
+-.Loop:	mov.w	r2,@er0		; playing it safe for now
+-	adds	#2,er0
+-	cmp.l	er1,er0
+-	blo	.Loop
++	mov.l	#_end,er2
++	sub.w   r1,r1
++	sub.l	er0,er2
++	jsr	@_memset
+ #ifdef __ELF__
+ 	mov.l   #__fini,er0
+ 	jsr     @_atexit
+@@ -77,12 +73,10 @@ _stack:	.long 	1
+ _start:
+ 	mov.l	#_stack,sp
+ 	mov.l	#_edata,er0
+-	mov.l	#_end,er1
+-	sub.w   r2,r2           ; not sure about alignment requirements
+-.Loop:	mov.w	r2,@er0		; playing it safe for now
+-	adds	#2,er0
+-	cmp.l	er1,er0
+-	blo	.Loop
++	mov.l	#_end,er2
++	sub.w   r1,r1
++	sub.l	er0,er2
++	jsr	@_memset
+ #ifdef __ELF__
+ 	mov.l   #__fini,er0
+ 	jsr     @_atexit
 diff --git a/newlib/libm/complex/cargl.c b/newlib/libm/complex/cargl.c
 index 790cffe8f..ac6ba1e7d 100644
 --- a/newlib/libm/complex/cargl.c
@@ -428,76 +544,3 @@ index c5c887c74..5fe76a718 100644
  long double complex
  ctanl(long double complex z)
  {
-diff --git a/newlib/libc/sys/h8300hms/crt0.S b/newlib/libc/sys/h8300hms/crt0.S
-index 6394f6841..05634113c 100644
---- a/newlib/libc/sys/h8300hms/crt0.S
-+++ b/newlib/libc/sys/h8300hms/crt0.S
-@@ -9,12 +9,10 @@
- _start:
- 	mov.w	#_stack,sp
- 	mov.w	#_edata,r0
--	mov.w	#_end,r1
--	sub.w   r2,r2
--.Loop:	mov.w	r2,@r0
--	adds	#2,r0
--	cmp	r1,r0
--	blo	.Loop
-+	mov.w	#_end,r2
-+	sub.w   r1,r1
-+	sub.w	r0,r2
-+	jsr	@_memset
- #ifdef __ELF__
- 	mov.l   #__fini,r0
- 	jsr     @_atexit
-@@ -43,12 +41,10 @@ _stack:	.word 	1
- _start:
- 	mov.l	#_stack,sp
- 	mov.l	#_edata,er0
--	mov.l	#_end,er1
--	sub.w   r2,r2           ; not sure about alignment requirements
--.Loop:	mov.w	r2,@er0		; playing it safe for now
--	adds	#2,er0
--	cmp.l	er1,er0
--	blo	.Loop
-+	mov.l	#_end,er2
-+	sub.w   r1,r1
-+	sub.l	er0,er2
-+	jsr	@_memset
- #ifdef __ELF__
- 	mov.l   #__fini,er0
- 	jsr     @_atexit
-@@ -77,12 +73,10 @@ _stack:	.long 	1
- _start:
- 	mov.l	#_stack,sp
- 	mov.l	#_edata,er0
--	mov.l	#_end,er1
--	sub.w   r2,r2           ; not sure about alignment requirements
--.Loop:	mov.w	r2,@er0		; playing it safe for now
--	adds	#2,er0
--	cmp.l	er1,er0
--	blo	.Loop
-+	mov.l	#_end,er2
-+	sub.w   r1,r1
-+	sub.l	er0,er2
-+	jsr	@_memset
- #ifdef __ELF__
- 	mov.l   #__fini,er0
- 	jsr     @_atexit
-diff --git a/libgloss/glue.h b/libgloss/glue.h
-index 0a7e36db2..98c0a6ad2 100644
---- a/libgloss/glue.h
-+++ b/libgloss/glue.h
-@@ -13,6 +13,7 @@
-  * they apply.
-  */
- #include <_ansi.h>
-+#include <unistd.h>
- 
- #ifndef NULL
- #  define NULL 0
-@@ -28,4 +29,5 @@ extern char _end[];                /* _end is set in the linker command file */
- /* only one prcess support, as this is OS dependant */
- #define __MYPID 1
- 
-+int outbyte (char);
- 
