@@ -3,3 +3,4 @@
 # reset.  
 sh4eb-linux-gnu
 sh4-linux-gnu
+hppa-linux-gnu
