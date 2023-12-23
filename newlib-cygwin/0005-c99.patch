@@ -230,6 +230,24 @@ index 76c1a4fef..af06c51d7 100644
  {
    errno = EIO;
    return (-1);
+diff --git a/libgloss/write.c b/libgloss/write.c
+index 28b7ea37a..08526a9db 100644
+--- a/libgloss/write.c
++++ b/libgloss/write.c
+@@ -23,10 +23,11 @@ extern int  outbyte (char x);
+  */
+ int
+ write (int fd,
+-       char *buf,
+-       int nbytes)
++       void *buf_,
++       size_t nbytes)
+ {
+   int i;
++  char *buf = buf_;
+ 
+   for (i = 0; i < nbytes; i++) {
+     if (*(buf + i) == '\n') {
 diff --git a/newlib/libc/reent/signalr.c b/newlib/libc/reent/signalr.c
 index 863ae7400..2a33e333e 100644
 --- a/newlib/libc/reent/signalr.c
