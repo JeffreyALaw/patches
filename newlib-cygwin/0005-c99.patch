@@ -777,21 +777,6 @@ index 6394f6841..05634113c 100644
  #ifdef __ELF__
  	mov.l   #__fini,er0
  	jsr     @_atexit
-diff --git a/newlib/libc/sys/h8300hms/sbrk.c b/newlib/libc/sys/h8300hms/sbrk.c
-index 1456a67eb..a99ae2904 100644
---- a/newlib/libc/sys/h8300hms/sbrk.c
-+++ b/newlib/libc/sys/h8300hms/sbrk.c
-@@ -1,8 +1,10 @@
- #include <_ansi.h>
- #include <sys/types.h>
- #include <sys/stat.h>
-+#include <stdlib.h>
- 
- register char *stack_ptr asm ("sp");
-+extern int _write (int, char *, int);
- 
- caddr_t 
-   _sbrk(incr)
 diff --git a/libgloss/frv/putnum.c b/libgloss/frv/putnum.c
 index a07315e13..b2b2c4435 100644
 --- a/libgloss/frv/putnum.c
