@@ -217,6 +217,22 @@ index 24108ce0d..83a3b549b 100644
  
    for (i = 0; i < nbytes; i++) {
      *(buf + i) = inbyte();
+diff --git a/libgloss/sbrk.c b/libgloss/sbrk.c
+index c222b4bbf..d567a4a60 100644
+--- a/libgloss/sbrk.c
++++ b/libgloss/sbrk.c
+@@ -27,9 +27,8 @@ char *heap_ptr;
+  *         RAM. We just increment a pointer in what's
+  *         left of memory on the board.
+  */
+-char *
+-sbrk (nbytes)
+-     int nbytes;
++void *
++sbrk (ptrdiff_t nbytes)
+ {
+   char        *base;
+ 
 diff --git a/libgloss/unlink.c b/libgloss/unlink.c
 index 76c1a4fef..af06c51d7 100644
 --- a/libgloss/unlink.c
@@ -231,7 +247,7 @@ index 76c1a4fef..af06c51d7 100644
    errno = EIO;
    return (-1);
 diff --git a/libgloss/write.c b/libgloss/write.c
-index 28b7ea37a..08526a9db 100644
+index 28b7ea37a..80bcd4a77 100644
 --- a/libgloss/write.c
 +++ b/libgloss/write.c
 @@ -23,10 +23,11 @@ extern int  outbyte (char x);
@@ -240,11 +256,11 @@ index 28b7ea37a..08526a9db 100644
  write (int fd,
 -       char *buf,
 -       int nbytes)
-+       void *buf_,
++       const void *buf_,
 +       size_t nbytes)
  {
    int i;
-+  char *buf = buf_;
++  const char *buf = buf_;
  
    for (i = 0; i < nbytes; i++) {
      if (*(buf + i) == '\n') {
