@@ -40,7 +40,7 @@ case "${TARGET}" in
     DUMMY_SIM=yes
     SIMTARG=
     SIMINSTALLTARG=
-    TESTARGS="--target_board=arc-sim"
+    TESTARGS="--target_board=avr-sim"
     ;;
   bfin*-*)
     RUNGCCTESTS=yes
