@@ -4,3 +4,10 @@
 sh4eb-linux-gnu
 sh4-linux-gnu
 hppa-linux-gnu
+fr30-elf
+ft32-elf
+lm32-elf
+c6x-elf
+iq2000-elf
+csky-linux-gnu
+m32r-elf
