@@ -173,7 +173,7 @@ cd ../..
 #cd ../..
 
 # Step 5, conditionally run the GCC testsuite using the simulator
-if [ $DUMMY_SIM = "yes" ]; then
+if [ x$DUMMY_SIM = "xyes" ]; then
   rm -f ${TARGET}-installed/bin/${TARGET}-run
   gcc -O2 patches/support/dummy.c -o ${TARGET}-installed/bin/${TARGET}-run
   cd ${TARGET}-obj/gcc/gcc
