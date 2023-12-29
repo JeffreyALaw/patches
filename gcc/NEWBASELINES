@@ -7,7 +7,8 @@ hppa-linux-gnu
 fr30-elf
 ft32-elf
 lm32-elf
-c6x-elf
 iq2000-elf
-csky-linux-gnu
 m32r-elf
+nds32be-elf
+nds32le-elf
+visium-elf
