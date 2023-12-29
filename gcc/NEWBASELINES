@@ -12,3 +12,11 @@ m32r-elf
 nds32be-elf
 nds32le-elf
 visium-elf
+msp430-elf
+sh3eb-linux-gnu
+sh3-linux-gnu
+microblaze-linux
+loongarch64-linux-gnu
+or1k-linux-gnu
+arc-elf
+nios2-linux-gnu
