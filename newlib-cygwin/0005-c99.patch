@@ -11,24 +11,6 @@ index 64dc02f05..dc36ea95f 100644
  LDFLAGS_FOR_TARGET = ${MULTILIB} ${NEWLIB_LDFLAGS}
  AR_FLAGS = rc
  
-diff --git a/libgloss/glue.h b/libgloss/glue.h
-index 0a7e36db2..98c0a6ad2 100644
---- a/libgloss/glue.h
-+++ b/libgloss/glue.h
-@@ -13,6 +13,7 @@
-  * they apply.
-  */
- #include <_ansi.h>
-+#include <unistd.h>
- 
- #ifndef NULL
- #  define NULL 0
-@@ -28,4 +29,5 @@ extern char _end[];                /* _end is set in the linker command file */
- /* only one prcess support, as this is OS dependant */
- #define __MYPID 1
- 
-+int outbyte (char);
- 
 diff --git a/libgloss/m32r/m32r-stub.c b/libgloss/m32r/m32r-stub.c
 index 4d54f72d6..0b15d2e18 100644
 --- a/libgloss/m32r/m32r-stub.c
@@ -174,84 +156,6 @@ index 4d54f72d6..0b15d2e18 100644
  {
    int ret;
  
-diff --git a/libgloss/putnum.c b/libgloss/putnum.c
-index c368c4136..6e1051e24 100644
---- a/libgloss/putnum.c
-+++ b/libgloss/putnum.c
-@@ -14,6 +14,8 @@
-  */
- #include "glue.h"
- 
-+extern void print (char *ptr);
-+
- /*
-  * putnum -- print a 32 bit number in hex
-  */
-diff --git a/libgloss/read.c b/libgloss/read.c
-index 24108ce0d..83a3b549b 100644
---- a/libgloss/read.c
-+++ b/libgloss/read.c
-@@ -22,10 +22,11 @@ extern char inbyte (void);
-  */
- int
- read (int fd,
--       char *buf,
--       int nbytes)
-+       void *buf_,
-+       size_t nbytes)
- {
-   int i = 0;
-+  char *buf = buf_;
- 
-   for (i = 0; i < nbytes; i++) {
-     *(buf + i) = inbyte();
-diff --git a/libgloss/sbrk.c b/libgloss/sbrk.c
-index c222b4bbf..d567a4a60 100644
---- a/libgloss/sbrk.c
-+++ b/libgloss/sbrk.c
-@@ -27,9 +27,8 @@ char *heap_ptr;
-  *         RAM. We just increment a pointer in what's
-  *         left of memory on the board.
-  */
--char *
--sbrk (nbytes)
--     int nbytes;
-+void *
-+sbrk (ptrdiff_t nbytes)
- {
-   char        *base;
- 
-diff --git a/libgloss/unlink.c b/libgloss/unlink.c
-index 76c1a4fef..af06c51d7 100644
---- a/libgloss/unlink.c
-+++ b/libgloss/unlink.c
-@@ -20,7 +20,7 @@
-  *           we just return an error.
-  */
- int
--unlink (char * path)
-+unlink (const char * path)
- {
-   errno = EIO;
-   return (-1);
-diff --git a/libgloss/write.c b/libgloss/write.c
-index 28b7ea37a..80bcd4a77 100644
---- a/libgloss/write.c
-+++ b/libgloss/write.c
-@@ -23,10 +23,11 @@ extern int  outbyte (char x);
-  */
- int
- write (int fd,
--       char *buf,
--       int nbytes)
-+       const void *buf_,
-+       size_t nbytes)
- {
-   int i;
-+  const char *buf = buf_;
- 
-   for (i = 0; i < nbytes; i++) {
-     if (*(buf + i) == '\n') {
 diff --git a/newlib/libc/reent/signalr.c b/newlib/libc/reent/signalr.c
 index 863ae7400..2a33e333e 100644
 --- a/newlib/libc/reent/signalr.c
