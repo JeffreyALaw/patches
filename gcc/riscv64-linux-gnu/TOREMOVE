@@ -15,3 +15,13 @@ gcc/testsuite/gcc.target/riscv/rvv/autovec/partial/slp-19.c
 gcc/testsuite/gfortran.dg/matmul_15.f90
 gcc/testsuite/gfortran.dg/sizeof_6.f90
 
+# Likely QEMU bug
+gcc/testsuite/g++.dg/ext/cleanup-8.C
+gcc/testsuite/g++.dg/ext/cleanup-9.C
+gcc/testsuite/g++.dg/ext/cleanup-10.C
+gcc/testsuite/g++.dg/ext/cleanup-11.C
+gcc/testsuite/gcc.dg/cleanup-8.C
+gcc/testsuite/gcc.dg/cleanup-9.C
+gcc/testsuite/gcc.dg/cleanup-10.C
+gcc/testsuite/gcc.dg/cleanup-11.C
+
