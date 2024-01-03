@@ -30,13 +30,19 @@ make -j $NPROC -l $NPROC all-gas all-binutils all-ld  >> $LOGFILE 2>&1
 make install-gas install-binutils install-ld >> $LOGFILE 2>&1
 popd
 
+# RV port takes insanely long to build right now
 if [ $TARGET == riscv64-linux-gnu ]; then
   DISABLE_BOOTSTRAP=--disable-bootstrap
 fi
 
+# MIPS is always multiarch
+if [ $TARGET == mips64el-linux-gnuabi64 ]; then
+  ENABLE_MULTIARCH=--enable-multiarch
+fi
+
 echo Building GCC
 pushd obj/gcc
-../../gcc/configure --prefix=$PREFIX --disable-analyzer --prefix=$PREFIX --enable-languages=c,c++,fortran,lto --disable-multilib --disable-libsanitizer $DISABLE_BOOTSTRAP ${TARGET} >> $LOGFILE 2>&1
+../../gcc/configure --prefix=$PREFIX --disable-analyzer --prefix=$PREFIX --enable-languages=c,c++,fortran,lto $ENABLE_MULTIARCH --disable-multilib --disable-libsanitizer $DISABLE_BOOTSTRAP ${TARGET} >> $LOGFILE 2>&1
 make -j $NPROC -l $NPROC >> $LOGFILE 2>&1
 make install >> $LOGFILE 2>&1
 popd
