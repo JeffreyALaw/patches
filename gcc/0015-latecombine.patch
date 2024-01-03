@@ -168,18 +168,6 @@ index 1cf3bdd3b51..306b11f91c7 100644
  floop-parallelize-all
  Common Var(flag_loop_parallelize_all) Optimization
  Mark all loops as parallel.
-diff --git a/gcc/common/config/aarch64/aarch64-common.cc b/gcc/common/config/aarch64/aarch64-common.cc
-index 20bc4e1291b..05647e0c93a 100644
---- a/gcc/common/config/aarch64/aarch64-common.cc
-+++ b/gcc/common/config/aarch64/aarch64-common.cc
-@@ -55,6 +55,7 @@ static const struct default_options aarch_option_optimization_table[] =
-     { OPT_LEVELS_1_PLUS, OPT_fsched_pressure, NULL, 1 },
-     /* Enable redundant extension instructions removal at -O2 and higher.  */
-     { OPT_LEVELS_2_PLUS, OPT_free, NULL, 1 },
-+    { OPT_LEVELS_2_PLUS, OPT_flate_combine_instructions, NULL, 1 },
- #if (TARGET_DEFAULT_ASYNC_UNWIND_TABLES == 1)
-     { OPT_LEVELS_ALL, OPT_fasynchronous_unwind_tables, NULL, 1 },
-     { OPT_LEVELS_ALL, OPT_funwind_tables, NULL, 1},
 diff --git a/gcc/doc/invoke.texi b/gcc/doc/invoke.texi
 index 5a9284d635c..d0576ac97cf 100644
 --- a/gcc/doc/invoke.texi
