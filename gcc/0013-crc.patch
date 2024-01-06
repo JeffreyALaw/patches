@@ -1,8 +1,8 @@
 diff --git a/gcc/Makefile.in b/gcc/Makefile.in
-index 754eceb23bb..1971712212b 100644
+index deb12e17d25..85d6a59beba 100644
 --- a/gcc/Makefile.in
 +++ b/gcc/Makefile.in
-@@ -1713,6 +1713,11 @@ OBJS = \
+@@ -1716,6 +1716,11 @@ OBJS = \
  	tree-iterator.o \
  	tree-logical-location.o \
  	tree-loop-distribution.o \
@@ -15,7 +15,7 @@ index 754eceb23bb..1971712212b 100644
  	tree-nrv.o \
  	tree-object-size.o \
 diff --git a/gcc/builtin-types.def b/gcc/builtin-types.def
-index 183ef62bad2..db2ca897785 100644
+index c97d6bad1de..a0c4b8b9ca6 100644
 --- a/gcc/builtin-types.def
 +++ b/gcc/builtin-types.def
 @@ -829,6 +829,26 @@ DEF_FUNCTION_TYPE_3 (BT_FN_PTR_SIZE_SIZE_PTRMODE,
@@ -46,10 +46,10 @@ index 183ef62bad2..db2ca897785 100644
  DEF_FUNCTION_TYPE_4 (BT_FN_SIZE_CONST_PTR_SIZE_SIZE_FILEPTR,
  		     BT_SIZE, BT_CONST_PTR, BT_SIZE, BT_SIZE, BT_FILEPTR)
 diff --git a/gcc/builtins.cc b/gcc/builtins.cc
-index 7c2732ab79e..9e73547d968 100644
+index d1767596ced..1ad8c2a633c 100644
 --- a/gcc/builtins.cc
 +++ b/gcc/builtins.cc
-@@ -2199,7 +2199,24 @@ associated_internal_fn (built_in_function fn, tree return_type)
+@@ -2207,7 +2207,24 @@ associated_internal_fn (built_in_function fn, tree return_type)
        if (REAL_MODE_FORMAT (TYPE_MODE (return_type))->b == 2)
  	return IFN_LDEXP;
        return IFN_LAST;
@@ -75,7 +75,7 @@ index 7c2732ab79e..9e73547d968 100644
      default:
        return IFN_LAST;
      }
-@@ -7715,6 +7732,37 @@ expand_speculation_safe_value (machine_mode mode, tree exp, rtx target,
+@@ -7749,6 +7766,37 @@ expand_speculation_safe_value (machine_mode mode, tree exp, rtx target,
    return targetm.speculation_safe_value (mode, target, val, failsafe);
  }
  
@@ -113,7 +113,7 @@ index 7c2732ab79e..9e73547d968 100644
  /* Expand an expression EXP that calls a built-in function,
     with result going to TARGET if that's convenient
     (and in mode MODE if that's convenient).
-@@ -8887,6 +8935,54 @@ expand_builtin (tree exp, rtx target, rtx subtarget, machine_mode mode,
+@@ -8921,6 +8969,54 @@ expand_builtin (tree exp, rtx target, rtx subtarget, machine_mode mode,
        mode = get_builtin_sync_mode (fcode - BUILT_IN_SPECULATION_SAFE_VALUE_1);
        return expand_speculation_safe_value (mode, exp, target, ignore);
  
@@ -169,7 +169,7 @@ index 7c2732ab79e..9e73547d968 100644
        break;
      }
 diff --git a/gcc/builtins.def b/gcc/builtins.def
-index f03df32f980..0c7e71613a8 100644
+index 4d97ca0eec9..404ca729bda 100644
 --- a/gcc/builtins.def
 +++ b/gcc/builtins.def
 @@ -704,7 +704,22 @@ DEF_EXT_LIB_BUILTIN    (BUILT_IN_Y1L, "y1l", BT_FN_LONGDOUBLE_LONGDOUBLE, ATTR_M
@@ -197,7 +197,7 @@ index f03df32f980..0c7e71613a8 100644
  DEF_C99_COMPL_BUILTIN        (BUILT_IN_CABS, "cabs", BT_FN_DOUBLE_COMPLEX_DOUBLE, ATTR_MATHFN_FPROUNDING)
  DEF_C99_COMPL_BUILTIN        (BUILT_IN_CABSF, "cabsf", BT_FN_FLOAT_COMPLEX_FLOAT, ATTR_MATHFN_FPROUNDING)
 diff --git a/gcc/builtins.h b/gcc/builtins.h
-index 1a26fc63a6d..aca3916cffb 100644
+index 8d93f75a9a4..e94dec68ed2 100644
 --- a/gcc/builtins.h
 +++ b/gcc/builtins.h
 @@ -133,6 +133,9 @@ extern void expand_builtin_trap (void);
@@ -211,7 +211,7 @@ index 1a26fc63a6d..aca3916cffb 100644
  extern enum built_in_function builtin_mathfn_code (const_tree);
  extern tree fold_builtin_expect (location_t, tree, tree, tree, tree);
 diff --git a/gcc/common.opt b/gcc/common.opt
-index d263a959df3..d48ce76909f 100644
+index 5f0a101bccb..f989b22c217 100644
 --- a/gcc/common.opt
 +++ b/gcc/common.opt
 @@ -3126,6 +3126,10 @@ ftree-loop-distribute-patterns
@@ -226,7 +226,7 @@ index d263a959df3..d48ce76909f 100644
  Common Var(flag_tree_loop_im) Init(1) Optimization
  Enable loop invariant motion on trees.
 diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
-index 92bcdc30fe4..35d85df2eb2 100644
+index fdab0017a2b..d6dc329dcd7 100644
 --- a/gcc/config/riscv/bitmanip.md
 +++ b/gcc/config/riscv/bitmanip.md
 @@ -878,3 +878,66 @@ (define_insn "riscv_clmulr_<mode>"
@@ -298,10 +298,10 @@ index 92bcdc30fe4..35d85df2eb2 100644
 +})
 \ No newline at end of file
 diff --git a/gcc/config/riscv/riscv-protos.h b/gcc/config/riscv/riscv-protos.h
-index eaee53ce94e..7760724a0fa 100644
+index 0f0337cfb38..44f64d3a5e7 100644
 --- a/gcc/config/riscv/riscv-protos.h
 +++ b/gcc/config/riscv/riscv-protos.h
-@@ -162,6 +162,9 @@ extern bool riscv_shamt_matches_mask_p (int, HOST_WIDE_INT);
+@@ -163,6 +163,9 @@ extern bool riscv_shamt_matches_mask_p (int, HOST_WIDE_INT);
  extern void riscv_subword_address (rtx, rtx *, rtx *, rtx *, rtx *);
  extern void riscv_lshift_subword (machine_mode, rtx, rtx, rtx *);
  extern enum memmodel riscv_union_memmodels (enum memmodel, enum memmodel);
@@ -312,10 +312,10 @@ index eaee53ce94e..7760724a0fa 100644
  /* Routines implemented in riscv-c.cc.  */
  void riscv_cpu_cpp_builtins (cpp_reader *);
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index f60726711e8..9d4f53f86eb 100644
+index 6bd22369a5e..288fc069e02 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
-@@ -10354,6 +10354,7 @@ riscv_preferred_else_value (unsigned ifn, tree vectype, unsigned int nops,
+@@ -10484,6 +10484,7 @@ riscv_preferred_else_value (unsigned ifn, tree vectype, unsigned int nops,
    return default_preferred_else_value (ifn, vectype, nops, ops);
  }
  
@@ -323,7 +323,7 @@ index f60726711e8..9d4f53f86eb 100644
  /* If MEM is in the form of "base+offset", extract the two parts
     of address and set to BASE and OFFSET, otherwise return false
     after clearing BASE and OFFSET.  */
-@@ -10388,6 +10389,226 @@ extract_base_offset_in_addr (rtx mem, rtx *base, rtx *offset)
+@@ -10518,6 +10519,226 @@ extract_base_offset_in_addr (rtx mem, rtx *base, rtx *offset)
    return false;
  }
  
@@ -551,13 +551,13 @@ index f60726711e8..9d4f53f86eb 100644
  #undef TARGET_ASM_ALIGNED_HI_OP
  #define TARGET_ASM_ALIGNED_HI_OP "\t.half\t"
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index eed997116b0..900db20d1d6 100644
+index 84212430dc0..b56659c9df5 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
-@@ -85,6 +85,10 @@ (define_c_enum "unspec" [
+@@ -89,6 +89,10 @@ (define_c_enum "unspec" [
  
-   ;; String unspecs
-   UNSPEC_STRLEN
+   ;; Workaround for HFmode without hardware extension
+   UNSPEC_FMV_SFP16_X
 +
 +  ;; CRC unspecs
 +  UNSPEC_CRC
@@ -566,10 +566,10 @@ index eed997116b0..900db20d1d6 100644
  
  (define_c_enum "unspecv" [
 diff --git a/gcc/configure b/gcc/configure
-index de72cb1e1fe..f781dac3152 100755
+index 996046f5198..e85b6b211e7 100755
 --- a/gcc/configure
 +++ b/gcc/configure
-@@ -36145,7 +36145,7 @@ $as_echo "$as_me: executing $ac_file commands" >&6;}
+@@ -36176,7 +36176,7 @@ $as_echo "$as_me: executing $ac_file commands" >&6;}
      "depdir":C) $SHELL $ac_aux_dir/mkinstalldirs $DEPDIR ;;
      "gccdepdir":C)
    ${CONFIG_SHELL-/bin/sh} $ac_aux_dir/mkinstalldirs build/$DEPDIR
@@ -2081,7 +2081,7 @@ index 00000000000..b45eb242486
 +
 +#endif //GCC_CRC_VERIFICATION
 diff --git a/gcc/expr.cc b/gcc/expr.cc
-index 9fef2bf6585..d1006675b48 100644
+index dc816bc20fa..0a169735181 100644
 --- a/gcc/expr.cc
 +++ b/gcc/expr.cc
 @@ -66,7 +66,6 @@ along with GCC; see the file COPYING3.  If not see
@@ -2092,7 +2092,7 @@ index 9fef2bf6585..d1006675b48 100644
  /* If this is nonzero, we do not bother generating VOLATILE
     around volatile memory references, and we are willing to
     output indirect addresses.  If cse is to follow, we reject
-@@ -14011,3 +14010,346 @@ int_expr_size (const_tree exp)
+@@ -14024,3 +14023,346 @@ int_expr_size (const_tree exp)
  
    return tree_to_shwi (size);
  }
@@ -2441,7 +2441,7 @@ index 9fef2bf6585..d1006675b48 100644
 +}
 \ No newline at end of file
 diff --git a/gcc/expr.h b/gcc/expr.h
-index 431616d55be..f6a066438ee 100644
+index f04f40da6ab..7c9786bb273 100644
 --- a/gcc/expr.h
 +++ b/gcc/expr.h
 @@ -366,4 +366,10 @@ extern rtx expr_size (tree);
@@ -3816,7 +3816,7 @@ index 00000000000..4ebdf35e80a
 +  return new pass_crc_optimization (ctxt);
 +}
 diff --git a/gcc/gimple.cc b/gcc/gimple.cc
-index 67f3fb2dabf..0a95d04006b 100644
+index a9f968cb038..76518d8897d 100644
 --- a/gcc/gimple.cc
 +++ b/gcc/gimple.cc
 @@ -3426,6 +3426,44 @@ gimple_or_expr_nonartificial_location (gimple *stmt, tree expr)
@@ -3865,7 +3865,7 @@ index 67f3fb2dabf..0a95d04006b 100644
  #if CHECKING_P
  
 diff --git a/gcc/gimple.h b/gcc/gimple.h
-index 1b0cd4b8ad8..8e51806a4e0 100644
+index 8a8ca109bbf..d782cb7b9c7 100644
 --- a/gcc/gimple.h
 +++ b/gcc/gimple.h
 @@ -1673,6 +1673,9 @@ extern void maybe_remove_unused_call_args (struct function *, gimple *);
@@ -3879,7 +3879,7 @@ index 1b0cd4b8ad8..8e51806a4e0 100644
  
  /* Return the disposition for a warning (or all warnings by default)
 diff --git a/gcc/internal-fn.cc b/gcc/internal-fn.cc
-index cb4ef447ced..621b115bdbe 100644
+index 80efd2f8980..7f7135c3fae 100644
 --- a/gcc/internal-fn.cc
 +++ b/gcc/internal-fn.cc
 @@ -186,6 +186,7 @@ init_internal_fns ()
@@ -3958,7 +3958,7 @@ index cb4ef447ced..621b115bdbe 100644
  #define direct_load_lanes_optab_supported_p multi_vector_optab_supported_p
  #define direct_mask_load_lanes_optab_supported_p multi_vector_optab_supported_p
 diff --git a/gcc/internal-fn.def b/gcc/internal-fn.def
-index ba5e4ce272c..3e50de13eb9 100644
+index c14d30365c1..3693a80e3bd 100644
 --- a/gcc/internal-fn.def
 +++ b/gcc/internal-fn.def
 @@ -200,6 +200,8 @@ along with GCC; see the file COPYING3.  If not see
@@ -3971,7 +3971,7 @@ index ba5e4ce272c..3e50de13eb9 100644
  DEF_INTERNAL_OPTAB_FN (LOAD_LANES, ECF_CONST, vec_load_lanes, load_lanes)
  DEF_INTERNAL_OPTAB_FN (MASK_LOAD_LANES, ECF_PURE,
 diff --git a/gcc/optabs.def b/gcc/optabs.def
-index 07c06ba8cbb..02a7aab4125 100644
+index ad14f9328b9..f840f1fec16 100644
 --- a/gcc/optabs.def
 +++ b/gcc/optabs.def
 @@ -78,6 +78,8 @@ OPTAB_CD(smsub_widen_optab, "msub$b$a4")
@@ -3984,7 +3984,7 @@ index 07c06ba8cbb..02a7aab4125 100644
  OPTAB_CD(vec_store_lanes_optab, "vec_store_lanes$a$b")
  OPTAB_CD(vec_mask_load_lanes_optab, "vec_mask_load_lanes$a$b")
 diff --git a/gcc/opts.cc b/gcc/opts.cc
-index 7a3830caaa3..b21c090463b 100644
+index 3333600e0ea..38ce5cdb6be 100644
 --- a/gcc/opts.cc
 +++ b/gcc/opts.cc
 @@ -655,6 +655,7 @@ static const struct default_options default_options_table[] =
@@ -4005,7 +4005,7 @@ index 7a3830caaa3..b21c090463b 100644
  
  /* -f{,no-}sanitize{,-recover}= suboptions.  */
 diff --git a/gcc/passes.def b/gcc/passes.def
-index 43b416f98f7..638cda4c6a1 100644
+index 1cbbd413097..a65d1b36ea6 100644
 --- a/gcc/passes.def
 +++ b/gcc/passes.def
 @@ -296,6 +296,7 @@ along with GCC; see the file COPYING3.  If not see
@@ -13489,7 +13489,7 @@ index 00000000000..85e1fd2f312
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 \ No newline at end of file
 diff --git a/gcc/timevar.def b/gcc/timevar.def
-index 9628223a436..38d9192159a 100644
+index 8e2168e0817..80bcc215017 100644
 --- a/gcc/timevar.def
 +++ b/gcc/timevar.def
 @@ -312,6 +312,7 @@ DEFTIMEVAR (TV_INITIALIZE_RTL        , "initialize rtl")
@@ -13501,7 +13501,7 @@ index 9628223a436..38d9192159a 100644
  /* Everything else in rest_of_compilation not included above.  */
  DEFTIMEVAR (TV_EARLY_LOCAL	     , "early local passes")
 diff --git a/gcc/tree-loop-distribution.cc b/gcc/tree-loop-distribution.cc
-index 95c1eea65be..f851165fb5a 100644
+index 95203fefa18..45628cb0381 100644
 --- a/gcc/tree-loop-distribution.cc
 +++ b/gcc/tree-loop-distribution.cc
 @@ -1275,83 +1275,6 @@ generate_memcpy_builtin (class loop *loop, partition *partition)
@@ -13589,7 +13589,7 @@ index 95c1eea65be..f851165fb5a 100644
  
  static bool 
 diff --git a/gcc/tree-pass.h b/gcc/tree-pass.h
-index 52fd57fd4c6..5831b7e673b 100644
+index 29267589eeb..9b4adf96e44 100644
 --- a/gcc/tree-pass.h
 +++ b/gcc/tree-pass.h
 @@ -387,6 +387,7 @@ extern gimple_opt_pass *make_pass_graphite_transforms (gcc::context *ctxt);
@@ -13601,7 +13601,7 @@ index 52fd57fd4c6..5831b7e673b 100644
  extern gimple_opt_pass *make_pass_simduid_cleanup (gcc::context *ctxt);
  extern gimple_opt_pass *make_pass_slp_vectorize (gcc::context *ctxt);
 diff --git a/gcc/tree-ssa-loop-manip.cc b/gcc/tree-ssa-loop-manip.cc
-index e7436915e01..b0e9c88f185 100644
+index 6cef1ae30c1..b63b93b6b80 100644
 --- a/gcc/tree-ssa-loop-manip.cc
 +++ b/gcc/tree-ssa-loop-manip.cc
 @@ -1465,3 +1465,81 @@ canonicalize_loop_ivs (class loop *loop, tree *nit, bool bump_in_latch)
@@ -13688,7 +13688,7 @@ index e7436915e01..b0e9c88f185 100644
 +}
 \ No newline at end of file
 diff --git a/gcc/tree-ssa-loop-manip.h b/gcc/tree-ssa-loop-manip.h
-index bda09f51d56..1a115b91d31 100644
+index bcedd5bc949..9612f2fc268 100644
 --- a/gcc/tree-ssa-loop-manip.h
 +++ b/gcc/tree-ssa-loop-manip.h
 @@ -51,6 +51,7 @@ extern void tree_transform_and_unroll_loop (class loop *, unsigned,
