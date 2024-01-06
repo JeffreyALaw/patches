@@ -402,3 +402,15 @@ index c5c887c74..5fe76a718 100644
  long double complex
  ctanl(long double complex z)
  {
+diff --git a/libgloss/xstormy16/eva_app.c b/libgloss/xstormy16/eva_app.c
+index f6069fc7c..6cebd10a0 100644
+--- a/libgloss/xstormy16/eva_app.c
++++ b/libgloss/xstormy16/eva_app.c
+@@ -13,6 +13,7 @@
+  * they apply.
+  */
+ #include "glue.h"
++#include <string.h>
+ 
+ typedef void (*write_proc_t)(char *buf, int nbytes);
+ typedef int  (*read_proc_t)(char *buf, int nbytes);
