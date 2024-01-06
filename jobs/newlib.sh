@@ -259,7 +259,7 @@ if [ ${TARGET} != avr-elf ]; then
   cd ../..
 else
   # We don't have bzip2 in the docker image.  My bad
-  wget "https://sourceforge.net/projects/bzip2/files/bzip2-1.0.6.tar.gz/download" -O bzip2-1.0.6.tar.gz
+  wget "https://sourceware.org/pub/bzip2/bzip2-1.0.6.tar.gz" -O bzip2-1.0.6.tar.gz
   tar xf bzip2-1.0.6.tar.gz
   pushd bzip2-1.0.6 >& /dev/null
   make -j 40 >> $LOGFILE 2>&1
