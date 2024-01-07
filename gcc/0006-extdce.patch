@@ -1,8 +1,8 @@
 diff --git a/gcc/Makefile.in b/gcc/Makefile.in
-index 754eceb23bb..3450eb860c6 100644
+index deb12e17d25..cdefdd0fa27 100644
 --- a/gcc/Makefile.in
 +++ b/gcc/Makefile.in
-@@ -1451,6 +1451,7 @@ OBJS = \
+@@ -1453,6 +1453,7 @@ OBJS = \
  	explow.o \
  	expmed.o \
  	expr.o \
@@ -11,7 +11,7 @@ index 754eceb23bb..3450eb860c6 100644
  	file-prefix-map.o \
  	final.o \
 diff --git a/gcc/common.opt b/gcc/common.opt
-index d263a959df3..8bbcaad2ec4 100644
+index 5f0a101bccb..d6b40edb57b 100644
 --- a/gcc/common.opt
 +++ b/gcc/common.opt
 @@ -3846,4 +3846,8 @@ fipa-ra
@@ -24,7 +24,7 @@ index d263a959df3..8bbcaad2ec4 100644
 +
  ; This comment is to ensure we retain the blank line above.
 diff --git a/gcc/df-scan.cc b/gcc/df-scan.cc
-index 934c9ca2d81..93c0ba4e15c 100644
+index 1bade2cd71e..46806fe6e67 100644
 --- a/gcc/df-scan.cc
 +++ b/gcc/df-scan.cc
 @@ -78,7 +78,6 @@ static void df_get_eh_block_artificial_uses (bitmap);
@@ -45,7 +45,7 @@ index 934c9ca2d81..93c0ba4e15c 100644
  {
    unsigned int i;
 diff --git a/gcc/df.h b/gcc/df.h
-index 402657a7076..abcbb097734 100644
+index 84e5aa8b524..2b9997eb978 100644
 --- a/gcc/df.h
 +++ b/gcc/df.h
 @@ -1091,6 +1091,7 @@ extern bool df_epilogue_uses_p (unsigned int);
@@ -58,10 +58,10 @@ index 402657a7076..abcbb097734 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..379264e0bca
+index 00000000000..08aab40698b
 --- /dev/null
 +++ b/gcc/ext-dce.cc
-@@ -0,0 +1,964 @@
+@@ -0,0 +1,948 @@
 +/* RTL dead zero/sign extension (code) elimination.
 +   Copyright (C) 2000-2022 Free Software Foundation, Inc.
 +
@@ -309,18 +309,9 @@ index 00000000000..379264e0bca
 +		 This is overly conservative, but safe.  */
 +	      if (!CONST_INT_P (XEXP (x, 1)) || !CONST_INT_P (XEXP (x, 2)))
 +		continue;
-+	      mask = (1ULL << INTVAL (XEXP (x, 1))) - 1;
-+	      bit = INTVAL (XEXP (x, 2));
-+	      if (BITS_BIG_ENDIAN)
-+		bit = (GET_MODE_BITSIZE (GET_MODE (x))
-+		       - INTVAL (XEXP (x, 1)) - bit).to_constant ();
-+	      x = XEXP (x, 0);
 +
-+	      /* We can certainly get (zero_extract (subreg ...)).  The
-+		 mode of the zero_extract and location should be sufficient
-+		 and we can just strip the SUBREG.  */
-+	      if (SUBREG_P (x))
-+		x = SUBREG_REG (x);
++	      /* FIXME: Remove wrapper and process mask/bit correctly.  */
++	      continue;
 +	    }
 +
 +	  /* BIT >= 64 indicates something went horribly wrong.  */
@@ -374,7 +365,7 @@ index 00000000000..379264e0bca
 +
 +  /* Avoid (subreg (mem)) and other constructs which may be valid RTL, but
 +     not useful for this optimization.  */
-+  if (!REG_P (inner) && !SUBREG_P (inner))
++  if (!(REG_P (inner) || (SUBREG_P (inner) && REG_P (SUBREG_REG (inner)))))
 +    return;
 +
 +  rtx new_pattern;
@@ -741,7 +732,7 @@ index 00000000000..379264e0bca
 +	       && GET_MODE_BITSIZE (GET_MODE (x)).is_constant ()
 +	       && GET_MODE_BITSIZE (GET_MODE (x)).to_constant () <= 32)
 +	{
-+	  HOST_WIDE_INT size = GET_MODE_BITSIZE (GET_MODE  (x)).to_constant ();
++	  HOST_WIDE_INT size = GET_MODE_BITSIZE (GET_MODE (x)).to_constant ();
 +	  HOST_WIDE_INT rn = 4 * REGNO (SUBREG_REG (x));
 +
 +	  bitmap_set_bit (livenow, rn);
@@ -749,7 +740,7 @@ index 00000000000..379264e0bca
 +	    bitmap_set_bit (livenow, rn + 1);
 +	  if (size > 16)
 +	    bitmap_set_bit (livenow, rn + 2);
-+	  if (size > 32)
++	  if (size == 32)
 +	    bitmap_set_bit (livenow, rn + 3);
 +	  iter.skip_subrtxes ();
 +	}
@@ -872,7 +863,6 @@ index 00000000000..379264e0bca
 +static void
 +ext_dce_init (void)
 +{
-+
 +  livein.create (last_basic_block_for_fn (cfun));
 +  livein.quick_grow_cleared (last_basic_block_for_fn (cfun));
 +  for (int i = 0; i < last_basic_block_for_fn (cfun); i++)
@@ -898,7 +888,6 @@ index 00000000000..379264e0bca
 +      bitmap_set_bit (all_blocks, i);
 +
 +  modify = false;
-+
 +}
 +
 +/* Finalization of the ext-dce pass.  Primarily this means
@@ -907,7 +896,6 @@ index 00000000000..379264e0bca
 +static void
 +ext_dce_finish (void)
 +{
-+
 +  for (unsigned i = 0; i < livein.length (); i++)
 +    bitmap_clear (&livein[i]);
 +  livein.release ();
@@ -919,7 +907,7 @@ index 00000000000..379264e0bca
 +
 +/* Process block number BB_INDEX as part of the backward
 +   simple dataflow analysis.  Return TRUE if something in
-+   this block change or FALSE otherwise.  */
++   this block changed or FALSE otherwise.  */
 +
 +static bool
 +ext_dce_rd_transfer_n (int bb_index)
@@ -945,9 +933,7 @@ index 00000000000..379264e0bca
 +     the generic dataflow code that something changed.  */
 +  if (!bitmap_equal_p (&livein[bb_index], livenow))
 +    {
-+      bitmap tmp = BITMAP_ALLOC (NULL);
-+      gcc_assert (!bitmap_and_compl (tmp, &livein[bb_index], livenow));
-+      BITMAP_FREE (tmp);
++      gcc_assert (!bitmap_intersect_compl_p (&livein[bb_index], livenow));
 +
 +      bitmap_copy (&livein[bb_index], livenow);
 +      return true;
@@ -966,7 +952,6 @@ index 00000000000..379264e0bca
 +static void
 +ext_dce (void)
 +{
-+
 +  df_analyze ();
 +  ext_dce_init ();
 +
@@ -983,7 +968,6 @@ index 00000000000..379264e0bca
 +  reset_subreg_promoted_p ();
 +
 +  ext_dce_finish ();
-+
 +}
 +
 +
@@ -1027,7 +1011,7 @@ index 00000000000..379264e0bca
 +  return new pass_ext_dce (ctxt);
 +}
 diff --git a/gcc/passes.def b/gcc/passes.def
-index 43b416f98f7..48bde575cf0 100644
+index 1cbbd413097..a88e1f1ba3b 100644
 --- a/gcc/passes.def
 +++ b/gcc/passes.def
 @@ -491,6 +491,7 @@ along with GCC; see the file COPYING3.  If not see
@@ -1125,12 +1109,12 @@ index 00000000000..9a2dd53b17a
 +}
 diff --git a/gcc/testsuite/gcc.target/riscv/mem-extend.c b/gcc/testsuite/gcc.target/riscv/mem-extend.c
 new file mode 100644
-index 00000000000..c67f12dfc35
+index 00000000000..76bde3c6db6
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/mem-extend.c
-@@ -0,0 +1,13 @@
+@@ -0,0 +1,14 @@
 +/* { dg-do compile } */
-+/* { dg-options "-march=rv64gc_zbb" } */
++/* { dg-options "-fdump-rtl-ext_dce" } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" } } */
 +
 +void
@@ -1142,6 +1126,7 @@ index 00000000000..c67f12dfc35
 +}
 +
 +/* { dg-final { scan-assembler-not {\mzext\.h\M} } } */
++/* { dg-final { scan-rtl-dump {Successfully transformed} "ext_dce" } } */
 diff --git a/gcc/testsuite/gcc.target/riscv/pr111384.c b/gcc/testsuite/gcc.target/riscv/pr111384.c
 new file mode 100644
 index 00000000000..a4e77d4aeb6
@@ -1160,7 +1145,7 @@ index 00000000000..a4e77d4aeb6
 +}
 +
 diff --git a/gcc/tree-pass.h b/gcc/tree-pass.h
-index 52fd57fd4c6..501501560ec 100644
+index 29267589eeb..20a6e882b87 100644
 --- a/gcc/tree-pass.h
 +++ b/gcc/tree-pass.h
 @@ -593,6 +593,7 @@ extern rtl_opt_pass *make_pass_reginfo_init (gcc::context *ctxt);
