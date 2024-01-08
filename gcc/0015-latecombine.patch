@@ -1,150 +1,8 @@
-
-
-This patch adds a combine pass that runs late in the pipeline.
-There are two instances: one between combine and split1, and one
-after postreload.
-
-The pass currently has a single objective: remove definitions by
-substituting into all uses.  The pre-RA version tries to restrict
-itself to cases that are likely to have a neutral or beneficial
-effect on register pressure.
-
-The patch fixes PR106594.  It also fixes a few FAILs and XFAILs
-in the aarch64 test results, mostly due to making proper use of
-MOVPRFX in cases where we didn't previously.  I hope it would
-also help with Robin's vec_duplicate testcase, although the
-pressure heuristic might need tweaking for that case.
-
-This is just a first step..  I'm hoping that the pass could be
-used for other combine-related optimisations in future.  In particular,
-the post-RA version doesn't need to restrict itself to cases where all
-uses are substitutitable, since it doesn't have to worry about register
-pressure.  If we did that, and if we extended it to handle multi-register
-REGs, the pass might be a viable replacement for regcprop, which in
-turn might reduce the cost of having a post-RA instance of the new pass.
-
-I've run an assembly comparison with one target per CPU directory,
-and it seems to be a win for all targets except nvptx (which is hard
-to measure, being a higher-level asm).  The biggest winner seemed
-to be AVR.
-
-I'd originally hoped to enable the pass by default at -O2 and above
-on all targets.  But in the end, I don't think that's possible,
-because it interacts badly with x86's STV and partial register
-dependency passes.
-
-For example, gcc.target/i386/minmax-6.c tests whether the code
-compiles without any spilling.  The RTL created by STV contains:
-
-(insn 33 31 3 2 (set (subreg:V4SI (reg:SI 120) 0)
-        (vec_merge:V4SI (vec_duplicate:V4SI (reg:SI 116))
-            (const_vector:V4SI [
-                    (const_int 0 [0]) repeated x4
-                ])
-            (const_int 1 [0x1]))) -1
-     (nil))
-(insn 3 33 34 2 (set (subreg:V4SI (reg:SI 118) 0)
-        (subreg:V4SI (reg:SI 120) 0)) {movv4si_internal}
-     (expr_list:REG_DEAD (reg:SI 120)
-        (nil)))
-(insn 34 3 32 2 (set (reg/v:SI 108 [ y ])
-        (reg:SI 118)) -1
-     (nil))
-
-and it's crucial for the test that reg 108 is kept, rather than
-propagated into uses.  As things stand, 118 can be allocated
-a vector register and 108 a scalar register.  If 108 is propagated,
-there will be scalar and vector uses of 118, and so it will be
-spilled to memory.
-
-That one could be solved by running STV2 later.  But RPAD is
-a bigger problem.  In gcc.target/i386/pr87007-5.c, RPAD converts:
-
-(insn 27 26 28 6 (set (reg:DF 100 [ _15 ])
-        (sqrt:DF (mem/c:DF (symbol_ref:DI ("d2"))))) {*sqrtdf2_sse}
-     (nil))
-
-into:
-
-(insn 45 26 44 6 (set (reg:V4SF 108)
-        (const_vector:V4SF [
-                (const_double:SF 0.0 [0x0.0p+0]) repeated x4
-            ])) -1
-     (nil))
-(insn 44 45 27 6 (set (reg:V2DF 109)
-        (vec_merge:V2DF (vec_duplicate:V2DF (sqrt:DF (mem/c:DF (symbol_ref:DI ("d2")))))
-            (subreg:V2DF (reg:V4SF 108) 0)
-            (const_int 1 [0x1]))) -1
-     (nil))
-(insn 27 44 28 6 (set (reg:DF 100 [ _15 ])
-        (subreg:DF (reg:V2DF 109) 0)) {*movdf_internal}
-     (nil))
-
-But both the pre-RA and post-RA passes are able to combine these
-instructions back to the original form.
-
-The patch therefore enables the pass by default only on AArch64.
-However, I did test the patch with it enabled on x86_64-linux-gnu
-as well, which was useful for debugging.
-
-Bootstrapped & regression-tested on aarch64-linux-gnu and
-x86_64-linux-gnu (as posted, with no regressions, and with the
-pass enabled by default, with some gcc.target/i386 regressions).
-OK to install?
-
-Richard
-
-
-gcc/
-	PR rtl-optimization/106594
-	* Makefile.in (OBJS): Add late-combine.o.
-	* common.opt (flate-combine-instructions): New option.
-	* doc/invoke.texi: Document it.
-	* common/config/aarch64/aarch64-common.cc: Enable it by default
-	at -O2 and above.
-	* tree-pass.h (make_pass_late_combine): Declare.
-	* late-combine.cc: New file.
-	* passes.def: Add two instances of late_combine.
-
-gcc/testsuite/
-	PR rtl-optimization/106594
-	* gcc.dg/ira-shrinkwrap-prep-1.c: Restrict XFAIL to non-aarch64
-	targets.
-	* gcc.dg/ira-shrinkwrap-prep-2.c: Likewise.
-	* gcc.dg/stack-check-4.c: Add -fno-shrink-wrap.
-	* gcc.target/aarch64/sve/cond_asrd_3.c: Remove XFAILs.
-	* gcc.target/aarch64/sve/cond_convert_3.c: Likewise.
-	* gcc.target/aarch64/sve/cond_fabd_5.c: Likewise.
-	* gcc.target/aarch64/sve/cond_convert_6.c: Expect the MOVPRFX /Zs
-	described in the comment.
-	* gcc.target/aarch64/sve/cond_unary_4.c: Likewise.
-	* gcc.target/aarch64/pr106594_1.c: New test.
----
- gcc/Makefile.in                               |   1 +
- gcc/common.opt                                |   5 +
- gcc/common/config/aarch64/aarch64-common.cc   |   1 +
- gcc/doc/invoke.texi                           |  11 +-
- gcc/late-combine.cc                           | 718 ++++++++++++++++++
- gcc/passes.def                                |   2 +
- gcc/testsuite/gcc.dg/ira-shrinkwrap-prep-1.c  |   2 +-
- gcc/testsuite/gcc.dg/ira-shrinkwrap-prep-2.c  |   2 +-
- gcc/testsuite/gcc.dg/stack-check-4.c          |   2 +-
- gcc/testsuite/gcc.target/aarch64/pr106594_1.c |  20 +
- .../gcc.target/aarch64/sve/cond_asrd_3.c      |  10 +-
- .../gcc.target/aarch64/sve/cond_convert_3.c   |   8 +-
- .../gcc.target/aarch64/sve/cond_convert_6.c   |   8 +-
- .../gcc.target/aarch64/sve/cond_fabd_5.c      |  11 +-
- .../gcc.target/aarch64/sve/cond_unary_4.c     |  13 +-
- gcc/tree-pass.h                               |   1 +
- 16 files changed, 780 insertions(+), 35 deletions(-)
- create mode 100644 gcc/late-combine.cc
- create mode 100644 gcc/testsuite/gcc.target/aarch64/pr106594_1.c
-
 diff --git a/gcc/Makefile.in b/gcc/Makefile.in
-index 91d6bfbea4d..b43fd6e8df1 100644
+index deb12e17d25..417390b3b79 100644
 --- a/gcc/Makefile.in
 +++ b/gcc/Makefile.in
-@@ -1554,6 +1554,7 @@ OBJS = \
+@@ -1571,6 +1571,7 @@ OBJS = \
  	ira-lives.o \
  	jump.o \
  	langhooks.o \
@@ -153,10 +11,10 @@ index 91d6bfbea4d..b43fd6e8df1 100644
  	lists.o \
  	loop-doloop.o \
 diff --git a/gcc/common.opt b/gcc/common.opt
-index 1cf3bdd3b51..306b11f91c7 100644
+index 5f0a101bccb..56036f2295f 100644
 --- a/gcc/common.opt
 +++ b/gcc/common.opt
-@@ -1775,6 +1775,11 @@ Common Var(flag_large_source_files) Init(0)
+@@ -1784,6 +1784,11 @@ Common Var(flag_large_source_files) Init(0)
  Improve GCC's ability to track column numbers in large source files,
  at the expense of slower compilation.
  
@@ -168,11 +26,38 @@ index 1cf3bdd3b51..306b11f91c7 100644
  floop-parallelize-all
  Common Var(flag_loop_parallelize_all) Optimization
  Mark all loops as parallel.
+diff --git a/gcc/common/config/aarch64/aarch64-common.cc b/gcc/common/config/aarch64/aarch64-common.cc
+index 951d041d310..75c72b1680d 100644
+--- a/gcc/common/config/aarch64/aarch64-common.cc
++++ b/gcc/common/config/aarch64/aarch64-common.cc
+@@ -56,6 +56,7 @@ static const struct default_options aarch_option_optimization_table[] =
+     /* Enable redundant extension instructions removal at -O2 and higher.  */
+     { OPT_LEVELS_2_PLUS, OPT_free, NULL, 1 },
+     { OPT_LEVELS_2_PLUS, OPT_mearly_ra_, NULL, AARCH64_EARLY_RA_ALL },
++    { OPT_LEVELS_2_PLUS, OPT_flate_combine_instructions, NULL, 1 },
+ #if (TARGET_DEFAULT_ASYNC_UNWIND_TABLES == 1)
+     { OPT_LEVELS_ALL, OPT_fasynchronous_unwind_tables, NULL, 1 },
+     { OPT_LEVELS_ALL, OPT_funwind_tables, NULL, 1},
+diff --git a/gcc/config/mn10300/mn10300.md b/gcc/config/mn10300/mn10300.md
+index 939f20d5a58..80b07cc4b36 100644
+--- a/gcc/config/mn10300/mn10300.md
++++ b/gcc/config/mn10300/mn10300.md
+@@ -957,7 +957,9 @@ (define_insn_and_split "*subdi3_degenerate"
+   if (scratch)
+     emit_move_insn (operands[0], scratch);
+   DONE;
+-})
++}
++  [(set_attr "isa" "*,am33")])
++
+ 
+ (define_insn_and_split "negsi2"
+   [(set (match_operand:SI         0 "register_operand"  "=D,&r")
 diff --git a/gcc/doc/invoke.texi b/gcc/doc/invoke.texi
-index 5a9284d635c..d0576ac97cf 100644
+index 68d1f364ac0..dbb798cc610 100644
 --- a/gcc/doc/invoke.texi
 +++ b/gcc/doc/invoke.texi
-@@ -562,7 +562,7 @@ Objective-C and Objective-C++ Dialects}.
+@@ -571,7 +571,7 @@ Objective-C and Objective-C++ Dialects}.
  -fipa-bit-cp  -fipa-vrp  -fipa-pta  -fipa-profile  -fipa-pure-const
  -fipa-reference  -fipa-reference-addressable
  -fipa-stack-alignment  -fipa-icf  -fira-algorithm=@var{algorithm}
@@ -181,7 +66,7 @@ index 5a9284d635c..d0576ac97cf 100644
  -fira-region=@var{region}  -fira-hoist-pressure
  -fira-loop-pressure  -fno-ira-share-save-slots
  -fno-ira-share-spill-slots
-@@ -13201,6 +13201,15 @@ equivalences that are found only by GCC and equivalences found only by Gold.
+@@ -13442,6 +13442,15 @@ equivalences that are found only by GCC and equivalences found only by Gold.
  
  This flag is enabled by default at @option{-O2} and @option{-Os}.
  
@@ -199,10 +84,10 @@ index 5a9284d635c..d0576ac97cf 100644
  Control GCC's optimizations to produce output suitable for live-patching.
 diff --git a/gcc/late-combine.cc b/gcc/late-combine.cc
 new file mode 100644
-index 00000000000..b1845875c4b
+index 00000000000..eaddf50057f
 --- /dev/null
 +++ b/gcc/late-combine.cc
-@@ -0,0 +1,718 @@
+@@ -0,0 +1,732 @@
 +// Late-stage instruction combination pass.
 +// Copyright (C) 2023 Free Software Foundation, Inc.
 +//
@@ -263,21 +148,6 @@ index 00000000000..b1845875c4b
 +  TODO_df_finish, // todo_flags_finish
 +};
 +
-+// Class that represents one run of the pass.
-+class late_combine
-+{
-+public:
-+  unsigned int execute (function *);
-+
-+private:
-+  rtx optimizable_set (insn_info *);
-+  bool check_register_pressure (insn_info *, rtx);
-+  bool check_uses (set_info *, rtx);
-+  bool combine_into_uses (insn_info *, insn_info *);
-+
-+  auto_vec<insn_info *> m_worklist;
-+};
-+
 +// Represents an attempt to substitute a single-set definition into all
 +// uses of the definition.
 +class insn_combination
@@ -324,6 +194,21 @@ index 00000000000..b1845875c4b
 +  // Contains the full list of changes that we want to make, in reverse
 +  // postorder.
 +  auto_vec<insn_change *> m_nondebug_changes;
++};
++
++// Class that represents one run of the pass.
++class late_combine
++{
++public:
++  unsigned int execute (function *);
++
++private:
++  rtx optimizable_set (insn_info *);
++  bool check_register_pressure (insn_info *, rtx);
++  bool check_uses (set_info *, rtx);
++  bool combine_into_uses (insn_info *, insn_info *);
++
++  auto_vec<insn_info *> m_worklist;
 +};
 +
 +insn_combination::insn_combination (set_info *def, rtx dest, rtx src)
@@ -717,14 +602,15 @@ index 00000000000..b1845875c4b
 +
 +	  // Make sure that the source operand's class is at least as
 +	  // permissive as the destination operand's class.
-+	  if (!reg_class_subset_p (dest_class, alt[i].cl))
++	  auto src_class = alternative_class (alt, i);
++	  if (!reg_class_subset_p (dest_class, src_class))
 +	    return false;
 +
 +	  // Make sure that the source operand occupies no more hard
 +	  // registers than the destination operand.  This mostly matters
 +	  // for subregs.
 +	  if (targetm.class_max_nregs (dest_class, GET_MODE (dest))
-+	      < targetm.class_max_nregs (alt[i].cl, GET_MODE (op)))
++	      < targetm.class_max_nregs (src_class, GET_MODE (op)))
 +	    return false;
 +
 +	  return true;
@@ -771,6 +657,19 @@ index 00000000000..b1845875c4b
 +      if (use_insn->is_jump ()
 +	  && find_reg_note (use_insn->rtl (), REG_NON_LOCAL_GOTO, NULL_RTX))
 +	return false;
++
++      // Don't try to substitute into call arguments.
++      if (use_insn->is_call ())
++	{
++	  auto usage = CALL_INSN_FUNCTION_USAGE (use_insn->rtl ());
++	  for (rtx item = usage; item; item = XEXP (item, 1))
++	    {
++	      rtx x = XEXP (item, 0);
++	      if (GET_CODE (x) == USE
++		  && reg_overlap_mentioned_p (SET_DEST (set), XEXP (x, 0)))
++		return false;
++	    }
++	}
 +
 +      // We'll keep the uses in their original order, even if we move
 +      // them relative to other instructions.  Make sure that non-final
@@ -922,10 +821,10 @@ index 00000000000..b1845875c4b
 +  return new pass_late_combine (ctxt);
 +}
 diff --git a/gcc/passes.def b/gcc/passes.def
-index 1e1950bdb39..56ab5204b08 100644
+index 1cbbd413097..1d56a0d4799 100644
 --- a/gcc/passes.def
 +++ b/gcc/passes.def
-@@ -488,6 +488,7 @@ along with GCC; see the file COPYING3.  If not see
+@@ -492,6 +492,7 @@ along with GCC; see the file COPYING3.  If not see
        NEXT_PASS (pass_initialize_regs);
        NEXT_PASS (pass_ud_rtl_dce);
        NEXT_PASS (pass_combine);
@@ -933,7 +832,7 @@ index 1e1950bdb39..56ab5204b08 100644
        NEXT_PASS (pass_if_after_combine);
        NEXT_PASS (pass_jump_after_combine);
        NEXT_PASS (pass_partition_blocks);
-@@ -507,6 +508,7 @@ along with GCC; see the file COPYING3.  If not see
+@@ -511,6 +512,7 @@ along with GCC; see the file COPYING3.  If not see
        NEXT_PASS (pass_postreload);
        PUSH_INSERT_PASSES_WITHIN (pass_postreload)
  	  NEXT_PASS (pass_postreload_cse);
@@ -1106,10 +1005,10 @@ index a491f899088..cbb957bffa4 100644
  /* { dg-final { scan-assembler-not {\tmov\tz[^\n]*z} } } */
  /* { dg-final { scan-assembler-not {\tsel\t} } } */
 diff --git a/gcc/tree-pass.h b/gcc/tree-pass.h
-index 09e6ada5b2f..75376316e40 100644
+index 29267589eeb..4bedaa40aa2 100644
 --- a/gcc/tree-pass.h
 +++ b/gcc/tree-pass.h
-@@ -612,6 +612,7 @@ extern rtl_opt_pass *make_pass_branch_prob (gcc::context *ctxt);
+@@ -614,6 +614,7 @@ extern rtl_opt_pass *make_pass_branch_prob (gcc::context *ctxt);
  extern rtl_opt_pass *make_pass_value_profile_transformations (gcc::context
  							      *ctxt);
  extern rtl_opt_pass *make_pass_postreload_cse (gcc::context *ctxt);
@@ -1117,7 +1016,3 @@ index 09e6ada5b2f..75376316e40 100644
  extern rtl_opt_pass *make_pass_gcse2 (gcc::context *ctxt);
  extern rtl_opt_pass *make_pass_split_after_reload (gcc::context *ctxt);
  extern rtl_opt_pass *make_pass_thread_prologue_and_epilogue (gcc::context
--- 
-2.25.1
-
-
