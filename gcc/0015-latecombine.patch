@@ -840,6 +840,23 @@ index 1cbbd413097..1d56a0d4799 100644
  	  NEXT_PASS (pass_gcse2);
  	  NEXT_PASS (pass_split_after_reload);
  	  NEXT_PASS (pass_ree);
+diff --git a/gcc/recog.cc b/gcc/recog.cc
+index a6799e3f5e6..56370e40e01 100644
+--- a/gcc/recog.cc
++++ b/gcc/recog.cc
+@@ -614,7 +614,11 @@ swap_change (int num)
+   else
+     std::swap (*changes[num].loc, changes[num].old);
+   if (changes[num].object && !MEM_P (changes[num].object))
+-    std::swap (INSN_CODE (changes[num].object), changes[num].old_code);
++    {
++      std::swap (INSN_CODE (changes[num].object), changes[num].old_code);
++      if (recog_data.insn == changes[num].object)
++	recog_data.insn = nullptr;
++    }
+ }
+ 
+ /* Temporarily undo all the changes numbered NUM and up, with a view
 diff --git a/gcc/testsuite/gcc.dg/ira-shrinkwrap-prep-1.c b/gcc/testsuite/gcc.dg/ira-shrinkwrap-prep-1.c
 index f290b9ccbdc..a95637abbe5 100644
 --- a/gcc/testsuite/gcc.dg/ira-shrinkwrap-prep-1.c
