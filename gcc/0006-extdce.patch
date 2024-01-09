@@ -61,7 +61,7 @@ new file mode 100644
 index 00000000000..ffea057ee11
 --- /dev/null
 +++ b/gcc/ext-dce.cc
-@@ -0,0 +1,953 @@
+@@ -0,0 +1,943 @@
 +/* RTL dead zero/sign extension (code) elimination.
 +   Copyright (C) 2000-2022 Free Software Foundation, Inc.
 +
@@ -430,16 +430,6 @@ index 00000000000..ffea057ee11
 +      return false;
 +    }
 +}
-+
-+/* Return TRUE/FALSE if MODE is a mode supported by the ext-dce optimization
-+   pass.  */
-+static bool
-+ext_dce_unsupported_mode (machine_mode mode)
-+{  
-+  scalar_int_mode outer_mode;
-+  return (!is_a <scalar_int_mode> (mode, &outer_mode)
-+	  || GET_MODE_BITSIZE (outer_mode) > 64);
-+}  
 +
 +/* X, with code CODE, is an operation for which safe_for_live_propagation
 +   holds true, and bits set in MASK are live in the result.  Compute a
