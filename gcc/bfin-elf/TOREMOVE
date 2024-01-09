@@ -1,2 +1,7 @@
 # Times out, not investigated
 gcc/testsuite/gcc.dg/pr97459-6.c
+
+# These two are flakey, related to debug-info and the nop insertion on
+# the 2nd lane of a LIW instruction
+gcc/testsuite/gcc.dg/sms-10.c
+gcc/testsuite/gcc.dg/pr44028.c
