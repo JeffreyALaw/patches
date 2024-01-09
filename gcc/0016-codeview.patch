@@ -1,0 +1,1304 @@
+
+
+This patch and the following add initial support for Microsoft's
+CodeView debugging format, as used by MSVC, to mingw targets.
+
+Note that you will need a recent version of binutils for this to be
+useful. The best way to view the output is to run Microsoft's
+cvdump.exe, found in their microsoft-pdb repo on GitHub, against the
+object files.
+---
+ gcc/Makefile.in                               |  2 +
+ gcc/config/i386/cygming.h                     |  2 +
+ gcc/dwarf2codeview.cc                         | 54 +++++++++++++++++++
+ gcc/dwarf2codeview.h                          | 30 +++++++++++
+ gcc/dwarf2out.cc                              |  6 +++
+ gcc/flag-types.h                              |  3 ++
+ gcc/flags.h                                   |  4 ++
+ gcc/opts.cc                                   | 23 ++++++--
+ .../gcc.dg/debug/codeview/codeview-1.c        |  6 +++
+ .../gcc.dg/debug/codeview/codeview.exp        | 48 +++++++++++++++++
+ gcc/toplev.cc                                 |  4 ++
+ 11 files changed, 177 insertions(+), 5 deletions(-)
+ create mode 100644 gcc/dwarf2codeview.cc
+ create mode 100644 gcc/dwarf2codeview.h
+ create mode 100644 gcc/testsuite/gcc.dg/debug/codeview/codeview-1.c
+ create mode 100644 gcc/testsuite/gcc.dg/debug/codeview/codeview.exp
+
+diff --git a/gcc/Makefile.in b/gcc/Makefile.in
+index 91d6bfbea4d..b260fe12c08 100644
+--- a/gcc/Makefile.in
++++ b/gcc/Makefile.in
+@@ -1430,6 +1430,7 @@ OBJS = \
+ 	dumpfile.o \
+ 	dwarf2asm.o \
+ 	dwarf2cfi.o \
++	dwarf2codeview.o \
+ 	dwarf2ctf.o \
+ 	dwarf2out.o \
+ 	early-remat.o \
+@@ -2800,6 +2801,7 @@ GTFILES = $(CPPLIB_H) $(srcdir)/input.h $(srcdir)/coretypes.h \
+   $(srcdir)/dwarf2out.h \
+   $(srcdir)/dwarf2asm.cc \
+   $(srcdir)/dwarf2cfi.cc \
++  $(srcdir)/dwarf2codeview.cc \
+   $(srcdir)/dwarf2ctf.cc \
+   $(srcdir)/dwarf2out.cc \
+   $(srcdir)/ctfc.h \
+diff --git a/gcc/config/i386/cygming.h b/gcc/config/i386/cygming.h
+index d539f8d0699..a141462133b 100644
+--- a/gcc/config/i386/cygming.h
++++ b/gcc/config/i386/cygming.h
+@@ -20,6 +20,8 @@ along with GCC; see the file COPYING3.  If not see
+ 
+ #define DWARF2_DEBUGGING_INFO 1
+ 
++#define CODEVIEW_DEBUGGING_INFO 1
++
+ #undef PREFERRED_DEBUGGING_TYPE
+ #define PREFERRED_DEBUGGING_TYPE DWARF2_DEBUG
+ 
+diff --git a/gcc/dwarf2codeview.cc b/gcc/dwarf2codeview.cc
+new file mode 100644
+index 00000000000..f08f5d55ad7
+--- /dev/null
++++ b/gcc/dwarf2codeview.cc
+@@ -0,0 +1,54 @@
++/* Generate CodeView debugging info from the GCC DWARF.
++   Copyright (C) 2023 Free Software Foundation, Inc.
++
++This file is part of GCC.
++
++GCC is free software; you can redistribute it and/or modify it under
++the terms of the GNU General Public License as published by the Free
++Software Foundation; either version 3, or (at your option) any later
++version.
++
++GCC is distributed in the hope that it will be useful, but WITHOUT ANY
++WARRANTY; without even the implied warranty of MERCHANTABILITY or
++FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++for more details.
++
++You should have received a copy of the GNU General Public License
++along with GCC; see the file COPYING3.  If not see
++<http://www.gnu.org/licenses/>.  */
++
++/* See gas/codeview.h in binutils for more about the constants and structs
++   listed below.  References to Microsoft files refer to Microsoft's PDB
++   repository: https://github.com/microsoft/microsoft-pdb.  */
++
++#include "config.h"
++#include "system.h"
++#include "coretypes.h"
++#include "target.h"
++#include "output.h"
++#include "errors.h"
++#include "md5.h"
++#include "function.h"
++#include "version.h"
++#include "tree.h"
++#include "langhooks.h"
++#include "dwarf2out.h"
++#include "dwarf2codeview.h"
++
++#ifdef CODEVIEW_DEBUGGING_INFO
++
++#define CV_SIGNATURE_C13	4
++
++/* Finish CodeView debug info emission.  */
++
++void
++codeview_debug_finish (void)
++{
++  targetm.asm_out.named_section (".debug$S", SECTION_DEBUG, NULL);
++
++  fputs (integer_asm_op (4, false), asm_out_file);
++  fprint_whex (asm_out_file, CV_SIGNATURE_C13);
++  putc ('\n', asm_out_file);
++}
++
++#endif
+diff --git a/gcc/dwarf2codeview.h b/gcc/dwarf2codeview.h
+new file mode 100644
+index 00000000000..efda148eb49
+--- /dev/null
++++ b/gcc/dwarf2codeview.h
+@@ -0,0 +1,30 @@
++/* dwarf2codeview.h - DWARF interface for CodeView generation.
++   Copyright (C) 2023 Free Software Foundation, Inc.
++
++This file is part of GCC.
++
++GCC is free software; you can redistribute it and/or modify it under
++the terms of the GNU General Public License as published by the Free
++Software Foundation; either version 3, or (at your option) any later
++version.
++
++GCC is distributed in the hope that it will be useful, but WITHOUT ANY
++WARRANTY; without even the implied warranty of MERCHANTABILITY or
++FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++for more details.
++
++You should have received a copy of the GNU General Public License
++along with GCC; see the file COPYING3.  If not see
++<http://www.gnu.org/licenses/>.  */
++
++#ifndef GCC_DWARF2CODEVIEW_H
++#define GCC_DWARF2CODEVIEW_H 1
++
++#include "dwarf2out.h"
++#include "flags.h"
++
++/* Debug Format Interface.  Used in dwarf2out.cc.  */
++
++extern void codeview_debug_finish (void);
++
++#endif /* GCC_DWARF2CODEVIEW_H */
+diff --git a/gcc/dwarf2out.cc b/gcc/dwarf2out.cc
+index 1e0cec66c5e..e987a8e9a3d 100644
+--- a/gcc/dwarf2out.cc
++++ b/gcc/dwarf2out.cc
+@@ -80,6 +80,7 @@ along with GCC; see the file COPYING3.  If not see
+ #include "expr.h"
+ #include "dwarf2out.h"
+ #include "dwarf2ctf.h"
++#include "dwarf2codeview.h"
+ #include "dwarf2asm.h"
+ #include "toplev.h"
+ #include "md5.h"
+@@ -32209,6 +32210,11 @@ dwarf2out_finish (const char *filename)
+        || btf_debuginfo_p ()) && lang_GNU_C ())
+     ctf_debug_finish (filename);
+ 
++#ifdef CODEVIEW_DEBUGGING_INFO
++  if (codeview_debuginfo_p ())
++    codeview_debug_finish ();
++#endif
++
+   /* Skip emitting DWARF if not required.  */
+   if (!dwarf_debuginfo_p ())
+     return;
+diff --git a/gcc/flag-types.h b/gcc/flag-types.h
+index c1852cd810c..dae1d0a8095 100644
+--- a/gcc/flag-types.h
++++ b/gcc/flag-types.h
+@@ -29,6 +29,7 @@ enum debug_info_type
+   DINFO_TYPE_VMS,		  /* VMS debug info.  */
+   DINFO_TYPE_CTF,		  /* CTF debug info.  */
+   DINFO_TYPE_BTF,		  /* BTF debug info.  */
++  DINFO_TYPE_CODEVIEW,		  /* CodeView debug info.  */
+   DINFO_TYPE_BTF_WITH_CORE,	  /* BTF debug info with CO-RE relocations.  */
+   DINFO_TYPE_MAX = DINFO_TYPE_BTF_WITH_CORE /* Marker only.  */
+ };
+@@ -42,6 +43,8 @@ enum debug_info_type
+ #define CTF_DEBUG     (1U << DINFO_TYPE_CTF)
+ /* Write BTF debug info (using btfout.cc).  */
+ #define BTF_DEBUG     (1U << DINFO_TYPE_BTF)
++/* Write CodeView debug info (using dwarf2codeview.cc).  */
++#define CODEVIEW_DEBUG     (1U << DINFO_TYPE_CODEVIEW)
+ /* Write BTF debug info for BPF CO-RE usecase (using btfout.cc).  */
+ #define BTF_WITH_CORE_DEBUG     (1U << DINFO_TYPE_BTF_WITH_CORE)
+ 
+diff --git a/gcc/flags.h b/gcc/flags.h
+index e4bafa310d6..50036459328 100644
+--- a/gcc/flags.h
++++ b/gcc/flags.h
+@@ -53,6 +53,10 @@ extern bool btf_with_core_debuginfo_p ();
+ 
+ extern bool ctf_debuginfo_p ();
+ 
++/* Return true iff CodeView debug info is enabled.  */
++
++extern bool codeview_debuginfo_p ();
++
+ /* Return true iff DWARF2 debug info is enabled.  */
+ 
+ extern bool dwarf_debuginfo_p (struct gcc_options *opts = &global_options);
+diff --git a/gcc/opts.cc b/gcc/opts.cc
+index 8015cb7556a..f02101ceea3 100644
+--- a/gcc/opts.cc
++++ b/gcc/opts.cc
+@@ -50,7 +50,7 @@ static void set_Wstrict_aliasing (struct gcc_options *opts, int onoff);
+ 
+ const char *const debug_type_names[] =
+ {
+-  "none", "dwarf-2", "vms", "ctf", "btf"
++  "none", "dwarf-2", "vms", "ctf", "btf", "codeview"
+ };
+ 
+ /* Bitmasks of fundamental debug info formats indexed by enum
+@@ -59,13 +59,13 @@ const char *const debug_type_names[] =
+ static uint32_t debug_type_masks[] =
+ {
+   NO_DEBUG, DWARF2_DEBUG, VMS_DEBUG,
+-  CTF_DEBUG, BTF_DEBUG
++  CTF_DEBUG, BTF_DEBUG, CODEVIEW_DEBUG
+ };
+ 
+ /* Names of the set of debug formats requested by user.  Updated and accessed
+    via debug_set_names.  */
+ 
+-static char df_set_names[sizeof "none dwarf-2 vms ctf btf"];
++static char df_set_names[sizeof "none dwarf-2 vms ctf btf codeview"];
+ 
+ /* Get enum debug_info_type of the specified debug format, for error messages.
+    Can be used only for individual debug format types.  */
+@@ -159,6 +159,14 @@ ctf_debuginfo_p ()
+   return (write_symbols & CTF_DEBUG);
+ }
+ 
++/* Return TRUE iff CodeView debug info is enabled.  */
++
++bool
++codeview_debuginfo_p ()
++{
++  return (write_symbols & CODEVIEW_DEBUG);
++}
++
+ /* Return TRUE iff dwarf2 debug info is enabled.  */
+ 
+ bool
+@@ -173,7 +181,8 @@ dwarf_debuginfo_p (struct gcc_options *opts)
+ bool dwarf_based_debuginfo_p ()
+ {
+   return ((write_symbols & CTF_DEBUG)
+-	  || (write_symbols & BTF_DEBUG));
++	  || (write_symbols & BTF_DEBUG)
++	  || (write_symbols & CODEVIEW_DEBUG));
+ }
+ 
+ /* All flag uses below need to explicitely reference the option sets
+@@ -3145,6 +3154,9 @@ common_handle_option (struct gcc_options *opts,
+       break;
+ 
+     case OPT_gcodeview:
++      set_debug_level (CODEVIEW_DEBUG, false, arg, opts, opts_set, loc);
++      if (opts->x_debug_info_level < DINFO_LEVEL_NORMAL)
++	opts->x_debug_info_level = DINFO_LEVEL_NORMAL;
+       break;
+ 
+     case OPT_gbtf:
+@@ -3419,7 +3431,8 @@ set_debug_level (uint32_t dinfo, int extended, const char *arg,
+ 	    warning_at (loc, 0, "target system does not support debug output");
+ 	}
+       else if ((opts->x_write_symbols & CTF_DEBUG)
+-	       || (opts->x_write_symbols & BTF_DEBUG))
++	       || (opts->x_write_symbols & BTF_DEBUG)
++	       || (opts->x_write_symbols & CODEVIEW_DEBUG))
+ 	{
+ 	  opts->x_write_symbols |= DWARF2_DEBUG;
+ 	  opts_set->x_write_symbols |= DWARF2_DEBUG;
+diff --git a/gcc/testsuite/gcc.dg/debug/codeview/codeview-1.c b/gcc/testsuite/gcc.dg/debug/codeview/codeview-1.c
+new file mode 100644
+index 00000000000..eb5f14530dc
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/debug/codeview/codeview-1.c
+@@ -0,0 +1,6 @@
++/* { dg-do compile } */
++/* { dg-options "-gcodeview" } */
++
++void func(void)
++{
++}
+diff --git a/gcc/testsuite/gcc.dg/debug/codeview/codeview.exp b/gcc/testsuite/gcc.dg/debug/codeview/codeview.exp
+new file mode 100644
+index 00000000000..ff705a4ae78
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/debug/codeview/codeview.exp
+@@ -0,0 +1,48 @@
++#   Copyright (C) 2023 Free Software Foundation, Inc.
++
++# This program is free software; you can redistribute it and/or modify
++# it under the terms of the GNU General Public License as published by
++# the Free Software Foundation; either version 3 of the License, or
++# (at your option) any later version.
++#
++# This program is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU General Public License for more details.
++#
++# You should have received a copy of the GNU General Public License
++# along with GCC; see the file COPYING3.  If not see
++# <http://www.gnu.org/licenses/>.
++
++# GCC testsuite that uses the `dg.exp' driver.
++
++# Load support procs.
++load_lib gcc-dg.exp
++
++if {![istarget i*86-*-mingw*]
++  && ![istarget x86_64-*-mingw*]} {
++    return 0
++}
++
++# If a testcase doesn't have special options, use these.
++global DEFAULT_CFLAGS
++if ![info exists DEFAULT_CFLAGS] then {
++    set DEFAULT_CFLAGS " -ansi -pedantic-errors"
++}
++
++# Initialize `dg'.
++dg-init
++
++# Main loop.
++set comp_output [gcc_target_compile \
++    "$srcdir/$subdir/../trivial.c" "trivial.S" assembly \
++    "additional_flags=-gcodeview"]
++if { ! [string match "*: target system does not support the * debug format*" \
++    $comp_output] } {
++    remove-build-file "trivial.S"
++    dg-runtest [lsort [glob -nocomplain $srcdir/$subdir/*.\[cS\] ]] \
++	    "" $DEFAULT_CFLAGS
++}
++
++# All done.
++dg-finish
+diff --git a/gcc/toplev.cc b/gcc/toplev.cc
+index 9a734890a18..dd7ed2233c7 100644
+--- a/gcc/toplev.cc
++++ b/gcc/toplev.cc
+@@ -1432,6 +1432,10 @@ process_options ()
+ #ifdef DWARF2_LINENO_DEBUGGING_INFO
+   else if (write_symbols == DWARF2_DEBUG)
+     debug_hooks = &dwarf2_lineno_debug_hooks;
++#endif
++#ifdef CODEVIEW_DEBUGGING_INFO
++  else if (codeview_debuginfo_p ())
++    debug_hooks = &dwarf2_debug_hooks;
+ #endif
+   else
+     {
+-- 
+2.41.0
+
+
+
+Outputs the file name and MD5 hash of the main source file into the
+CodeView .debug$S section, along with that of any #include'd files.
+---
+ gcc/dwarf2codeview.cc | 254 ++++++++++++++++++++++++++++++++++++++++++
+ gcc/dwarf2codeview.h  |   1 +
+ gcc/dwarf2out.cc      |   5 +
+ 3 files changed, 260 insertions(+)
+
+diff --git a/gcc/dwarf2codeview.cc b/gcc/dwarf2codeview.cc
+index f08f5d55ad7..da8315310b5 100644
+--- a/gcc/dwarf2codeview.cc
++++ b/gcc/dwarf2codeview.cc
+@@ -39,6 +39,257 @@ along with GCC; see the file COPYING3.  If not see
+ 
+ #define CV_SIGNATURE_C13	4
+ 
++#define DEBUG_S_STRINGTABLE     0xf3
++#define DEBUG_S_FILECHKSMS      0xf4
++
++#define CHKSUM_TYPE_MD5		1
++
++#define HASH_SIZE 16
++
++struct codeview_string
++{
++  codeview_string *next;
++  uint32_t offset;
++  char *string;
++};
++
++struct string_hasher : free_ptr_hash <struct codeview_string>
++{
++  typedef const char *compare_type;
++
++  static hashval_t hash (const codeview_string *x)
++  {
++    return htab_hash_string (x->string);
++  }
++
++  static bool equal (const codeview_string *x, const char *y)
++  {
++    return !strcmp (x->string, y);
++  }
++
++  static void mark_empty (codeview_string *x)
++  {
++    if (x->string)
++      {
++	free (x->string);
++	x->string = NULL;
++      }
++  }
++
++  static void remove (codeview_string *&x)
++  {
++    free (x->string);
++  }
++};
++
++struct codeview_source_file
++{
++  codeview_source_file *next;
++  unsigned int file_num;
++  uint32_t string_offset;
++  char *filename;
++  uint8_t hash[HASH_SIZE];
++};
++
++static codeview_source_file *files, *last_file;
++static unsigned int num_files;
++static uint32_t string_offset = 1;
++static hash_table<string_hasher> *strings_htab;
++static codeview_string *strings, *last_string;
++
++/* Adds string to the string table, returning its offset.  If already present,
++   this returns the offset of the existing string.  */
++
++static uint32_t
++add_string (const char *string)
++{
++  codeview_string **slot;
++  codeview_string *s;
++  size_t len;
++
++  if (!strings_htab)
++    strings_htab = new hash_table<string_hasher> (10);
++
++  slot = strings_htab->find_slot_with_hash (string, htab_hash_string (string),
++					    INSERT);
++
++  if (*slot)
++    return (*slot)->offset;
++
++  s = (codeview_string *) xmalloc (sizeof (codeview_string));
++  len = strlen (string);
++
++  s->next = NULL;
++
++  s->offset = string_offset;
++  string_offset += len + 1;
++
++  s->string = xstrdup (string);
++
++  if (last_string)
++    last_string->next = s;
++  else
++    strings = s;
++
++  last_string = s;
++
++  *slot = s;
++
++  return s->offset;
++}
++
++/* A new source file has been encountered - record the details and calculate
++   its hash.  */
++
++void
++codeview_start_source_file (const char *filename)
++{
++  codeview_source_file *sf;
++  char *path;
++  uint32_t string_offset;
++  FILE *f;
++
++  path = lrealpath (filename);
++  string_offset = add_string (path);
++  free (path);
++
++  sf = files;
++  while (sf)
++    {
++      if (sf->string_offset == string_offset)
++	return;
++
++      sf = sf->next;
++    }
++
++  sf = (codeview_source_file *) xmalloc (sizeof (codeview_source_file));
++  sf->next = NULL;
++  sf->file_num = num_files;
++  sf->string_offset = string_offset;
++  sf->filename = xstrdup (filename);
++
++  f = fopen (filename, "r");
++  if (!f)
++    internal_error ("could not open %s for reading", filename);
++
++  if (md5_stream (f, sf->hash))
++    {
++      fclose (f);
++      internal_error ("md5_stream failed");
++    }
++
++  fclose (f);
++
++  if (last_file)
++    last_file->next = sf;
++  else
++    files = sf;
++
++  last_file = sf;
++  num_files++;
++}
++
++/* Write out the strings table into the .debug$S section.  The linker will
++   parse this, and handle the deduplication and hashing for all the object
++   files.  */
++
++static void
++write_strings_table (void)
++{
++  codeview_string *string;
++
++  fputs (integer_asm_op (4, false), asm_out_file);
++  fprint_whex (asm_out_file, DEBUG_S_STRINGTABLE);
++  putc ('\n', asm_out_file);
++
++  fputs (integer_asm_op (4, false), asm_out_file);
++  asm_fprintf (asm_out_file, "%LLcv_strings_end - %LLcv_strings_start\n");
++
++  asm_fprintf (asm_out_file, "%LLcv_strings_start:\n");
++
++  /* The first entry is always an empty string.  */
++  fputs (integer_asm_op (1, false), asm_out_file);
++  fprint_whex (asm_out_file, 0);
++  putc ('\n', asm_out_file);
++
++  string = strings;
++  while (string)
++    {
++      ASM_OUTPUT_ASCII (asm_out_file, string->string,
++			strlen (string->string) + 1);
++
++      string = string->next;
++    }
++
++  delete strings_htab;
++
++  asm_fprintf (asm_out_file, "%LLcv_strings_end:\n");
++
++  ASM_OUTPUT_ALIGN (asm_out_file, 2);
++}
++
++/* Write out the file checksums data into the .debug$S section.  */
++
++static void
++write_source_files (void)
++{
++  fputs (integer_asm_op (4, false), asm_out_file);
++  fprint_whex (asm_out_file, DEBUG_S_FILECHKSMS);
++  putc ('\n', asm_out_file);
++
++  fputs (integer_asm_op (4, false), asm_out_file);
++  asm_fprintf (asm_out_file,
++	       "%LLcv_filechksms_end - %LLcv_filechksms_start\n");
++
++  asm_fprintf (asm_out_file, "%LLcv_filechksms_start:\n");
++
++  while (files)
++    {
++      codeview_source_file *next = files->next;
++
++      /* This is struct file_checksum in binutils, or filedata in Microsoft's
++	 dumpsym7.cpp:
++
++	struct file_checksum
++	{
++	  uint32_t file_id;
++	  uint8_t checksum_length;
++	  uint8_t checksum_type;
++	} ATTRIBUTE_PACKED;
++
++	followed then by the bytes of the hash, padded to the next 4 bytes.
++	file_id here is actually the offset in the strings table.  */
++
++      fputs (integer_asm_op (4, false), asm_out_file);
++      fprint_whex (asm_out_file, files->string_offset);
++      putc ('\n', asm_out_file);
++
++      fputs (integer_asm_op (1, false), asm_out_file);
++      fprint_whex (asm_out_file, HASH_SIZE);
++      putc ('\n', asm_out_file);
++
++      fputs (integer_asm_op (1, false), asm_out_file);
++      fprint_whex (asm_out_file, CHKSUM_TYPE_MD5);
++      putc ('\n', asm_out_file);
++
++      for (unsigned int i = 0; i < HASH_SIZE; i++)
++	{
++	  fputs (integer_asm_op (1, false), asm_out_file);
++	  fprint_whex (asm_out_file, files->hash[i]);
++	  putc ('\n', asm_out_file);
++	}
++
++      ASM_OUTPUT_ALIGN (asm_out_file, 2);
++
++      free (files->filename);
++      free (files);
++
++      files = next;
++    }
++
++  asm_fprintf (asm_out_file, "%LLcv_filechksms_end:\n");
++}
++
+ /* Finish CodeView debug info emission.  */
+ 
+ void
+@@ -49,6 +300,9 @@ codeview_debug_finish (void)
+   fputs (integer_asm_op (4, false), asm_out_file);
+   fprint_whex (asm_out_file, CV_SIGNATURE_C13);
+   putc ('\n', asm_out_file);
++
++  write_strings_table ();
++  write_source_files ();
+ }
+ 
+ #endif
+diff --git a/gcc/dwarf2codeview.h b/gcc/dwarf2codeview.h
+index efda148eb49..e2d732bb9b6 100644
+--- a/gcc/dwarf2codeview.h
++++ b/gcc/dwarf2codeview.h
+@@ -26,5 +26,6 @@ along with GCC; see the file COPYING3.  If not see
+ /* Debug Format Interface.  Used in dwarf2out.cc.  */
+ 
+ extern void codeview_debug_finish (void);
++extern void codeview_start_source_file (const char *);
+ 
+ #endif /* GCC_DWARF2CODEVIEW_H */
+diff --git a/gcc/dwarf2out.cc b/gcc/dwarf2out.cc
+index e987a8e9a3d..dfff6e88804 100644
+--- a/gcc/dwarf2out.cc
++++ b/gcc/dwarf2out.cc
+@@ -28825,6 +28825,11 @@ dwarf2out_set_ignored_loc (unsigned int line, unsigned int column,
+ static void
+ dwarf2out_start_source_file (unsigned int lineno, const char *filename)
+ {
++#ifdef CODEVIEW_DEBUGGING_INFO
++  if (codeview_debuginfo_p ())
++    codeview_start_source_file (filename);
++#endif
++
+   if (debug_info_level >= DINFO_LEVEL_VERBOSE)
+     {
+       macinfo_entry e;
+-- 
+2.41.0
+
+
+
+Outputs the DEBUG_S_LINES block in the CodeView .debug$S section, which
+maps between line numbers and addresses.
+
+You'll need a fairly recent version of GAS for the .secidx directive to
+be recognized.
+---
+ gcc/dwarf2codeview.cc | 303 ++++++++++++++++++++++++++++++++++++++++++
+ gcc/dwarf2codeview.h  |   3 +
+ gcc/dwarf2out.cc      |  15 +++
+ gcc/opts.cc           |   2 +-
+ 4 files changed, 322 insertions(+), 1 deletion(-)
+
+diff --git a/gcc/dwarf2codeview.cc b/gcc/dwarf2codeview.cc
+index da8315310b5..9c69ebf8998 100644
+--- a/gcc/dwarf2codeview.cc
++++ b/gcc/dwarf2codeview.cc
+@@ -39,11 +39,15 @@ along with GCC; see the file COPYING3.  If not see
+ 
+ #define CV_SIGNATURE_C13	4
+ 
++#define DEBUG_S_LINES		0xf2
+ #define DEBUG_S_STRINGTABLE     0xf3
+ #define DEBUG_S_FILECHKSMS      0xf4
+ 
+ #define CHKSUM_TYPE_MD5		1
+ 
++#define LINE_LABEL	"Lcvline"
++#define END_FUNC_LABEL	"Lcvendfunc"
++
+ #define HASH_SIZE 16
+ 
+ struct codeview_string
+@@ -91,11 +95,128 @@ struct codeview_source_file
+   uint8_t hash[HASH_SIZE];
+ };
+ 
++struct codeview_line
++{
++  codeview_line *next;
++  unsigned int line_no;
++  unsigned int label_num;
++};
++
++struct codeview_line_block
++{
++  codeview_line_block *next;
++  uint32_t file_id;
++  unsigned int num_lines;
++  codeview_line *lines, *last_line;
++};
++
++struct codeview_function
++{
++  codeview_function *next;
++  function *func;
++  unsigned int end_label;
++  codeview_line_block *blocks, *last_block;
++};
++
++static unsigned int line_label_num;
++static unsigned int func_label_num;
+ static codeview_source_file *files, *last_file;
+ static unsigned int num_files;
+ static uint32_t string_offset = 1;
+ static hash_table<string_hasher> *strings_htab;
+ static codeview_string *strings, *last_string;
++static codeview_function *funcs, *last_func;
++static const char* last_filename;
++static uint32_t last_file_id;
++
++/* Record new line number against the current function.  */
++
++void
++codeview_source_line (unsigned int line_no, const char *filename)
++{
++  codeview_line *l;
++  uint32_t file_id = last_file_id;
++  unsigned int label_num = ++line_label_num;
++
++  targetm.asm_out.internal_label (asm_out_file, LINE_LABEL, label_num);
++
++  if (!last_func || last_func->func != cfun)
++    {
++      codeview_function *f = (codeview_function *)
++				xmalloc (sizeof (codeview_function));
++
++      f->next = NULL;
++      f->func = cfun;
++      f->end_label = 0;
++      f->blocks = f->last_block = NULL;
++
++      if (!funcs)
++	funcs = f;
++      else
++	last_func->next = f;
++
++      last_func = f;
++    }
++
++  if (filename != last_filename)
++    {
++      codeview_source_file *sf = files;
++
++      while (sf)
++	{
++	  if (!strcmp (sf->filename, filename))
++	    {
++	      /* 0x18 is the size of the checksum entry for each file.
++		 0x6 bytes for the header, plus 0x10 bytes for the hash,
++		 then padded to a multiple of 4.  */
++
++	      file_id = sf->file_num * 0x18;
++	      last_filename = filename;
++	      last_file_id = file_id;
++	      break;
++	    }
++
++	  sf = sf->next;
++	}
++    }
++
++  if (!last_func->last_block || last_func->last_block->file_id != file_id)
++    {
++      codeview_line_block *b;
++
++      b = (codeview_line_block *) xmalloc (sizeof (codeview_line_block));
++
++      b->next = NULL;
++      b->file_id = file_id;
++      b->num_lines = 0;
++      b->lines = b->last_line = NULL;
++
++      if (!last_func->blocks)
++	last_func->blocks = b;
++      else
++	last_func->last_block->next = b;
++
++      last_func->last_block = b;
++    }
++
++  if (last_func->last_block->last_line
++    && last_func->last_block->last_line->line_no == line_no)
++    return;
++
++  l = (codeview_line *) xmalloc (sizeof (codeview_line));
++
++  l->next = NULL;
++  l->line_no = line_no;
++  l->label_num = label_num;
++
++  if (!last_func->last_block->lines)
++    last_func->last_block->lines = l;
++  else
++    last_func->last_block->last_line->next = l;
++
++  last_func->last_block->last_line = l;
++  last_func->last_block->num_lines++;
++}
+ 
+ /* Adds string to the string table, returning its offset.  If already present,
+    this returns the offset of the existing string.  */
+@@ -290,6 +411,187 @@ write_source_files (void)
+   asm_fprintf (asm_out_file, "%LLcv_filechksms_end:\n");
+ }
+ 
++/* Write out the line number information for each function into the
++   .debug$S section.  */
++
++static void
++write_line_numbers (void)
++{
++  unsigned int func_num = 0;
++
++  while (funcs)
++    {
++      codeview_function *next = funcs->next;
++      unsigned int first_label_num;
++
++      fputs (integer_asm_op (4, false), asm_out_file);
++      fprint_whex (asm_out_file, DEBUG_S_LINES);
++      putc ('\n', asm_out_file);
++
++      fputs (integer_asm_op (4, false), asm_out_file);
++      asm_fprintf (asm_out_file, "%LLcv_lines%u_end - %LLcv_lines%u_start\n",
++		   func_num, func_num);
++
++      asm_fprintf (asm_out_file, "%LLcv_lines%u_start:\n", func_num);
++
++      /* Output the header (struct cv_lines_header in binutils or
++	 CV_DebugSLinesHeader_t in Microsoft's cvinfo.h):
++
++	struct cv_lines_header
++	{
++	  uint32_t offset;
++	  uint16_t section;
++	  uint16_t flags;
++	  uint32_t length;
++	};
++      */
++
++      asm_fprintf (asm_out_file, "\t.secrel32\t%L" LINE_LABEL "%u\n",
++		   funcs->blocks->lines->label_num);
++      asm_fprintf (asm_out_file, "\t.secidx\t%L" LINE_LABEL "%u\n",
++		   funcs->blocks->lines->label_num);
++
++      /* flags */
++      fputs (integer_asm_op (2, false), asm_out_file);
++      fprint_whex (asm_out_file, 0);
++      putc ('\n', asm_out_file);
++
++      first_label_num = funcs->blocks->lines->label_num;
++
++      /* length */
++      fputs (integer_asm_op (4, false), asm_out_file);
++      asm_fprintf (asm_out_file,
++		   "%L" END_FUNC_LABEL "%u - %L" LINE_LABEL "%u\n",
++		   funcs->end_label, first_label_num);
++
++      while (funcs->blocks)
++	{
++	  codeview_line_block *next = funcs->blocks->next;
++
++	  /* Next comes the blocks, each block being a part of a function
++	     within the same source file (struct cv_lines_block in binutils or
++	     CV_DebugSLinesFileBlockHeader_t in Microsoft's cvinfo.h):
++
++	    struct cv_lines_block
++	    {
++	      uint32_t file_id;
++	      uint32_t num_lines;
++	      uint32_t length;
++	    };
++	  */
++
++	  /* file ID */
++	  fputs (integer_asm_op (4, false), asm_out_file);
++	  fprint_whex (asm_out_file, funcs->blocks->file_id);
++	  putc ('\n', asm_out_file);
++
++	  /* number of lines */
++	  fputs (integer_asm_op (4, false), asm_out_file);
++	  fprint_whex (asm_out_file, funcs->blocks->num_lines);
++	  putc ('\n', asm_out_file);
++
++	  /* length of code block: (num_lines * sizeof (struct cv_line)) +
++	     sizeof (struct cv_lines_block) */
++	  fputs (integer_asm_op (4, false), asm_out_file);
++	  fprint_whex (asm_out_file, (funcs->blocks->num_lines * 0x8) + 0xc);
++	  putc ('\n', asm_out_file);
++
++	  while (funcs->blocks->lines)
++	    {
++	      codeview_line *next = funcs->blocks->lines->next;
++
++	      /* Finally comes the line number information (struct cv_line in
++		 binutils or CV_Line_t in Microsoft's cvinfo.h):
++
++		struct cv_line
++		{
++		  uint32_t offset;
++		  uint32_t line_no;
++		};
++
++		Strictly speaking line_no is a bitfield: the bottom 24 bits
++		are the line number, and the top bit means "is a statement".
++	      */
++
++	      fputs (integer_asm_op (4, false), asm_out_file);
++	      asm_fprintf (asm_out_file,
++			   "%L" LINE_LABEL "%u - %L" LINE_LABEL "%u\n",
++			   funcs->blocks->lines->label_num, first_label_num);
++
++	      fputs (integer_asm_op (4, false), asm_out_file);
++	      fprint_whex (asm_out_file,
++			   0x80000000
++			   | (funcs->blocks->lines->line_no & 0xffffff));
++	      putc ('\n', asm_out_file);
++
++	      free (funcs->blocks->lines);
++
++	      funcs->blocks->lines = next;
++	    }
++
++	  free (funcs->blocks);
++
++	  funcs->blocks = next;
++	}
++
++      free (funcs);
++
++      asm_fprintf (asm_out_file, "%LLcv_lines%u_end:\n", func_num);
++      func_num++;
++
++      funcs = next;
++    }
++}
++
++/* Treat cold sections as separate functions, for the purposes of line
++   numbers.  */
++
++void
++codeview_switch_text_section (void)
++{
++  codeview_function *f;
++
++  if (last_func && last_func->end_label == 0)
++    {
++      unsigned int label_num = ++func_label_num;
++
++      targetm.asm_out.internal_label (asm_out_file, END_FUNC_LABEL,
++				      label_num);
++
++      last_func->end_label = label_num;
++    }
++
++  f = (codeview_function *) xmalloc (sizeof (codeview_function));
++
++  f->next = NULL;
++  f->func = cfun;
++  f->end_label = 0;
++  f->blocks = f->last_block = NULL;
++
++  if (!funcs)
++    funcs = f;
++  else
++    last_func->next = f;
++
++  last_func = f;
++}
++
++/* Mark the end of the current function.  */
++
++void
++codeview_end_epilogue (void)
++{
++  if (last_func && last_func->end_label == 0)
++    {
++      unsigned int label_num = ++func_label_num;
++
++      targetm.asm_out.internal_label (asm_out_file, END_FUNC_LABEL,
++				      label_num);
++
++      last_func->end_label = label_num;
++    }
++}
++
+ /* Finish CodeView debug info emission.  */
+ 
+ void
+@@ -303,6 +605,7 @@ codeview_debug_finish (void)
+ 
+   write_strings_table ();
+   write_source_files ();
++  write_line_numbers ();
+ }
+ 
+ #endif
+diff --git a/gcc/dwarf2codeview.h b/gcc/dwarf2codeview.h
+index e2d732bb9b6..b6421b62d2e 100644
+--- a/gcc/dwarf2codeview.h
++++ b/gcc/dwarf2codeview.h
+@@ -26,6 +26,9 @@ along with GCC; see the file COPYING3.  If not see
+ /* Debug Format Interface.  Used in dwarf2out.cc.  */
+ 
+ extern void codeview_debug_finish (void);
++extern void codeview_source_line (unsigned int, const char *);
+ extern void codeview_start_source_file (const char *);
++extern void codeview_switch_text_section ();
++extern void codeview_end_epilogue (void);
+ 
+ #endif /* GCC_DWARF2CODEVIEW_H */
+diff --git a/gcc/dwarf2out.cc b/gcc/dwarf2out.cc
+index dfff6e88804..04ccb702180 100644
+--- a/gcc/dwarf2out.cc
++++ b/gcc/dwarf2out.cc
+@@ -1253,6 +1253,11 @@ dwarf2out_end_epilogue (unsigned int line ATTRIBUTE_UNUSED,
+   if (dwarf2out_do_cfi_asm ())
+     fprintf (asm_out_file, "\t.cfi_endproc\n");
+ 
++#ifdef CODEVIEW_DEBUGGING_INFO
++  if (codeview_debuginfo_p ())
++    codeview_end_epilogue ();
++#endif
++
+   /* Output a label to mark the endpoint of the code generated for this
+      function.  */
+   ASM_GENERATE_INTERNAL_LABEL (label, FUNC_END_LABEL,
+@@ -1306,6 +1311,11 @@ dwarf2out_switch_text_section (void)
+     }
+   have_multiple_function_sections = true;
+ 
++#ifdef CODEVIEW_DEBUGGING_INFO
++  if (codeview_debuginfo_p ())
++    codeview_switch_text_section ();
++#endif
++
+   if (dwarf2out_do_cfi_asm ())
+     fprintf (asm_out_file, "\t.cfi_endproc\n");
+ 
+@@ -28605,6 +28615,11 @@ dwarf2out_source_line (unsigned int line, unsigned int column,
+   dw_line_info_table *table;
+   static var_loc_view lvugid;
+ 
++#ifdef CODEVIEW_DEBUGGING_INFO
++  if (codeview_debuginfo_p ())
++    codeview_source_line (line, filename);
++#endif
++
+   /* 'line_info_table' information gathering is not needed when the debug
+      info level is set to the lowest value.  Also, the current DWARF-based
+      debug formats do not use this info.  */
+diff --git a/gcc/opts.cc b/gcc/opts.cc
+index f02101ceea3..6e91b1e0ff9 100644
+--- a/gcc/opts.cc
++++ b/gcc/opts.cc
+@@ -1364,7 +1364,7 @@ finish_options (struct gcc_options *opts, struct gcc_options *opts_set,
+     opts->x_debug_nonbind_markers_p
+       = (opts->x_optimize
+ 	 && opts->x_debug_info_level >= DINFO_LEVEL_NORMAL
+-	 && dwarf_debuginfo_p (opts)
++	 && (dwarf_debuginfo_p (opts) || codeview_debuginfo_p ())
+ 	 && !(opts->x_flag_selective_scheduling
+ 	      || opts->x_flag_selective_scheduling2));
+ 
+-- 
+2.41.0
+
+
+
+Outputs the S_COMPILE3 symbol in the CodeView .debug$S debug section.
+The DEBUG_S_SYMBOLS block added here makes up pretty much everything
+that isn't data structures or line numbers; we add the S_COMPILE3 symbol
+here to start it off.
+
+This is a descriptive bit, the most interesting part of which is the
+version of the compiler used.
+---
+ gcc/dwarf2codeview.cc | 126 ++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 126 insertions(+)
+
+diff --git a/gcc/dwarf2codeview.cc b/gcc/dwarf2codeview.cc
+index 9c69ebf8998..db776d79be4 100644
+--- a/gcc/dwarf2codeview.cc
++++ b/gcc/dwarf2codeview.cc
+@@ -39,14 +39,25 @@ along with GCC; see the file COPYING3.  If not see
+ 
+ #define CV_SIGNATURE_C13	4
+ 
++#define DEBUG_S_SYMBOLS		0xf1
+ #define DEBUG_S_LINES		0xf2
+ #define DEBUG_S_STRINGTABLE     0xf3
+ #define DEBUG_S_FILECHKSMS      0xf4
+ 
+ #define CHKSUM_TYPE_MD5		1
+ 
++#define S_COMPILE3		0x113c
++
++#define CV_CFL_80386		0x03
++#define CV_CFL_X64		0xD0
++
++#define CV_CFL_C		0x00
++#define CV_CFL_CXX		0x01
++
+ #define LINE_LABEL	"Lcvline"
+ #define END_FUNC_LABEL	"Lcvendfunc"
++#define SYMBOL_START_LABEL	"Lcvsymstart"
++#define SYMBOL_END_LABEL	"Lcvsymend"
+ 
+ #define HASH_SIZE 16
+ 
+@@ -120,6 +131,7 @@ struct codeview_function
+ 
+ static unsigned int line_label_num;
+ static unsigned int func_label_num;
++static unsigned int sym_label_num;
+ static codeview_source_file *files, *last_file;
+ static unsigned int num_files;
+ static uint32_t string_offset = 1;
+@@ -592,6 +604,119 @@ codeview_end_epilogue (void)
+     }
+ }
+ 
++/* Return the CodeView constant for the selected architecture.  */
++
++static uint16_t
++target_processor (void)
++{
++  if (TARGET_64BIT)
++    return CV_CFL_X64;
++  else
++    return CV_CFL_80386;
++}
++
++/* Return the CodeView constant for the language being used.  */
++
++static uint32_t
++language_constant (void)
++{
++  const char *language_string = lang_hooks.name;
++
++  if (startswith (language_string, "GNU C++"))
++    return CV_CFL_CXX;
++  else if (startswith (language_string, "GNU C"))
++    return CV_CFL_C;
++
++  return 0;
++}
++
++/* Write a S_COMPILE3 symbol, which records the details of the compiler
++   being used.  */
++
++static void
++write_compile3_symbol (void)
++{
++  unsigned int label_num = ++sym_label_num;
++
++  static const char compiler_name[] = "GCC ";
++
++  /* This is struct COMPILESYM3 in binutils and Microsoft's cvinfo.h:
++
++     struct COMPILESYM3
++     {
++       uint16_t length;
++       uint16_t type;
++       uint32_t flags;
++       uint16_t machine;
++       uint16_t frontend_major;
++       uint16_t frontend_minor;
++       uint16_t frontend_build;
++       uint16_t frontend_qfe;
++       uint16_t backend_major;
++       uint16_t backend_minor;
++       uint16_t backend_build;
++       uint16_t backend_qfe;
++     } ATTRIBUTE_PACKED;
++  */
++
++  fputs (integer_asm_op (2, false), asm_out_file);
++  asm_fprintf (asm_out_file,
++	       "%L" SYMBOL_END_LABEL "%u - %L" SYMBOL_START_LABEL "%u\n",
++	       label_num, label_num);
++
++  targetm.asm_out.internal_label (asm_out_file, SYMBOL_START_LABEL, label_num);
++
++  fputs (integer_asm_op (2, false), asm_out_file);
++  fprint_whex (asm_out_file, S_COMPILE3);
++  putc ('\n', asm_out_file);
++
++  /* Microsoft has the flags as a bitfield, with the bottom 8 bits being the
++     language constant, and the reset being MSVC-specific stuff.  */
++  fputs (integer_asm_op (4, false), asm_out_file);
++  fprint_whex (asm_out_file, language_constant ());
++  putc ('\n', asm_out_file);
++
++  fputs (integer_asm_op (2, false), asm_out_file);
++  fprint_whex (asm_out_file, target_processor ());
++  putc ('\n', asm_out_file);
++
++  /* Write 8 uint16_ts for the frontend and backend versions.  As with GAS, we
++     zero these, as it's easier to record the version in the compiler
++     string.  */
++  for (unsigned int i = 0; i < 8; i++)
++    {
++      fputs (integer_asm_op (2, false), asm_out_file);
++      fprint_whex (asm_out_file, 0);
++      putc ('\n', asm_out_file);
++    }
++
++  ASM_OUTPUT_ASCII (asm_out_file, compiler_name, sizeof (compiler_name) - 1);
++  ASM_OUTPUT_ASCII (asm_out_file, version_string, strlen (version_string) + 1);
++
++  ASM_OUTPUT_ALIGN (asm_out_file, 2);
++
++  targetm.asm_out.internal_label (asm_out_file, SYMBOL_END_LABEL, label_num);
++}
++
++/* Write the CodeView symbols into the .debug$S section.  */
++
++static void
++write_codeview_symbols (void)
++{
++  fputs (integer_asm_op (4, false), asm_out_file);
++  fprint_whex (asm_out_file, DEBUG_S_SYMBOLS);
++  putc ('\n', asm_out_file);
++
++  fputs (integer_asm_op (4, false), asm_out_file);
++  asm_fprintf (asm_out_file, "%LLcv_syms_end - %LLcv_syms_start\n");
++
++  asm_fprintf (asm_out_file, "%LLcv_syms_start:\n");
++
++  write_compile3_symbol ();
++
++  asm_fprintf (asm_out_file, "%LLcv_syms_end:\n");
++}
++
+ /* Finish CodeView debug info emission.  */
+ 
+ void
+@@ -606,6 +731,7 @@ codeview_debug_finish (void)
+   write_strings_table ();
+   write_source_files ();
+   write_line_numbers ();
++  write_codeview_symbols ();
+ }
+ 
+ #endif
+-- 
+2.41.0
+
+
+B
+B
+B
+B
+B
+
