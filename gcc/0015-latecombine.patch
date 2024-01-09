@@ -1033,3 +1033,15 @@ index 29267589eeb..4bedaa40aa2 100644
  extern rtl_opt_pass *make_pass_gcse2 (gcc::context *ctxt);
  extern rtl_opt_pass *make_pass_split_after_reload (gcc::context *ctxt);
  extern rtl_opt_pass *make_pass_thread_prologue_and_epilogue (gcc::context
+diff --git a/gcc/combine.cc b/gcc/combine.cc
+index 812553c091e..85ea2c231cb 100644
+--- a/gcc/combine.cc
++++ b/gcc/combine.cc
+@@ -15066,6 +15066,7 @@ make_more_copies (void)
+ 	    continue;
+ 
+ 	  rtx new_reg = gen_reg_rtx (GET_MODE (dest));
++	  REG_POINTER (new_reg) = REG_POINTER (dest);
+ 	  rtx_insn *new_insn = gen_move_insn (new_reg, src);
+ 	  SET_SRC (set) = new_reg;
+ 	  emit_insn_before (new_insn, insn);
