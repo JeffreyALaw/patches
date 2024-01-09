@@ -1,0 +1,1047 @@
+diff --git a/gcc/Makefile.in b/gcc/Makefile.in
+index deb12e17d25..417390b3b79 100644
+--- a/gcc/Makefile.in
++++ b/gcc/Makefile.in
+@@ -1571,6 +1571,7 @@ OBJS = \
+ 	ira-lives.o \
+ 	jump.o \
+ 	langhooks.o \
++	late-combine.o \
+ 	lcm.o \
+ 	lists.o \
+ 	loop-doloop.o \
+diff --git a/gcc/common.opt b/gcc/common.opt
+index 5f0a101bccb..56036f2295f 100644
+--- a/gcc/common.opt
++++ b/gcc/common.opt
+@@ -1784,6 +1784,11 @@ Common Var(flag_large_source_files) Init(0)
+ Improve GCC's ability to track column numbers in large source files,
+ at the expense of slower compilation.
+ 
++flate-combine-instructions
++Common Var(flag_late_combine_instructions) Optimization Init(0)
++Run two instruction combination passes late in the pass pipeline;
++one before register allocation and one after.
++
+ floop-parallelize-all
+ Common Var(flag_loop_parallelize_all) Optimization
+ Mark all loops as parallel.
+diff --git a/gcc/common/config/aarch64/aarch64-common.cc b/gcc/common/config/aarch64/aarch64-common.cc
+index 951d041d310..75c72b1680d 100644
+--- a/gcc/common/config/aarch64/aarch64-common.cc
++++ b/gcc/common/config/aarch64/aarch64-common.cc
+@@ -56,6 +56,7 @@ static const struct default_options aarch_option_optimization_table[] =
+     /* Enable redundant extension instructions removal at -O2 and higher.  */
+     { OPT_LEVELS_2_PLUS, OPT_free, NULL, 1 },
+     { OPT_LEVELS_2_PLUS, OPT_mearly_ra_, NULL, AARCH64_EARLY_RA_ALL },
++    { OPT_LEVELS_2_PLUS, OPT_flate_combine_instructions, NULL, 1 },
+ #if (TARGET_DEFAULT_ASYNC_UNWIND_TABLES == 1)
+     { OPT_LEVELS_ALL, OPT_fasynchronous_unwind_tables, NULL, 1 },
+     { OPT_LEVELS_ALL, OPT_funwind_tables, NULL, 1},
+diff --git a/gcc/config/mn10300/mn10300.md b/gcc/config/mn10300/mn10300.md
+index 939f20d5a58..80b07cc4b36 100644
+--- a/gcc/config/mn10300/mn10300.md
++++ b/gcc/config/mn10300/mn10300.md
+@@ -957,7 +957,9 @@ (define_insn_and_split "*subdi3_degenerate"
+   if (scratch)
+     emit_move_insn (operands[0], scratch);
+   DONE;
+-})
++}
++  [(set_attr "isa" "*,am33")])
++
+ 
+ (define_insn_and_split "negsi2"
+   [(set (match_operand:SI         0 "register_operand"  "=D,&r")
+diff --git a/gcc/doc/invoke.texi b/gcc/doc/invoke.texi
+index 68d1f364ac0..dbb798cc610 100644
+--- a/gcc/doc/invoke.texi
++++ b/gcc/doc/invoke.texi
+@@ -571,7 +571,7 @@ Objective-C and Objective-C++ Dialects}.
+ -fipa-bit-cp  -fipa-vrp  -fipa-pta  -fipa-profile  -fipa-pure-const
+ -fipa-reference  -fipa-reference-addressable
+ -fipa-stack-alignment  -fipa-icf  -fira-algorithm=@var{algorithm}
+--flive-patching=@var{level}
++-flate-combine-instructions  -flive-patching=@var{level}
+ -fira-region=@var{region}  -fira-hoist-pressure
+ -fira-loop-pressure  -fno-ira-share-save-slots
+ -fno-ira-share-spill-slots
+@@ -13442,6 +13442,15 @@ equivalences that are found only by GCC and equivalences found only by Gold.
+ 
+ This flag is enabled by default at @option{-O2} and @option{-Os}.
+ 
++@opindex flate-combine-instructions
++@item -flate-combine-instructions
++Enable two instruction combination passes that run relatively late in the
++compilation process.  One of the passes runs before register allocation and
++the other after register allocation.  The main aim of the passes is to
++substitute definitions into all uses.
++
++Some targets enable this flag by default at @option{-O2} and @option{-Os}.
++
+ @opindex flive-patching
+ @item -flive-patching=@var{level}
+ Control GCC's optimizations to produce output suitable for live-patching.
+diff --git a/gcc/late-combine.cc b/gcc/late-combine.cc
+new file mode 100644
+index 00000000000..eaddf50057f
+--- /dev/null
++++ b/gcc/late-combine.cc
+@@ -0,0 +1,732 @@
++// Late-stage instruction combination pass.
++// Copyright (C) 2023 Free Software Foundation, Inc.
++//
++// This file is part of GCC.
++//
++// GCC is free software; you can redistribute it and/or modify it under
++// the terms of the GNU General Public License as published by the Free
++// Software Foundation; either version 3, or (at your option) any later
++// version.
++//
++// GCC is distributed in the hope that it will be useful, but WITHOUT ANY
++// WARRANTY; without even the implied warranty of MERCHANTABILITY or
++// FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++// for more details.
++//
++// You should have received a copy of the GNU General Public License
++// along with GCC; see the file COPYING3.  If not see
++// <http://www.gnu.org/licenses/>.
++
++// The current purpose of this pass is to substitute definitions into
++// all uses, so that the definition can be removed.  However, it could
++// be extended to handle other combination-related optimizations in future.
++//
++// The pass can run before or after register allocation.  When running
++// before register allocation, it tries to avoid cases that are likely
++// to increase register pressure.  For the same reason, it avoids moving
++// instructions around, even if doing so would allow an optimization to
++// succeed.  These limitations are removed when running after register
++// allocation.
++
++#define INCLUDE_ALGORITHM
++#define INCLUDE_FUNCTIONAL
++#include "config.h"
++#include "system.h"
++#include "coretypes.h"
++#include "backend.h"
++#include "rtl.h"
++#include "df.h"
++#include "rtl-ssa.h"
++#include "print-rtl.h"
++#include "tree-pass.h"
++#include "cfgcleanup.h"
++#include "target.h"
++
++using namespace rtl_ssa;
++
++namespace {
++const pass_data pass_data_late_combine =
++{
++  RTL_PASS, // type
++  "late_combine", // name
++  OPTGROUP_NONE, // optinfo_flags
++  TV_NONE, // tv_id
++  0, // properties_required
++  0, // properties_provided
++  0, // properties_destroyed
++  0, // todo_flags_start
++  TODO_df_finish, // todo_flags_finish
++};
++
++// Represents an attempt to substitute a single-set definition into all
++// uses of the definition.
++class insn_combination
++{
++public:
++  insn_combination (set_info *, rtx, rtx);
++  bool run ();
++  const vec<insn_change *> &use_changes () const { return m_use_changes; }
++
++private:
++  use_array get_new_uses (use_info *);
++  bool substitute_nondebug_use (use_info *);
++  bool substitute_nondebug_uses (set_info *);
++  bool move_and_recog (insn_change &);
++  bool try_to_preserve_debug_info (insn_change &, use_info *);
++  void substitute_debug_use (use_info *);
++  bool substitute_note (insn_info *, rtx, bool);
++  void substitute_notes (insn_info *, bool);
++  void substitute_note_uses (use_info *);
++  void substitute_optional_uses (set_info *);
++
++  // Represents the state of the function's RTL at the start of this
++  // combination attempt.
++  insn_change_watermark m_rtl_watermark;
++
++  // Represents the rtl-ssa state at the start of this combination attempt.
++  obstack_watermark m_attempt;
++
++  // The instruction that contains the definition, and that we're trying
++  // to delete.
++  insn_info *m_def_insn;
++
++  // The definition itself.
++  set_info *m_def;
++
++  // The destination and source of the single set that defines m_def.
++  // The destination is known to be a plain REG.
++  rtx m_dest;
++  rtx m_src;
++
++  // Contains all in-progress changes to uses of m_def.
++  auto_vec<insn_change *> m_use_changes;
++
++  // Contains the full list of changes that we want to make, in reverse
++  // postorder.
++  auto_vec<insn_change *> m_nondebug_changes;
++};
++
++// Class that represents one run of the pass.
++class late_combine
++{
++public:
++  unsigned int execute (function *);
++
++private:
++  rtx optimizable_set (insn_info *);
++  bool check_register_pressure (insn_info *, rtx);
++  bool check_uses (set_info *, rtx);
++  bool combine_into_uses (insn_info *, insn_info *);
++
++  auto_vec<insn_info *> m_worklist;
++};
++
++insn_combination::insn_combination (set_info *def, rtx dest, rtx src)
++  : m_rtl_watermark (),
++    m_attempt (crtl->ssa->new_change_attempt ()),
++    m_def_insn (def->insn ()),
++    m_def (def),
++    m_dest (dest),
++    m_src (src),
++    m_use_changes (),
++    m_nondebug_changes ()
++{
++}
++
++// USE is a direct or indirect use of m_def.  Return the list of uses
++// that would be needed after substituting m_def into the instruction.
++// The returned list is marked as invalid if USE's insn and m_def_insn
++// use different definitions for the same resource (register or memory).
++use_array
++insn_combination::get_new_uses (use_info *use)
++{
++  auto *def = use->def ();
++  auto *use_insn = use->insn ();
++
++  use_array new_uses = use_insn->uses ();
++  new_uses = remove_uses_of_def (m_attempt, new_uses, def);
++  new_uses = merge_access_arrays (m_attempt, m_def_insn->uses (), new_uses);
++  if (new_uses.is_valid () && use->ebb () != m_def->ebb ())
++    new_uses = crtl->ssa->make_uses_available (m_attempt, new_uses, use->bb (),
++					       use_insn->is_debug_insn ());
++  return new_uses;
++}
++
++// Start the process of trying to replace USE by substitution, given that
++// USE occurs in a non-debug instruction.  Check that the substitution can
++// be represented in RTL and that each use of a resource (register or memory)
++// has a consistent definition.  If so, start an insn_change record for the
++// substitution and return true.
++bool
++insn_combination::substitute_nondebug_use (use_info *use)
++{
++  insn_info *use_insn = use->insn ();
++  rtx_insn *use_rtl = use_insn->rtl ();
++
++  if (dump_file && (dump_flags & TDF_DETAILS))
++    dump_insn_slim (dump_file, use->insn ()->rtl ());
++
++  // Chceck that we can change the instruction pattern.  Leave recognition
++  // of the result till later.
++  insn_propagation prop (use_rtl, m_dest, m_src);
++  if (!prop.apply_to_pattern (&PATTERN (use_rtl))
++      || prop.num_replacements == 0)
++    {
++      if (dump_file && (dump_flags & TDF_DETAILS))
++	fprintf (dump_file, "-- RTL substitution failed\n");
++      return false;
++    }
++
++  use_array new_uses = get_new_uses (use);
++  if (!new_uses.is_valid ())
++    {
++      if (dump_file && (dump_flags & TDF_DETAILS))
++	fprintf (dump_file, "-- could not prove that all sources"
++		 " are available\n");
++      return false;
++    }
++
++  auto *where = XOBNEW (m_attempt, insn_change);
++  auto *use_change = new (where) insn_change (use_insn);
++  m_use_changes.safe_push (use_change);
++  use_change->new_uses = new_uses;
++
++  return true;
++}
++
++// Apply substitute_nondebug_use to all direct and indirect uses of DEF.
++// There will be at most one level of indirection.
++bool
++insn_combination::substitute_nondebug_uses (set_info *def)
++{
++  for (use_info *use : def->nondebug_insn_uses ())
++    if (!use->is_live_out_use ()
++	&& !use->only_occurs_in_notes ()
++	&& !substitute_nondebug_use (use))
++      return false;
++
++  for (use_info *use : def->phi_uses ())
++    if (!substitute_nondebug_uses (use->phi ()))
++      return false;
++
++  return true;
++}
++
++// Complete the verification of USE_CHANGE, given that m_nondebug_insns
++// now contains an insn_change record for all proposed non-debug changes.
++// Check that the new instruction is a recognized pattern.  Also check that
++// the instruction can be placed somewhere that makes all definitions and
++// uses valid, and that permits any new hard-register clobbers added
++// during the recognition process.  Return true on success.
++bool
++insn_combination::move_and_recog (insn_change &use_change)
++{
++  insn_info *use_insn = use_change.insn ();
++
++  if (reload_completed && can_move_insn_p (use_insn))
++    use_change.move_range = { use_insn->bb ()->head_insn (),
++			      use_insn->ebb ()->last_bb ()->end_insn () };
++  if (!restrict_movement_ignoring (use_change,
++				   insn_is_changing (m_nondebug_changes)))
++    {
++      if (dump_file && (dump_flags & TDF_DETAILS))
++	fprintf (dump_file, "-- cannot satisfy all definitions and uses"
++		 " in insn %d\n", INSN_UID (use_insn->rtl ()));
++      return false;
++    }
++
++  if (!recog_ignoring (m_attempt, use_change,
++		       insn_is_changing (m_nondebug_changes)))
++    return false;
++
++  return true;
++}
++
++// USE_CHANGE.insn () is a debug instruction that uses m_def.  Try to
++// substitute the definition into the instruction and try to describe
++// the result in USE_CHANGE.  Return true on success.  Failure means that
++// the instruction must be reset instead.
++bool
++insn_combination::try_to_preserve_debug_info (insn_change &use_change,
++					      use_info *use)
++{
++  insn_info *use_insn = use_change.insn ();
++  rtx_insn *use_rtl = use_insn->rtl ();
++
++  use_change.new_uses = get_new_uses (use);
++  if (!use_change.new_uses.is_valid ()
++      || !restrict_movement (use_change))
++    return false;
++
++  insn_propagation prop (use_rtl, m_dest, m_src);
++  return prop.apply_to_pattern (&INSN_VAR_LOCATION_LOC (use_rtl));
++}
++
++// USE_INSN is a debug instruction that uses m_def.  Update it to reflect
++// the fact that m_def is going to disappear.  Try to preserve the source
++// value if possible, but reset the instruction if not.
++void
++insn_combination::substitute_debug_use (use_info *use)
++{
++  auto *use_insn = use->insn ();
++  rtx_insn *use_rtl = use_insn->rtl ();
++
++  auto use_change = insn_change (use_insn);
++  if (!try_to_preserve_debug_info (use_change, use))
++    {
++      use_change.new_uses = {};
++      use_change.move_range = use_change.insn ();
++      INSN_VAR_LOCATION_LOC (use_rtl) = gen_rtx_UNKNOWN_VAR_LOC ();
++    }
++  insn_change *changes[] = { &use_change };
++  crtl->ssa->change_insns (changes);
++}
++
++// NOTE is a reg note of USE_INSN, which previously used m_def.  Update
++// the note to reflect the fact that m_def is going to disappear.  Return
++// true on success, or false if the note must be deleted.
++//
++// CAN_PROPAGATE is true if m_dest can be replaced with m_use.
++bool
++insn_combination::substitute_note (insn_info *use_insn, rtx note,
++				   bool can_propagate)
++{
++  if (REG_NOTE_KIND (note) == REG_EQUAL
++      || REG_NOTE_KIND (note) == REG_EQUIV)
++    {
++      insn_propagation prop (use_insn->rtl (), m_dest, m_src);
++      return (prop.apply_to_rvalue (&XEXP (note, 0))
++	      && (can_propagate || prop.num_replacements == 0));
++    }
++  return true;
++}
++
++// Update USE_INSN's notes after deciding to go ahead with the optimization.
++// CAN_PROPAGATE is true if m_dest can be replaced with m_use.
++void
++insn_combination::substitute_notes (insn_info *use_insn, bool can_propagate)
++{
++  rtx_insn *use_rtl = use_insn->rtl ();
++  rtx *ptr = &REG_NOTES (use_rtl);
++  while (rtx note = *ptr)
++    {
++      if (substitute_note (use_insn, note, can_propagate))
++	ptr = &XEXP (note, 1);
++      else
++	*ptr = XEXP (note, 1);
++    }
++}
++
++// We've decided to go ahead with the substitution.  Update all REG_NOTES
++// involving USE.
++void
++insn_combination::substitute_note_uses (use_info *use)
++{
++  insn_info *use_insn = use->insn ();
++
++  bool can_propagate = true;
++  if (use->only_occurs_in_notes ())
++    {
++      // The only uses are in notes.  Try to keep the note if we can,
++      // but removing it is better than aborting the optimization.
++      insn_change use_change (use_insn);
++      use_change.new_uses = get_new_uses (use);
++      if (!use_change.new_uses.is_valid ()
++	  || !restrict_movement (use_change))
++	{
++	  use_change.move_range = use_insn;
++	  use_change.new_uses = remove_uses_of_def (m_attempt,
++						    use_insn->uses (),
++						    use->def ());
++	  can_propagate = false;
++	}
++      if (dump_file && (dump_flags & TDF_DETAILS))
++	{
++	  fprintf (dump_file, "%s notes in:\n",
++		   can_propagate ? "updating" : "removing");
++	  dump_insn_slim (dump_file, use_insn->rtl ());
++	}
++      substitute_notes (use_insn, can_propagate);
++      insn_change *changes[] = { &use_change };
++      crtl->ssa->change_insns (changes);
++    }
++  else
++    substitute_notes (use_insn, can_propagate);
++}
++
++// We've decided to go ahead with the substitution and we've dealt with
++// all uses that occur in the patterns of non-debug insns.  Update all
++// other uses for the fact that m_def is about to disappear.
++void
++insn_combination::substitute_optional_uses (set_info *def)
++{
++  if (auto insn_uses = def->all_insn_uses ())
++    {
++      use_info *use = *insn_uses.begin ();
++      while (use)
++	{
++	  use_info *next_use = use->next_any_insn_use ();
++	  if (use->is_in_debug_insn ())
++	    substitute_debug_use (use);
++	  else if (!use->is_live_out_use ())
++	    substitute_note_uses (use);
++	  use = next_use;
++	}
++    }
++  for (use_info *use : def->phi_uses ())
++    substitute_optional_uses (use->phi ());
++}
++
++// Try to perform the substitution.  Return true on success.
++bool
++insn_combination::run ()
++{
++  if (dump_file && (dump_flags & TDF_DETAILS))
++    {
++      fprintf (dump_file, "\ntrying to combine definition of r%d in:\n",
++	       m_def->regno ());
++      dump_insn_slim (dump_file, m_def_insn->rtl ());
++      fprintf (dump_file, "into:\n");
++    }
++
++  if (!substitute_nondebug_uses (m_def))
++    return false;
++
++  auto def_change = insn_change::delete_insn (m_def_insn);
++
++  m_nondebug_changes.reserve (m_use_changes.length () + 1);
++  m_nondebug_changes.quick_push (&def_change);
++  m_nondebug_changes.splice (m_use_changes);
++
++  for (auto *use_change : m_use_changes)
++    if (!move_and_recog (*use_change))
++      return false;
++
++  if (!changes_are_worthwhile (m_nondebug_changes)
++      || !crtl->ssa->verify_insn_changes (m_nondebug_changes))
++    return false;
++
++  substitute_optional_uses (m_def);
++
++  confirm_change_group ();
++  crtl->ssa->change_insns (m_nondebug_changes);
++  return true;
++}
++
++// See whether INSN is a single_set that we can optimize.  Return the
++// set if so, otherwise return null.
++rtx
++late_combine::optimizable_set (insn_info *insn)
++{
++  if (!insn->can_be_optimized ()
++      || insn->is_asm ()
++      || insn->is_call ()
++      || insn->has_volatile_refs ()
++      || insn->has_pre_post_modify ()
++      || !can_move_insn_p (insn))
++    return NULL_RTX;
++
++  return single_set (insn->rtl ());
++}
++
++// Suppose that we can replace all uses of SET_DEST (SET) with SET_SRC (SET),
++// where SET occurs in INSN.  Return true if doing so is not likely to
++// increase register pressure.
++bool
++late_combine::check_register_pressure (insn_info *insn, rtx set)
++{
++  // Plain register-to-register moves do not establish a register class
++  // preference and have no well-defined effect on the register allocator.
++  // If changes in register class are needed, the register allocator is
++  // in the best position to place those changes.  If no change in
++  // register class is needed, then the optimization reduces register
++  // pressure if SET_SRC (set) was already live at uses, otherwise the
++  // optimization is pressure-neutral.
++  rtx src = SET_SRC (set);
++  if (REG_P (src))
++    return true;
++
++  // On the same basis, substituting a SET_SRC that contains a single
++  // pseudo register either reduces pressure or is pressure-neutral,
++  // subject to the constraints below.  We would need to do more
++  // analysis for SET_SRCs that use more than one pseudo register.
++  unsigned int nregs = 0;
++  for (auto *use : insn->uses ())
++    if (use->is_reg ()
++	&& !HARD_REGISTER_NUM_P (use->regno ())
++	&& !use->only_occurs_in_notes ())
++      if (++nregs > 1)
++	return false;
++
++  // If there are no pseudo registers in SET_SRC then the optimization
++  // should improve register pressure.
++  if (nregs == 0)
++    return true;
++
++  // We'd be substituting (set (reg R1) SRC) where SRC is known to
++  // contain a single pseudo register R2.  Assume for simplicity that
++  // each new use of R2 would need to be in the same class C as the
++  // current use of R2.  If, for a realistic allocation, C is a
++  // non-strict superset of the R1's register class, the effect on
++  // register pressure should be positive or neutral.  If instead
++  // R1 occupies a different register class from R2, or if R1 has
++  // more allocation freedom than R2, then there's a higher risk that
++  // the effect on register pressure could be negative.
++  //
++  // First use constrain_operands to get the most likely choice of
++  // alternative.  For simplicity, just handle the case where the
++  // output operand is operand 0.
++  extract_insn (insn->rtl ());
++  rtx dest = SET_DEST (set);
++  if (recog_data.n_operands == 0
++      || recog_data.operand[0] != dest)
++    return false;
++
++  if (!constrain_operands (0, get_enabled_alternatives (insn->rtl ())))
++    return false;
++
++  preprocess_constraints (insn->rtl ());
++  auto *alt = which_op_alt ();
++  auto dest_class = alt[0].cl;
++
++  // Check operands 1 and above.
++  auto check_src = [&](unsigned int i)
++    {
++      if (recog_data.is_operator[i])
++	return true;
++
++      rtx op = recog_data.operand[i];
++      if (CONSTANT_P (op))
++	return true;
++
++      if (SUBREG_P (op))
++	op = SUBREG_REG (op);
++      if (REG_P (op))
++	{
++	  if (HARD_REGISTER_P (op))
++	    {
++	      // We've already rejected uses of non-fixed hard registers.
++	      gcc_checking_assert (fixed_regs[REGNO (op)]);
++	      return true;
++	    }
++
++	  // Make sure that the source operand's class is at least as
++	  // permissive as the destination operand's class.
++	  auto src_class = alternative_class (alt, i);
++	  if (!reg_class_subset_p (dest_class, src_class))
++	    return false;
++
++	  // Make sure that the source operand occupies no more hard
++	  // registers than the destination operand.  This mostly matters
++	  // for subregs.
++	  if (targetm.class_max_nregs (dest_class, GET_MODE (dest))
++	      < targetm.class_max_nregs (src_class, GET_MODE (op)))
++	    return false;
++
++	  return true;
++	}
++      return false;
++    };
++  for (int i = 1; i < recog_data.n_operands; ++i)
++    if (!check_src (i))
++      return false;
++
++  return true;
++}
++
++// Check uses of DEF to see whether there is anything obvious that
++// prevents the substitution of SET into uses of DEF.
++bool
++late_combine::check_uses (set_info *def, rtx set)
++{
++  use_info *last_use = nullptr;
++  for (use_info *use : def->nondebug_insn_uses ())
++    {
++      insn_info *use_insn = use->insn ();
++
++      if (use->is_live_out_use ())
++	continue;
++      if (use->only_occurs_in_notes ())
++	continue;
++
++      // We cannot replace all uses if the value is live on exit.
++      if (use->is_artificial ())
++	return false;
++
++      // Avoid increasing the complexity of instructions that
++      // reference allocatable hard registers.
++      if (!REG_P (SET_SRC (set))
++	  && !reload_completed
++	  && (accesses_include_nonfixed_hard_registers (use_insn->uses ())
++	      || accesses_include_nonfixed_hard_registers (use_insn->defs ())))
++	return false;
++
++      // Don't substitute into a non-local goto, since it can then be
++      // treated as a jump to local label, e.g. in shorten_branches.
++      // ??? But this shouldn't be necessary.
++      if (use_insn->is_jump ()
++	  && find_reg_note (use_insn->rtl (), REG_NON_LOCAL_GOTO, NULL_RTX))
++	return false;
++
++      // Don't try to substitute into call arguments.
++      if (use_insn->is_call ())
++	{
++	  auto usage = CALL_INSN_FUNCTION_USAGE (use_insn->rtl ());
++	  for (rtx item = usage; item; item = XEXP (item, 1))
++	    {
++	      rtx x = XEXP (item, 0);
++	      if (GET_CODE (x) == USE
++		  && reg_overlap_mentioned_p (SET_DEST (set), XEXP (x, 0)))
++		return false;
++	    }
++	}
++
++      // We'll keep the uses in their original order, even if we move
++      // them relative to other instructions.  Make sure that non-final
++      // uses do not change any values that occur in the SET_SRC.
++      if (last_use && last_use->ebb () == use->ebb ())
++	{
++	  def_info *ultimate_def = look_through_degenerate_phi (def);
++	  if (insn_clobbers_resources (last_use->insn (),
++				       ultimate_def->insn ()->uses ()))
++	    return false;
++	}
++
++      last_use = use;
++    }
++
++  for (use_info *use : def->phi_uses ())
++    if (!use->phi ()->is_degenerate ()
++	|| !check_uses (use->phi (), set))
++      return false;
++
++  return true;
++}
++
++// Try to remove INSN by substituting a definition into all uses.
++// If the optimization moves any instructions before CURSOR, add those
++// instructions to the end of m_worklist.
++bool
++late_combine::combine_into_uses (insn_info *insn, insn_info *cursor)
++{
++  // For simplicity, don't try to handle sets of multiple hard registers.
++  // And for correctness, don't remove any assignments to the stack or
++  // frame pointers, since that would implicitly change the set of valid
++  // memory locations between this assignment and the next.
++  //
++  // Removing assignments to the hard frame pointer would invalidate
++  // backtraces.
++  set_info *def = single_set_info (insn);
++  if (!def
++      || !def->is_reg ()
++      || def->regno () == STACK_POINTER_REGNUM
++      || def->regno () == FRAME_POINTER_REGNUM
++      || def->regno () == HARD_FRAME_POINTER_REGNUM)
++    return false;
++
++  rtx set = optimizable_set (insn);
++  if (!set)
++    return false;
++
++  // For simplicity, don't try to handle subreg destinations.
++  rtx dest = SET_DEST (set);
++  if (!REG_P (dest) || def->regno () != REGNO (dest))
++    return false;
++
++  // Don't prolong the live ranges of allocatable hard registers, or put
++  // them into more complicated instructions.  Failing to prevent this
++  // could lead to spill failures, or at least to worst register allocation.
++  if (!reload_completed
++      && accesses_include_nonfixed_hard_registers (insn->uses ()))
++    return false;
++
++  if (!reload_completed && !check_register_pressure (insn, set))
++    return false;
++
++  if (!check_uses (def, set))
++    return false;
++
++  insn_combination combination (def, SET_DEST (set), SET_SRC (set));
++  if (!combination.run ())
++    return false;
++
++  for (auto *use_change : combination.use_changes ())
++    if (*use_change->insn () < *cursor)
++      m_worklist.safe_push (use_change->insn ());
++    else
++      break;
++  return true;
++}
++
++// Run the pass on function FN.
++unsigned int
++late_combine::execute (function *fn)
++{
++  // Initialization.
++  calculate_dominance_info (CDI_DOMINATORS);
++  df_analyze ();
++  crtl->ssa = new rtl_ssa::function_info (fn);
++  // Don't allow memory_operand to match volatile MEMs.
++  init_recog_no_volatile ();
++
++  insn_info *insn = *crtl->ssa->nondebug_insns ().begin ();
++  while (insn)
++    {
++      if (!insn->is_artificial ())
++	{
++	  insn_info *prev = insn->prev_nondebug_insn ();
++	  if (combine_into_uses (insn, prev))
++	    {
++	      // Any instructions that get added to the worklist were
++	      // previously after PREV.  Thus if we were able to move
++	      // an instruction X before PREV during one combination,
++	      // X cannot depend on any instructions that we move before
++	      // PREV during subsequent combinations.  This means that
++	      // the worklist should be free of backwards dependencies,
++	      // even if it isn't necessarily in RPO.
++	      for (unsigned int i = 0; i < m_worklist.length (); ++i)
++		combine_into_uses (m_worklist[i], prev);
++	      m_worklist.truncate (0);
++	      insn = prev;
++	    }
++	}
++      insn = insn->next_nondebug_insn ();
++    }
++
++  // Finalization.
++  if (crtl->ssa->perform_pending_updates ())
++    cleanup_cfg (0);
++  // Make recognizer allow volatile MEMs again.
++  init_recog ();
++  free_dominance_info (CDI_DOMINATORS);
++  return 0;
++}
++
++class pass_late_combine : public rtl_opt_pass
++{
++public:
++  pass_late_combine (gcc::context *ctxt)
++    : rtl_opt_pass (pass_data_late_combine, ctxt)
++  {}
++
++  // opt_pass methods:
++  opt_pass *clone () override { return new pass_late_combine (m_ctxt); }
++  bool gate (function *) override { return optimize > 0; }
++  unsigned int execute (function *) override;
++};
++
++unsigned int
++pass_late_combine::execute (function *fn)
++{
++  return late_combine ().execute (fn);
++}
++
++} // end namespace
++
++// Create a new CC fusion pass instance.
++
++rtl_opt_pass *
++make_pass_late_combine (gcc::context *ctxt)
++{
++  return new pass_late_combine (ctxt);
++}
+diff --git a/gcc/passes.def b/gcc/passes.def
+index 1cbbd413097..1d56a0d4799 100644
+--- a/gcc/passes.def
++++ b/gcc/passes.def
+@@ -492,6 +492,7 @@ along with GCC; see the file COPYING3.  If not see
+       NEXT_PASS (pass_initialize_regs);
+       NEXT_PASS (pass_ud_rtl_dce);
+       NEXT_PASS (pass_combine);
++      NEXT_PASS (pass_late_combine);
+       NEXT_PASS (pass_if_after_combine);
+       NEXT_PASS (pass_jump_after_combine);
+       NEXT_PASS (pass_partition_blocks);
+@@ -511,6 +512,7 @@ along with GCC; see the file COPYING3.  If not see
+       NEXT_PASS (pass_postreload);
+       PUSH_INSERT_PASSES_WITHIN (pass_postreload)
+ 	  NEXT_PASS (pass_postreload_cse);
++	  NEXT_PASS (pass_late_combine);
+ 	  NEXT_PASS (pass_gcse2);
+ 	  NEXT_PASS (pass_split_after_reload);
+ 	  NEXT_PASS (pass_ree);
+diff --git a/gcc/recog.cc b/gcc/recog.cc
+index a6799e3f5e6..56370e40e01 100644
+--- a/gcc/recog.cc
++++ b/gcc/recog.cc
+@@ -614,7 +614,11 @@ swap_change (int num)
+   else
+     std::swap (*changes[num].loc, changes[num].old);
+   if (changes[num].object && !MEM_P (changes[num].object))
+-    std::swap (INSN_CODE (changes[num].object), changes[num].old_code);
++    {
++      std::swap (INSN_CODE (changes[num].object), changes[num].old_code);
++      if (recog_data.insn == changes[num].object)
++	recog_data.insn = nullptr;
++    }
+ }
+ 
+ /* Temporarily undo all the changes numbered NUM and up, with a view
+diff --git a/gcc/testsuite/gcc.dg/ira-shrinkwrap-prep-1.c b/gcc/testsuite/gcc.dg/ira-shrinkwrap-prep-1.c
+index f290b9ccbdc..a95637abbe5 100644
+--- a/gcc/testsuite/gcc.dg/ira-shrinkwrap-prep-1.c
++++ b/gcc/testsuite/gcc.dg/ira-shrinkwrap-prep-1.c
+@@ -25,5 +25,5 @@ bar (long a)
+ }
+ 
+ /* { dg-final { scan-rtl-dump "Will split live ranges of parameters" "ira" } } */
+-/* { dg-final { scan-rtl-dump "Split live-range of register" "ira" { xfail *-*-* } } } */
++/* { dg-final { scan-rtl-dump "Split live-range of register" "ira" { xfail { ! aarch64*-*-* } } } } */
+ /* { dg-final { scan-rtl-dump "Performing shrink-wrapping" "pro_and_epilogue" { xfail powerpc*-*-* } } } */
+diff --git a/gcc/testsuite/gcc.dg/ira-shrinkwrap-prep-2.c b/gcc/testsuite/gcc.dg/ira-shrinkwrap-prep-2.c
+index 6212c95585d..0690e036eaa 100644
+--- a/gcc/testsuite/gcc.dg/ira-shrinkwrap-prep-2.c
++++ b/gcc/testsuite/gcc.dg/ira-shrinkwrap-prep-2.c
+@@ -30,6 +30,6 @@ bar (long a)
+ }
+ 
+ /* { dg-final { scan-rtl-dump "Will split live ranges of parameters" "ira" } } */
+-/* { dg-final { scan-rtl-dump "Split live-range of register" "ira" { xfail *-*-* } } } */
++/* { dg-final { scan-rtl-dump "Split live-range of register" "ira" { xfail { ! aarch64*-*-* } } } } */
+ /* XFAIL due to PR70681.  */ 
+ /* { dg-final { scan-rtl-dump "Performing shrink-wrapping" "pro_and_epilogue" { xfail arm*-*-* powerpc*-*-* } } } */
+diff --git a/gcc/testsuite/gcc.dg/stack-check-4.c b/gcc/testsuite/gcc.dg/stack-check-4.c
+index b0c5c61972f..052d2abc2f1 100644
+--- a/gcc/testsuite/gcc.dg/stack-check-4.c
++++ b/gcc/testsuite/gcc.dg/stack-check-4.c
+@@ -20,7 +20,7 @@
+    scan for.   We scan for both the positive and negative cases.  */
+ 
+ /* { dg-do compile } */
+-/* { dg-options "-O2 -fstack-clash-protection -fdump-rtl-pro_and_epilogue -fno-optimize-sibling-calls" } */
++/* { dg-options "-O2 -fstack-clash-protection -fdump-rtl-pro_and_epilogue -fno-optimize-sibling-calls -fno-shrink-wrap" } */
+ /* { dg-require-effective-target supports_stack_clash_protection } */
+ 
+ extern void arf (char *);
+diff --git a/gcc/testsuite/gcc.target/aarch64/pr106594_1.c b/gcc/testsuite/gcc.target/aarch64/pr106594_1.c
+new file mode 100644
+index 00000000000..71bcafcb44f
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/pr106594_1.c
+@@ -0,0 +1,20 @@
++/* { dg-options "-O2" } */
++
++extern const int constellation_64qam[64];
++
++void foo(int nbits,
++         const char *p_src,
++         int *p_dst) {
++
++  while (nbits > 0U) {
++    char first = *p_src++;
++
++    char index1 = ((first & 0x3) << 4) | (first >> 4);
++
++    *p_dst++ = constellation_64qam[index1];
++
++    nbits--;
++  }
++}
++
++/* { dg-final { scan-assembler {(?n)\tldr\t.*\[x[0-9]+, w[0-9]+, sxtw #?2\]} } } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/sve/cond_asrd_3.c b/gcc/testsuite/gcc.target/aarch64/sve/cond_asrd_3.c
+index 0d620a30d5d..b537c6154a3 100644
+--- a/gcc/testsuite/gcc.target/aarch64/sve/cond_asrd_3.c
++++ b/gcc/testsuite/gcc.target/aarch64/sve/cond_asrd_3.c
+@@ -27,9 +27,9 @@ TEST_ALL (DEF_LOOP)
+ /* { dg-final { scan-assembler-times {\tasrd\tz[0-9]+\.h, p[0-7]/m, z[0-9]+\.h, #4\n} 2 } } */
+ /* { dg-final { scan-assembler-times {\tasrd\tz[0-9]+\.s, p[0-7]/m, z[0-9]+\.s, #4\n} 1 } } */
+ 
+-/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+\.b, p[0-7]/z, z[0-9]+\.b\n} 3 { xfail *-*-* } } } */
+-/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+\.h, p[0-7]/z, z[0-9]+\.h\n} 2 { xfail *-*-* } } } */
+-/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+\.s, p[0-7]/z, z[0-9]+\.s\n} 1 { xfail *-*-* } } } */
++/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+\.b, p[0-7]/z, z[0-9]+\.b\n} 3 } } */
++/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+\.h, p[0-7]/z, z[0-9]+\.h\n} 2 } } */
++/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+\.s, p[0-7]/z, z[0-9]+\.s\n} 1 } } */
+ 
+-/* { dg-final { scan-assembler-not {\tmov\tz} { xfail *-*-* } } } */
+-/* { dg-final { scan-assembler-not {\tsel\t} { xfail *-*-* } } } */
++/* { dg-final { scan-assembler-not {\tmov\tz} } } */
++/* { dg-final { scan-assembler-not {\tsel\t} } } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/sve/cond_convert_3.c b/gcc/testsuite/gcc.target/aarch64/sve/cond_convert_3.c
+index a294effd4a9..cff806c278d 100644
+--- a/gcc/testsuite/gcc.target/aarch64/sve/cond_convert_3.c
++++ b/gcc/testsuite/gcc.target/aarch64/sve/cond_convert_3.c
+@@ -30,11 +30,9 @@ TEST_ALL (DEF_LOOP)
+ /* { dg-final { scan-assembler-times {\tscvtf\tz[0-9]+\.d, p[0-7]/m,} 1 } } */
+ /* { dg-final { scan-assembler-times {\tucvtf\tz[0-9]+\.d, p[0-7]/m,} 1 } } */
+ 
+-/* Really we should be able to use MOVPRFX /z here, but at the moment
+-   we're relying on combine to merge a SEL and an arithmetic operation,
+-   and the SEL doesn't allow the "false" value to be zero when the "true"
+-   value is a register.  */
+-/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+, z[0-9]+\n} 6 } } */
++/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+\.h, p[0-7]/z,} 2 } } */
++/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+\.s, p[0-7]/z,} 2 } } */
++/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+\.d, p[0-7]/z,} 2 } } */
+ 
+ /* { dg-final { scan-assembler-not {\tmov\tz[^\n]*z} } } */
+ /* { dg-final { scan-assembler-not {\tsel\t} } } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/sve/cond_convert_6.c b/gcc/testsuite/gcc.target/aarch64/sve/cond_convert_6.c
+index 6541a2ea49d..abf0a2e832f 100644
+--- a/gcc/testsuite/gcc.target/aarch64/sve/cond_convert_6.c
++++ b/gcc/testsuite/gcc.target/aarch64/sve/cond_convert_6.c
+@@ -30,11 +30,9 @@ TEST_ALL (DEF_LOOP)
+ /* { dg-final { scan-assembler-times {\tfcvtzs\tz[0-9]+\.d, p[0-7]/m,} 1 } } */
+ /* { dg-final { scan-assembler-times {\tfcvtzu\tz[0-9]+\.d, p[0-7]/m,} 1 } } */
+ 
+-/* Really we should be able to use MOVPRFX /z here, but at the moment
+-   we're relying on combine to merge a SEL and an arithmetic operation,
+-   and the SEL doesn't allow the "false" value to be zero when the "true"
+-   value is a register.  */
+-/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+, z[0-9]+\n} 6 } } */
++/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+\.h, p[0-7]/z,} 2 } } */
++/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+\.s, p[0-7]/z,} 2 } } */
++/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+\.d, p[0-7]/z,} 2 } } */
+ 
+ /* { dg-final { scan-assembler-not {\tmov\tz[^\n]*z} } } */
+ /* { dg-final { scan-assembler-not {\tsel\t} } } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/sve/cond_fabd_5.c b/gcc/testsuite/gcc.target/aarch64/sve/cond_fabd_5.c
+index e66477b3bce..401201b315a 100644
+--- a/gcc/testsuite/gcc.target/aarch64/sve/cond_fabd_5.c
++++ b/gcc/testsuite/gcc.target/aarch64/sve/cond_fabd_5.c
+@@ -24,12 +24,9 @@ TEST_ALL (DEF_LOOP)
+ /* { dg-final { scan-assembler-times {\tfabd\tz[0-9]+\.s, p[0-7]/m,} 1 } } */
+ /* { dg-final { scan-assembler-times {\tfabd\tz[0-9]+\.d, p[0-7]/m,} 1 } } */
+ 
+-/* Really we should be able to use MOVPRFX /Z here, but at the moment
+-   we're relying on combine to merge a SEL and an arithmetic operation,
+-   and the SEL doesn't allow zero operands.  */
+-/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+\.h, p[0-7]/z, z[0-9]+\.h\n} 1 { xfail *-*-* } } } */
+-/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+\.s, p[0-7]/z, z[0-9]+\.s\n} 1 { xfail *-*-* } } } */
+-/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+\.d, p[0-7]/z, z[0-9]+\.d\n} 1 { xfail *-*-* } } } */
++/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+\.h, p[0-7]/z, z[0-9]+\.h\n} 1 } } */
++/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+\.s, p[0-7]/z, z[0-9]+\.s\n} 1 } } */
++/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+\.d, p[0-7]/z, z[0-9]+\.d\n} 1 } } */
+ 
+ /* { dg-final { scan-assembler-not {\tmov\tz[^,]*z} } } */
+-/* { dg-final { scan-assembler-not {\tsel\t} { xfail *-*-* } } } */
++/* { dg-final { scan-assembler-not {\tsel\t} } } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/sve/cond_unary_4.c b/gcc/testsuite/gcc.target/aarch64/sve/cond_unary_4.c
+index a491f899088..cbb957bffa4 100644
+--- a/gcc/testsuite/gcc.target/aarch64/sve/cond_unary_4.c
++++ b/gcc/testsuite/gcc.target/aarch64/sve/cond_unary_4.c
+@@ -52,15 +52,10 @@ TEST_ALL (DEF_LOOP)
+ /* { dg-final { scan-assembler-times {\tfneg\tz[0-9]+\.s, p[0-7]/m,} 1 } } */
+ /* { dg-final { scan-assembler-times {\tfneg\tz[0-9]+\.d, p[0-7]/m,} 1 } } */
+ 
+-/* Really we should be able to use MOVPRFX /z here, but at the moment
+-   we're relying on combine to merge a SEL and an arithmetic operation,
+-   and the SEL doesn't allow the "false" value to be zero when the "true"
+-   value is a register.  */
+-/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+, z[0-9]+\n} 7 } } */
+-/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+\.b, p[0-7]/z, z[0-9]+\.b} 1 } } */
+-/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+\.h, p[0-7]/z, z[0-9]+\.h} 2 } } */
+-/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+\.s, p[0-7]/z, z[0-9]+\.s} 2 } } */
+-/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+\.d, p[0-7]/z, z[0-9]+\.d} 2 } } */
++/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+\.b, p[0-7]/z, z[0-9]+\.b} 2 } } */
++/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+\.h, p[0-7]/z, z[0-9]+\.h} 4 } } */
++/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+\.s, p[0-7]/z, z[0-9]+\.s} 4 } } */
++/* { dg-final { scan-assembler-times {\tmovprfx\tz[0-9]+\.d, p[0-7]/z, z[0-9]+\.d} 4 } } */
+ 
+ /* { dg-final { scan-assembler-not {\tmov\tz[^\n]*z} } } */
+ /* { dg-final { scan-assembler-not {\tsel\t} } } */
+diff --git a/gcc/tree-pass.h b/gcc/tree-pass.h
+index 29267589eeb..4bedaa40aa2 100644
+--- a/gcc/tree-pass.h
++++ b/gcc/tree-pass.h
+@@ -614,6 +614,7 @@ extern rtl_opt_pass *make_pass_branch_prob (gcc::context *ctxt);
+ extern rtl_opt_pass *make_pass_value_profile_transformations (gcc::context
+ 							      *ctxt);
+ extern rtl_opt_pass *make_pass_postreload_cse (gcc::context *ctxt);
++extern rtl_opt_pass *make_pass_late_combine (gcc::context *ctxt);
+ extern rtl_opt_pass *make_pass_gcse2 (gcc::context *ctxt);
+ extern rtl_opt_pass *make_pass_split_after_reload (gcc::context *ctxt);
+ extern rtl_opt_pass *make_pass_thread_prologue_and_epilogue (gcc::context
+diff --git a/gcc/combine.cc b/gcc/combine.cc
+index 812553c091e..85ea2c231cb 100644
+--- a/gcc/combine.cc
++++ b/gcc/combine.cc
+@@ -15066,6 +15066,7 @@ make_more_copies (void)
+ 	    continue;
+ 
+ 	  rtx new_reg = gen_reg_rtx (GET_MODE (dest));
++	  REG_POINTER (new_reg) = REG_POINTER (dest);
+ 	  rtx_insn *new_insn = gen_move_insn (new_reg, src);
+ 	  SET_SRC (set) = new_reg;
+ 	  emit_insn_before (new_insn, insn);
