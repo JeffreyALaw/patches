@@ -1,0 +1,17 @@
+diff --git a/gcc/config/mips/mips.md b/gcc/config/mips/mips.md
+index 17dfcbd6722..9da72a3a92f 100644
+--- a/gcc/config/mips/mips.md
++++ b/gcc/config/mips/mips.md
+@@ -3441,9 +3441,9 @@ (define_insn "*ior<mode>3"
+    (set_attr "mode" "<MODE>")])
+ 
+ (define_insn "*ior<mode>3_mips16_asmacro"
+-  [(set (match_operand:GPR 0 "register_operand" "=d,d")
+-	(ior:GPR (match_operand:GPR 1 "register_operand" "%0,0")
+-		 (match_operand:GPR 2 "uns_arith_operand" "d,K")))]
++  [(set (match_operand:SI 0 "register_operand" "=d,d")
++	(ior:SI (match_operand:SI 1 "register_operand" "%0,0")
++		(match_operand:SI 2 "uns_arith_operand" "d,K")))]
+   "ISA_HAS_MIPS16E2"
+   "@
+    or\t%0,%2
