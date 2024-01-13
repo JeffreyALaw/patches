@@ -1,8 +1,8 @@
 diff --git a/gcc/config/mips/mips.md b/gcc/config/mips/mips.md
-index 17dfcbd6722..9df2cadf7bb 100644
+index 17dfcbd6722..b0fb5850a9e 100644
 --- a/gcc/config/mips/mips.md
 +++ b/gcc/config/mips/mips.md
-@@ -3440,10 +3440,10 @@ (define_insn "*ior<mode>3"
+@@ -3440,16 +3440,16 @@ (define_insn "*ior<mode>3"
     (set_attr "compression" "micromips,*,*")
     (set_attr "mode" "<MODE>")])
  
@@ -17,3 +17,10 @@ index 17dfcbd6722..9df2cadf7bb 100644
    "ISA_HAS_MIPS16E2"
    "@
     or\t%0,%2
+    ori\t%0,%x2"
+    [(set_attr "alu_type" "or")
+-    (set_attr "mode" "<MODE>")
++    (set_attr "mode" "SI")
+     (set_attr "extended_mips16" "*,yes")])
+ 
+ (define_insn "*ior<mode>3_mips16"
