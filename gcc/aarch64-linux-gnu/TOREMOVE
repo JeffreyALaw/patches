@@ -1,0 +1,10 @@
+# Likely QEMU bug
+gcc/testsuite/g++.dg/ext/cleanup-8.C
+gcc/testsuite/g++.dg/ext/cleanup-9.C
+gcc/testsuite/g++.dg/ext/cleanup-10.C
+gcc/testsuite/g++.dg/ext/cleanup-11.C
+gcc/testsuite/gcc.dg/cleanup-8.C
+gcc/testsuite/gcc.dg/cleanup-9.C
+gcc/testsuite/gcc.dg/cleanup-10.C
+gcc/testsuite/gcc.dg/cleanup-11.C
+
