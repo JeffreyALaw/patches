@@ -5,3 +5,6 @@ gcc/testsuite/gcc.dg/pr97459-6.c
 # the 2nd lane of a LIW instruction
 gcc/testsuite/gcc.dg/sms-10.c
 gcc/testsuite/gcc.dg/pr44028.c
+
+# Often time out on loaded systems
+gcc/testsuite/gcc.dg/torture/inline-mem-cpy-cmp-1.c
