@@ -1,1 +1,8 @@
+# Unknown
 gcc/testsuite/g++.dg/modules/bad-mapper-3.C
+
+# Timeout under heavy load
+# system-1.h, system-2.H and various struct-layout tests do as well
+gcc/testsuite/g++.dg/tree-ssa/pr90078.C
+gcc/testsuite/g++.dg/tree-ssa/pr96979.C
+gcc/testsuite/g++.dg/warn/uninit-pr105562.C
