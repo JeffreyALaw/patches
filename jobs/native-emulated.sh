@@ -40,6 +40,10 @@ if [ $TARGET == mips64el-linux-gnuabi64 ]; then
   ENABLE_MULTIARCH=--enable-multiarch
 fi
 
+if [ $TARGET == mipsel-linux-gnu ]; then
+  ENABLE_MULTIARCH=--enable-multiarch
+fi
+
 echo Building GCC
 pushd obj/gcc
 ../../gcc/configure --prefix=$PREFIX --disable-analyzer --prefix=$PREFIX --enable-languages=c,c++,fortran,lto $ENABLE_MULTIARCH --disable-multilib --disable-libsanitizer $DISABLE_BOOTSTRAP ${TARGET} >> $LOGFILE 2>&1
