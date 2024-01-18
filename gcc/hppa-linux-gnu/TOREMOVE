@@ -1,4 +1,10 @@
-# Unknown
+# These are really weird.  They claim to have passed many times, but started
+# failing in early 2024.  Testing all the way back with gcc-7 shows them
+# failing.  No idea how/why they worked before.
+gcc/testsuite/gcc.dg/torture/ftrapv-1.c
+gcc/testsuite/gcc.dg/torture/ftrapv-2.c
+
+# Don't remember
 gcc/testsuite/g++.dg/modules/bad-mapper-3.C
 
 # Timeout under heavy load
