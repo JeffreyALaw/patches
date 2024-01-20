@@ -36,4 +36,5 @@ gcc/testsuite/c-c++-common/torture/strub-ptrfn2.c
 gcc/testsuite/c-c++-common/torture/strub-ptrfn3.c
 # These take an absurd amount of time on the QEMU targets
 gcc/testsuite/gcc.dg/vect
+gcc/testsuite/g++.dg/vect
 
