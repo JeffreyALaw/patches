@@ -34,5 +34,6 @@ gcc/testsuite/gcc.dg/torture/pr112305.c
 # some tests that pass in one context and fail in the other, not good.
 gcc/testsuite/c-c++-common/torture/strub-ptrfn2.c
 gcc/testsuite/c-c++-common/torture/strub-ptrfn3.c
-
+# These take an absurd amount of time on the QEMU targets
+gcc/testsuite/gcc.dg/vect
 
