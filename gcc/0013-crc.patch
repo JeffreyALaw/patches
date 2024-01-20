@@ -13046,22 +13046,6 @@ index 00000000000..ce91e32f971
 +
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
-diff --git a/gcc/testsuite/gcc.target/riscv/crc-22-zbkb.c b/gcc/testsuite/gcc.target/riscv/crc-22-zbkb.c
-new file mode 100644
-index 00000000000..4aae6c99360
---- /dev/null
-+++ b/gcc/testsuite/gcc.target/riscv/crc-22-zbkb.c
-@@ -0,0 +1,10 @@
-+/* { dg-do run } */
-+/* { dg-options "-fdump-tree-crc-details" } */
-+/* { dg-additional-options "-march=rv64gc_zbkb" { target { rv64 } } } */
-+/* { dg-additional-options "-march=rv32gc_zbkb" { target { rv32 } } } */
-+/* { dg-skip-if "" { *-*-* } { "-flto"} } */
-+
-+#include "../../gcc.dg/crc-22.c"
-+
-+/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
-+/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 diff --git a/gcc/testsuite/gcc.target/riscv/crc-23-zbc.c b/gcc/testsuite/gcc.target/riscv/crc-23-zbc.c
 new file mode 100644
 index 00000000000..f433023d0dc
@@ -13094,22 +13078,6 @@ index 00000000000..cf0d6d0f262
 +
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
-diff --git a/gcc/testsuite/gcc.target/riscv/crc-4-zbkb.c b/gcc/testsuite/gcc.target/riscv/crc-4-zbkb.c
-new file mode 100644
-index 00000000000..970315aa4c3
---- /dev/null
-+++ b/gcc/testsuite/gcc.target/riscv/crc-4-zbkb.c
-@@ -0,0 +1,10 @@
-+/* { dg-do run } */
-+/* { dg-options "-fdump-tree-crc-details" } */
-+/* { dg-additional-options "-march=rv64gc_zbkb" { target { rv64 } } } */
-+/* { dg-additional-options "-march=rv32gc_zbkb" { target { rv32 } } } */
-+/* { dg-skip-if "" { *-*-* } { "-flto"} } */
-+
-+#include "../../gcc.dg/crc-4.c"
-+
-+/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
-+/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 diff --git a/gcc/testsuite/gcc.target/riscv/crc-5-zbc.c b/gcc/testsuite/gcc.target/riscv/crc-5-zbc.c
 new file mode 100644
 index 00000000000..c9e3a719515
@@ -13120,23 +13088,6 @@ index 00000000000..c9e3a719515
 +/* { dg-options "-w -fdump-tree-crc-details" } */
 +/* { dg-additional-options "-march=rv64gc_zbc" { target { rv64 } } } */
 +/* { dg-additional-options "-march=rv32gc_zbc" { target { rv32 } } } */
-+/* { dg-skip-if "" { *-*-* } { "-flto"} } */
-+
-+#include "../../gcc.dg/crc-5.c"
-+
-+/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
-+/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
-\ No newline at end of file
-diff --git a/gcc/testsuite/gcc.target/riscv/crc-5-zbkb.c b/gcc/testsuite/gcc.target/riscv/crc-5-zbkb.c
-new file mode 100644
-index 00000000000..1cd7f0ede32
---- /dev/null
-+++ b/gcc/testsuite/gcc.target/riscv/crc-5-zbkb.c
-@@ -0,0 +1,10 @@
-+/* { dg-do run } */
-+/* { dg-options "-w -fdump-tree-crc-details" } */
-+/* { dg-additional-options "-march=rv64gc_zbkb" { target { rv64 } } } */
-+/* { dg-additional-options "-march=rv32gc_zbkb" { target { rv32 } } } */
 +/* { dg-skip-if "" { *-*-* } { "-flto"} } */
 +
 +#include "../../gcc.dg/crc-5.c"
@@ -13187,22 +13138,6 @@ index 00000000000..88a06d203e4
 +/* { dg-options "-fdump-tree-crc-details" } */
 +/* { dg-additional-options "-march=rv64gc_zbc" { target { rv64 } } } */
 +/* { dg-additional-options "-march=rv32gc_zbc" { target { rv32 } } } */
-+/* { dg-skip-if "" { *-*-* } { "-flto"} } */
-+
-+#include "../../gcc.dg/crc-8.c"
-+
-+/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
-+/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
-diff --git a/gcc/testsuite/gcc.target/riscv/crc-8-zbkb.c b/gcc/testsuite/gcc.target/riscv/crc-8-zbkb.c
-new file mode 100644
-index 00000000000..a8f163f2d80
---- /dev/null
-+++ b/gcc/testsuite/gcc.target/riscv/crc-8-zbkb.c
-@@ -0,0 +1,10 @@
-+/* { dg-do run } */
-+/* { dg-options "-fdump-tree-crc-details" } */
-+/* { dg-additional-options "-march=rv64gc_zbkb" { target { rv64 } } } */
-+/* { dg-additional-options "-march=rv32gc_zbkb" { target { rv32 } } } */
 +/* { dg-skip-if "" { *-*-* } { "-flto"} } */
 +
 +#include "../../gcc.dg/crc-8.c"
