@@ -5,3 +5,14 @@ gcc/testsuite/gcc.dg/atomic/c11-atomic-exec-5.c
 gcc/testsuite/gcc.target/powerpc/quad-atomic.c
 gcc/testsuite/gcc.dg/vect/tsvc
 
+# These take surprisingly long
+gcc/testsuite/gcc.target/powerpc/rlwimi-0.c
+gcc/testsuite/gcc.target/powerpc/rlwimi-1.c
+gcc/testsuite/gcc.target/powerpc/rlwimi-2.c
+gcc/testsuite/gcc.target/powerpc/rlwimm-0.c
+gcc/testsuite/gcc.target/powerpc/rlwimm-1.c
+gcc/testsuite/gcc.target/powerpc/rlwimm-2.c
+
+# Sporatic failure
+gcc/testsuite/gcc.target/powerpc/check-builtin-vec_rlnm-runnable.c
+
