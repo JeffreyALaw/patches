@@ -1,0 +1,143 @@
+
+
+When the x86 backend generates code for cpymem with the rep_8byte
+strathegy for the 8 byte aligned main rep movq it needs to compute
+an adjusted pointer to the source after doing a prologue aligning
+the destination.  It computes that via
+
+  src_ptr + (dest_ptr - orig_dest_ptr)
+
+which is perfectly fine.  On RTL this is then
+
+    8: r134:DI=const(`g'+0x44)
+    9: {r133:DI=frame:DI-0x4c;clobber flags:CC;}
+      REG_UNUSED flags:CC
+   56: r129:DI=const(`g'+0x4c)
+   57: {r129:DI=r129:DI&0xfffffffffffffff8;clobber flags:CC;}
+      REG_UNUSED flags:CC
+      REG_EQUAL const(`g'+0x4c)&0xfffffffffffffff8
+   58: {r118:DI=r134:DI-r129:DI;clobber flags:CC;}
+      REG_DEAD r134:DI
+      REG_UNUSED flags:CC
+      REG_EQUAL const(`g'+0x44)-r129:DI
+   59: {r119:DI=r133:DI-r118:DI;clobber flags:CC;}
+      REG_DEAD r133:DI
+      REG_UNUSED flags:CC
+
+but as written find_base_term happily picks the first candidate
+it finds for the MINUS which means it picks const(`g') rather
+than the correct frame:DI.  This way find_base_term (but also
+the unfixed find_base_value used by init_alias_analysis to
+initialize REG_BASE_VALUE) performs pointer analysis isn't
+sound.  The following restricts the handling of multi-operand
+operations to the case we know only one can be a pointer.
+
+This for example causes gcc.dg/tree-ssa/pr94969.c to miss some
+RTL PRE (I've opened PR113395 for this).  A more drastic patch,
+removing base_alias_check results in only gcc.dg/guality/pr41447-1.c
+regressing (so testsuite coverage is bad).  I've looked at
+gcc.dg/tree-ssa tests and mostly scheduling changes are present,
+the cc1plus .text size is only 230 bytes worse.  With the this
+less drastic patch below most scheduling changes are gone.
+
+x86_64 might not the very best target to test for impact, but
+test coverage on other targets is unlikely to be very much better.
+
+Bootstrapped and tested on x86_64-unknown-linux-gnu (together
+with 2/2).  Jeff, can you maybe throw this on your tester?
+Jakub, you did the PR64025 fix which was for a similar issue.
+
+OK for trunk?
+
+Thanks,
+Richard.
+
+	PR rtl-optimization/113255
+	* alias.cc (find_base_term): Remove PLUS/MINUS handling
+	when both operands are not CONST_INT_P.
+
+	* gcc.dg/torture/pr113255.c: New testcase.
+---
+ gcc/alias.cc                            | 28 +++++--------------------
+ gcc/testsuite/gcc.dg/torture/pr113255.c | 27 ++++++++++++++++++++++++
+ 2 files changed, 32 insertions(+), 23 deletions(-)
+ create mode 100644 gcc/testsuite/gcc.dg/torture/pr113255.c
+
+diff --git a/gcc/alias.cc b/gcc/alias.cc
+index 99008b0390d..bdc119822b4 100644
+--- a/gcc/alias.cc
++++ b/gcc/alias.cc
+@@ -2077,31 +2077,13 @@ find_base_term (rtx x, vec<std::pair<cselib_val *,
+ 	if (tmp1 == pic_offset_table_rtx && CONSTANT_P (tmp2))
+ 	  return find_base_term (tmp2, visited_vals);
+ 
+-	/* If either operand is known to be a pointer, then prefer it
+-	   to determine the base term.  */
+-	if (REG_P (tmp1) && REG_POINTER (tmp1))
+-	  ;
+-	else if (REG_P (tmp2) && REG_POINTER (tmp2))
+-	  std::swap (tmp1, tmp2);
+-	/* If second argument is constant which has base term, prefer it
+-	   over variable tmp1.  See PR64025.  */
+-	else if (CONSTANT_P (tmp2) && !CONST_INT_P (tmp2))
++	if (CONST_INT_P (tmp1))
+ 	  std::swap (tmp1, tmp2);
+ 
+-	/* Go ahead and find the base term for both operands.  If either base
+-	   term is from a pointer or is a named object or a special address
+-	   (like an argument or stack reference), then use it for the
+-	   base term.  */
+-	rtx base = find_base_term (tmp1, visited_vals);
+-	if (base != NULL_RTX
+-	    && ((REG_P (tmp1) && REG_POINTER (tmp1))
+-		 || known_base_value_p (base)))
+-	  return base;
+-	base = find_base_term (tmp2, visited_vals);
+-	if (base != NULL_RTX
+-	    && ((REG_P (tmp2) && REG_POINTER (tmp2))
+-		 || known_base_value_p (base)))
+-	  return base;
++	/* We can only handle binary operators when one of the operands
++	   never leads to a base value.  */
++	if (CONST_INT_P (tmp2))
++	  return find_base_term (tmp1, visited_vals);
+ 
+ 	/* We could not determine which of the two operands was the
+ 	   base register and which was the index.  So we can determine
+diff --git a/gcc/testsuite/gcc.dg/torture/pr113255.c b/gcc/testsuite/gcc.dg/torture/pr113255.c
+new file mode 100644
+index 00000000000..2f009524c6b
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/torture/pr113255.c
+@@ -0,0 +1,27 @@
++/* { dg-do run } */
++/* { dg-additional-options "-mtune=k8 -mstringop-strategy=rep_8byte" { target { x86_64-*-* i?86-*-* } } } */
++
++struct S { unsigned a[10]; unsigned y; unsigned b[6]; } g[2];
++
++__attribute__((noinline, noclone)) int
++test (int x)
++{
++  struct S e[2] = { g[0], g[1] };
++  int r = 0;
++  if (x >= 0)
++    {
++      r++;
++      e[1].y++;
++    }
++  g[1] = e[1];
++  return r;
++}
++
++int
++main ()
++{
++  test (1);
++  if (g[1].y != 1)
++    __builtin_abort ();
++  return 0;
++}
+-- 
+2.35.3
+
+
