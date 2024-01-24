@@ -39,4 +39,5 @@ gcc/testsuite/gcc.dg/vect
 gcc/testsuite/g++.dg/vect
 # Depends on gcc.dg/vect
 gcc/testsuite/gcc.dg/autopar/pr69109.c
-
+# Known to take a long time on simulated targets
+gcc/testsuite/gfortran.dg/matmul_15.f90
