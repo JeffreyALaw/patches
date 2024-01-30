@@ -491,10 +491,10 @@ index b3f0bdb9924..c9eedece1a9 100644
  /* Routines implemented in riscv-c.cc.  */
  void riscv_cpu_cpp_builtins (cpp_reader *);
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 7b6111aa545..3787c2ff66b 100644
+index 529ef5e84b7..c61b8e8aa5c 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
-@@ -10500,6 +10500,7 @@ riscv_preferred_else_value (unsigned ifn, tree vectype, unsigned int nops,
+@@ -10578,6 +10578,7 @@ riscv_preferred_else_value (unsigned ifn, tree vectype, unsigned int nops,
    return default_preferred_else_value (ifn, vectype, nops, ops);
  }
  
@@ -502,7 +502,7 @@ index 7b6111aa545..3787c2ff66b 100644
  /* If MEM is in the form of "base+offset", extract the two parts
     of address and set to BASE and OFFSET, otherwise return false
     after clearing BASE and OFFSET.  */
-@@ -10544,6 +10545,178 @@ riscv_vector_mode_supported_any_target_p (machine_mode)
+@@ -10622,6 +10623,178 @@ riscv_vector_mode_supported_any_target_p (machine_mode)
    return true;
  }
  
@@ -682,20 +682,56 @@ index 7b6111aa545..3787c2ff66b 100644
  #undef TARGET_ASM_ALIGNED_HI_OP
  #define TARGET_ASM_ALIGNED_HI_OP "\t.half\t"
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index edcaec4a786..89095afeea5 100644
+index b320ad0210e..6125b3637df 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
-@@ -89,6 +89,10 @@ (define_c_enum "unspec" [
- 
+@@ -90,9 +90,9 @@ (define_c_enum "unspec" [
    ;; Workaround for HFmode without hardware extension
    UNSPEC_FMV_SFP16_X
-+
+ 
+-  ;; XTheadFmv moves
+-  UNSPEC_XTHEADFMV
+-  UNSPEC_XTHEADFMV_HW
 +  ;; CRC unspecs
 +  UNSPEC_CRC
 +  UNSPEC_CRC_REV
  ])
  
  (define_c_enum "unspecv" [
+@@ -1769,7 +1769,15 @@ (define_insn "truncdfhf2"
+ (define_expand "zero_extendsidi2"
+   [(set (match_operand:DI 0 "register_operand")
+ 	(zero_extend:DI (match_operand:SI 1 "nonimmediate_operand")))]
+-  "TARGET_64BIT")
++  "TARGET_64BIT"
++{
++  if (SUBREG_P (operands[1]) && SUBREG_PROMOTED_VAR_P (operands[1])
++      && SUBREG_PROMOTED_UNSIGNED_P (operands[1]))
++    {
++      emit_insn (gen_movdi (operands[0], SUBREG_REG (operands[1])));
++      DONE;
++    }
++})
+ 
+ (define_insn_and_split "*zero_extendsidi2_internal"
+   [(set (match_operand:DI     0 "register_operand"     "=r,r")
+@@ -1850,7 +1858,15 @@ (define_expand "extendsidi2"
+   [(set (match_operand:DI     0 "register_operand"     "=r,r")
+ 	(sign_extend:DI
+ 	    (match_operand:SI 1 "nonimmediate_operand" " r,m")))]
+-  "TARGET_64BIT")
++  "TARGET_64BIT"
++{
++  if (SUBREG_P (operands[1]) && SUBREG_PROMOTED_VAR_P (operands[1])
++      && SUBREG_PROMOTED_SIGNED_P (operands[1]))
++    {
++      emit_insn (gen_movdi (operands[0], SUBREG_REG (operands[1])));
++      DONE;
++    }
++})
+ 
+ (define_insn "*extendsidi2_internal"
+   [(set (match_operand:DI     0 "register_operand"     "=r,r")
 diff --git a/gcc/configure b/gcc/configure
 index c83e09beea9..408fc491de0 100755
 --- a/gcc/configure
