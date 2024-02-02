@@ -41,3 +41,5 @@ gcc/testsuite/g++.dg/vect
 gcc/testsuite/gcc.dg/autopar/pr69109.c
 # Known to take a long time on simulated targets
 gcc/testsuite/gfortran.dg/matmul_15.f90
+# Seems to bounce around all the time, various targets
+gcc/testsuite/g++.dg/modules/hello-1_b.C
