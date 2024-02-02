@@ -46,7 +46,7 @@ index c97d6bad1de..a0c4b8b9ca6 100644
  DEF_FUNCTION_TYPE_4 (BT_FN_SIZE_CONST_PTR_SIZE_SIZE_FILEPTR,
  		     BT_SIZE, BT_CONST_PTR, BT_SIZE, BT_SIZE, BT_FILEPTR)
 diff --git a/gcc/builtins.cc b/gcc/builtins.cc
-index a0bd82c7981..3dba90e8246 100644
+index 4c04ae03321..0df6d0f54d0 100644
 --- a/gcc/builtins.cc
 +++ b/gcc/builtins.cc
 @@ -2207,7 +2207,24 @@ associated_internal_fn (built_in_function fn, tree return_type)
@@ -75,7 +75,7 @@ index a0bd82c7981..3dba90e8246 100644
      default:
        return IFN_LAST;
      }
-@@ -7752,6 +7769,37 @@ expand_speculation_safe_value (machine_mode mode, tree exp, rtx target,
+@@ -7751,6 +7768,37 @@ expand_speculation_safe_value (machine_mode mode, tree exp, rtx target,
    return targetm.speculation_safe_value (mode, target, val, failsafe);
  }
  
@@ -335,7 +335,7 @@ index b3e7c74846e..5d90fb8daac 100644
  
  static const scoped_attribute_specs *const ix86_attribute_table[] =
 diff --git a/gcc/config/i386/i386.md b/gcc/config/i386/i386.md
-index bac0a6ade67..5c492a9b98f 100644
+index a82f2e456fe..8301428a1ea 100644
 --- a/gcc/config/i386/i386.md
 +++ b/gcc/config/i386/i386.md
 @@ -189,6 +189,9 @@ (define_c_enum "unspec" [
@@ -358,7 +358,7 @@ index bac0a6ade67..5c492a9b98f 100644
  ;; Single word integer modes without QImode.
  (define_mode_iterator SWI248 [HI SI (DI "TARGET_64BIT")])
  
-@@ -27170,6 +27176,28 @@ (define_insn "sse4_2_crc32di"
+@@ -27166,6 +27172,28 @@ (define_insn "sse4_2_crc32di"
     (set_attr "prefix_extra" "1")
     (set_attr "mode" "DI")])
  
@@ -491,10 +491,10 @@ index b3f0bdb9924..c9eedece1a9 100644
  /* Routines implemented in riscv-c.cc.  */
  void riscv_cpu_cpp_builtins (cpp_reader *);
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 529ef5e84b7..c61b8e8aa5c 100644
+index cead76fe1a2..a132a2248a0 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
-@@ -10578,6 +10578,7 @@ riscv_preferred_else_value (unsigned ifn, tree vectype, unsigned int nops,
+@@ -10595,6 +10595,7 @@ riscv_preferred_else_value (unsigned ifn, tree vectype, unsigned int nops,
    return default_preferred_else_value (ifn, vectype, nops, ops);
  }
  
@@ -502,7 +502,7 @@ index 529ef5e84b7..c61b8e8aa5c 100644
  /* If MEM is in the form of "base+offset", extract the two parts
     of address and set to BASE and OFFSET, otherwise return false
     after clearing BASE and OFFSET.  */
-@@ -10622,6 +10623,178 @@ riscv_vector_mode_supported_any_target_p (machine_mode)
+@@ -10639,6 +10640,178 @@ riscv_vector_mode_supported_any_target_p (machine_mode)
    return true;
  }
  
@@ -682,16 +682,14 @@ index 529ef5e84b7..c61b8e8aa5c 100644
  #undef TARGET_ASM_ALIGNED_HI_OP
  #define TARGET_ASM_ALIGNED_HI_OP "\t.half\t"
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index b320ad0210e..6125b3637df 100644
+index 2a164a03dbd..9652e1d7ec7 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
-@@ -90,9 +90,9 @@ (define_c_enum "unspec" [
-   ;; Workaround for HFmode without hardware extension
-   UNSPEC_FMV_SFP16_X
- 
--  ;; XTheadFmv moves
--  UNSPEC_XTHEADFMV
--  UNSPEC_XTHEADFMV_HW
+@@ -93,6 +93,10 @@ (define_c_enum "unspec" [
+   ;; XTheadFmv moves
+   UNSPEC_XTHEADFMV
+   UNSPEC_XTHEADFMV_HW
++
 +  ;; CRC unspecs
 +  UNSPEC_CRC
 +  UNSPEC_CRC_REV
