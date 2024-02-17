@@ -24,3 +24,5 @@ gcc/testsuite/gcc.dg/cleanup-9.c
 gcc/testsuite/gcc.dg/cleanup-10.c
 gcc/testsuite/gcc.dg/cleanup-11.c
 
+# Times out semi-regularly
+gcc/testsuite/gcc.target/riscv/rvv/autovec/gather-scatter/gather_load_64-12.c
