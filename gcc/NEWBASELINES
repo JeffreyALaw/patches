@@ -3,3 +3,4 @@
 # reset.  
 hppa-linux-gnu
 xstormy16-elf
+sh4-linux-gnu
