@@ -1,9 +1,5 @@
 # This file contains the job names that need fresh baselines.  In general it
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
-moxie-elf
-sh3-linux-gnu
-sh3eb-linux-gnu
-v850e-elf
-visium-elf
 hppa-linux-gnu
+xstormy16-elf
