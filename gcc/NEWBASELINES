@@ -5,4 +5,9 @@ arc-elf
 avr-elf
 fr30-elf
 h8300-elf
+c6x-elf
+cris-elf
+csky-linux-gnu
+frv-elf
+ft32-elf
 
