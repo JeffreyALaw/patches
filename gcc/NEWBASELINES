@@ -3,6 +3,7 @@
 # reset.  
 arc-elf
 avr-elf
+bfin-elf
 fr30-elf
 h8300-elf
 c6x-elf
@@ -10,4 +11,8 @@ cris-elf
 csky-linux-gnu
 frv-elf
 ft32-elf
+iq2000-elf
+lm32-elf
+m32r-elf
+mcore-elf
 
