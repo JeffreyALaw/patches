@@ -3,13 +3,13 @@
 # reset.  
 or1k-linux-gnu
 msp430-elf
-m32r-elf
 nds32be-elf
 nds32le-elf
 lm32-elf
 sh3-linux-gnu
-sh3eb-linux-gnu
-fr30-elf
 arc-elf
-microblaze-linux
 rl78-elf
+frv-elf
+mn10300-elf
+mcore-elf
+moxie-elf
