@@ -9,3 +9,6 @@ xstormy16-elf
 nds32be-elf
 nds32le-elf
 lm32-elf
+sh3-linux-gnu
+sh3eb-linux-gnu
+fr30-elf
