@@ -3,9 +3,10 @@
 # reset.  
 rx-elf
 or1k
-visium-elf
-ft32-elf
 msp430-elf
-c6x-elf
 csky-linux-gnu
-nios2-linux-gnu
+m32r-elf
+xstormy16-elf
+nds32be-elf
+nds32le-elf
+lm32-elf
