@@ -1,0 +1,39 @@
+diff --git a/gcc/vr-values.cc b/gcc/vr-values.cc
+index 3ccb77d28be..cc753e79a8a 100644
+--- a/gcc/vr-values.cc
++++ b/gcc/vr-values.cc
+@@ -325,6 +325,34 @@ simplify_using_ranges::fold_cond_with_ops (enum tree_code code,
+       if (res == range_false (type))
+ 	return boolean_false_node;
+     }
++
++  /* If we're comparing pointers and one of the pointers is
++     not a valid pointer (say &MEM <const char> [(void *)"aa" + 4B)
++     return true for EQ and false for NE.  */
++  if ((code == EQ_EXPR || code == NE_EXPR)
++      && POINTER_TYPE_P (type)
++      && TREE_CODE (op1) == ADDR_EXPR
++      && TREE_CODE (TREE_OPERAND (op1, 0)) == MEM_REF)
++    {
++      tree mem_ref = TREE_OPERAND (op1, 0);
++      if (TREE_CODE (TREE_OPERAND (mem_ref, 0)) == ADDR_EXPR)
++	{
++	  tree addr_expr = TREE_OPERAND (mem_ref, 0);
++	  if (TREE_CODE (TREE_OPERAND (addr_expr, 0)) == STRING_CST)
++	    {
++	      tree string = TREE_OPERAND (addr_expr, 0);
++
++	      if (TREE_CODE (TREE_OPERAND (mem_ref, 1)) == INTEGER_CST)
++		{
++		  HOST_WIDE_INT len = TREE_STRING_LENGTH (string);
++		  HOST_WIDE_INT offset = tree_to_uhwi (TREE_OPERAND (mem_ref, 1));
++		  if (offset > len)
++		    return code == EQ_EXPR ? boolean_false_node : boolean_true_node;
++		}
++	    }
++	}
++    }
++
+   return NULL;
+ }
+ 
