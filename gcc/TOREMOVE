@@ -44,3 +44,14 @@ gcc/testsuite/gfortran.dg/matmul_15.f90
 # Seems to bounce around all the time, various targets
 gcc/testsuite/g++.dg/modules/hello-1_b.C
 gcc/testsuite/g++.dg/modules/hello-1_a.C
+# These tests are flakey with qemu user mode emulation
+gcc/testsuite/g++.dg/ext/cleanup-8.C
+gcc/testsuite/g++.dg/ext/cleanup-9.C
+gcc/testsuite/g++.dg/ext/cleanup-10.C
+gcc/testsuite/g++.dg/ext/cleanup-11.C
+gcc/testsuite/gcc.dg/cleanup-8.c
+gcc/testsuite/gcc.dg/cleanup-9.c
+gcc/testsuite/gcc.dg/cleanup-10.c
+gcc/testsuite/gcc.dg/cleanup-11.c
+
+

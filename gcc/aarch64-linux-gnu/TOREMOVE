@@ -1,13 +1,3 @@
-# Likely QEMU bug
-gcc/testsuite/g++.dg/ext/cleanup-8.C
-gcc/testsuite/g++.dg/ext/cleanup-9.C
-gcc/testsuite/g++.dg/ext/cleanup-10.C
-gcc/testsuite/g++.dg/ext/cleanup-11.C
-gcc/testsuite/gcc.dg/cleanup-8.c
-gcc/testsuite/gcc.dg/cleanup-9.c
-gcc/testsuite/gcc.dg/cleanup-10.c
-gcc/testsuite/gcc.dg/cleanup-11.c
-
 # Trying to cut down on runtime
 gcc/testsuite/gcc.dg/vect/tsvc
 
