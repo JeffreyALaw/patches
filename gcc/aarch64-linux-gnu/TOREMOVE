@@ -4,5 +4,7 @@ gcc/testsuite/gcc.dg/vect/tsvc
 # Has been flakey on this platform
 gcc/testsuite/g++.dg/tls/thread_local4g.C
 
+# Times out occasionally
+gcc/testsuite/gcc.target/aarch64/sve/vcond_2_run.c
 
 
