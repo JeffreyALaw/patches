@@ -79,7 +79,7 @@ popd
 
 # As is the GCC testsuite on native targets
 pushd obj/gcc/gcc
-make -k -j $NPROC -l $NPROC check || true
+make -k -j $NPROC -l $NPROC check >& check.log || true 
 popd
 
 patches/jobs/validate-results.sh $TARGET

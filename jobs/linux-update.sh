@@ -185,7 +185,7 @@ fi
 cd ${TARGET}-obj/gcc/gcc
 
 if [ x"$RUNGCCTESTS" = x"yes" ]; then
-  make -k -j $NPROC -l $NPROC check-gcc RUNTESTFLAGS="$TESTARGS"
+  make -k -j $NPROC -l $NPROC check-gcc RUNTESTFLAGS="$TESTARGS" >& check.log
 fi
 
 cd ../../..

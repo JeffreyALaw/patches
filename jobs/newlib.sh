@@ -322,7 +322,7 @@ cd ${TARGET}-obj/gcc/gcc
 
 if [ $RUNGCCTESTS = "yes" ]; then
   echo Testing GCC
-  make -k -j $NPROC -l $NPROC check-gcc $CHECK_CXX RUNTESTFLAGS="$TESTARGS"
+  make -k -j $NPROC -l $NPROC check-gcc $CHECK_CXX RUNTESTFLAGS="$TESTARGS" >& check.log
 fi
 
 cd ../../..
