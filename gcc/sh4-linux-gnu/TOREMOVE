@@ -7,8 +7,6 @@ gcc/testsuite/gcc.target/sh/pr49263-2.c
 gcc/testsuite/gcc.target/sh/pr49263-3.c
 gcc/testsuite/gcc.target/sh/pr49263-4.c
 
-gcc/testsuite/g++.dg/tls/thread_local4.C
-gcc/testsuite/g++.dg/tls/thread_local4g.C
 gcc/testsuite/g++.old-deja/g++.robertl/eb30.C
 gcc/testsuite/gfortran.dg/maxlocval_1.f90
 

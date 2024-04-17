@@ -55,3 +55,7 @@ gcc/testsuite/gcc.dg/cleanup-10.c
 gcc/testsuite/gcc.dg/cleanup-11.c
 
 
+# Flakey on multiple platforms (sh4*, aarch64, loongarch64)
+gcc/testsuite/g++.dg/tls/thread_local4.C
+gcc/testsuite/g++.dg/tls/thread_local4g.C
+
