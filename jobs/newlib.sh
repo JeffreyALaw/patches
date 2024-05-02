@@ -174,6 +174,10 @@ case "${TARGET}" in
     SIMINSTALLTARG=install-sim
     TESTARGS="--target_board=pru-sim"
     ;;
+  riscv32*-*)
+    RUNGCCTESTS=yes
+    TESTARGS="--target_board=unix/-march=rv32gcv,unix/-march=rv32"
+    ;;
   riscv64*-*)
     RUNGCCTESTS=yes
     TESTARGS="--target_board=unix"
