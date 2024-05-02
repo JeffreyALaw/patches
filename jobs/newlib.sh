@@ -1,4 +1,4 @@
-#!/bin/bash
+v!/bin/bash
 
 # Ensure that we fail if any command fails
 set -e
@@ -176,7 +176,7 @@ case "${TARGET}" in
     ;;
   riscv32*-*)
     RUNGCCTESTS=yes
-    TESTARGS="--target_board=unix/-march=rv32gcv,unix/-march=rv32"
+    TESTARGS="--target_board=unix/-march=rv32gcv"
     ;;
   riscv64*-*)
     RUNGCCTESTS=yes
