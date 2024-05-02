@@ -1,4 +1,4 @@
-!/bin/bash
+#!/bin/bash
 
 # Ensure that we fail if any command fails
 set -e
