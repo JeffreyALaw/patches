@@ -1,0 +1,13 @@
+# Duplicate testnames, some failing, some working
+gcc/testsuite/gcc.target/riscv/rvv/autovec/gather-scatter/mask_scatter_store_run-9.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/gather-scatter/mask_scatter_store_run-10.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/partial/slp-1.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/partial/slp-2.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/partial/slp-3.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/partial/slp-4.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/partial/slp-5.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/partial/slp-6.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/partial/slp-16.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/partial/slp-17.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/partial/slp-18.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/partial/slp-19.c
