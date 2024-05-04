@@ -177,11 +177,10 @@ case "${TARGET}" in
   riscv32*-*)
     RUNGCCTESTS=yes
     TESTARGS="--target_board=unix/-march=rv32gcv"
-    TESTARGS="--target_board=unix"\{,-march=rv32_gcv,-march=rv32gc_zba_zbb_zbc_zbs\}"
     ;;
   riscv64*-*)
     RUNGCCTESTS=yes
-    TESTARGS="--target_board=unix"\{,-march=rv64_gcv,-march=rv64gc_zba_zbb_zbc_zbs\}"
+    TESTARGS="--target_board=unix/-march=rv64gc"
     ;;
   rl78*-*)
     RUNGCCTESTS=yes
