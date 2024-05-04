@@ -1,5 +1,5 @@
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 8ed9df8126a..cb28ddf5d4a 100644
+index 44945d47fd6..fd81f69e230 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
 @@ -249,6 +249,7 @@ struct riscv_arg_info {
@@ -42,7 +42,7 @@ index 8ed9df8126a..cb28ddf5d4a 100644
  	  memcpy (codes, alt_codes, sizeof (alt_codes));
  	  cost = alt_cost;
  	}
-@@ -792,17 +797,34 @@ riscv_build_integer_1 (struct riscv_integer_op codes[RISCV_MAX_INTEGER_OPS],
+@@ -792,17 +797,37 @@ riscv_build_integer_1 (struct riscv_integer_op codes[RISCV_MAX_INTEGER_OPS],
      {
        int shift = ctz_hwi (value);
        unsigned HOST_WIDE_INT x = value;
@@ -54,7 +54,10 @@ index 8ed9df8126a..cb28ddf5d4a 100644
 +      if (shift > IMM_BITS
 +	  && !SMALL_OPERAND (x)
 +	  && (LUI_OPERAND (x << IMM_BITS)
-+	      || (TARGET_64BIT && TARGET_ZBA && LUI_OPERAND ((x << IMM_BITS) & ~0x80000000UL))))
++	      || (TARGET_64BIT
++		  && TARGET_ZBA
++		  && LUI_OPERAND ((x << IMM_BITS)
++				  & ~HOST_WIDE_INT_C (0x80000000)))))
  	shift -= IMM_BITS, x <<= IMM_BITS;
  
 +      /* Adjust X if it isn't a LUI operand in isolation, but we can use
@@ -63,7 +66,7 @@ index 8ed9df8126a..cb28ddf5d4a 100644
 +      if (!LUI_OPERAND (x)
 +	  && TARGET_64BIT
 +	  && TARGET_ZBA
-+	  && LUI_OPERAND (x & ~0x80000000UL))
++	  && LUI_OPERAND (x & ~HOST_WIDE_INT_C (0x80000000UL)))
 +	{
 +	  x = sext_hwi (x, 32);
 +	  use_uw = true;
@@ -78,7 +81,7 @@ index 8ed9df8126a..cb28ddf5d4a 100644
  	  memcpy (codes, alt_codes, sizeof (alt_codes));
  	  cost = alt_cost;
  	}
-@@ -823,8 +845,10 @@ riscv_build_integer_1 (struct riscv_integer_op codes[RISCV_MAX_INTEGER_OPS],
+@@ -823,8 +848,10 @@ riscv_build_integer_1 (struct riscv_integer_op codes[RISCV_MAX_INTEGER_OPS],
  	  /* The sign-bit might be zero, so just rotate to be safe.  */
  	  codes[0].value = (((unsigned HOST_WIDE_INT) value >> trailing_ones)
  			    | (value << (64 - trailing_ones)));
@@ -89,7 +92,7 @@ index 8ed9df8126a..cb28ddf5d4a 100644
  	  cost = 2;
  	}
        /* Handle the case where the 11 bit range of zero bits wraps around.  */
-@@ -836,8 +860,10 @@ riscv_build_integer_1 (struct riscv_integer_op codes[RISCV_MAX_INTEGER_OPS],
+@@ -836,8 +863,10 @@ riscv_build_integer_1 (struct riscv_integer_op codes[RISCV_MAX_INTEGER_OPS],
  	  codes[0].value = ((value << (32 - upper_trailing_ones))
  			    | ((unsigned HOST_WIDE_INT) value
  			       >> (32 + upper_trailing_ones)));
@@ -100,7 +103,7 @@ index 8ed9df8126a..cb28ddf5d4a 100644
  	  cost = 2;
  	}
        /* Final cases, particularly focused on bseti.  */
-@@ -851,6 +877,7 @@ riscv_build_integer_1 (struct riscv_integer_op codes[RISCV_MAX_INTEGER_OPS],
+@@ -851,6 +880,7 @@ riscv_build_integer_1 (struct riscv_integer_op codes[RISCV_MAX_INTEGER_OPS],
  	    {
  	      alt_codes[i].code = (i == 0 ? UNKNOWN : IOR);
  	      alt_codes[i].value = value & 0x7ffff800;
@@ -108,7 +111,7 @@ index 8ed9df8126a..cb28ddf5d4a 100644
  	      value &= ~0x7ffff800;
  	      i++;
  	    }
-@@ -860,6 +887,7 @@ riscv_build_integer_1 (struct riscv_integer_op codes[RISCV_MAX_INTEGER_OPS],
+@@ -860,6 +890,7 @@ riscv_build_integer_1 (struct riscv_integer_op codes[RISCV_MAX_INTEGER_OPS],
  	    {
  	      alt_codes[i].code = (i == 0 ? UNKNOWN : PLUS);
  	      alt_codes[i].value = value & 0x7ff;
@@ -116,7 +119,7 @@ index 8ed9df8126a..cb28ddf5d4a 100644
  	      value &= ~0x7ff;
  	      i++;
  	    }
-@@ -870,6 +898,7 @@ riscv_build_integer_1 (struct riscv_integer_op codes[RISCV_MAX_INTEGER_OPS],
+@@ -870,6 +901,7 @@ riscv_build_integer_1 (struct riscv_integer_op codes[RISCV_MAX_INTEGER_OPS],
  	      HOST_WIDE_INT bit = ctz_hwi (value);
  	      alt_codes[i].code = (i == 0 ? UNKNOWN : IOR);
  	      alt_codes[i].value = 1UL << bit;
@@ -124,7 +127,7 @@ index 8ed9df8126a..cb28ddf5d4a 100644
  	      value &= ~(1ULL << bit);
  	      i++;
  	    }
-@@ -911,6 +940,7 @@ riscv_build_integer (struct riscv_integer_op *codes, HOST_WIDE_INT value,
+@@ -911,6 +943,7 @@ riscv_build_integer (struct riscv_integer_op *codes, HOST_WIDE_INT value,
  	{
  	  alt_codes[alt_cost-1].code = LSHIFTRT;
  	  alt_codes[alt_cost-1].value = shift;
@@ -132,7 +135,7 @@ index 8ed9df8126a..cb28ddf5d4a 100644
  	  memcpy (codes, alt_codes, sizeof (alt_codes));
  	  cost = alt_cost;
  	}
-@@ -922,6 +952,7 @@ riscv_build_integer (struct riscv_integer_op *codes, HOST_WIDE_INT value,
+@@ -922,6 +955,7 @@ riscv_build_integer (struct riscv_integer_op *codes, HOST_WIDE_INT value,
  	{
  	  alt_codes[alt_cost-1].code = LSHIFTRT;
  	  alt_codes[alt_cost-1].value = shift;
@@ -140,7 +143,7 @@ index 8ed9df8126a..cb28ddf5d4a 100644
  	  memcpy (codes, alt_codes, sizeof (alt_codes));
  	  cost = alt_cost;
  	}
-@@ -2476,7 +2507,27 @@ riscv_move_integer (rtx temp, rtx dest, HOST_WIDE_INT value,
+@@ -2478,7 +2512,27 @@ riscv_move_integer (rtx temp, rtx dest, HOST_WIDE_INT value,
  	  else
  	    x = force_reg (mode, x);
  	  codes[i].value = trunc_int_for_mode (codes[i].value, mode);
