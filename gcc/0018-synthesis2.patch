@@ -54,7 +54,7 @@ index 8ed9df8126a..cb28ddf5d4a 100644
 +      if (shift > IMM_BITS
 +	  && !SMALL_OPERAND (x)
 +	  && (LUI_OPERAND (x << IMM_BITS)
-+	      || (TARGET_64BIT && TARGET_ZBA && LUI_OPERAND ((x << IMM_BITS) & ~0x80000000))))
++	      || (TARGET_64BIT && TARGET_ZBA && LUI_OPERAND ((x << IMM_BITS) & ~0x80000000UL))))
  	shift -= IMM_BITS, x <<= IMM_BITS;
  
 +      /* Adjust X if it isn't a LUI operand in isolation, but we can use
@@ -63,7 +63,7 @@ index 8ed9df8126a..cb28ddf5d4a 100644
 +      if (!LUI_OPERAND (x)
 +	  && TARGET_64BIT
 +	  && TARGET_ZBA
-+	  && LUI_OPERAND (x & ~0x80000000))
++	  && LUI_OPERAND (x & ~0x80000000UL))
 +	{
 +	  x = sext_hwi (x, 32);
 +	  use_uw = true;
