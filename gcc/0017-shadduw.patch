@@ -1,0 +1,69 @@
+diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
+index ad3ad758959..d76a72d30e0 100644
+--- a/gcc/config/riscv/bitmanip.md
++++ b/gcc/config/riscv/bitmanip.md
+@@ -184,6 +184,23 @@ (define_insn "*slliuw"
+   [(set_attr "type" "bitmanip")
+    (set_attr "mode" "DI")])
+ 
++;; Combine will reassociate the operands in the most useful way here.  We
++;; just have to give it guidance on where to split the result to facilitate
++;; shNadd.uw generation.
++(define_split
++  [(set (match_operand:DI 0 "register_operand")
++	(plus:DI (plus:DI (and:DI (ashift:DI (match_operand:DI 1 "register_operand")
++					     (match_operand:QI 2 "imm123_operand"))
++				  (match_operand 3 "consecutive_bits32_operand"))
++			  (match_operand:DI 4 "register_operand"))
++		 (match_operand 5 "immediate_operand")))]
++  "TARGET_64BIT && TARGET_ZBA"
++  [(set (match_dup 0)
++	(plus:DI (and:DI (ashift:DI (match_dup 1) (match_dup 2))
++			 (match_dup 3))
++		 (match_dup 4)))
++   (set (match_dup 0) (plus:DI (match_dup 0) (match_dup 5)))])
++
+ ;; ZBB extension.
+ 
+ (define_expand "clzdi2"
+diff --git a/gcc/testsuite/gcc.target/riscv/zba-shadduw.c b/gcc/testsuite/gcc.target/riscv/zba-shadduw.c
+new file mode 100644
+index 00000000000..5b77447e681
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/zba-shadduw.c
+@@ -0,0 +1,35 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -march=rv64gc_zba -mabi=lp64" } */
++
++typedef struct simple_bitmap_def
++{
++  unsigned char *popcount;
++  unsigned int n_bits;
++  unsigned int size;
++  unsigned long elms[1];
++} *sbitmap;
++typedef const struct simple_bitmap_def *const_sbitmap;
++
++typedef unsigned long *sbitmap_ptr;
++typedef const unsigned long *const_sbitmap_ptr;
++static unsigned long sbitmap_elt_popcount (unsigned long);
++
++void
++sbitmap_a_or_b (sbitmap dst, const_sbitmap a, const_sbitmap b)
++{
++  unsigned int i, n = dst->size;
++  sbitmap_ptr dstp = dst->elms;
++  const_sbitmap_ptr ap = a->elms;
++  const_sbitmap_ptr bp = b->elms;
++  unsigned char has_popcount = dst->popcount != ((void *) 0);
++
++  for (i = 0; i < n; i++)
++    {
++      const unsigned long tmp = *ap++ | *bp++;
++      *dstp++ = tmp;
++    }
++}
++
++
++/* { dg-final { scan-assembler "sh3add.uw" } } */
++/* { dg-final { scan-assembler-not {\mslli.uw} } } */
