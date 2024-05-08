@@ -29,6 +29,7 @@ gcc/testsuite/gcc.target/riscv/rvv/autovec/cond/cond_widen_complicate-3.c
 gcc/testsuite/gcc.target/riscv/rvv/autovec/cond/cond_widen_complicate-4.c
 gcc/testsuite/gcc.target/riscv/rvv/autovec/cond/cond_widen_complicate-5.c
 gcc/testsuite/gcc.target/riscv/rvv/autovec/cond/cond_widen_complicate-6.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/cond/cond_widen_complicate-7.c
 gcc/testsuite/gcc.target/riscv/rvv/autovec/cond/cond_widen_complicate-8.c
 gcc/testsuite/gcc.target/riscv/rvv/autovec/cond/cond_widen_complicate-9.c
 gcc/testsuite/gcc.target/riscv/rvv/autovec/widen/widen-complicate-1.c
