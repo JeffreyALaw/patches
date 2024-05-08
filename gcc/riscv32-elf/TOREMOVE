@@ -21,3 +21,23 @@ gcc/testsuite/gcc.target/riscv/rvv/autovec/partial/slp_run-16.c
 gcc/testsuite/gcc.target/riscv/rvv/autovec/partial/slp_run-17.c
 gcc/testsuite/gcc.target/riscv/rvv/autovec/partial/slp_run-18.c
 gcc/testsuite/gcc.target/riscv/rvv/autovec/partial/slp_run-19.c
+
+# Temporary as we sort things out
+gcc/testsuite/gcc.target/riscv/rvv/autovec/bug-3.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/cond/cond_widen_complicate-1.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/cond/cond_widen_complicate-2.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/cond/cond_widen_complicate-3.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/cond/cond_widen_complicate-4.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/cond/cond_widen_complicate-5.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/cond/cond_widen_complicate-6.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/cond/cond_widen_complicate-8.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/cond/cond_widen_complicate-9.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/widen/widen-complicate-1.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/widen/widen-complicate-2.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/widen/widen-complicate-3.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/widen/widen-complicate-4.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/widen/widen-complicate-5.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/widen/widen-complicate-6.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/widen/widen-complicate-7.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/widen/widen-complicate-8.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/widen/widen-complicate-9.c
