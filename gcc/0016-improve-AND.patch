@@ -1,0 +1,64 @@
+diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
+index d76a72d30e0..62362d1f2d3 100644
+--- a/gcc/config/riscv/bitmanip.md
++++ b/gcc/config/riscv/bitmanip.md
+@@ -896,3 +896,31 @@ (define_insn "riscv_clmulr_<mode>"
+   "TARGET_ZBC"
+   "clmulr\t%0,%1,%2"
+   [(set_attr "type" "clmul")])
++
++;; If we have the ZBA extension, then we can clear the upper half of a 64
++;; bit object with a zext.w.  So if we have AND where the constant would
++;; require synthesis of two or more instructions, but 32->64 sign extension
++;; of the constant is a simm12, then we can use zext.w+andi.
++;;
++;; With the mvconst_internal pattern claiming a single insn to synthesize
++;; constants, this must be a define_insn_and_split.
++(define_insn_and_split ""
++  [(set (match_operand:DI 0 "register_operand" "=r")
++	(and:DI (match_operand:DI 1 "register_operand" "r")
++		(match_operand 2 "const_int_operand" "n")))]
++  "TARGET_ZBA
++   && !paradoxical_subreg_p (operands[1])
++   && riscv_const_insns (operands[2]) != 1
++   && (INTVAL (operands[2]) & 0xffffffff00000000UL) == 0
++   && ((SMALL_OPERAND ((INTVAL (operands[2]) << 32) >> 32)
++        || (TARGET_ZBS && popcount_hwi (INTVAL (operands[2])) == 31))
++       && INTVAL (operands[2]) != 0x7fffffff)"
++  "#"
++  "&& 1"
++  [(set (match_dup 0) (zero_extend:DI (match_dup 3)))
++   (set (match_dup 0) (and:DI (match_dup 0) (match_dup 2)))]
++  "{
++     operands[3] = gen_lowpart (SImode, operands[1]);
++     operands[2] = GEN_INT ((INTVAL (operands[2]) << 32) >> 32);
++   }"
++  [(set_attr "type" "bitmanip")])
+diff --git a/gcc/testsuite/gcc.target/riscv/zba_zbs_and-1.c b/gcc/testsuite/gcc.target/riscv/zba_zbs_and-1.c
+new file mode 100644
+index 00000000000..23fd769449e
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/zba_zbs_and-1.c
+@@ -0,0 +1,22 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc_zba_zbb_zbs -mabi=lp64" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
++
++
++unsigned long long w32mem_1(unsigned long long w32)
++{
++    return w32 & ~(1U << 0);
++}
++
++unsigned long long w32mem_2(unsigned long long w32)
++{
++    return w32 & ~(1U << 30);
++}
++
++unsigned long long w32mem_3(unsigned long long w32)
++{
++    return w32 & ~(1U << 31);
++}
++
++/* If we do synthesis, then we'd see an addi.  */
++/* { dg-final { scan-assembler-not "addi\t" } } */
