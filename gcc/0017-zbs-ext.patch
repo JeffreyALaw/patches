@@ -54,13 +54,13 @@ index d76a72d30e0..724511b6df3 100644
  ;; zero-extension is performed around the bitno).
 diff --git a/gcc/testsuite/gcc.target/riscv/zbs-bext-2.c b/gcc/testsuite/gcc.target/riscv/zbs-bext-2.c
 new file mode 100644
-index 00000000000..719df442fed
+index 00000000000..79f120b2286
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/zbs-bext-2.c
 @@ -0,0 +1,19 @@
 +/* { dg-do compile } */
 +/* { dg-options "-march=rv64gc_zbs -mabi=lp64" } */
-+/* { dg-skip-if "" { *-*-* } { "-O0" } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
 +
 +
 +_Bool match(const int ch, int fMap) {
@@ -72,8 +72,21 @@ index 00000000000..719df442fed
 +}
 +
 +
-+/* { dg-final { scan-assembler-times "bext\t" 1 } } */
-+/* { dg-final { scan-assembler-times "seqz\t" 1 } } */
++/* { dg-final { scan-assembler-times "bext\t" 2 } } */
++/* { dg-final { scan-assembler-times "seqz\t|xori\t" 2 } } */
 +/* { dg-final { scan-assembler-not "sraw\t" } } */
 +/* { dg-final { scan-assembler-not "not\t" } } */
 +/* { dg-final { scan-assembler-not "andi\t" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/zbs-bext.c b/gcc/testsuite/gcc.target/riscv/zbs-bext.c
+index ff75dad6528..0db97f5ab59 100644
+--- a/gcc/testsuite/gcc.target/riscv/zbs-bext.c
++++ b/gcc/testsuite/gcc.target/riscv/zbs-bext.c
+@@ -38,7 +38,7 @@ long bext64_4(long a, char bitno)
+ 
+ /* { dg-final { scan-assembler-times "bexti\t" 1 } } */
+ /* { dg-final { scan-assembler-times "bext\t" 5 } } */
+-/* { dg-final { scan-assembler-times "xori\t|snez\t" 1 } } */
++/* { dg-final { scan-assembler-times "xori\t|seqz\t" 1 } } */
+ /* { dg-final { scan-assembler-times "addi\t" 1 } } */
+ /* { dg-final { scan-assembler-times "neg\t" 1 } } */
+ /* { dg-final { scan-assembler-not {\mandi} } } */
