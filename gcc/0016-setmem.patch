@@ -43,7 +43,7 @@ index 41cb061c746..0e312209fdb 100644
 +
 +  /* If we've been asked to use a specific LMUL,
 +     check the operation fits and do that.  */
-+  if (riscv_autovec_lmul != RVV_DYNAMIC)
++  if (rv_max_lmul != RVV_DYNAMIC)
 +    {
 +      lmul_out = TARGET_MAX_LMUL;
 +      return (length <= ((TARGET_MAX_LMUL * TARGET_MIN_VLEN) / 8));
