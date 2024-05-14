@@ -1,0 +1,71 @@
+commit 3ed6db38183688eac1c2dfcde574918dbd9668ab
+Author: Jeff Law <jeffreyalaw@gmail.com>
+Date:   Thu Apr 4 16:35:02 2024 -0600
+
+    Improve another shift-add sequence.
+    
+    In some cases involving 32bit arithmetic, the combiner will leave a
+    redundant AND in the IL.  We recognize that case and emit a split
+    sequence post-reload that is more efficient than the original
+    (removing a right shift).
+    
+    Add missing TARGET_64BIT in prior change.
+
+diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
+index 1335f6c0f8d..5f4d5996bf3 100644
+--- a/gcc/config/riscv/riscv.md
++++ b/gcc/config/riscv/riscv.md
+@@ -4433,6 +4435,31 @@ (define_insn_and_split ""
+    }"
+   [(set_attr "type" "arith")])
+ 
++;; The AND is largely redunant here.  It always turns off the high 32 bits
++;; and the low number of bits equal to the shift count.  Those upper 32 bits
++;; will be reset by the SIGN_EXTEND at the end.
++;;
++;; One could argue combine should have realized this and simplified what it
++;; presented to the backend.  But we can obviously cope with what it gave us.
++(define_insn_and_split ""
++  [(set (match_operand:DI 0 "register_operand" "=r")
++	(sign_extend:DI
++	  (plus:SI (subreg:SI
++		     (and:DI
++		       (ashift:DI (match_operand:DI 1 "register_operand" "r")
++				  (match_operand 2 "const_int_operand" "n"))
++		       (match_operand 3 "const_int_operand" "n")) 0)
++		   (match_operand:SI 4 "register_operand" "r"))))
++   (clobber (match_scratch:DI 5 "=&r"))]
++  "TARGET_64BIT
++   && (INTVAL (operands[3]) | ((1 << INTVAL (operands[2])) - 1)) == 0xffffffff"
++  "#"
++  "&& reload_completed"
++  [(set (match_dup 5) (ashift:DI (match_dup 1) (match_dup 2)))
++   (set (match_dup 0) (sign_extend:DI (plus:SI (match_dup 6) (match_dup 4))))]
++  "{ operands[6] = gen_lowpart (SImode, operands[5]); }"
++  [(set_attr "type" "arith")])
++
+ (include "bitmanip.md")
+ (include "crypto.md")
+ (include "sync.md")
+diff --git a/gcc/testsuite/gcc.target/riscv/shift-add-2.c b/gcc/testsuite/gcc.target/riscv/shift-add-2.c
+new file mode 100644
+index 00000000000..87439858e59
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/shift-add-2.c
+@@ -0,0 +1,16 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc_zba_zbb_zbs -mabi=lp64" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
++
++int sub2(int a, long long b) {
++  b = (b << 32) >> 31;
++  unsigned int x = a + b;
++  return x;
++}
++
++
++/* { dg-final { scan-assembler-times "\tslli\t" 1 } } */
++/* { dg-final { scan-assembler-times "\taddw\t" 1 } } */
++/* { dg-final { scan-assembler-not "\tsrai\t" } } */
++/* { dg-final { scan-assembler-not "\tsh.add\t" } } */
++
