@@ -1,0 +1,28 @@
+diff --git a/gcc/config/riscv/riscv-string.cc b/gcc/config/riscv/riscv-string.cc
+index 87f5fdee3c1..b515f44d17a 100644
+--- a/gcc/config/riscv/riscv-string.cc
++++ b/gcc/config/riscv/riscv-string.cc
+@@ -827,7 +827,10 @@ riscv_expand_block_clear_zicboz_zic64b (rtx dest, rtx length)
+     {
+       rtx mem = adjust_address (dest, BLKmode, offset);
+       rtx addr = force_reg (Pmode, XEXP (mem, 0));
+-      emit_insn (gen_riscv_zero_di (addr));
++      if (TARGET_64BIT)
++	emit_insn (gen_riscv_zero_di (addr));
++      else
++	emit_insn (gen_riscv_zero_si (addr));
+       offset += cbo_bytes;
+     }
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/cmo-zicboz-zic64-1.c b/gcc/testsuite/gcc.target/riscv/cmo-zicboz-zic64-1.c
+index c2d79eb7ae6..6d4535287d0 100644
+--- a/gcc/testsuite/gcc.target/riscv/cmo-zicboz-zic64-1.c
++++ b/gcc/testsuite/gcc.target/riscv/cmo-zicboz-zic64-1.c
+@@ -1,6 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-march=rv64gc_zic64b_zicboz" { target { rv64 } } } */
+-/* { dg-options "-march=rv32gc_zic64b_zicboz" { target { rv32 } } } */
++/* { dg-options "-march=rv64gc_zic64b_zicboz -mabi=lp64d" } */
+ /* { dg-skip-if "" { *-*-* } {"-O0" "-Os" "-Og" "-Oz" "-flto" } } */
+ /* { dg-final { check-function-bodies "**" "" } } */
+ /* { dg-allow-blank-lines-in-output 1 } */
