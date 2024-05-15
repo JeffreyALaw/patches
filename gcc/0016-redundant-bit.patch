@@ -12,11 +12,11 @@ gcc/testsuite
 	* gcc.target/riscv/redundant-bitmap-3.c: New test.
 
 diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
-index 9ed7912c44a..c11ab48ac89 100644
+index 8769a6b818b..9d4247ec8b9 100644
 --- a/gcc/config/riscv/bitmanip.md
 +++ b/gcc/config/riscv/bitmanip.md
-@@ -1282,3 +1282,26 @@ (define_insn_and_split "*branch<X:mode>_mask_twobits_equals_singlebit"
- }
+@@ -877,6 +877,29 @@ (define_insn_and_split ""
+    }"
    [(set_attr "type" "bitmanip")])
  
 +;; In theory these might be better handled with match.pd patterns, but
@@ -41,7 +41,10 @@ index 9ed7912c44a..c11ab48ac89 100644
 +  "TARGET_ZBS && rtx_equal_p (operands[1], operands[3])"
 +  "bclr\t%0,%2,%1"
 +  [(set_attr "type" "bitmanip")])
-+ 
++
+ ;; IF_THEN_ELSE: test for 2 bits of opposite polarity
+ (define_insn_and_split "*branch<X:mode>_mask_twobits_equals_singlebit"
+   [(set (pc)
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
 index b0a14a2a82d..78a4a1cd554 100644
 --- a/gcc/config/riscv/riscv.cc
