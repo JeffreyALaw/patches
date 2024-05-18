@@ -1,0 +1,15 @@
+diff --git a/gcc/optabs-query.cc b/gcc/optabs-query.cc
+index de145be7075..a459b6c65d7 100644
+--- a/gcc/optabs-query.cc
++++ b/gcc/optabs-query.cc
+@@ -519,7 +519,9 @@ can_mult_highpart_p (machine_mode mode, bool uns_p)
+   /* If the mode is integral, synth from widening or larger operations.  */
+   if (is_a <scalar_int_mode> (mode, &int_mode))
+     {
+-      scalar_int_mode wider_mode = GET_MODE_WIDER_MODE (int_mode).require ();
++      scalar_int_mode wider_mode;
++      if (!GET_MODE_WIDER_MODE (int_mode).exists (&wider_mode))
++	return 0;
+ 
+       op = uns_p ? umul_widen_optab : smul_widen_optab;
+       if (convert_optab_handler (op, wider_mode, mode) != CODE_FOR_nothing)
