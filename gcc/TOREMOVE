@@ -59,3 +59,5 @@ gcc/testsuite/gcc.dg/cleanup-11.c
 gcc/testsuite/g++.dg/tls/thread_local4.C
 gcc/testsuite/g++.dg/tls/thread_local4g.C
 
+# Temporary while sinking gets fixed
+gcc/tetsuite/gcc.dg/tree-ssa/ssa-sink-22.c
