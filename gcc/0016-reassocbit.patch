@@ -1,0 +1,87 @@
+commit d1b983c520f5c3f889e736bee7932d6577e83d09
+Author: Jeff Law <jeffreyalaw@gmail.com>
+Date:   Thu Mar 28 13:15:08 2024 -0600
+
+    Reassociate shift w/bitwise op to bring constant operand into simm12 range.
+    
+    From Lyut@RAU.  This patch improves code on its own and is a prerequisite
+    for Zbkb support.
+
+diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
+index 756095297e4..939c2e3014a 100644
+--- a/gcc/config/riscv/riscv.md
++++ b/gcc/config/riscv/riscv.md
+@@ -2937,6 +2937,33 @@ (define_insn_and_split "*<optab>si3_extend_mask"
+   [(set_attr "type" "shift")
+    (set_attr "mode" "SI")])
+ 
++;; We can reassociate the shift and bitwise operator which may allow us to
++;; reduce the immediate operand of the bitwise operator into a range that
++;; fits in a simm12.
++;;
++;; We need to make sure that shifting does not lose any bits, particularly
++;; for IOR/XOR.  It probably doesn't matter for AND.
++;;
++;; We also don't want to do this if the immediate already fits in a simm12
++;; field.
++(define_insn_and_split "<optab>_shift_reverse<X:mode>"
++  [(set (match_operand:X 0 "register_operand" "=r")
++    (any_bitwise:X (ashift:X (match_operand:X 1 "register_operand" "r")
++			     (match_operand 2 "immediate_operand" "n"))
++		   (match_operand 3 "immediate_operand" "n")))]
++  "(!SMALL_OPERAND (INTVAL (operands[3]))
++   && SMALL_OPERAND (INTVAL (operands[3]) >> INTVAL (operands[2]))
++   && popcount_hwi (INTVAL (operands[3])) <= popcount_hwi (INTVAL (operands[3]) >> INTVAL (operands[2])))"
++  "#"
++  "&& 1"
++  [(set (match_dup 0) (any_bitwise:X (match_dup 1) (match_dup 3)))
++   (set (match_dup 0) (ashift:X (match_dup 0) (match_dup 2)))]
++  {
++    operands[3] = GEN_INT (INTVAL (operands[3]) >> INTVAL (operands[2]));
++  }
++  [(set_attr "type" "shift")
++   (set_attr "mode" "<X:MODE>")])
++
+ ;; Non-canonical, but can be formed by ree when combine is not successful at
+ ;; producing one of the two canonical patterns below.
+ (define_insn "*lshrsi3_zero_extend_1"
+diff --git a/gcc/testsuite/gcc.target/riscv/and-shift32.c b/gcc/testsuite/gcc.target/riscv/and-shift32.c
+new file mode 100644
+index 00000000000..38ee63e8d79
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/and-shift32.c
+@@ -0,0 +1,13 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv32gc -mabi=ilp32" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-g" } } */
++
++int foo(int a)
++{
++  return (a << 8) & 24320;
++}
++
++/* { dg-final { scan-assembler-times "\\sandi\\s" 1 } } */
++/* { dg-final { scan-assembler-times "\\sslli\\s" 1 } } */
++/* { dg-final { scan-assembler-not "\\sli\\s" } } */
++/* { dg-final { scan-assembler-not "\\saddi\\s" } } */
+\ No newline at end of file
+diff --git a/gcc/testsuite/gcc.target/riscv/and-shift64.c b/gcc/testsuite/gcc.target/riscv/and-shift64.c
+new file mode 100644
+index 00000000000..ccfaedd508a
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/and-shift64.c
+@@ -0,0 +1,13 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc -mabi=lp64" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-g" } } */
++
++long long foo(long long a)
++{
++  return (a << 8) & 24320;
++}
++
++/* { dg-final { scan-assembler-times "\\sandi\\s" 1 } } */
++/* { dg-final { scan-assembler-times "\\sslli\\s" 1 } } */
++/* { dg-final { scan-assembler-not "\\sli\\s" } } */
++/* { dg-final { scan-assembler-not "\\saddi\\s" } } */
+\ No newline at end of file
