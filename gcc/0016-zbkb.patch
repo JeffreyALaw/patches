@@ -1,0 +1,88 @@
+diff --git a/gcc/config/riscv/crypto.md b/gcc/config/riscv/crypto.md
+index b632312ade2..b9cac78fce1 100644
+--- a/gcc/config/riscv/crypto.md
++++ b/gcc/config/riscv/crypto.md
+@@ -107,7 +107,7 @@ (define_insn "riscv_pack_<X:mode><HISI:mode>"
+ ;; This is slightly more complex than the other pack patterns
+ ;; that fully expose the RTL as it needs to self-adjust to
+ ;; rv32 and rv64.  But it's not that hard.
+-(define_insn "*riscv_xpack_<X:mode>_2"
++(define_insn "riscv_xpack_<X:mode>_<HX:mode>_2"
+   [(set (match_operand:X 0 "register_operand" "=r")
+ 	(ior:X (ashift:X (match_operand:X 1 "register_operand" "r")
+ 			 (match_operand 2 "immediate_operand" "n"))
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index a99211d56b1..91fefacee80 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -1123,6 +1123,22 @@ riscv_build_integer (struct riscv_integer_op *codes, HOST_WIDE_INT value,
+ 	}
+     }
+ 
++  /* With pack we can generate a 64 bit constant with the same high
++     and low 32 bits triviall.  */
++  if (cost > 3 && TARGET_64BIT && TARGET_ZBKB)
++    {
++      unsigned HOST_WIDE_INT loval = value & 0xffffffff;
++      unsigned HOST_WIDE_INT hival = value & ~loval;
++      if (hival >> 32 == loval)
++	{
++	  cost = 1 + riscv_build_integer_1 (codes, sext_hwi (loval, 32), mode);
++	  codes[cost - 1].code = CONCAT;
++	  codes[cost - 1].value = 0;
++	  codes[cost - 1].use_uw = false;
++	}
++
++    }
++
+   return cost;
+ }
+ 
+@@ -2679,6 +2695,13 @@ riscv_move_integer (rtx temp, rtx dest, HOST_WIDE_INT value,
+ 	      rtx t = can_create_pseudo_p () ? gen_reg_rtx (mode) : temp;
+ 	      x = riscv_emit_set (t, x);
+ 	    }
++	  else if (codes[i].code == CONCAT)
++	    {
++	      rtx t = can_create_pseudo_p () ? gen_reg_rtx (mode) : temp;
++	      rtx t2 = gen_lowpart (SImode, x);
++	      emit_insn (gen_riscv_xpack_di_si_2 (t, x, GEN_INT (32), t2));
++	      x = t;
++	    }
+ 	  else
+ 	    x = gen_rtx_fmt_ee (codes[i].code, mode,
+ 				x, GEN_INT (codes[i].value));
+diff --git a/gcc/testsuite/gcc.target/riscv/synthesis-9.c b/gcc/testsuite/gcc.target/riscv/synthesis-9.c
+new file mode 100644
+index 00000000000..cc622188abc
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/synthesis-9.c
+@@ -0,0 +1,28 @@
++/* { dg-do compile } */
++/* { dg-require-effective-target rv64 } */
++/* We aggressively skip as we really just need to test the basic synthesis
++   which shouldn't vary based on the optimization level.  -O1 seems to work
++   and eliminates the usual sources of extraneous dead code that would throw
++   off the counts.  */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" "-O2" "-O3" "-Os" "-Oz" "-flto" } } */
++/* { dg-options "-march=rv64gc_zba_zbb_zbkb_zbs" } */
++
++/* Rather than test for a specific synthesis of all these constants or
++   having thousands of tests each testing one variant, we just test the
++   total number of instructions.
++
++   This isn't expected to change much and any change is worthy of a look.  */
++/* { dg-final { scan-assembler-times "\\t(add|addi|bseti|li|pack|ret|sh1add|sh2add|sh3add|slli|srli|xori)" 40 } } */
++
++
++
++unsigned long foo_0xf857f2def857f2de(void) { return 0xf857f2def857f2deUL; }
++unsigned long foo_0x99660e6399660e63(void) { return 0x99660e6399660e63UL; }
++unsigned long foo_0x937f1b75937f1b75(void) { return 0x937f1b75937f1b75UL; }
++unsigned long foo_0xb5019fa0b5019fa0(void) { return 0xb5019fa0b5019fa0UL; }
++unsigned long foo_0xb828e6c1b828e6c1(void) { return 0xb828e6c1b828e6c1UL; }
++unsigned long foo_0x839d87e9839d87e9(void) { return 0x839d87e9839d87e9UL; }
++unsigned long foo_0xc29617c1c29617c1(void) { return 0xc29617c1c29617c1UL; }
++unsigned long foo_0xa4118119a4118119(void) { return 0xa4118119a4118119UL; }
++unsigned long foo_0x8c01df7d8c01df7d(void) { return 0x8c01df7d8c01df7dUL; }
++unsigned long foo_0xf0e23d6bf0e23d6b(void) { return 0xf0e23d6bf0e23d6bUL; }
