@@ -1,0 +1,763 @@
+
+
+This pass detects cases of expensive store forwarding and tries to avoid them
+by reordering the stores and using suitable bit insertion sequences.
+For example it can transform this:
+
+     strb    w2, [x1, 1]
+     ldr     x0, [x1]      # Expensive store forwarding to larger load.
+
+To:
+
+     ldr     x0, [x1]
+     strb    w2, [x1]
+     bfi     x0, x2, 0, 8
+
+Assembly like this can appear with bitfields or type punning / unions.
+On stress-ng when running the cpu-union microbenchmark the following speedups
+have been observed.
+
+  Neoverse-N1:      +29.4%
+  Intel Coffeelake: +13.1%
+  AMD 5950X:        +17.5%
+
+gcc/ChangeLog:
+
+	* Makefile.in: Add avoid-store-forwarding.o.
+	* common.opt: New option -favoid-store-forwarding.
+	* params.opt: New param store-forwarding-max-distance.
+	* doc/invoke.texi: Document new pass.
+	* doc/passes.texi: Document new pass.
+	* passes.def: Schedule a new pass.
+	* tree-pass.h (make_pass_rtl_avoid_store_forwarding): Declare.
+	* avoid-store-forwarding.cc: New file.
+
+gcc/testsuite/ChangeLog:
+
+	* gcc.target/aarch64/avoid-store-forwarding-1.c: New test.
+	* gcc.target/aarch64/avoid-store-forwarding-2.c: New test.
+	* gcc.target/aarch64/avoid-store-forwarding-3.c: New test.
+	* gcc.target/aarch64/avoid-store-forwarding-4.c: New test.
+
+Signed-off-by: Manolis Tsamis <manolis.tsamis@vrull.eu>
+---
+
+Changes in v2:
+        - Allow modes that are not scalar_int_mode.
+        - Introduce simple costing to avoid unprofitable transformations.
+        - Reject bit insert sequences that spill to memory.
+        - Document new pass.
+        - Fix and add testcases.
+
+ gcc/Makefile.in                               |   1 +
+ gcc/avoid-store-forwarding.cc                 | 578 ++++++++++++++++++
+ gcc/common.opt                                |   4 +
+ gcc/doc/invoke.texi                           |   9 +
+ gcc/doc/passes.texi                           |   8 +
+ gcc/params.opt                                |   4 +
+ gcc/passes.def                                |   1 +
+ .../aarch64/avoid-store-forwarding-1.c        |  28 +
+ .../aarch64/avoid-store-forwarding-2.c        |  39 ++
+ .../aarch64/avoid-store-forwarding-3.c        |  31 +
+ .../aarch64/avoid-store-forwarding-4.c        |  24 +
+ gcc/tree-pass.h                               |   1 +
+ 12 files changed, 728 insertions(+)
+ create mode 100644 gcc/avoid-store-forwarding.cc
+ create mode 100644 gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-1.c
+ create mode 100644 gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-2.c
+ create mode 100644 gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-3.c
+ create mode 100644 gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-4.c
+
+diff --git a/gcc/Makefile.in b/gcc/Makefile.in
+index c983b0c102a..1fd68c7d182 100644
+--- a/gcc/Makefile.in
++++ b/gcc/Makefile.in
+@@ -1683,6 +1683,7 @@ OBJS = \
+ 	statistics.o \
+ 	stmt.o \
+ 	stor-layout.o \
++	avoid-store-forwarding.o \
+ 	store-motion.o \
+ 	streamer-hooks.o \
+ 	stringpool.o \
+diff --git a/gcc/avoid-store-forwarding.cc b/gcc/avoid-store-forwarding.cc
+new file mode 100644
+index 00000000000..b641451a6b7
+--- /dev/null
++++ b/gcc/avoid-store-forwarding.cc
+@@ -0,0 +1,578 @@
++/* Avoid store forwarding optimization pass.
++   Copyright (C) 2024 Free Software Foundation, Inc.
++   Contributed by VRULL GmbH.
++
++   This file is part of GCC.
++
++   GCC is free software; you can redistribute it and/or modify it
++   under the terms of the GNU General Public License as published by
++   the Free Software Foundation; either version 3, or (at your option)
++   any later version.
++
++   GCC is distributed in the hope that it will be useful, but
++   WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   General Public License for more details.
++
++   You should have received a copy of the GNU General Public License
++   along with GCC; see the file COPYING3.  If not see
++   <http://www.gnu.org/licenses/>.  */
++
++#include "config.h"
++#include "system.h"
++#include "coretypes.h"
++#include "backend.h"
++#include "rtl.h"
++#include "alias.h"
++#include "rtlanal.h"
++#include "tree-pass.h"
++#include "cselib.h"
++#include "predict.h"
++#include "insn-config.h"
++#include "expmed.h"
++#include "recog.h"
++#include "regset.h"
++#include "df.h"
++#include "expr.h"
++#include "memmodel.h"
++#include "emit-rtl.h"
++#include "vec.h"
++
++/* This pass tries to detect and avoid cases of store forwarding.
++   On many processors there is a large penalty when smaller stores are
++   forwarded to larger loads.  The idea used to avoid the stall is to move
++   the store after the load and in addition emit a bit insert sequence so
++   the load register has the correct value.  For example the following:
++
++     strb    w2, [x1, 1]
++     ldr     x0, [x1]
++
++   Will be transformed to:
++
++     ldr     x0, [x1]
++     and     w2, w2, 255
++     strb    w2, [x1]
++     bfi     x0, x2, 0, 8
++*/
++
++namespace {
++
++const pass_data pass_data_avoid_store_forwarding =
++{
++  RTL_PASS, /* type.  */
++  "avoid_store_forwarding", /* name.  */
++  OPTGROUP_NONE, /* optinfo_flags.  */
++  TV_NONE, /* tv_id.  */
++  0, /* properties_required.  */
++  0, /* properties_provided.  */
++  0, /* properties_destroyed.  */
++  0, /* todo_flags_start.  */
++  TODO_df_finish /* todo_flags_finish.  */
++};
++
++class pass_rtl_avoid_store_forwarding : public rtl_opt_pass
++{
++public:
++  pass_rtl_avoid_store_forwarding (gcc::context *ctxt)
++    : rtl_opt_pass (pass_data_avoid_store_forwarding, ctxt)
++  {}
++
++  /* opt_pass methods: */
++  virtual bool gate (function *)
++    {
++      return flag_avoid_store_forwarding && optimize >= 1
++	     && optimize_insn_for_speed_p ();
++    }
++
++  virtual unsigned int execute (function *) override;
++}; // class pass_rtl_avoid_store_forwarding
++
++typedef struct
++{
++  /* The store instruction that is a store forwarding candidate.  */
++  rtx_insn *store_insn;
++  /* SET_DEST (single_set (store_insn)).  */
++  rtx store_mem;
++  /* The temporary that will hold the stored value at the original store
++     position.  */
++  rtx mov_reg;
++  /* The instruction sequence that inserts the stored value's bits at the
++     appropriate position in the loaded value.  */
++  rtx_insn *bits_insert_insns;
++  /* The byte offset for the store's position within the load.  */
++  HOST_WIDE_INT offset;
++
++  unsigned int insn_cnt;
++  bool remove;
++  bool forwarded;
++} store_info;
++
++static unsigned int stats_sf_detected = 0;
++static unsigned int stats_sf_avoided = 0;
++
++static rtx
++get_load_mem (rtx expr)
++{
++  if (!expr)
++    return NULL_RTX;
++
++  rtx mem = SET_SRC (expr);
++
++  if (GET_CODE (mem) == ZERO_EXTEND
++      || GET_CODE (mem) == SIGN_EXTEND)
++    mem = XEXP (mem, 0);
++
++  if (MEM_P (mem))
++    return mem;
++  else
++    return NULL_RTX;
++}
++
++/* Return true iff a store to STORE_MEM would write to a sub-region of bytes
++   from what LOAD_MEM would read.  If true also store the relative byte offset
++   of the store within the load to OFF_VAL.  */
++
++static bool
++is_store_forwarding (rtx store_mem, rtx load_mem, HOST_WIDE_INT *off_val)
++{
++  if (known_ge (GET_MODE_SIZE (GET_MODE (store_mem)),
++		GET_MODE_SIZE (GET_MODE (load_mem))))
++    return false;
++
++  rtx off = simplify_gen_binary (MINUS, GET_MODE (XEXP (store_mem, 0)),
++				 XEXP (store_mem, 0), XEXP (load_mem, 0));
++
++  if (CONST_INT_P (off))
++    {
++      *off_val = INTVAL (off);
++      poly_uint64 store_mode_size = GET_MODE_SIZE (GET_MODE (store_mem));
++      poly_uint64 load_mode_size = GET_MODE_SIZE (GET_MODE (load_mem));
++      unsigned HOST_WIDE_INT store_size, load_size;
++      if (store_mode_size.is_constant (&store_size)
++	  && load_mode_size.is_constant (&load_size))
++	{
++	  return *off_val >= 0
++		 && (store_size + *off_val <= load_size);
++	}
++    }
++
++  return false;
++}
++
++/* Return a bit insertion sequence that would make DEST have the correct value
++   if the store represented by STORE_INFO were to be moved after DEST.  */
++
++static rtx_insn *
++generate_bit_insert_sequence (store_info *store_info, rtx dest,
++			      machine_mode load_inner_mode)
++{
++  poly_uint64 store_mode_size
++    = GET_MODE_SIZE (GET_MODE (store_info->store_mem));
++  poly_uint64 load_mode_size = GET_MODE_SIZE (load_inner_mode);
++  unsigned HOST_WIDE_INT store_size = store_mode_size.to_constant ();
++  unsigned HOST_WIDE_INT load_size = load_mode_size.to_constant ();
++  HOST_WIDE_INT bf_offset_bytes;
++
++  if (BYTES_BIG_ENDIAN)
++    bf_offset_bytes = load_size - store_size - store_info->offset;
++  else
++    bf_offset_bytes = store_info->offset;
++
++  start_sequence ();
++  store_bit_field (dest, store_size * BITS_PER_UNIT,
++		   bf_offset_bytes * BITS_PER_UNIT, 0, 0,
++		   GET_MODE (dest), store_info->mov_reg,
++		   false, false);
++
++  rtx_insn *insns = get_insns ();
++
++  for (rtx_insn *insn = insns; insn; insn = NEXT_INSN (insn))
++    if (contains_mem_rtx_p (PATTERN (insn)))
++      return NULL;
++
++  end_sequence ();
++
++  return insns;
++}
++
++/* Given a list of small stores that are forwarded to LOAD_INSN, try to
++   rearrange them so that a store-forwarding penalty doesn't occur.  */
++
++static bool
++process_forwardings (vec<store_info> &stores, rtx_insn *load_insn)
++{
++  rtx load = single_set (load_insn);
++  machine_mode load_inner_mode = GET_MODE (get_load_mem (load));
++  poly_uint64 load_mode_size = GET_MODE_SIZE (load_inner_mode);
++  HOST_WIDE_INT load_size = load_mode_size.to_constant ();
++
++  /* If the stores cover all the bytes of the load without overlap then we can
++     eliminate the load entirely and use the computed value instead.  */
++
++  sbitmap forwarded_bytes = sbitmap_alloc (load_size);
++
++  unsigned int i;
++  store_info* it;
++  FOR_EACH_VEC_ELT (stores, i, it)
++    {
++      poly_uint64 store_mode_size = GET_MODE_SIZE (GET_MODE (it->store_mem));
++      HOST_WIDE_INT store_size = store_mode_size.to_constant ();
++      if (bitmap_bit_in_range_p (forwarded_bytes, it->offset,
++				 it->offset + store_size - 1))
++	break;
++      bitmap_set_range (forwarded_bytes, it->offset, store_size);
++    }
++
++  bitmap_not (forwarded_bytes, forwarded_bytes);
++  bool eliminate_load = bitmap_empty_p (forwarded_bytes);
++
++  stats_sf_detected++;
++
++  if (dump_file)
++    {
++      fprintf (dump_file, "Store forwarding%s detected:\n",
++	       (stores.length () > 1) ? "s" : "");
++
++      FOR_EACH_VEC_ELT (stores, i, it)
++	{
++	  fprintf (dump_file, "From: ");
++	  print_rtl_single (dump_file, it->store_insn);
++	}
++
++      fprintf (dump_file, "To: ");
++      print_rtl_single (dump_file, load_insn);
++
++      if (eliminate_load)
++	fprintf (dump_file, "(Load elimination candidate)\n");
++    }
++
++  rtx dest;
++  if (eliminate_load)
++    dest = gen_reg_rtx (load_inner_mode);
++  else
++    dest = SET_DEST (load);
++
++  int move_to_front = -1;
++  int total_cost = 0;
++
++  /* Check if we can emit bit insert instructions for all forwarded stores.  */
++  FOR_EACH_VEC_ELT (stores, i, it)
++    {
++      it->mov_reg = gen_reg_rtx (GET_MODE (it->store_mem));
++      rtx_insn *insns = NULL;
++
++      /* If we're eliminating the load then find the store with zero offset
++	 and use it as the base register to avoid a bit insert.  */
++      if (eliminate_load && it->offset == 0)
++	{
++	  start_sequence ();
++
++	  /* We can use a paradoxical subreg to force this to a wider mode, as
++	     the only use will be inserting the bits (i.e., we don't care about
++	     the value of the higher bits).  */
++	  rtx ext0 = gen_rtx_SUBREG (GET_MODE (dest), it->mov_reg, 0);
++	  rtx_insn *move0 = emit_move_insn (dest, ext0);
++	  if (recog_memoized (move0) >= 0)
++	    {
++	      insns = get_insns ();
++	      move_to_front = (int) i;
++	    }
++
++	  end_sequence ();
++	}
++
++      if (!insns)
++	insns = generate_bit_insert_sequence (&(*it), dest, load_inner_mode);
++
++      if (!insns)
++	{
++	  if (dump_file)
++	    {
++	      fprintf (dump_file, "Failed due to: ");
++	      print_rtl_single (dump_file, it->store_insn);
++	    }
++	  return false;
++	}
++
++      total_cost += seq_cost (insns, true);
++      it->bits_insert_insns = insns;
++    }
++
++  if (eliminate_load)
++    total_cost -= COSTS_N_INSNS (1);
++
++  /* param_store_forwarding_max_distance should be somewhat correlated to the
++     store forwarding penalty; if the penalty is large then it is justified to
++     increase the window size.  As such we can use it to reject sequences that
++     are clearly unprofitable.  */
++  int max_cost = COSTS_N_INSNS (param_store_forwarding_max_distance / 2);
++  if (total_cost > max_cost)
++    {
++      if (dump_file)
++	fprintf (dump_file, "Not transformed due to sequence cost: %d > %d.\n",
++		 total_cost, max_cost);
++
++      return false;
++    }
++
++  /* If we have a move instead of bit insert, it needs to be emitted first in
++     the resulting sequence.  */
++  if (move_to_front != -1)
++    {
++      stores.safe_push (stores[move_to_front]);
++      stores.ordered_remove (move_to_front);
++    }
++
++  if (dump_file)
++    {
++      fprintf (dump_file, "Store forwarding%s avoided with bit inserts:\n",
++	       (stores.length () > 1) ? "s" : "");
++
++      FOR_EACH_VEC_ELT (stores, i, it)
++	{
++	  if (stores.length () > 1)
++	    {
++	      fprintf (dump_file, "For: ");
++	      print_rtl_single (dump_file, it->store_insn);
++	    }
++
++	  fprintf (dump_file, "With sequence:\n");
++
++	  for (rtx_insn *insn = it->bits_insert_insns; insn;
++	       insn = NEXT_INSN (insn))
++	    {
++	      fprintf (dump_file, "  ");
++	      print_rtl_single (dump_file, insn);
++	    }
++	}
++    }
++
++  stats_sf_avoided++;
++
++  if (eliminate_load)
++    {
++      machine_mode outter_mode = GET_MODE (SET_DEST (load));
++      rtx_code extend = ZERO_EXTEND;
++      if (outter_mode != load_inner_mode)
++	extend = GET_CODE (SET_SRC (load));
++
++      rtx load_value = simplify_gen_unary (extend, outter_mode, dest,
++					   load_inner_mode);
++      rtx load_move = gen_move_insn (SET_DEST (load), load_value);
++      df_insn_rescan (emit_insn_after (load_move, load_insn));
++    }
++
++  FOR_EACH_VEC_ELT (stores, i, it)
++    {
++      /* Emit code that updated the loaded value to account for the
++	 missing store.  */
++      df_insn_rescan (emit_insn_after (it->bits_insert_insns, load_insn));
++    }
++
++  FOR_EACH_VEC_ELT (stores, i, it)
++    {
++      rtx store_set = single_set (it->store_insn);
++      /* Create a register move at the store's original position to save the
++	 stored value.  */
++      rtx mov1 = gen_move_insn (it->mov_reg, SET_SRC (store_set));
++      df_insn_rescan (emit_insn_before (mov1, it->store_insn));
++      /* Create a new store after the load with the saved original value.
++	 This avoids the forwarding stall.  */
++      rtx mov2 = gen_move_insn (SET_DEST (store_set), it->mov_reg);
++      df_insn_rescan (emit_insn_after (mov2, load_insn));
++      /* Done, delete the original store.  */
++      set_insn_deleted (it->store_insn);
++    }
++
++  df_insn_rescan (load_insn);
++
++  if (eliminate_load)
++    set_insn_deleted (load_insn);
++
++  return true;
++}
++
++/* Process BB for expensive store forwardings.  */
++
++static void
++avoid_store_forwarding (basic_block bb)
++{
++  auto_vec<store_info, 8> store_exprs;
++  rtx_insn *insn;
++  unsigned int insn_cnt = 0;
++
++  FOR_BB_INSNS (bb, insn)
++    {
++      if (!NONDEBUG_INSN_P (insn))
++	continue;
++
++      rtx set = single_set (insn);
++
++      /* Store forwarding issues are unlikely if we cross a call.
++	 Clear store forwarding candidates if we can't understand INSN.  */
++      if (CALL_P (insn) || !set || volatile_refs_p (set))
++	{
++	  store_exprs.truncate (0);
++	  continue;
++	}
++
++      rtx load_mem = get_load_mem (set);
++      int removed_count = 0;
++
++      if (MEM_P (SET_DEST (set)))
++	{
++	  /* Record store forwarding candidate.  */
++	  store_info info;
++	  info.store_insn = insn;
++	  info.store_mem = SET_DEST (set);
++	  info.insn_cnt = insn_cnt;
++	  info.remove = false;
++	  info.forwarded = false;
++	  store_exprs.safe_push (info);
++	}
++      else if (load_mem)
++	{
++	  /* Process load for possible store forwardings.  */
++	  auto_vec<store_info> forwardings;
++	  bool partial_forwarding = false;
++	  bool remove_rest = false;
++
++	  unsigned int i;
++	  store_info *it;
++	  FOR_EACH_VEC_ELT_REVERSE (store_exprs, i, it)
++	    {
++	      rtx store_mem = it->store_mem;
++	      HOST_WIDE_INT off_val;
++
++	      if (remove_rest)
++		{
++		  it->remove = true;
++		  removed_count++;
++		}
++	      else if (is_store_forwarding (store_mem, load_mem, &off_val))
++		{
++		  /* Check if moving this store after the load is legal.  */
++		  bool write_dep = false;
++		  for (unsigned int j = store_exprs.length () - 1; j != i; j--)
++		    if (!store_exprs[j].forwarded
++			&& output_dependence (store_mem,
++					      store_exprs[j].store_mem))
++		      {
++			write_dep = true;
++			break;
++		      }
++
++		  if (!write_dep)
++		    {
++		      it->forwarded = true;
++		      it->offset = off_val;
++		      forwardings.safe_push (*it);
++		    }
++		  else
++		    partial_forwarding = true;
++
++		  it->remove = true;
++		  removed_count++;
++		}
++	      else if (true_dependence (store_mem, GET_MODE (store_mem),
++					load_mem))
++		{
++		  /* We cannot keep a store forwarding candidate if it possibly
++		     interferes with this load.  */
++		  it->remove = true;
++		  removed_count++;
++		  remove_rest = true;
++		}
++	    }
++
++	  if (!forwardings.is_empty () && !partial_forwarding)
++	    process_forwardings (forwardings, insn);
++	}
++      else
++	{
++	  rtx reg = SET_DEST (set);
++
++	  while (GET_CODE (reg) == ZERO_EXTRACT
++		|| GET_CODE (reg) == STRICT_LOW_PART
++		|| GET_CODE (reg) == SUBREG)
++	    reg = XEXP (reg, 0);
++
++	  /* Drop store forwarding candidates when the address register is
++	     overwritten.  */
++	  if (REG_P (reg))
++	    {
++	      bool remove_rest = false;
++	      unsigned int i;
++	      store_info *it;
++	      FOR_EACH_VEC_ELT_REVERSE (store_exprs, i, it)
++		{
++		  if (remove_rest
++		      || reg_overlap_mentioned_p (reg, it->store_mem))
++		    {
++		      it->remove = true;
++		      removed_count++;
++		      remove_rest = true;
++		    }
++		}
++	    }
++	  else
++	    {
++	      /* We can't understand INSN.  */
++	      store_exprs.truncate (0);
++	      continue;
++	    }
++	}
++
++      if (removed_count)
++	{
++	  unsigned int i, j;
++	  store_info *it;
++	  VEC_ORDERED_REMOVE_IF (store_exprs, i, j, it, it->remove);
++	}
++
++      /* Don't consider store forwarding if the RTL instruction distance is
++	 more than PARAM_STORE_FORWARDING_MAX_DISTANCE.  */
++      if (!store_exprs.is_empty ()
++	  && (store_exprs[0].insn_cnt
++	      + param_store_forwarding_max_distance <= insn_cnt))
++	store_exprs.ordered_remove (0);
++
++      insn_cnt++;
++    }
++}
++
++unsigned int
++pass_rtl_avoid_store_forwarding::execute (function *fn)
++{
++  df_set_flags (DF_DEFER_INSN_RESCAN);
++  df_note_add_problem ();
++
++  init_alias_analysis ();
++  cselib_init (CSELIB_RECORD_MEMORY | CSELIB_PRESERVE_CONSTANTS);
++
++  stats_sf_detected = 0;
++  stats_sf_avoided = 0;
++
++  basic_block bb;
++  FOR_EACH_BB_FN (bb, fn)
++    avoid_store_forwarding (bb);
++
++  end_alias_analysis ();
++  cselib_finish ();
++  df_analyze ();
++
++  statistics_counter_event (fn, "Store forwardings detected: ",
++			    stats_sf_detected);
++  statistics_counter_event (fn, "Store forwardings avoided: ",
++			    stats_sf_detected);
++
++  return 0;
++}
++
++} // anon namespace.
++
++rtl_opt_pass *
++make_pass_rtl_avoid_store_forwarding (gcc::context *ctxt)
++{
++  return new pass_rtl_avoid_store_forwarding (ctxt);
++}
+diff --git a/gcc/common.opt b/gcc/common.opt
+index 2c078fdd1f8..2fcf7170c2a 100644
+--- a/gcc/common.opt
++++ b/gcc/common.opt
+@@ -1747,6 +1747,10 @@ fgcse-sm
+ Common Var(flag_gcse_sm) Init(0) Optimization
+ Perform store motion after global common subexpression elimination.
+ 
++favoid-store-forwarding
++Common Var(flag_avoid_store_forwarding) Init(0) Optimization
++Try to avoid store forwarding.
++
+ fgcse-las
+ Common Var(flag_gcse_las) Init(0) Optimization
+ Perform redundant load after store elimination in global common subexpression
+diff --git a/gcc/doc/invoke.texi b/gcc/doc/invoke.texi
+index 4e8967fd8ab..c769744d178 100644
+--- a/gcc/doc/invoke.texi
++++ b/gcc/doc/invoke.texi
+@@ -12657,6 +12657,15 @@ loop unrolling.
+ This option is enabled by default at optimization levels @option{-O1},
+ @option{-O2}, @option{-O3}, @option{-Os}.
+ 
++@opindex favoid-store-forwarding
++@item -favoid-store-forwarding
++@itemx -fno-avoid-store-forwarding
++Many CPUs will stall for many cycles when a load partially depends on previous
++smaller stores.  This pass tries to detect such cases and avoid the penalty by
++changing the order of the load and store and then fixing up the loaded value.
++
++Disabled by default.
++
+ @opindex ffp-contract
+ @item -ffp-contract=@var{style}
+ @option{-ffp-contract=off} disables floating-point expression contraction.
+diff --git a/gcc/doc/passes.texi b/gcc/doc/passes.texi
+index b50d3d5635b..fca1d437331 100644
+--- a/gcc/doc/passes.texi
++++ b/gcc/doc/passes.texi
+@@ -977,6 +977,14 @@ and addressing mode selection.  The pass is run twice, with values
+ being propagated into loops only on the second run.  The code is
+ located in @file{fwprop.cc}.
+ 
++@item Store forwarding avoidance
++
++This pass attempts to reduce the overhead of store to load forwarding.
++It detects when a load reads from one or more previous smaller stores and
++then rearranges them so that the stores are done after the load.  The loaded
++value is adjusted with a series of bit insert instructions so that it stays
++the same.  The code is located in @file{avoid-store-forwarding.cc}.
++
+ @item Common subexpression elimination
+ 
+ This pass removes redundant computation within basic blocks, and
+diff --git a/gcc/params.opt b/gcc/params.opt
+index d34ef545bf0..b8115f5c27a 100644
+--- a/gcc/params.opt
++++ b/gcc/params.opt
+@@ -1032,6 +1032,10 @@ Allow the store merging pass to introduce unaligned stores if it is legal to do
+ Common Joined UInteger Var(param_store_merging_max_size) Init(65536) IntegerRange(1, 65536) Param Optimization
+ Maximum size of a single store merging region in bytes.
+ 
++-param=store-forwarding-max-distance=
++Common Joined UInteger Var(param_store_forwarding_max_distance) Init(10) IntegerRange(1, 1000) Param Optimization
++Maximum number of instruction distance that a small store forwarded to a larger load may stall.
++
+ -param=switch-conversion-max-branch-ratio=
+ Common Joined UInteger Var(param_switch_conversion_branch_ratio) Init(8) IntegerRange(1, 65536) Param Optimization
+ The maximum ratio between array size and switch branches for a switch conversion to take place.
+diff --git a/gcc/passes.def b/gcc/passes.def
+index 1cbbd413097..1e608774707 100644
+--- a/gcc/passes.def
++++ b/gcc/passes.def
+@@ -462,6 +462,7 @@ along with GCC; see the file COPYING3.  If not see
+       NEXT_PASS (pass_lower_subreg);
+       NEXT_PASS (pass_df_initialize_opt);
+       NEXT_PASS (pass_cse);
++      NEXT_PASS (pass_rtl_avoid_store_forwarding);
+       NEXT_PASS (pass_rtl_fwprop);
+       NEXT_PASS (pass_rtl_cprop);
+       NEXT_PASS (pass_rtl_pre);
+diff --git a/gcc/tree-pass.h b/gcc/tree-pass.h
+index 29267589eeb..49957ba3373 100644
+--- a/gcc/tree-pass.h
++++ b/gcc/tree-pass.h
+@@ -570,6 +570,7 @@ extern rtl_opt_pass *make_pass_rtl_dse3 (gcc::context *ctxt);
+ extern rtl_opt_pass *make_pass_rtl_cprop (gcc::context *ctxt);
+ extern rtl_opt_pass *make_pass_rtl_pre (gcc::context *ctxt);
+ extern rtl_opt_pass *make_pass_rtl_hoist (gcc::context *ctxt);
++extern rtl_opt_pass *make_pass_rtl_avoid_store_forwarding (gcc::context *ctxt);
+ extern rtl_opt_pass *make_pass_rtl_store_motion (gcc::context *ctxt);
+ extern rtl_opt_pass *make_pass_cse_after_global_opts (gcc::context *ctxt);
+ extern rtl_opt_pass *make_pass_rtl_ifcvt (gcc::context *ctxt);
+-- 
+2.44.0
+
+
