@@ -155,3 +155,19 @@ index f6069fc7c..6cebd10a0 100644
  
  typedef void (*write_proc_t)(char *buf, int nbytes);
  typedef int  (*read_proc_t)(char *buf, int nbytes);
+diff --git a/newlib/libc/stdlib/system.c b/newlib/libc/stdlib/system.c
+index f30b7df80..04b285bcc 100644
+--- a/newlib/libc/stdlib/system.c
++++ b/newlib/libc/stdlib/system.c
+@@ -56,6 +56,10 @@ Supporting OS subroutines required: <<_exit>>, <<_execve>>, <<_fork_r>>,
+ static int do_system (struct _reent *ptr, const char *s);
+ #endif
+ 
++#if defined(HAVE_SYSTEM)
++int _system(const char *command);
++#endif
++
+ int
+ _system_r (struct _reent *ptr,
+      const char *s)
+
