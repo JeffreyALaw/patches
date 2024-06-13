@@ -38,9 +38,18 @@ gcc/testsuite/ChangeLog:
 	* gcc.target/aarch64/avoid-store-forwarding-2.c: New test.
 	* gcc.target/aarch64/avoid-store-forwarding-3.c: New test.
 	* gcc.target/aarch64/avoid-store-forwarding-4.c: New test.
+        * gcc.target/aarch64/avoid-store-forwarding-5.c: New test.
 
 Signed-off-by: Manolis Tsamis <manolis.tsamis@vrull.eu>
 ---
+
+Changes in v3:
+        - Only emit SUBREG after calling validate_subreg.
+        - Fix memory corruption due to vec self-reference.
+        - Fix bitmap_bit_in_range_p ICE due to BLKMode.
+        - Reject MEM to MEM sets.
+        - Add get_load_mem comment.
+        - Add new testcase.
 
 Changes in v2:
         - Allow modes that are not scalar_int_mode.
@@ -50,7 +59,7 @@ Changes in v2:
         - Fix and add testcases.
 
  gcc/Makefile.in                               |   1 +
- gcc/avoid-store-forwarding.cc                 | 578 ++++++++++++++++++
+ gcc/avoid-store-forwarding.cc                 | 587 ++++++++++++++++++
  gcc/common.opt                                |   4 +
  gcc/doc/invoke.texi                           |   9 +
  gcc/doc/passes.texi                           |   8 +
@@ -59,20 +68,22 @@ Changes in v2:
  .../aarch64/avoid-store-forwarding-1.c        |  28 +
  .../aarch64/avoid-store-forwarding-2.c        |  39 ++
  .../aarch64/avoid-store-forwarding-3.c        |  31 +
- .../aarch64/avoid-store-forwarding-4.c        |  24 +
+ .../aarch64/avoid-store-forwarding-4.c        |  23 +
+ .../aarch64/avoid-store-forwarding-5.c        |  38 ++
  gcc/tree-pass.h                               |   1 +
- 12 files changed, 728 insertions(+)
+ 13 files changed, 774 insertions(+)
  create mode 100644 gcc/avoid-store-forwarding.cc
  create mode 100644 gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-1.c
  create mode 100644 gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-2.c
  create mode 100644 gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-3.c
  create mode 100644 gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-4.c
+ create mode 100644 gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-5.c
 
 diff --git a/gcc/Makefile.in b/gcc/Makefile.in
-index c983b0c102a..1fd68c7d182 100644
+index f5adb647d3f..f31a486b3e0 100644
 --- a/gcc/Makefile.in
 +++ b/gcc/Makefile.in
-@@ -1683,6 +1683,7 @@ OBJS = \
+@@ -1684,6 +1684,7 @@ OBJS = \
  	statistics.o \
  	stmt.o \
  	stor-layout.o \
@@ -82,10 +93,10 @@ index c983b0c102a..1fd68c7d182 100644
  	stringpool.o \
 diff --git a/gcc/avoid-store-forwarding.cc b/gcc/avoid-store-forwarding.cc
 new file mode 100644
-index 00000000000..b641451a6b7
+index 00000000000..0ade5838343
 --- /dev/null
 +++ b/gcc/avoid-store-forwarding.cc
-@@ -0,0 +1,578 @@
+@@ -0,0 +1,587 @@
 +/* Avoid store forwarding optimization pass.
 +   Copyright (C) 2024 Free Software Foundation, Inc.
 +   Contributed by VRULL GmbH.
@@ -168,7 +179,7 @@ index 00000000000..b641451a6b7
 +  /* opt_pass methods: */
 +  virtual bool gate (function *)
 +    {
-+      return optimize >= 1
++      return flag_avoid_store_forwarding && optimize >= 1
 +	     && optimize_insn_for_speed_p ();
 +    }
 +
@@ -197,6 +208,9 @@ index 00000000000..b641451a6b7
 +
 +static unsigned int stats_sf_detected = 0;
 +static unsigned int stats_sf_avoided = 0;
++
++/* If expr is a SET that reads from memory then return the RTX for it's MEM
++   argument, otherwise return NULL.  Allows MEM to be zero/sign extended.  */
 +
 +static rtx
 +get_load_mem (rtx expr)
@@ -239,6 +253,7 @@ index 00000000000..b641451a6b7
 +      if (store_mode_size.is_constant (&store_size)
 +	  && load_mode_size.is_constant (&load_size))
 +	{
++	  gcc_checking_assert (store_size > 0 && load_size > 0);
 +	  return *off_val >= 0
 +		 && (store_size + *off_val <= load_size);
 +	}
@@ -350,8 +365,10 @@ index 00000000000..b641451a6b7
 +      rtx_insn *insns = NULL;
 +
 +      /* If we're eliminating the load then find the store with zero offset
-+	 and use it as the base register to avoid a bit insert.  */
-+      if (eliminate_load && it->offset == 0)
++	 and use it as the base register to avoid a bit insert if possible.  */
++      if (eliminate_load && it->offset == 0
++	  && validate_subreg (GET_MODE (dest), GET_MODE (it->mov_reg),
++			      it->mov_reg, 0))
 +	{
 +	  start_sequence ();
 +
@@ -407,7 +424,8 @@ index 00000000000..b641451a6b7
 +     the resulting sequence.  */
 +  if (move_to_front != -1)
 +    {
-+      stores.safe_push (stores[move_to_front]);
++      store_info copy = stores[move_to_front];
++      stores.safe_push (copy);
 +      stores.ordered_remove (move_to_front);
 +    }
 +
@@ -497,8 +515,10 @@ index 00000000000..b641451a6b7
 +      rtx set = single_set (insn);
 +
 +      /* Store forwarding issues are unlikely if we cross a call.
-+	 Clear store forwarding candidates if we can't understand INSN.  */
-+      if (CALL_P (insn) || !set || volatile_refs_p (set))
++	 Clear store forwarding candidates if we can't deal with INSN.  */
++      if (CALL_P (insn) || !set || volatile_refs_p (set)
++	  || GET_MODE (SET_DEST (set)) == BLKmode
++	  || MEM_P (SET_DEST (set)) && MEM_P (SET_SRC (set)))
 +	{
 +	  store_exprs.truncate (0);
 +	  continue;
@@ -665,7 +685,7 @@ index 00000000000..b641451a6b7
 +  return new pass_rtl_avoid_store_forwarding (ctxt);
 +}
 diff --git a/gcc/common.opt b/gcc/common.opt
-index 2c078fdd1f8..2fcf7170c2a 100644
+index f2bc47fdc5e..82f235673c1 100644
 --- a/gcc/common.opt
 +++ b/gcc/common.opt
 @@ -1747,6 +1747,10 @@ fgcse-sm
@@ -680,10 +700,10 @@ index 2c078fdd1f8..2fcf7170c2a 100644
  Common Var(flag_gcse_las) Init(0) Optimization
  Perform redundant load after store elimination in global common subexpression
 diff --git a/gcc/doc/invoke.texi b/gcc/doc/invoke.texi
-index 4e8967fd8ab..c769744d178 100644
+index 26e6a349d51..385ab685920 100644
 --- a/gcc/doc/invoke.texi
 +++ b/gcc/doc/invoke.texi
-@@ -12657,6 +12657,15 @@ loop unrolling.
+@@ -12694,6 +12694,15 @@ loop unrolling.
  This option is enabled by default at optimization levels @option{-O1},
  @option{-O2}, @option{-O3}, @option{-Os}.
  
@@ -734,10 +754,10 @@ index d34ef545bf0..b8115f5c27a 100644
  Common Joined UInteger Var(param_switch_conversion_branch_ratio) Init(8) IntegerRange(1, 65536) Param Optimization
  The maximum ratio between array size and switch branches for a switch conversion to take place.
 diff --git a/gcc/passes.def b/gcc/passes.def
-index 1cbbd413097..1e608774707 100644
+index 041229e47a6..655288a522f 100644
 --- a/gcc/passes.def
 +++ b/gcc/passes.def
-@@ -462,6 +462,7 @@ along with GCC; see the file COPYING3.  If not see
+@@ -463,6 +463,7 @@ along with GCC; see the file COPYING3.  If not see
        NEXT_PASS (pass_lower_subreg);
        NEXT_PASS (pass_df_initialize_opt);
        NEXT_PASS (pass_cse);
@@ -745,11 +765,200 @@ index 1cbbd413097..1e608774707 100644
        NEXT_PASS (pass_rtl_fwprop);
        NEXT_PASS (pass_rtl_cprop);
        NEXT_PASS (pass_rtl_pre);
+diff --git a/gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-1.c b/gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-1.c
+new file mode 100644
+index 00000000000..4712f101d5e
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-1.c
+@@ -0,0 +1,28 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -favoid-store-forwarding -fdump-rtl-avoid_store_forwarding" } */
++
++typedef union {
++    char arr_8[8];
++    long long_value;
++} DataUnion;
++
++long ssll_1 (DataUnion *data, char x)
++{
++  data->arr_8[0] = x;
++  return data->long_value;
++}
++
++long ssll_2 (DataUnion *data, char x)
++{
++  data->arr_8[1] = x;
++  return data->long_value;
++}
++
++long ssll_3 (DataUnion *data, char x)
++{
++  data->arr_8[7] = x;
++  return data->long_value;
++}
++
++/* { dg-final { scan-rtl-dump-times "Store forwarding detected" 3 "avoid_store_forwarding" } } */
++/* { dg-final { scan-rtl-dump-times "Store forwarding avoided" 3 "avoid_store_forwarding" } } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-2.c b/gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-2.c
+new file mode 100644
+index 00000000000..b958612173b
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-2.c
+@@ -0,0 +1,39 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -favoid-store-forwarding -fdump-rtl-avoid_store_forwarding" } */
++
++typedef union {
++    char arr_8[8];
++    int long_value;
++} DataUnion1;
++
++long no_ssll_1 (DataUnion1 *data, char x)
++{
++  data->arr_8[4] = x;
++  return data->long_value;
++}
++
++long no_ssll_2 (DataUnion1 *data, char x)
++{
++  data->arr_8[5] = x;
++  return data->long_value;
++}
++
++typedef union {
++    char arr_8[8];
++    short long_value[4];
++} DataUnion2;
++
++long no_ssll_3 (DataUnion2 *data, char x)
++{
++  data->arr_8[4] = x;
++  return data->long_value[1];
++}
++
++long no_ssll_4 (DataUnion2 *data, char x)
++{
++  data->arr_8[0] = x;
++  return data->long_value[1];
++}
++
++/* { dg-final { scan-rtl-dump-times "Store forwarding detected" 0 "avoid_store_forwarding" } } */
++/* { dg-final { scan-rtl-dump-times "Store forwarding avoided" 0 "avoid_store_forwarding" } } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-3.c b/gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-3.c
+new file mode 100644
+index 00000000000..f4814c1a4d2
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-3.c
+@@ -0,0 +1,31 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -favoid-store-forwarding -fdump-rtl-avoid_store_forwarding" } */
++
++typedef union {
++    char arr_8[8];
++    long long_value;
++} DataUnion;
++
++long ssll_multi_1 (DataUnion *data, char x)
++{
++  data->arr_8[0] = x;
++  data->arr_8[2] = x;
++  return data->long_value;
++}
++
++long ssll_multi_2 (DataUnion *data, char x)
++{
++  data->arr_8[0] = x;
++  data->arr_8[1] = 11;
++  return data->long_value;
++}
++
++long ssll_multi_3 (DataUnion *data, char x, short y)
++{
++  data->arr_8[1] = x;
++  __builtin_memcpy(data->arr_8 + 4, &y, sizeof(short));
++  return data->long_value;
++}
++
++/* { dg-final { scan-rtl-dump-times "Store forwardings detected" 3 "avoid_store_forwarding" } } */
++/* { dg-final { scan-rtl-dump-times "Store forwardings avoided" 3 "avoid_store_forwarding" } } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-4.c b/gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-4.c
+new file mode 100644
+index 00000000000..db3c6b6630b
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-4.c
+@@ -0,0 +1,23 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -favoid-store-forwarding -fdump-rtl-avoid_store_forwarding" } */
++
++typedef int v4si __attribute__ ((vector_size (16)));
++
++typedef union {
++    char arr_16[16];
++    v4si vec_value;
++} DataUnion;
++
++v4si ssll_vect_1 (DataUnion *data, char x)
++{
++  data->arr_16[0] = x;
++  return data->vec_value;
++}
++
++v4si ssll_vect_2 (DataUnion *data, int x)
++{
++  __builtin_memcpy(data->arr_16 + 4, &x, sizeof(int));
++  return data->vec_value;
++}
++
++/* { dg-final { scan-rtl-dump-times "Store forwarding detected" 2 "avoid_store_forwarding" } } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-5.c b/gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-5.c
+new file mode 100644
+index 00000000000..2522df56905
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-5.c
+@@ -0,0 +1,38 @@
++/* { dg-do compile { target int128 } } */
++/* { dg-options "-O2 -favoid-store-forwarding -fdump-rtl-avoid_store_forwarding" } */
++
++typedef float v4f __attribute__ ((vector_size (16)));
++
++typedef union {
++    float arr_2[4];
++    long long_value;
++    __int128 longlong_value;
++    v4f vec_value;
++} DataUnion;
++
++long ssll_load_elim_1 (DataUnion *data, float x)
++{
++  data->arr_2[0] = x;
++  data->arr_2[1] = 0.0f;
++  return data->long_value;
++}
++
++__int128 ssll_load_elim_2 (DataUnion *data, float x)
++{
++  data->arr_2[0] = x;
++  data->arr_2[1] = 0.0f;
++  data->arr_2[2] = x;
++  data->arr_2[3] = 0.0f;
++  return data->longlong_value;
++}
++
++v4f ssll_load_elim_3 (DataUnion *data, float x)
++{
++  data->arr_2[3] = x;
++  data->arr_2[2] = x;
++  data->arr_2[1] = x;
++  data->arr_2[0] = x;
++  return data->vec_value;
++}
++
++/* { dg-final { scan-rtl-dump-times "Store forwardings detected" 3 "avoid_store_forwarding" } } */
 diff --git a/gcc/tree-pass.h b/gcc/tree-pass.h
-index 29267589eeb..49957ba3373 100644
+index edebb2be245..2b8f9173ff0 100644
 --- a/gcc/tree-pass.h
 +++ b/gcc/tree-pass.h
-@@ -570,6 +570,7 @@ extern rtl_opt_pass *make_pass_rtl_dse3 (gcc::context *ctxt);
+@@ -571,6 +571,7 @@ extern rtl_opt_pass *make_pass_rtl_dse3 (gcc::context *ctxt);
  extern rtl_opt_pass *make_pass_rtl_cprop (gcc::context *ctxt);
  extern rtl_opt_pass *make_pass_rtl_pre (gcc::context *ctxt);
  extern rtl_opt_pass *make_pass_rtl_hoist (gcc::context *ctxt);
@@ -759,5 +968,4 @@ index 29267589eeb..49957ba3373 100644
  extern rtl_opt_pass *make_pass_rtl_ifcvt (gcc::context *ctxt);
 -- 
 2.44.0
-
 
