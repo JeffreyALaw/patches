@@ -168,6 +168,7 @@ make install >> $LOGFILE 2>&1
 cd ../..
 
 # Step 5, run tests
+echo Starting Testing
 #cd ${TARGET}-obj/binutils
 #make -k -j $NPROC -l $NPROC check-gas check-ld check-binutils || true
 #cd ../..
