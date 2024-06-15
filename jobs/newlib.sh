@@ -180,7 +180,7 @@ case "${TARGET}" in
     ;;
   riscv64*-*)
     RUNGCCTESTS=yes
-    TESTARGS="--target_board=unix/-march=rv64gc"
+    TESTARGS="--target_board=unix/{-march=rv64gc,-march=rv64gc_zba_zbb_zbs_zicond}"
     ;;
   rl78*-*)
     RUNGCCTESTS=yes
