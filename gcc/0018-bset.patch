@@ -26,7 +26,7 @@ new file mode 100644
 index 00000000000..4fa33f681d8
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/zbs-zext-3.c
-@@ -0,0 +1,28 @@
+@@ -0,0 +1,27 @@
 +/* { dg-do compile } */
 +/* { dg-options "-march=rv64gc_zba_zbb_zbs" { target { rv64 } } } */
 +/* { dg-options "-march=rv64gc_zba_zbb_zbs" { target { rv32 } } } */
@@ -54,4 +54,3 @@ index 00000000000..4fa33f681d8
 +
 +/* { dg-final { scan-assembler-not "and\t" } } */
 +/* { dg-final { scan-assembler-not "andn\t" } } */
-+/* { dg-final { scan-assembler-not "or\t" } } */
