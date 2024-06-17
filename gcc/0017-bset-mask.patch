@@ -1,5 +1,5 @@
 diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
-index 311f0d373c0..0888d203b00 100644
+index 094bc2acf1c..dc7a7e7fba7 100644
 --- a/gcc/config/riscv/bitmanip.md
 +++ b/gcc/config/riscv/bitmanip.md
 @@ -609,6 +609,36 @@ (define_insn "*bsetdi_2"
@@ -39,45 +39,12 @@ index 311f0d373c0..0888d203b00 100644
  (define_insn "*bset<mode>_1_mask"
    [(set (match_operand:X 0 "register_operand" "=r")
  	(ashift:X (const_int 1)
-diff --git a/gcc/testsuite/gcc.target/riscv/zbs-zext-3.c b/gcc/testsuite/gcc.target/riscv/zbs-zext-3.c
+diff --git a/gcc/testsuite/gcc.target/riscv/zbs-ext-2.c b/gcc/testsuite/gcc.target/riscv/zbs-ext-2.c
 new file mode 100644
-index 00000000000..0239014e06b
+index 00000000000..301bc9d89c4
 --- /dev/null
-+++ b/gcc/testsuite/gcc.target/riscv/zbs-zext-3.c
-@@ -0,0 +1,27 @@
-+/* { dg-do compile } */
-+/* { dg-options "-march=rv64gc_zba_zbb_zbs -mabi=lp64d" { target { rv64 } } } */
-+/* { dg-options "-march=rv32gc_zba_zbb_zbs -mabi=ilp32" { target { rv32 } } } */
-+/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
-+
-+/* We need to adjust the constant so this works for rv32 and rv64.  */
-+#if __riscv_xlen == 32
-+#define ONE 1U
-+#else
-+#define ONE 1ULL
-+#endif
-+
-+void add_to_hard_reg_set(long long *a, unsigned int count) {
-+  int i = 0;
-+  while(i++ < count)
-+    *a |= (1U << i);
-+}
-+
-+void remove_from_hard_reg_set(long long *a, unsigned int count) {
-+  int i = 0;
-+  while(i++ < count)
-+    *a &= ~(ONE << i);
-+}
-+
-+
-+/* { dg-final { scan-assembler-not "and\t" } } */
-+/* { dg-final { scan-assembler-not "andn\t" } } */
-diff --git a/gcc/testsuite/gcc.target/riscv/bset_for_simode-1.c b/gcc/testsuite/gcc.target/riscv/bset_for_simode-1.c
-new file mode 100644
-index 00000000000..9d30b1a009d
---- /dev/null
-+++ b/gcc/testsuite/gcc.target/riscv/bset_for_simode-1.c
-@@ -0,0 +1,25 @@
++++ b/gcc/testsuite/gcc.target/riscv/zbs-ext-2.c
+@@ -0,0 +1,24 @@
 +/* { dg-do compile } */
 +/* { dg-options "-march=rv64gc_zbb_zbs -mabi=lp64" } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
@@ -101,5 +68,4 @@ index 00000000000..9d30b1a009d
 +/* { dg-final { scan-assembler-times "andn\t" 1 } } */
 +/* { dg-final { scan-assembler-times "li\t" 1 } } */
 +/* { dg-final { scan-assembler-times "ret" 2 } } */
-+
 +
