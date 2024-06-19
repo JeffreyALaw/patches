@@ -1,8 +1,31 @@
+commit a16e7c513016d9851b8af551ef6ce82975e9914d
+Author: Jeff Law <jlaw@ventanamicro.com>
+Date:   Wed Jun 19 07:17:09 2024 -0600
+
+    [RISC-V] Minor cleanup/improvement to bset/binv patterns
+    
+    This patch introduces a bit_optab iterator that maps IOR/XOR to bset and
+    binv (and one day bclr if we need it).  That allows us to combine some
+    patterns that only differed in the RTL opcode (IOR vs XOR) and in the
+    name/assembly (bset vs binv).
+    
+    Additionally this also allow us to use the iterator in the
+    bset<mode>mask and bsetidisi patterns thus potentially fixing a missed
+    optimization.
+    
+    This has gone through my tester.  I'll wait for a verdict from
+    pre-commit CI before moving forward.
+    
+    gcc/
+            * config/riscv/bitmanip.md (<bit_optab><mode>): New unified
+            pattern for bset/binv using a code iterator.
+            (<bit_optab>i<mode>): Likewise.
+
 diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
-index ae5e7e510c0..17a036bdb60 100644
+index ae5e7e510c0..3eedabffca0 100644
 --- a/gcc/config/riscv/bitmanip.md
 +++ b/gcc/config/riscv/bitmanip.md
-@@ -569,22 +569,22 @@ (define_insn_and_split "*minmax"
+@@ -569,24 +569,26 @@ (define_insn_and_split "*minmax"
  
  ;; ZBS extension.
  
@@ -28,15 +51,20 @@ index ae5e7e510c0..17a036bdb60 100644
 -			  (and:X (match_operand:X 2 "register_operand" "r")
 -				 (match_operand 3 "<X:shiftm1>" "<X:shiftm1p>")) 0))
 -	       (match_operand:X 1 "register_operand" "r")))]
-+	(any_or:X (ashift:X (const_int 1)
-+			    (subreg:QI
-+			      (and:X (match_operand:X 2 "register_operand" "r")
-+				     (match_operand 3 "<X:shiftm1>" "<X:shiftm1p>")) 0))
-+		  (match_operand:X 1 "register_operand" "r")))]
++	(any_or:X
++	  (ashift:X
++	    (const_int 1)
++	    (subreg:QI
++	      (and:X (match_operand:X 2 "register_operand" "r")
++		     (match_operand 3 "<X:shiftm1>" "<X:shiftm1p>")) 0))
++	  (match_operand:X 1 "register_operand" "r")))]
    "TARGET_ZBS"
-   "bset\t%0,%1,%2"
+-  "bset\t%0,%1,%2"
++  "<bit_optab>\t%0,%1,%2"
    [(set_attr "type" "bitmanip")])
-@@ -655,24 +655,24 @@ (define_insn "*bset<mode>_1_mask"
+ 
+ (define_insn "*bset<mode>_1"
+@@ -655,24 +657,24 @@ (define_insn "*bset<mode>_1_mask"
    "bset\t%0,x0,%1"
    [(set_attr "type" "bitmanip")])
  
@@ -69,7 +97,7 @@ index ae5e7e510c0..17a036bdb60 100644
    [(set_attr "type" "bitmanip")])
  
  ;; We can easily handle zero extensions
-@@ -781,23 +781,6 @@ (define_split
+@@ -781,23 +783,6 @@ (define_split
  	  (and:DI (rotate:DI (const_int -2) (match_dup 1))
  		  (match_dup 3)))])
  
