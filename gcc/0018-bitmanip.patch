@@ -1,0 +1,253 @@
+diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
+index 3eedabffca0..3f563da0024 100644
+--- a/gcc/config/riscv/bitmanip.md
++++ b/gcc/config/riscv/bitmanip.md
+@@ -615,37 +615,143 @@ (define_insn "*bsetdi_2"
+ ;; shift constant.  With the limited range we know the SImode sign
+ ;; bit is never set, thus we can treat this as zero extending and
+ ;; generate the bsetdi_2 pattern.
+-(define_split
+-  [(set (match_operand:DI 0 "register_operand")
++;;
++;; ?!? How does the (and (not ...)) work in the split RTL?  "andn"
++;; does not support a constant argument!
++;; Fixing that likely requires a scratch.
++(define_insn_and_split ""
++  [(set (match_operand:DI 0 "register_operand" "=r")
+ 	(any_extend:DI
+ 	 (ashift:SI (const_int 1)
+ 		    (subreg:QI
+-		      (and:DI (not:DI (match_operand:DI 1 "register_operand"))
+-			      (match_operand 2 "const_int_operand")) 0))))
+-   (clobber (match_operand:DI 3 "register_operand"))]
++		      (and:DI (not:DI (match_operand:DI 1 "register_operand" "r"))
++			      (match_operand 2 "const_int_operand")) 0))))]
+   "TARGET_64BIT
+    && TARGET_ZBS
+    && (TARGET_ZBB || TARGET_ZBKB)
+    && (INTVAL (operands[2]) & 0x1f) != 0x1f"
++  "#"
++  "&& reload_completed"
+    [(set (match_dup 0) (and:DI (not:DI (match_dup 1)) (match_dup 2)))
+     (set (match_dup 0) (zero_extend:DI (ashift:SI
+ 				       (const_int 1)
+-				       (subreg:QI (match_dup 0) 0))))])
++				       (subreg:QI (match_dup 0) 0))))]
++  { }
++  [(set_attr "type" "bitmanip")])
+ 
+-(define_split
+-  [(set (match_operand:DI 0 "register_operand")
+-       (any_extend:DI
++(define_insn_and_split ""
++  [(set (match_operand:DI 0 "register_operand" "=r")
++        (any_extend:DI
+ 	 (ashift:SI (const_int 1)
+ 		    (subreg:QI
+-		      (and:DI (match_operand:DI 1 "register_operand")
++		      (and:DI (match_operand:DI 1 "register_operand" "r")
+ 			      (match_operand 2 "const_int_operand")) 0))))]
+   "TARGET_64BIT
+    && TARGET_ZBS
+    && (INTVAL (operands[2]) & 0x1f) != 0x1f"
+-   [(set (match_dup 0) (and:DI (match_dup 1) (match_dup 2)))
+-    (set (match_dup 0) (zero_extend:DI (ashift:SI
+-				       (const_int 1)
+-				       (subreg:QI (match_dup 0) 0))))])
++  "#"
++  "&& 1"
++  [(set (match_dup 0) (and:DI (match_dup 1) (match_dup 2)))
++   (set (match_dup 0) (zero_extend:DI (ashift:SI
++				     (const_int 1)
++				     (subreg:QI (match_dup 0) 0))))]
++  { }
++  [(set_attr "type" "bitmanip")])
++
++;; Similarly two patterns for IOR/XOR generating bset/binv to
++;; manipulate a bit in a register
++(define_insn_and_split ""
++  [(set (match_operand:DI 0 "register_operand" "=r")
++	(any_or:DI
++	  (any_extend:DI
++	    (ashift:SI
++	      (const_int 1)
++	      (subreg:QI
++		(and:DI (not:DI (match_operand:DI 1 "register_operand" "r"))
++			(match_operand 2 "const_int_operand")) 0)))
++	  (match_operand:DI 3 "register_operand" "r")))
++   (clobber (match_scratch:X 4 "=&r"))]
++  "TARGET_64BIT
++   && TARGET_ZBS
++   && (TARGET_ZBB || TARGET_ZBKB)
++   && (INTVAL (operands[2]) & 0x1f) != 0x1f"
++  "#"
++  "&& reload_completed"
++   [(set (match_dup 4) (match_dup 2))
++    (set (match_dup 4) (and:DI (not:DI (match_dup 4)) (match_dup 1)))
++    (set (match_dup 0) (any_or:DI (ashift:DI (const_int 1) (match_dup 5)) (match_dup 3)))]
++  { operands[5] = gen_lowpart (QImode, operands[4]); }
++  [(set_attr "type" "bitmanip")])
++
++(define_insn_and_split ""
++  [(set (match_operand:DI 0 "register_operand" "=r")
++	(any_or:DI
++	  (any_extend:DI
++	    (ashift:SI
++	      (const_int 1)
++	      (subreg:QI
++		(and:DI (match_operand:DI 1 "register_operand" "r")
++			(match_operand 2 "const_int_operand")) 0)))
++	  (match_operand:DI 3 "register_operand" "r")))
++   (clobber (match_scratch:X 4 "=&r"))]
++  "TARGET_64BIT
++   && TARGET_ZBS
++   && (INTVAL (operands[2]) & 0x1f) != 0x1f"
++  "#"
++  "&& reload_completed"
++   [(set (match_dup 4) (and:DI (match_dup 1) (match_dup 2)))
++    (set (match_dup 0) (any_or:DI (ashift:DI (const_int 1) (subreg:QI (match_dup 4) 0)) (match_dup 3)))]
++  { }
++  [(set_attr "type" "bitmanip")])
++
++;; Similarly two patterns for AND generating bclr to
++;; manipulate a bit in a register
++(define_insn_and_split ""
++  [(set (match_operand:DI 0 "register_operand" "=r")
++	(and:DI
++	  (not:DI
++	    (any_extend:DI
++	      (ashift:SI
++	        (const_int 1)
++	        (subreg:QI
++		  (and:DI (not:DI (match_operand:DI 1 "register_operand" "r"))
++			  (match_operand 2 "const_int_operand")) 0))))
++	  (match_operand:DI 3 "register_operand" "r")))
++   (clobber (match_scratch:X 4 "=&r"))]
++  "TARGET_64BIT
++   && TARGET_ZBS
++   && (TARGET_ZBB || TARGET_ZBKB)
++   && (INTVAL (operands[2]) & 0x1f) != 0x1f"
++  "#"
++  "&& reload_completed"
++   [(set (match_dup 4) (match_dup 2))
++    (set (match_dup 4) (and:DI (not:DI (match_dup 1)) (match_dup 4)))
++    (set (match_dup 0) (and:DI (rotate:DI (const_int -2) (match_dup 5)) (match_dup 3)))]
++  { operands[5] = gen_lowpart (QImode, operands[4]); }
++  [(set_attr "type" "bitmanip")])
++
++
++(define_insn_and_split ""
++  [(set (match_operand:DI 0 "register_operand" "=r")
++	(and:DI
++	  (not:DI
++	    (any_extend:DI
++	      (ashift:SI
++	        (const_int 1)
++	        (subreg:QI
++		  (and:DI (match_operand:DI 1 "register_operand" "r")
++			  (match_operand 2 "const_int_operand")) 0))))
++	  (match_operand:DI 3 "register_operand" "r")))
++   (clobber (match_scratch:X 4 "=&r"))]
++  "TARGET_64BIT
++   && TARGET_ZBS
++   && (INTVAL (operands[2]) & 0x1f) != 0x1f"
++  "#"
++  "&& reload_completed"
++   [(set (match_dup 4) (and:DI (match_dup 1) (match_dup 2)))
++    (set (match_dup 0) (and:DI (rotate:DI (const_int -2) (match_dup 5)) (match_dup 3)))]
++  { operands[5] = gen_lowpart (QImode, operands[4]); }
++  [(set_attr "type" "bitmanip")])
+ 
+ (define_insn "*bset<mode>_1_mask"
+   [(set (match_operand:X 0 "register_operand" "=r")
+diff --git a/gcc/testsuite/gcc.target/riscv/bclr-for-simode-1.c b/gcc/testsuite/gcc.target/riscv/bclr-for-simode-1.c
+new file mode 100644
+index 00000000000..ae9fc33bb34
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/bclr-for-simode-1.c
+@@ -0,0 +1,25 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc_zbb_zbs -mabi=lp64" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
++
++
++typedef unsigned int uint32_t;
++uint32_t foo(uint32_t pos, uint32_t x)
++{
++    return x & ~(1 <<( pos & 0xf));
++}
++
++typedef unsigned int uint32_t;
++uint32_t foo2(uint32_t pos, uint32_t x)
++{
++    return x & ~(1 <<(7-(pos) % 8));
++}
++
++
++
++/* { dg-final { scan-assembler-not "sll\t" } } */
++/* { dg-final { scan-assembler-times "bclr\t" 2 } } */
++/* { dg-final { scan-assembler-times "andi\t" 1 } } */
++/* { dg-final { scan-assembler-times "andn\t" 1 } } */
++/* { dg-final { scan-assembler-times "ret" 2 } } */
++
+diff --git a/gcc/testsuite/gcc.target/riscv/binv-for-simode-1.c b/gcc/testsuite/gcc.target/riscv/binv-for-simode-1.c
+new file mode 100644
+index 00000000000..f96c2458ef1
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/binv-for-simode-1.c
+@@ -0,0 +1,24 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc_zbb_zbs -mabi=lp64" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
++
++
++typedef unsigned int uint32_t;
++uint32_t foo(uint32_t pos, uint32_t x)
++{
++    return x ^ (1 <<( pos & 0xf));
++}
++
++typedef unsigned int uint32_t;
++uint32_t foo2(uint32_t pos, uint32_t x)
++{
++    return x ^ (1 <<(7-(pos) % 8));
++
++}
++
++/* { dg-final { scan-assembler-not "sll\t" } } */
++/* { dg-final { scan-assembler-times "binv\t" 2 } } */
++/* { dg-final { scan-assembler-times "andi\t" 1 } } */
++/* { dg-final { scan-assembler-times "andn\t" 1 } } */
++/* { dg-final { scan-assembler-times "ret" 2 } } */
++
+diff --git a/gcc/testsuite/gcc.target/riscv/bset-for-simode-1.c b/gcc/testsuite/gcc.target/riscv/bset-for-simode-1.c
+new file mode 100644
+index 00000000000..24663a1c856
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/bset-for-simode-1.c
+@@ -0,0 +1,24 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc_zbb_zbs -mabi=lp64" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
++
++
++typedef unsigned int uint32_t;
++uint32_t foo(uint32_t pos, uint32_t x)
++{
++    return x | (1 <<( pos & 0xf));
++}
++
++typedef unsigned int uint32_t;
++uint32_t foo2(uint32_t pos, uint32_t x)
++{
++    return x | (1 <<(7-(pos) % 8));
++
++}
++
++/* { dg-final { scan-assembler-not "sll\t" } } */
++/* { dg-final { scan-assembler-times "bset\t" 2 } } */
++/* { dg-final { scan-assembler-times "andi\t" 1 } } */
++/* { dg-final { scan-assembler-times "andn\t" 1 } } */
++/* { dg-final { scan-assembler-times "ret" 2 } } */
++
