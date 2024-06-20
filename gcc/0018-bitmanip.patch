@@ -1,39 +1,38 @@
 diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
-index 3eedabffca0..3f563da0024 100644
+index 3eedabffca0..f403ba8dbba 100644
 --- a/gcc/config/riscv/bitmanip.md
 +++ b/gcc/config/riscv/bitmanip.md
-@@ -615,37 +615,143 @@ (define_insn "*bsetdi_2"
+@@ -615,37 +615,140 @@ (define_insn "*bsetdi_2"
  ;; shift constant.  With the limited range we know the SImode sign
  ;; bit is never set, thus we can treat this as zero extending and
  ;; generate the bsetdi_2 pattern.
 -(define_split
 -  [(set (match_operand:DI 0 "register_operand")
-+;;
-+;; ?!? How does the (and (not ...)) work in the split RTL?  "andn"
-+;; does not support a constant argument!
-+;; Fixing that likely requires a scratch.
 +(define_insn_and_split ""
 +  [(set (match_operand:DI 0 "register_operand" "=r")
  	(any_extend:DI
  	 (ashift:SI (const_int 1)
  		    (subreg:QI
 -		      (and:DI (not:DI (match_operand:DI 1 "register_operand"))
--			      (match_operand 2 "const_int_operand")) 0))))
--   (clobber (match_operand:DI 3 "register_operand"))]
 +		      (and:DI (not:DI (match_operand:DI 1 "register_operand" "r"))
-+			      (match_operand 2 "const_int_operand")) 0))))]
+ 			      (match_operand 2 "const_int_operand")) 0))))
+-   (clobber (match_operand:DI 3 "register_operand"))]
++   (clobber (match_scratch:X 3 "=&r"))]
    "TARGET_64BIT
     && TARGET_ZBS
     && (TARGET_ZBB || TARGET_ZBKB)
     && (INTVAL (operands[2]) & 0x1f) != 0x1f"
+-   [(set (match_dup 0) (and:DI (not:DI (match_dup 1)) (match_dup 2)))
+-    (set (match_dup 0) (zero_extend:DI (ashift:SI
+-				       (const_int 1)
+-				       (subreg:QI (match_dup 0) 0))))])
 +  "#"
 +  "&& reload_completed"
-    [(set (match_dup 0) (and:DI (not:DI (match_dup 1)) (match_dup 2)))
-     (set (match_dup 0) (zero_extend:DI (ashift:SI
- 				       (const_int 1)
--				       (subreg:QI (match_dup 0) 0))))])
-+				       (subreg:QI (match_dup 0) 0))))]
-+  { }
++   [(set (match_dup 3) (match_dup 2))
++    (set (match_dup 3) (and:DI (not:DI (match_dup 1)) (match_dup 3)))
++    (set (match_dup 0) (zero_extend:DI
++			 (ashift:SI (const_int 1) (match_dup 4))))]
++  { operands[4] = gen_lowpart (QImode, operands[3]); }
 +  [(set_attr "type" "bitmanip")])
  
 -(define_split
