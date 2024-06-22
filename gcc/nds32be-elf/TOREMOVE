@@ -1,3 +1,4 @@
 gcc/testsuite/gcc.c-torture/execute/simd-1.c
 gcc/testsuite/gcc.c-torture/execute/builtin-bitops-1.c
+gcc/testsuite/gcc.c-torture/execute/strcpy-1.c
 
