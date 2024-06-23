@@ -1,3 +1,20 @@
+gcc/ChangeLog
+
+	* config/riscv/riscv-protos.h (riscv_vector::expand_vec_setmem): New
+	function declaration.
+
+	* config/riscv/riscv-string.cc (riscv_vector::expand_vec_setmem): New
+	function: this generates an inline vectorised memory set, if and only if
+	we know the entire operation can be performed in a single vector store.
+
+	* config/riscv/riscv.md (setmem<mode>): Try riscv_vector::expand_vec_setmem
+	for constant lengths.  Do not require operand 2 to be a constant.
+
+gcc/testsuite/ChangeLog
+	* gcc.target/riscv/rvv/base/setmem-1.c: New tests
+	* gcc.target/riscv/rvv/base/setmem-2.c: New tests
+	* gcc.target/riscv/rvv/base/setmem-3.c: New tests
+
 diff --git a/gcc/config/riscv/riscv-protos.h b/gcc/config/riscv/riscv-protos.h
 index d6473d0cd85..a3380d4250d 100644
 --- a/gcc/config/riscv/riscv-protos.h
