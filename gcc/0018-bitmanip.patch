@@ -1,3 +1,16 @@
+gcc/
+
+
+	* config/riscv/bitmap.md (bset splitters): Turn into define_and_splits.
+	Don't depend on combine splitting the "andn with constant" form.
+	(bset, binv, bclr with masked bit position): New patterns.
+
+gcc/testsuite
+	* gcc.target/riscv/binv-for-simode.c: New test.
+	* gcc.target/riscv/bset-for-simode.c: New test.
+	* gcc.target/riscv/bclr-for-simode.c: New test.
+
+
 diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
 index 3eedabffca0..f403ba8dbba 100644
 --- a/gcc/config/riscv/bitmanip.md
