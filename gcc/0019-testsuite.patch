@@ -1,0 +1,76 @@
+On branch master
+Your branch is up to date with 'origin/master'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   cm_mv_rv32.c
+	modified:   rvv/autovec/binop/vadd-rv32gcv-nofm.c
+	modified:   rvv/autovec/binop/vadd-rv64gcv-nofm.c
+	modified:   rvv/autovec/binop/vdiv-rv32gcv-nofm.c
+	modified:   rvv/autovec/binop/vdiv-rv32gcv.c
+	modified:   rvv/autovec/binop/vdiv-rv64gcv-nofm.c
+	modified:   rvv/autovec/binop/vdiv-rv64gcv.c
+	modified:   rvv/autovec/binop/vmul-rv32gcv-nofm.c
+	modified:   rvv/autovec/binop/vmul-rv64gcv-nofm.c
+	modified:   rvv/autovec/binop/vrem-rv32gcv.c
+	modified:   rvv/autovec/binop/vrem-rv64gcv.c
+	modified:   rvv/autovec/binop/vsub-rv32gcv-nofm.c
+	modified:   rvv/autovec/binop/vsub-rv64gcv-nofm.c
+	modified:   rvv/autovec/cond/cond_copysign-rv32gcv.c
+	modified:   rvv/autovec/cond/cond_copysign-rv64gcv.c
+	modified:   rvv/autovec/cond/cond_fadd-1.c
+	modified:   rvv/autovec/cond/cond_fadd-2.c
+	modified:   rvv/autovec/cond/cond_fadd-3.c
+	modified:   rvv/autovec/cond/cond_fadd-4.c
+	modified:   rvv/autovec/cond/cond_fma_fnma-1.c
+	modified:   rvv/autovec/cond/cond_fma_fnma-3.c
+	modified:   rvv/autovec/cond/cond_fma_fnma-4.c
+	modified:   rvv/autovec/cond/cond_fma_fnma-5.c
+	modified:   rvv/autovec/cond/cond_fma_fnma-6.c
+	modified:   rvv/autovec/cond/cond_fmax-1.c
+	modified:   rvv/autovec/cond/cond_fmax-2.c
+	modified:   rvv/autovec/cond/cond_fmax-3.c
+	modified:   rvv/autovec/cond/cond_fmax-4.c
+	modified:   rvv/autovec/cond/cond_fmax_zvfh-1.c
+	modified:   rvv/autovec/cond/cond_fmax_zvfh-2.c
+	modified:   rvv/autovec/cond/cond_fmax_zvfh-3.c
+	modified:   rvv/autovec/cond/cond_fmax_zvfh-4.c
+	modified:   rvv/autovec/cond/cond_fmin-1.c
+	modified:   rvv/autovec/cond/cond_fmin-2.c
+	modified:   rvv/autovec/cond/cond_fmin-3.c
+	modified:   rvv/autovec/cond/cond_fmin-4.c
+	modified:   rvv/autovec/cond/cond_fmin_zvfh-1.c
+	modified:   rvv/autovec/cond/cond_fmin_zvfh-2.c
+	modified:   rvv/autovec/cond/cond_fmin_zvfh-3.c
+	modified:   rvv/autovec/cond/cond_fmin_zvfh-4.c
+	modified:   rvv/autovec/cond/cond_fms_fnms-1.c
+	modified:   rvv/autovec/cond/cond_fms_fnms-3.c
+	modified:   rvv/autovec/cond/cond_fms_fnms-4.c
+	modified:   rvv/autovec/cond/cond_fms_fnms-5.c
+	modified:   rvv/autovec/cond/cond_fms_fnms-6.c
+	modified:   rvv/autovec/cond/cond_fmul-1.c
+	modified:   rvv/autovec/cond/cond_fmul-2.c
+	modified:   rvv/autovec/cond/cond_fmul-3.c
+	modified:   rvv/autovec/cond/cond_fmul-4.c
+	modified:   rvv/autovec/cond/cond_fmul-5.c
+	modified:   rvv/autovec/vls/calling-convention-1.c
+	modified:   rvv/autovec/vls/calling-convention-2.c
+	modified:   rvv/autovec/vls/calling-convention-3.c
+	modified:   rvv/autovec/vls/calling-convention-4.c
+	modified:   rvv/autovec/vls/calling-convention-5.c
+	modified:   rvv/autovec/vls/calling-convention-6.c
+	modified:   rvv/autovec/vls/calling-convention-7.c
+	modified:   rvv/autovec/vls/dup-1.c
+	modified:   rvv/autovec/vls/dup-2.c
+	modified:   rvv/autovec/vls/dup-3.c
+	modified:   rvv/vsetvl/vlmax_back_prop-37.c
+	modified:   shorten-memrefs-1.c
+	modified:   shorten-memrefs-2.c
+	modified:   shorten-memrefs-3.c
+	modified:   shorten-memrefs-4.c
+	modified:   shorten-memrefs-5.c
+	modified:   shorten-memrefs-6.c
+	modified:   shorten-memrefs-8.c
+
+no changes added to commit (use "git add" and/or "git commit -a")
