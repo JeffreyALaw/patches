@@ -144,6 +144,17 @@ index 78cf83c9252..ff37125e3f2 100644
  ;; Expand in-line code to clear the instruction cache between operand[0] and
  ;; operand[1].
  (define_expand "clear_cache"
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vls/misalign-1.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vls/misalign-1.c
+index 5184a295e16..9d698b421d6 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vls/misalign-1.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vls/misalign-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-march=rv64gcv -mabi=lp64d -O3 -fno-schedule-insns -fno-schedule-insns2 -mrvv-max-lmul=m4 -fno-tree-loop-distribute-patterns -mno-vector-strict-align" } */
++/* { dg-options "-march=rv64gcv -mabi=lp64d -O3 -fno-schedule-insns -fno-schedule-insns2 -mrvv-max-lmul=m4 -fno-tree-loop-distribute-patterns -mno-vector-strict-align -mstringop-strategy=libcall" } */
+ 
+ #include <stdlib.h>
+ 
 diff --git a/gcc/testsuite/gcc.target/riscv/rvv/base/cmpmem-1.c b/gcc/testsuite/gcc.target/riscv/rvv/base/cmpmem-1.c
 new file mode 100644
 index 00000000000..6bc8b07bc2c
