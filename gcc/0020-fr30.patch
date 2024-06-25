@@ -13,10 +13,10 @@ index e4e2be1bfd9..1beee7cc3a2 100644
 -  (and (match_code "mem")
 -       (match_code "symbol_ref" "0")))
 diff --git a/gcc/config/fr30/fr30.md b/gcc/config/fr30/fr30.md
-index ecde60b455d..3c3c366458c 100644
+index ecde60b455d..04f6d909054 100644
 --- a/gcc/config/fr30/fr30.md
 +++ b/gcc/config/fr30/fr30.md
-@@ -1079,8 +1079,15 @@ (define_insn "*branch_false"
+@@ -1079,12 +1079,19 @@ (define_insn "*branch_false"
  ;; `SImode', except it is normally a `const_int'); operand 2 is the number of
  ;; registers used as operands.
  
@@ -34,7 +34,12 @@ index ecde60b455d..3c3c366458c 100644
  	 (match_operand 1 ""             "g"))
     (clobber (reg:SI 17))]
    ""
-@@ -1094,10 +1101,17 @@ (define_insn "call"
+-  "call%#\\t%0"
++  "call%#\\t@%0"
+   [(set_attr "delay_type" "delayed")]
+ )
+ 
+@@ -1094,14 +1101,21 @@ (define_insn "call"
  ;; increased by one).
  
  ;; Subroutines that return `BLKmode' objects use the `call' insn.
@@ -54,6 +59,11 @@ index ecde60b455d..3c3c366458c 100644
  	      (match_operand 2 ""             "g")))
     (clobber (reg:SI 17))]
    ""
+-  "call%#\\t%1"
++  "call%#\\t@%1"
+   [(set_attr "delay_type" "delayed")]
+ )
+ 
 diff --git a/gcc/config/fr30/predicates.md b/gcc/config/fr30/predicates.md
 index f67c6097430..2f87a4c81b2 100644
 --- a/gcc/config/fr30/predicates.md
