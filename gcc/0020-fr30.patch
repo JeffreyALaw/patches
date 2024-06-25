@@ -1,0 +1,51 @@
+diff --git a/gcc/config/fr30/constraints.md b/gcc/config/fr30/constraints.md
+index e4e2be1bfd9..1beee7cc3a2 100644
+--- a/gcc/config/fr30/constraints.md
++++ b/gcc/config/fr30/constraints.md
+@@ -63,9 +63,3 @@ (define_constraint "P"
+   "An integer in the range -256 to 255."
+   (and (match_code "const_int")
+        (match_test "IN_RANGE (ival, -256, 255)")))
+-
+-;; Extra constraints.
+-(define_constraint "Q"
+-  "@internal"
+-  (and (match_code "mem")
+-       (match_code "symbol_ref" "0")))
+diff --git a/gcc/config/fr30/fr30.md b/gcc/config/fr30/fr30.md
+index ecde60b455d..7ba9a0814b9 100644
+--- a/gcc/config/fr30/fr30.md
++++ b/gcc/config/fr30/fr30.md
+@@ -1080,7 +1080,7 @@ (define_insn "*branch_false"
+ ;; registers used as operands.
+ 
+ (define_insn "call"
+-  [(call (match_operand 0 "call_operand" "Qm")
++  [(call (match_operand 0 "call_operand" "m")
+ 	 (match_operand 1 ""             "g"))
+    (clobber (reg:SI 17))]
+   ""
+@@ -1097,7 +1097,7 @@ (define_insn "call"
+ 
+ (define_insn "call_value"
+   [(set (match_operand 0 "register_operand"  "=r")
+-	(call (match_operand 1 "call_operand" "Qm")
++	(call (match_operand 1 "call_operand" "m")
+ 	      (match_operand 2 ""             "g")))
+    (clobber (reg:SI 17))]
+   ""
+diff --git a/gcc/config/fr30/predicates.md b/gcc/config/fr30/predicates.md
+index f67c6097430..55d8e0dc249 100644
+--- a/gcc/config/fr30/predicates.md
++++ b/gcc/config/fr30/predicates.md
+@@ -56,9 +56,7 @@ (define_predicate "low_register_operand"
+ (define_predicate "call_operand"
+   (match_code "mem")
+ {
+-  return (GET_CODE (op) == MEM
+-	  && (GET_CODE (XEXP (op, 0)) == SYMBOL_REF
+-	      || GET_CODE (XEXP (op, 0)) == REG));
++  return (GET_CODE (op) == MEM || GET_CODE (XEXP (op, 0)) == REG);
+ })
+ 
+ ;; Returns TRUE if OP is a valid operand of a DImode operation.
