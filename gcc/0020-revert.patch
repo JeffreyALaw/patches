@@ -1,0 +1,55 @@
+commit 29fa2114f56cf9c7adc14070ece53d0d1a287bd5
+Author: Jeff Law <jlaw@ventanamicro.com>
+Date:   Wed Jun 26 09:59:48 2024 -0600
+
+    Revert "tree-optimization/115652 - adjust insertion gsi for SLP"
+    
+    This reverts commit f80db5495d5f8455b3003951727eb6c8dc67d81d.
+
+diff --git a/gcc/tree-vect-slp.cc b/gcc/tree-vect-slp.cc
+index 1f5b3fccf41..b47b7e8c979 100644
+--- a/gcc/tree-vect-slp.cc
++++ b/gcc/tree-vect-slp.cc
+@@ -9629,6 +9629,16 @@ vect_schedule_slp_node (vec_info *vinfo,
+       /* Emit other stmts after the children vectorized defs which is
+ 	 earliest possible.  */
+       gimple *last_stmt = NULL;
++      if (auto loop_vinfo = dyn_cast <loop_vec_info> (vinfo))
++	if (LOOP_VINFO_FULLY_MASKED_P (loop_vinfo)
++	    || LOOP_VINFO_FULLY_WITH_LENGTH_P (loop_vinfo))
++	  {
++	    /* But avoid scheduling internal defs outside of the loop when
++	       we might have only implicitly tracked loop mask/len defs.  */
++	    gimple_stmt_iterator si
++	      = gsi_after_labels (LOOP_VINFO_LOOP (loop_vinfo)->header);
++	    last_stmt = *si;
++	  }
+       bool seen_vector_def = false;
+       FOR_EACH_VEC_ELT (SLP_TREE_CHILDREN (node), i, child)
+ 	if (SLP_TREE_DEF_TYPE (child) == vect_internal_def)
+@@ -9737,19 +9747,12 @@ vect_schedule_slp_node (vec_info *vinfo,
+       else
+ 	{
+ 	  si = gsi_for_stmt (last_stmt);
+-	  gsi_next (&si);
+-
+-	  /* Avoid scheduling internal defs outside of the loop when
+-	     we might have only implicitly tracked loop mask/len defs.  */
+-	  if (auto loop_vinfo = dyn_cast <loop_vec_info> (vinfo))
+-	    if (LOOP_VINFO_FULLY_MASKED_P (loop_vinfo)
+-		|| LOOP_VINFO_FULLY_WITH_LENGTH_P (loop_vinfo))
+-	      {
+-		gimple_stmt_iterator si2
+-		  = gsi_after_labels (LOOP_VINFO_LOOP (loop_vinfo)->header);
+-		if (vect_stmt_dominates_stmt_p (last_stmt, *si2))
+-		  si = si2;
+-	      }
++	  /* When we're getting gsi_after_labels from the starting
++	     condition of a fully masked/len loop avoid insertion
++	     after a GIMPLE_COND that can appear as the only header
++	     stmt with early break vectorization.  */
++	  if (gimple_code (last_stmt) != GIMPLE_COND)
++	    gsi_next (&si);
+ 	}
+     }
+ 
