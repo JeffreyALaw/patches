@@ -64,7 +64,7 @@ index d416ce24a97..da931f710c1 100644
  (define_insn ""
 -  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "=r,b")
 +  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "=r")
- 	(sign_extract:SI (match_operand:SI 1 "mcore_arith_reg_operand" "0,r") (const_int 8) (const_int 24)))]
+ 	(sign_extract:SI (match_operand:SI 1 "mcore_arith_reg_operand" "0") (const_int 8) (const_int 24)))]
    ""
 -  "@
 -	asri	%0,24
@@ -94,7 +94,7 @@ index d416ce24a97..da931f710c1 100644
  (define_insn ""
 -  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "=r,b")
 +  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "=r")
- 	(zero_extract:SI (match_operand:SI 1 "mcore_arith_reg_operand" "0,r") (const_int 8) (const_int 24)))]
+ 	(zero_extract:SI (match_operand:SI 1 "mcore_arith_reg_operand" "0") (const_int 8) (const_int 24)))]
    ""
 -  "@
 -	lsri	%0,24
@@ -122,7 +122,7 @@ index d416ce24a97..da931f710c1 100644
  (define_insn ""
 -  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "=r,b")
 +  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "=r")
- 	(zero_extract:SI (match_operand:SI 1 "mcore_arith_reg_operand" "0,r") (const_int 8) (const_int 0)))]
+ 	(zero_extract:SI (match_operand:SI 1 "mcore_arith_reg_operand" "0") (const_int 8) (const_int 0)))]
    ""
 -  "@
 -	zextb	%0
