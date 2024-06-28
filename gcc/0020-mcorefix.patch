@@ -1,136 +1,46 @@
 diff --git a/gcc/config/mcore/mcore.md b/gcc/config/mcore/mcore.md
-index d416ce24a97..faed1bb4f8f 100644
+index d416ce24a97..1a0b74ccd49 100644
 --- a/gcc/config/mcore/mcore.md
 +++ b/gcc/config/mcore/mcore.md
-@@ -1062,16 +1062,16 @@ (define_expand "zero_extendqisi2"
+@@ -1057,15 +1057,17 @@ (define_insn ""
+   [(set_attr "type" "load")])
+ 
+ (define_expand "zero_extendqisi2"
+-  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "")
+-	(zero_extend:SI (match_operand:QI 1 "general_operand" "")))]
++  [(parallel [(set (match_operand:SI 0 "mcore_arith_reg_operand" "")
++		  (zero_extend:SI (match_operand:QI 1 "general_operand" "")))
++	      (clobber (reg:CC 17))])]
    ""
    "") 
  
--;; RBE: XXX: we don't recognize that the xtrb3 kills the CC register.
-+;; We used to use xtrb here, but that clobbers CC which isn't represented
-+;; properly.
+ ;; RBE: XXX: we don't recognize that the xtrb3 kills the CC register.
  (define_insn ""
--  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "=r,b,r")
+   [(set (match_operand:SI 0 "mcore_arith_reg_operand" "=r,b,r")
 -	(zero_extend:SI (match_operand:QI 1 "general_operand" "0,r,m")))]
-+  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "=r,r")
-+	(zero_extend:SI (match_operand:QI 1 "general_operand" "0,m")))]
++	(zero_extend:SI (match_operand:QI 1 "general_operand" "0,r,m")))
++   (clobber (reg:CC 17))]
    ""
    "@
  	zextb	%0
--	xtrb3	%0,%1
- 	ld.b	%0,%1"
--  [(set_attr "type" "shift,shift,load")])
-+  [(set_attr "type" "shift,load")])
+@@ -1091,15 +1093,17 @@ (define_insn ""
+   [(set_attr "type" "load")])
  
- ;; ldb gives us a free zero-extension. The combiner picks up on this.
- (define_insn ""
-@@ -1096,16 +1096,16 @@ (define_expand "zero_extendqihi2"
+ (define_expand "zero_extendqihi2"
+-  [(set (match_operand:HI 0 "mcore_arith_reg_operand" "")
+-	(zero_extend:HI (match_operand:QI 1 "general_operand" "")))]
++  [(parallel [(set (match_operand:HI 0 "mcore_arith_reg_operand" "")
++		   (zero_extend:HI (match_operand:QI 1 "general_operand" "")))
++	      (clobber (reg:CC 17))])]
    ""
    "") 
  
--;; RBE: XXX: we don't recognize that the xtrb3 kills the CC register.
-+;; We used to use xtrb here, but that clobbers CC which isn't represented
-+;; properly.
+ ;; RBE: XXX: we don't recognize that the xtrb3 kills the CC register.
  (define_insn ""
--  [(set (match_operand:HI 0 "mcore_arith_reg_operand" "=r,b,r")
+   [(set (match_operand:HI 0 "mcore_arith_reg_operand" "=r,b,r")
 -	(zero_extend:HI (match_operand:QI 1 "general_operand" "0,r,m")))]
-+  [(set (match_operand:HI 0 "mcore_arith_reg_operand" "=r,r")
-+	(zero_extend:HI (match_operand:QI 1 "general_operand" "0,m")))]
++	(zero_extend:HI (match_operand:QI 1 "general_operand" "0,r,m")))
++   (clobber (reg:CC 17))]
    ""
    "@
  	zextb	%0
--	xtrb3	%0,%1
- 	ld.b	%0,%1"
--  [(set_attr "type" "shift,shift,load")])
-+  [(set_attr "type" "shift,load")])
- 
- ;; ldb gives us a free zero-extension. The combiner picks up on this.
- ;; this doesn't catch references that are into a structure.
-@@ -2470,8 +2470,9 @@ (define_expand "insv"
- ;; the xtrb[0123] instructions handily get at 8-bit fields on nice boundaries.
- ;; but then, they do force you through r1.
- ;;
--;; the combiner will build such patterns for us, so we'll make them available
--;; for its use.
-+;; Unfortunately we don't model CC properly, so xtrb is not currently safe to
-+;; use.  So those alternatives have been removed or the pattern totally
-+;; disabled.
- ;;
- ;; Note that we have both SIGNED and UNSIGNED versions of these...
- ;;
-@@ -2483,25 +2484,23 @@ (define_expand "insv"
- ;; the SIGNED versions of these
- ;;
- (define_insn ""
--  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "=r,b")
--	(sign_extract:SI (match_operand:SI 1 "mcore_arith_reg_operand" "0,r") (const_int 8) (const_int 24)))]
-+  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "=r")
-+	(sign_extract:SI (match_operand:SI 1 "mcore_arith_reg_operand" "0") (const_int 8) (const_int 24)))]
-   ""
--  "@
--	asri	%0,24
--	xtrb0	%0,%1\;sextb	%0"
-+  "asri	%0,24"
-   [(set_attr "type" "shift")])
- 
- (define_insn ""
-   [(set (match_operand:SI 0 "mcore_arith_reg_operand" "=b")
- 	(sign_extract:SI (match_operand:SI 1 "mcore_arith_reg_operand" "r") (const_int 8) (const_int 16)))]
--  ""
-+  "0"
-   "xtrb1	%0,%1\;sextb	%0"
-   [(set_attr "type" "shift")])
- 
- (define_insn ""
-   [(set (match_operand:SI 0 "mcore_arith_reg_operand" "=b")
- 	(sign_extract:SI (match_operand:SI 1 "mcore_arith_reg_operand" "r") (const_int 8) (const_int 8)))]
--  ""
-+  "0"
-   "xtrb2	%0,%1\;sextb	%0"
-   [(set_attr "type" "shift")])
- 
-@@ -2515,36 +2514,32 @@ (define_insn ""
- ;; the UNSIGNED uses of xtrb[0123]
- ;;
- (define_insn ""
--  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "=r,b")
--	(zero_extract:SI (match_operand:SI 1 "mcore_arith_reg_operand" "0,r") (const_int 8) (const_int 24)))]
-+  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "=r")
-+	(zero_extract:SI (match_operand:SI 1 "mcore_arith_reg_operand" "0") (const_int 8) (const_int 24)))]
-   ""
--  "@
--	lsri	%0,24
--	xtrb0	%0,%1"
-+  "lsri	%0,24"
-   [(set_attr "type" "shift")])
- 
- (define_insn ""
-   [(set (match_operand:SI 0 "mcore_arith_reg_operand" "=b")
- 	(zero_extract:SI (match_operand:SI 1 "mcore_arith_reg_operand" "r") (const_int 8) (const_int 16)))]
--  ""
-+  "0"
-   "xtrb1	%0,%1"
-   [(set_attr "type" "shift")])
- 
- (define_insn ""
-   [(set (match_operand:SI 0 "mcore_arith_reg_operand" "=b")
- 	(zero_extract:SI (match_operand:SI 1 "mcore_arith_reg_operand" "r") (const_int 8) (const_int 8)))]
--  ""
-+  "0"
-   "xtrb2	%0,%1"
-   [(set_attr "type" "shift")])
- 
- ;; This can be peepholed if it follows a ldb ...
- (define_insn ""
--  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "=r,b")
--	(zero_extract:SI (match_operand:SI 1 "mcore_arith_reg_operand" "0,r") (const_int 8) (const_int 0)))]
-+  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "=r")
-+	(zero_extract:SI (match_operand:SI 1 "mcore_arith_reg_operand" "0") (const_int 8) (const_int 0)))]
-   ""
--  "@
--	zextb	%0
--	xtrb3	%0,%1\;zextb	%0"
-+  "zextb	%0"
-   [(set_attr "type" "shift")])
- 
- 
