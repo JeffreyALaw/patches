@@ -1,5 +1,5 @@
 diff --git a/gcc/config/mcore/mcore.md b/gcc/config/mcore/mcore.md
-index d416ce24a97..da931f710c1 100644
+index d416ce24a97..faed1bb4f8f 100644
 --- a/gcc/config/mcore/mcore.md
 +++ b/gcc/config/mcore/mcore.md
 @@ -1062,16 +1062,16 @@ (define_expand "zero_extendqisi2"
@@ -63,8 +63,9 @@ index d416ce24a97..da931f710c1 100644
  ;;
  (define_insn ""
 -  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "=r,b")
+-	(sign_extract:SI (match_operand:SI 1 "mcore_arith_reg_operand" "0,r") (const_int 8) (const_int 24)))]
 +  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "=r")
- 	(sign_extract:SI (match_operand:SI 1 "mcore_arith_reg_operand" "0") (const_int 8) (const_int 24)))]
++	(sign_extract:SI (match_operand:SI 1 "mcore_arith_reg_operand" "0") (const_int 8) (const_int 24)))]
    ""
 -  "@
 -	asri	%0,24
@@ -93,8 +94,9 @@ index d416ce24a97..da931f710c1 100644
  ;;
  (define_insn ""
 -  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "=r,b")
+-	(zero_extract:SI (match_operand:SI 1 "mcore_arith_reg_operand" "0,r") (const_int 8) (const_int 24)))]
 +  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "=r")
- 	(zero_extract:SI (match_operand:SI 1 "mcore_arith_reg_operand" "0") (const_int 8) (const_int 24)))]
++	(zero_extract:SI (match_operand:SI 1 "mcore_arith_reg_operand" "0") (const_int 8) (const_int 24)))]
    ""
 -  "@
 -	lsri	%0,24
@@ -121,8 +123,9 @@ index d416ce24a97..da931f710c1 100644
  ;; This can be peepholed if it follows a ldb ...
  (define_insn ""
 -  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "=r,b")
+-	(zero_extract:SI (match_operand:SI 1 "mcore_arith_reg_operand" "0,r") (const_int 8) (const_int 0)))]
 +  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "=r")
- 	(zero_extract:SI (match_operand:SI 1 "mcore_arith_reg_operand" "0") (const_int 8) (const_int 0)))]
++	(zero_extract:SI (match_operand:SI 1 "mcore_arith_reg_operand" "0") (const_int 8) (const_int 0)))]
    ""
 -  "@
 -	zextb	%0
