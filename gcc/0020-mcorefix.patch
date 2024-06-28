@@ -1,0 +1,44 @@
+diff --git a/gcc/config/mcore/mcore.md b/gcc/config/mcore/mcore.md
+index d416ce24a97..557e4fc08bf 100644
+--- a/gcc/config/mcore/mcore.md
++++ b/gcc/config/mcore/mcore.md
+@@ -1063,15 +1063,15 @@ (define_expand "zero_extendqisi2"
+   "") 
+ 
+ ;; RBE: XXX: we don't recognize that the xtrb3 kills the CC register.
++;; So we don't use xtrb3 right now.
+ (define_insn ""
+-  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "=r,b,r")
+-	(zero_extend:SI (match_operand:QI 1 "general_operand" "0,r,m")))]
++  [(set (match_operand:SI 0 "mcore_arith_reg_operand" "=r,r")
++	(zero_extend:SI (match_operand:QI 1 "general_operand" "0,m")))]
+   ""
+   "@
+ 	zextb	%0
+-	xtrb3	%0,%1
+ 	ld.b	%0,%1"
+-  [(set_attr "type" "shift,shift,load")])
++  [(set_attr "type" "shift,load")])
+ 
+ ;; ldb gives us a free zero-extension. The combiner picks up on this.
+ (define_insn ""
+@@ -1097,15 +1097,15 @@ (define_expand "zero_extendqihi2"
+   "") 
+ 
+ ;; RBE: XXX: we don't recognize that the xtrb3 kills the CC register.
++;; So we don't use xtrb3 right now.
+ (define_insn ""
+-  [(set (match_operand:HI 0 "mcore_arith_reg_operand" "=r,b,r")
+-	(zero_extend:HI (match_operand:QI 1 "general_operand" "0,r,m")))]
++  [(set (match_operand:HI 0 "mcore_arith_reg_operand" "=r,r")
++	(zero_extend:HI (match_operand:QI 1 "general_operand" "0,m")))]
+   ""
+   "@
+ 	zextb	%0
+-	xtrb3	%0,%1
+ 	ld.b	%0,%1"
+-  [(set_attr "type" "shift,shift,load")])
++  [(set_attr "type" "shift,load")])
+ 
+ ;; ldb gives us a free zero-extension. The combiner picks up on this.
+ ;; this doesn't catch references that are into a structure.
