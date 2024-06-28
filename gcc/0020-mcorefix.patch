@@ -127,7 +127,7 @@ index d416ce24a97..da931f710c1 100644
 -  "@
 -	zextb	%0
 -	xtrb3	%0,%1\;zextb	%0"
-+  "zextb	%0
++  "zextb	%0"
    [(set_attr "type" "shift")])
  
  
