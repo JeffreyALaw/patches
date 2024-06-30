@@ -1,8 +1,8 @@
 diff --git a/gcc/Makefile.in b/gcc/Makefile.in
-index deb12e17d25..cdefdd0fa27 100644
+index 7d3ea27a6ab..f4bb4a88cf3 100644
 --- a/gcc/Makefile.in
 +++ b/gcc/Makefile.in
-@@ -1453,6 +1453,7 @@ OBJS = \
+@@ -1455,6 +1455,7 @@ OBJS = \
  	explow.o \
  	expmed.o \
  	expr.o \
@@ -11,10 +11,10 @@ index deb12e17d25..cdefdd0fa27 100644
  	file-prefix-map.o \
  	final.o \
 diff --git a/gcc/common.opt b/gcc/common.opt
-index 5f0a101bccb..d6b40edb57b 100644
+index 327230967ea..d68bca74365 100644
 --- a/gcc/common.opt
 +++ b/gcc/common.opt
-@@ -3846,4 +3846,8 @@ fipa-ra
+@@ -3877,4 +3877,8 @@ fipa-ra
  Common Var(flag_ipa_ra) Optimization
  Use caller save register across calls if possible.
  
@@ -24,7 +24,7 @@ index 5f0a101bccb..d6b40edb57b 100644
 +
  ; This comment is to ensure we retain the blank line above.
 diff --git a/gcc/df-scan.cc b/gcc/df-scan.cc
-index 1bade2cd71e..46806fe6e67 100644
+index c8ab3c09cee..e4839012b14 100644
 --- a/gcc/df-scan.cc
 +++ b/gcc/df-scan.cc
 @@ -78,7 +78,6 @@ static void df_get_eh_block_artificial_uses (bitmap);
@@ -45,10 +45,10 @@ index 1bade2cd71e..46806fe6e67 100644
  {
    unsigned int i;
 diff --git a/gcc/df.h b/gcc/df.h
-index 84e5aa8b524..2b9997eb978 100644
+index c4e690b40cf..d3331833608 100644
 --- a/gcc/df.h
 +++ b/gcc/df.h
-@@ -1091,6 +1091,7 @@ extern bool df_epilogue_uses_p (unsigned int);
+@@ -1092,6 +1092,7 @@ extern bool df_epilogue_uses_p (unsigned int);
  extern void df_set_regs_ever_live (unsigned int, bool);
  extern void df_compute_regs_ever_live (bool);
  extern void df_scan_verify (void);
@@ -58,7 +58,7 @@ index 84e5aa8b524..2b9997eb978 100644
  /*----------------------------------------------------------------------------
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
 new file mode 100644
-index 00000000000..ffea057ee11
+index 00000000000..adc9084df57
 --- /dev/null
 +++ b/gcc/ext-dce.cc
 @@ -0,0 +1,943 @@
@@ -989,7 +989,7 @@ index 00000000000..ffea057ee11
 +  {}
 +
 +  /* opt_pass methods: */
-+  virtual bool gate (function *) { return optimize > 0; }
++  virtual bool gate (function *) { return flag_ext_dce && optimize > 0; }
 +  virtual unsigned int execute (function *)
 +    {
 +      ext_dce ();
@@ -1005,18 +1005,97 @@ index 00000000000..ffea057ee11
 +{
 +  return new pass_ext_dce (ctxt);
 +}
+diff --git a/gcc/opts.cc b/gcc/opts.cc
+index 915bce88fd6..d7e0126e11f 100644
+--- a/gcc/opts.cc
++++ b/gcc/opts.cc
+@@ -634,6 +634,7 @@ static const struct default_options default_options_table[] =
+     { OPT_LEVELS_2_PLUS, OPT_fdevirtualize, NULL, 1 },
+     { OPT_LEVELS_2_PLUS, OPT_fdevirtualize_speculatively, NULL, 1 },
+     { OPT_LEVELS_2_PLUS, OPT_fexpensive_optimizations, NULL, 1 },
++    { OPT_LEVELS_2_PLUS, OPT_fext_dce, NULL, 1 },
+     { OPT_LEVELS_2_PLUS, OPT_fgcse, NULL, 1 },
+     { OPT_LEVELS_2_PLUS, OPT_fhoist_adjacent_loads, NULL, 1 },
+     { OPT_LEVELS_2_PLUS, OPT_findirect_inlining, NULL, 1 },
 diff --git a/gcc/passes.def b/gcc/passes.def
-index 1cbbd413097..a88e1f1ba3b 100644
+index 13c9dc34ddf..e6868041010 100644
 --- a/gcc/passes.def
 +++ b/gcc/passes.def
-@@ -491,6 +491,7 @@ along with GCC; see the file COPYING3.  If not see
+@@ -492,6 +492,7 @@ along with GCC; see the file COPYING3.  If not see
        NEXT_PASS (pass_inc_dec);
        NEXT_PASS (pass_initialize_regs);
        NEXT_PASS (pass_ud_rtl_dce);
 +      NEXT_PASS (pass_ext_dce);
        NEXT_PASS (pass_combine);
+       NEXT_PASS (pass_late_combine);
        NEXT_PASS (pass_if_after_combine);
-       NEXT_PASS (pass_jump_after_combine);
+diff --git a/gcc/testsuite/gcc.target/aarch64/sve/pred_clobber_1.c b/gcc/testsuite/gcc.target/aarch64/sve/pred_clobber_1.c
+index 25129e8d6f2..38dfdd43d81 100644
+--- a/gcc/testsuite/gcc.target/aarch64/sve/pred_clobber_1.c
++++ b/gcc/testsuite/gcc.target/aarch64/sve/pred_clobber_1.c
+@@ -12,6 +12,7 @@ extern void use(svbool_t);
+ ** foo:
+ **	...
+ **	ptrue	p([1-3]).b, all
++**	...
+ **	cmplo	p0.h, p\1/z, z0.h, z[0-9]+.h
+ **	...
+ */
+diff --git a/gcc/testsuite/gcc.target/aarch64/sve/pred_clobber_2.c b/gcc/testsuite/gcc.target/aarch64/sve/pred_clobber_2.c
+index 58badb66a43..45363cca925 100644
+--- a/gcc/testsuite/gcc.target/aarch64/sve/pred_clobber_2.c
++++ b/gcc/testsuite/gcc.target/aarch64/sve/pred_clobber_2.c
+@@ -12,6 +12,7 @@ extern void use(svbool_t);
+ ** foo:
+ **	...
+ **	ptrue	p([1-9][0-9]?).b, all
++**	...
+ **	cmplo	p0.h, p\1/z, z0.h, z[0-9]+.h
+ **	...
+ */
+diff --git a/gcc/testsuite/gcc.target/aarch64/sve/pred_clobber_3.c b/gcc/testsuite/gcc.target/aarch64/sve/pred_clobber_3.c
+index c67c2bd3422..c50a5815cc0 100644
+--- a/gcc/testsuite/gcc.target/aarch64/sve/pred_clobber_3.c
++++ b/gcc/testsuite/gcc.target/aarch64/sve/pred_clobber_3.c
+@@ -12,6 +12,7 @@ extern void use(svbool_t);
+ ** foo:
+ **	...
+ **	ptrue	p([1-9][0-9]?).b, all
++**	...
+ **	cmplo	p0.h, p\1/z, z0.h, z[0-9]+.h
+ **	...
+ */
+diff --git a/gcc/testsuite/gcc.target/aarch64/tbz_2.c b/gcc/testsuite/gcc.target/aarch64/tbz_2.c
+index ec128b58f35..8ca69e9b0c4 100644
+--- a/gcc/testsuite/gcc.target/aarch64/tbz_2.c
++++ b/gcc/testsuite/gcc.target/aarch64/tbz_2.c
+@@ -69,7 +69,7 @@ void g5(char x)
+ 
+ /* 
+ ** g6:
+-** 	tbnz	w0, 0, .L[0-9]+
++** 	tbnz	x0, 0, .L[0-9]+
+ ** 	ret
+ ** 	...
+ */
+@@ -81,7 +81,7 @@ void g6(char x)
+ 
+ /* 
+ ** g7:
+-** 	tst	w0, 3
++** 	tst	x0, 3
+ ** 	bne	.L[0-9]+
+ ** 	ret
+ ** 	...
+@@ -94,7 +94,7 @@ void g7(char x)
+ 
+ /* 
+ ** g8:
+-** 	tbnz	w0, 7, .L[0-9]+
++** 	tbnz	x0, 7, .L[0-9]+
+ ** 	ret
+ ** 	...
+ */
 diff --git a/gcc/testsuite/gcc.target/riscv/core_bench_list.c b/gcc/testsuite/gcc.target/riscv/core_bench_list.c
 new file mode 100644
 index 00000000000..957e9c841ed
@@ -1087,11 +1166,14 @@ index 00000000000..2f36dae85aa
 +}
 diff --git a/gcc/testsuite/gcc.target/riscv/matrix_add_const.c b/gcc/testsuite/gcc.target/riscv/matrix_add_const.c
 new file mode 100644
-index 00000000000..9a2dd53b17a
+index 00000000000..ee3e53377a0
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/matrix_add_const.c
-@@ -0,0 +1,11 @@
+@@ -0,0 +1,14 @@
 +/* { dg-do compile } */
++/* Explicitly use -march flags to that we don't get V.  */
++/* { dg-options "-march=rv64gc -mabi=lp64d" { target { rv64 } } } */
++/* { dg-options "-march=rv32gc" { target { rv32 } } } */
 +/* { dg-options "-O2 -fdump-rtl-ext_dce" } */
 +/* { dg-final { scan-rtl-dump {Successfully transformed} "ext_dce" } } */
 +
@@ -1140,10 +1222,10 @@ index 00000000000..a4e77d4aeb6
 +}
 +
 diff --git a/gcc/tree-pass.h b/gcc/tree-pass.h
-index 29267589eeb..20a6e882b87 100644
+index 38902b1b01b..326c13516a6 100644
 --- a/gcc/tree-pass.h
 +++ b/gcc/tree-pass.h
-@@ -593,6 +593,7 @@ extern rtl_opt_pass *make_pass_reginfo_init (gcc::context *ctxt);
+@@ -594,6 +594,7 @@ extern rtl_opt_pass *make_pass_reginfo_init (gcc::context *ctxt);
  extern rtl_opt_pass *make_pass_inc_dec (gcc::context *ctxt);
  extern rtl_opt_pass *make_pass_stack_ptr_mod (gcc::context *ctxt);
  extern rtl_opt_pass *make_pass_initialize_regs (gcc::context *ctxt);
