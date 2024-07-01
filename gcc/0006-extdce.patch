@@ -1098,14 +1098,13 @@ index ec128b58f35..8ca69e9b0c4 100644
  */
 diff --git a/gcc/testsuite/gcc.target/riscv/core_bench_list.c b/gcc/testsuite/gcc.target/riscv/core_bench_list.c
 new file mode 100644
-index 00000000000..e34d40bcff7
+index 00000000000..957e9c841ed
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/core_bench_list.c
-@@ -0,0 +1,16 @@
+@@ -0,0 +1,15 @@
 +/* { dg-do compile } */
-+/* { dg-options "-fdump-rtl-ext_dce" } */
++/* { dg-options "-O2 -fdump-rtl-ext_dce" } */
 +/* { dg-final { scan-rtl-dump {Successfully transformed} "ext_dce" } } */
-+/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" "-O1" } } */
 +
 +short
 +core_bench_list (int N) {
@@ -1120,14 +1119,13 @@ index 00000000000..e34d40bcff7
 +}
 diff --git a/gcc/testsuite/gcc.target/riscv/core_init_matrix.c b/gcc/testsuite/gcc.target/riscv/core_init_matrix.c
 new file mode 100644
-index 00000000000..2535af182cd
+index 00000000000..35a4a5fe0e7
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/core_init_matrix.c
-@@ -0,0 +1,18 @@
+@@ -0,0 +1,17 @@
 +/* { dg-do compile } */
-+/* { dg-options "-fdump-rtl-ext_dce" } */
++/* { dg-options "-O2 -fdump-rtl-ext_dce" } */
 +/* { dg-final { scan-rtl-dump {Successfully transformed} "ext_dce" } } */
-+/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" "-O1" } } */
 +
 +void
 +core_init_matrix(short* A, short* B, int seed) {
@@ -1144,14 +1142,13 @@ index 00000000000..2535af182cd
 +}
 diff --git a/gcc/testsuite/gcc.target/riscv/core_list_init.c b/gcc/testsuite/gcc.target/riscv/core_list_init.c
 new file mode 100644
-index 00000000000..81902dde21b
+index 00000000000..2f36dae85aa
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/core_list_init.c
-@@ -0,0 +1,19 @@
+@@ -0,0 +1,18 @@
 +/* { dg-do compile } */
-+/* { dg-options "-fdump-rtl-ext_dce" } */
++/* { dg-options "-O1 -fdump-rtl-ext_dce" } */
 +/* { dg-final { scan-rtl-dump {Successfully transformed} "ext_dce" } } */
-+/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" "-O1" } } */
 +
 +unsigned short
 +core_list_init (int size, short seed) {
@@ -1169,17 +1166,15 @@ index 00000000000..81902dde21b
 +}
 diff --git a/gcc/testsuite/gcc.target/riscv/matrix_add_const.c b/gcc/testsuite/gcc.target/riscv/matrix_add_const.c
 new file mode 100644
-index 00000000000..7f2db3d714c
+index 00000000000..7347c3de3b8
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/matrix_add_const.c
-@@ -0,0 +1,15 @@
+@@ -0,0 +1,13 @@
 +/* { dg-do compile } */
 +/* Explicitly use -march flags to that we don't get V.  */
-+/* { dg-options "-march=rv64gc -mabi=lp64d" { target { rv64 } } } */
-+/* { dg-options "-march=rv32gc" { target { rv32 } } } */
-+/* { dg-options "-fdump-rtl-ext_dce" } */
++/* { dg-options "-O2 -fdump-rtl-ext_dce -march=rv64gc -mabi=lp64d" { target { rv64 } } } */
++/* { dg-options "-O2 -fdump-rtl-ext_dce -march=rv32gc" { target { rv32 } } } */
 +/* { dg-final { scan-rtl-dump {Successfully transformed} "ext_dce" } } */
-+/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" "-O1" "-Os" "-Oz" } } */
 +
 +void
 +matrix_add_const(int N, short *A, short val)
@@ -1190,13 +1185,13 @@ index 00000000000..7f2db3d714c
 +}
 diff --git a/gcc/testsuite/gcc.target/riscv/mem-extend.c b/gcc/testsuite/gcc.target/riscv/mem-extend.c
 new file mode 100644
-index 00000000000..a7b56686094
+index 00000000000..1d44dfca4e5
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/mem-extend.c
 @@ -0,0 +1,14 @@
 +/* { dg-do compile } */
-+/* { dg-options "-fdump-rtl-ext_dce" } */
-+/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" "-O1" } } */
++/* { dg-options "-O2 -fdump-rtl-ext_dce" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" } } */
 +
 +void
 +foo(short *d, short *tmp) {
@@ -1210,14 +1205,13 @@ index 00000000000..a7b56686094
 +/* { dg-final { scan-rtl-dump {Successfully transformed} "ext_dce" } } */
 diff --git a/gcc/testsuite/gcc.target/riscv/pr111384.c b/gcc/testsuite/gcc.target/riscv/pr111384.c
 new file mode 100644
-index 00000000000..42a250ee90d
+index 00000000000..a4e77d4aeb6
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/pr111384.c
-@@ -0,0 +1,12 @@
+@@ -0,0 +1,11 @@
 +/* { dg-do compile } */
-+/* { dg-options "-fdump-rtl-ext_dce" } */
++/* { dg-options "-O1 -fdump-rtl-ext_dce" } */
 +/* { dg-final { scan-rtl-dump {Successfully transformed} "ext_dce" } } */
-+/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" "-O1" } } */
 +
 +void
 +foo(unsigned int src, unsigned short *dst1, unsigned short *dst2)
