@@ -1,0 +1,16 @@
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index c17141d909a..5e34dc92210 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -1702,7 +1702,9 @@ riscv_valid_lo_sum_p (enum riscv_symbol_type sym_type, machine_mode mode,
+       align = (SYMBOL_REF_DECL (x)
+ 	       ? DECL_ALIGN (SYMBOL_REF_DECL (x))
+ 	       : 1);
+-      size = (SYMBOL_REF_DECL (x) && DECL_SIZE (SYMBOL_REF_DECL (x))
++      size = (SYMBOL_REF_DECL (x)
++	      && DECL_SIZE (SYMBOL_REF_DECL (x))
++	      && tree_fits_uhwi_p (DECL_SIZE (SYMBOL_REF_DECL (x)))
+ 	      ? tree_to_uhwi (DECL_SIZE (SYMBOL_REF_DECL (x)))
+ 	      : 2*BITS_PER_WORD);
+     }
+
