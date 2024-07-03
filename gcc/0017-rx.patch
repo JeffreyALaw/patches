@@ -1,0 +1,13 @@
+diff --git a/gcc/config/rx/rx.cc b/gcc/config/rx/rx.cc
+index 8048cc98708..f286fecb1ac 100644
+--- a/gcc/config/rx/rx.cc
++++ b/gcc/config/rx/rx.cc
+@@ -2119,7 +2119,7 @@ rx_expand_epilogue (bool is_sibcall)
+       /* Cannot use the special instructions - deconstruct by hand.  */
+       if (total_size)
+ 	gen_safe_add (stack_pointer_rtx, stack_pointer_rtx,
+-		      GEN_INT (total_size), false);
++		      GEN_INT (total_size), true);
+ 
+       if (MUST_SAVE_ACC_REGISTER)
+ 	{
