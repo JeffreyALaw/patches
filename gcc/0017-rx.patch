@@ -1,8 +1,18 @@
 diff --git a/gcc/config/rx/rx.cc b/gcc/config/rx/rx.cc
-index 8048cc98708..f286fecb1ac 100644
+index 8048cc98708..c84e1398aad 100644
 --- a/gcc/config/rx/rx.cc
 +++ b/gcc/config/rx/rx.cc
-@@ -2119,7 +2119,7 @@ rx_expand_epilogue (bool is_sibcall)
+@@ -1845,8 +1845,7 @@ rx_expand_prologue (void)
+ 	gen_safe_add (stack_pointer_rtx, stack_pointer_rtx,
+ 		      GEN_INT (- (HOST_WIDE_INT) frame_size), true);
+       else
+-	gen_safe_add (stack_pointer_rtx, frame_pointer_rtx, NULL_RTX,
+-		      false /* False because the epilogue will use the FP not the SP.  */);
++	gen_safe_add (stack_pointer_rtx, frame_pointer_rtx, NULL_RTX, true);
+     }
+ }
+ 
+@@ -2119,7 +2118,7 @@ rx_expand_epilogue (bool is_sibcall)
        /* Cannot use the special instructions - deconstruct by hand.  */
        if (total_size)
  	gen_safe_add (stack_pointer_rtx, stack_pointer_rtx,
