@@ -6,7 +6,7 @@ index 38ed773c222..3d84e33a203 100644
     'A'	Print the atomic operation suffix for memory model OP.
     'I'	Print the LR suffix for memory model OP.
     'J'	Print the SC suffix for memory model OP.
-+   'N'	Print a non-temporal locality hints instruction.
++   'L'	Print a non-temporal locality hints instruction.
     'z'	Print x0 if OP is zero, otherwise print OP normally.
     'i'	Print i if the operand is not a register.
     'S'	Print shift-index of single-bit mask OP.
@@ -14,7 +14,7 @@ index 38ed773c222..3d84e33a203 100644
        break;
      }
  
-+    case 'N':
++    case 'L':
 +      {
 +	const char *ntl_hint = NULL;
 +	switch (INTVAL (op))
@@ -48,8 +48,8 @@ index c0c960353eb..4ab6a233267 100644
    {
 -    case 0: return "prefetch.r\t%a0";
 -    case 1: return "prefetch.w\t%a0";
-+    case 0: return TARGET_ZIHINTNTL ? "%N2prefetch.r\t%a0" : "prefetch.r\t%a0";
-+    case 1: return TARGET_ZIHINTNTL ? "%N2prefetch.w\t%a0" : "prefetch.w\t%a0";
++    case 0: return TARGET_ZIHINTNTL ? "%L2prefetch.r\t%a0" : "prefetch.r\t%a0";
++    case 1: return TARGET_ZIHINTNTL ? "%L2prefetch.w\t%a0" : "prefetch.w\t%a0";
      default: gcc_unreachable ();
    }
  }
