@@ -1,8 +1,8 @@
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 706c18416db..42f80088bab 100644
+index 38ed773c222..3d84e33a203 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
-@@ -4532,6 +4532,7 @@  riscv_memmodel_needs_amo_release (enum memmodel model)
+@@ -6485,6 +6485,7 @@ riscv_asm_output_opcode (FILE *asm_out_file, const char *p)
     'A'	Print the atomic operation suffix for memory model OP.
     'I'	Print the LR suffix for memory model OP.
     'J'	Print the SC suffix for memory model OP.
@@ -10,7 +10,7 @@ index 706c18416db..42f80088bab 100644
     'z'	Print x0 if OP is zero, otherwise print OP normally.
     'i'	Print i if the operand is not a register.
     'S'	Print shift-index of single-bit mask OP.
-@@ -4718,6 +4719,27 @@  riscv_print_operand (FILE *file, rtx op, int letter)
+@@ -6679,6 +6680,27 @@ riscv_print_operand (FILE *file, rtx op, int letter)
        break;
      }
  
@@ -39,10 +39,10 @@ index 706c18416db..42f80088bab 100644
        if (code != REG)
          fputs ("i", file);
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index 7988026d129..3357c981b5d 100644
+index c0c960353eb..4ab6a233267 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
-@@ -3256,11 +3256,15 @@ 
+@@ -4093,12 +4093,18 @@ (define_insn "prefetch"
  {
    switch (INTVAL (operands[1]))
    {
@@ -52,12 +52,15 @@ index 7988026d129..3357c981b5d 100644
 +    case 1: return TARGET_ZIHINTNTL ? "%N2prefetch.w\t%a0" : "prefetch.w\t%a0";
      default: gcc_unreachable ();
    }
--})
-+}
-+  [(set (attr "length") (if_then_else (and (match_test "TARGET_ZIHINTNTL")
-+					   (match_test "INTVAL (operands[2]) != 3"))
-+				      (const_string "8")
-+				      (const_string "4")))])
+ }
+-  [(set_attr "type" "store")])
++  [(set_attr "type" "store")
++   (set (attr "length") (if_then_else
++			  (and (match_test "TARGET_ZIHINTNTL")
++			       (match_test "INTVAL (operands[2]) != 3"))
++			  (const_string "8")
++			  (const_string "4")))])
++
  
  (define_insn "riscv_prefetchi_<mode>"
    [(unspec_volatile:X [(match_operand:X 0 "address_operand" "r")
@@ -66,7 +69,7 @@ new file mode 100644
 index 00000000000..78a3afe6833
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/prefetch-zihintntl.c
-@@ -0,0 +1,20 @@ 
+@@ -0,0 +1,20 @@
 +/* { dg-do compile target { { rv64-*-*}}} */
 +/* { dg-options "-march=rv64gc_zicbop_zihintntl -mabi=lp64" } */
 +
@@ -87,4 +90,3 @@ index 00000000000..78a3afe6833
 +/* { dg-final { scan-assembler-times "ntl.p1" 2 } } */
 +/* { dg-final { scan-assembler-times "prefetch.r" 4 } } */
 +/* { dg-final { scan-assembler-times "prefetch.w" 4 } } */
-
