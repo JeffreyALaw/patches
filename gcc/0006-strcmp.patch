@@ -69,17 +69,6 @@ index d9380033175..29e38a1c8b7 100644
        emit_jump_insn (gen_jump (final_label));
        emit_barrier (); /* No fall-through.  */
      }
-@@ -668,9 +663,7 @@ emit_memcmp_scalar_load_and_compare (rtx result, rtx src1, rtx src2,
-       /* Fast-path for a single byte.  */
-       if (cmp_bytes == 1)
- 	{
--	  rtx tmp = gen_reg_rtx (Xmode);
--	  do_sub3 (tmp, data1, data2);
--	  emit_insn (gen_movsi (result, gen_lowpart (SImode, tmp)));
-+	  do_sub3 (result, data1, data2);
- 	  emit_jump_insn (gen_jump (final_label));
- 	  emit_barrier (); /* No fall-through.  */
- 	  return;
 @@ -1544,7 +1537,7 @@ expand_strcmp (rtx result, rtx src1, rtx src2, rtx nbytes,
    if (with_length)
      emit_label (done);
