@@ -1,3 +1,12 @@
+	* config/riscv/riscv-string.cc (emit_memcmp_scalar_load_and_compare):
+	Set RESULT directly rather than using a temporary.
+	(emit_memcmp_scalar_result_calculation): Similarly.
+	(riscv_expand_block_compare_scalar): Use CONST0_RTX rather than
+	generating new RTL.
+	* config/riscv/riscv.md (cmpmemsi): Pass an X mode temporary to the
+	expansion routines.  If necessary extract low part of the word to store
+	in final result location.
+
 diff --git a/gcc/config/riscv/riscv-string.cc b/gcc/config/riscv/riscv-string.cc
 index 4736228e6f1..80d22e87d57 100644
 --- a/gcc/config/riscv/riscv-string.cc
