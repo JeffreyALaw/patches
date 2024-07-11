@@ -1,0 +1,132 @@
+
+
+
+This patch improves the speed of ARC's ashrsi3 and lshrsi3, on CPUs
+without a barrel shifter, when not optimizing for size.  The current
+implementations of right shifts by a constant are optimal for code
+size, but at significant performance cost.  By emitting an extra
+instruction or two, when not optimizing for size, we can improve
+performance (sometimes dramatically).
+
+[al]shrsi3 #5   Before 4 insns@12 cycles, after 5 insns@5 cycles
+
+Without -mswap
+[al]shrsi3 #29  Before 4 insns@60 cycles, after 5 insns@31 cycles
+
+With -mswap
+lshrsi3 #29     Before 4 insns@60 cycles, after 6 insns@16 cycles
+
+
+This patch has been minimally tested by building a cross-compiler
+to arc-linux hosted on x86_64-pc-linux-gnu where there are no new
+failures from "make -k check" in the compile-only tests.
+Ok for mainline (after 3rd-party testing)?
+
+
+2024-07-11  Roger Sayle  <roger@nextmovesoftware.com>
+
+gcc/ChangeLog
+        * config/arc/arc.cc (arc_split_ashr): When not optimizing for
+        size; fully unroll ashr #5, on TARGET_SWAP for shifts between
+        19 and 29, perform ashr #16 using two instructions then
+        recursively perform the remaining shift, and for shifts by
+        odd amounts perform a single shift then the remainder
+        of the shift using a loop doing two bits per iteration.
+        (arc_split_lshr): Likewise.
+
+
+Thanks in advance,
+Roger
+--
+
+
+patchas.txt
+
+diff --git a/gcc/config/arc/arc.cc b/gcc/config/arc/arc.cc
+index 686de0ff2d5..b56e65d2d3e 100644
+--- a/gcc/config/arc/arc.cc
++++ b/gcc/config/arc/arc.cc
+@@ -4556,7 +4556,8 @@ arc_split_ashr (rtx *operands)
+   if (CONST_INT_P (operands[2]))
+     {
+       int n = INTVAL (operands[2]) & 0x1f;
+-      if (n <= 4)
++      if (n <= 4
++	  || (n == 5 && !optimize_function_for_size_p (cfun)))
+ 	{
+ 	  if (n != 0)
+ 	    {
+@@ -4577,6 +4578,17 @@ arc_split_ashr (rtx *operands)
+ 	    emit_insn (gen_ashrsi3_cnt1 (operands[0], operands[0]));
+ 	  return;
+ 	}
++      else if (n >= 19 && n <= 29 && TARGET_SWAP
++	       && !optimize_function_for_size_p (cfun))
++	{
++	  emit_insn (gen_rotrsi2_cnt16 (operands[0], operands[1]));
++	  emit_insn (gen_extendhisi2 (operands[0],
++				      gen_lowpart (HImode, operands[0])));
++	  operands[1] = operands[0];
++	  operands[2] = GEN_INT (n - 16);
++	  arc_split_ashr (operands);
++	  return;
++	}
+       else if (n == 30)
+ 	{
+ 	  rtx tmp = gen_reg_rtx (SImode);
+@@ -4592,6 +4604,13 @@ arc_split_ashr (rtx *operands)
+ 	  emit_insn (gen_sbc (operands[0], operands[0], operands[0]));
+ 	  return;
+ 	}
++      else if ((n & 1) != 0 && !optimize_function_for_size_p (cfun))
++	{
++	  emit_insn (gen_ashrsi3_cnt1 (operands[0], operands[1]));
++	  emit_insn (gen_ashrsi3_loop (operands[0], operands[0],
++				       GEN_INT (n - 1)));
++	  return;
++	}
+     }
+ 
+   emit_insn (gen_ashrsi3_loop (operands[0], operands[1], operands[2]));
+@@ -4604,7 +4623,8 @@ arc_split_lshr (rtx *operands)
+   if (CONST_INT_P (operands[2]))
+     {
+       int n = INTVAL (operands[2]) & 0x1f;
+-      if (n <= 4)
++      if (n <= 4
++	  || (n == 5 && !optimize_function_for_size_p (cfun)))
+ 	{
+ 	  if (n != 0)
+ 	    {
+@@ -4623,6 +4643,15 @@ arc_split_lshr (rtx *operands)
+ 	    emit_insn (gen_lshrsi3_cnt1 (operands[0], operands[0]));
+ 	  return;
+ 	}
++      else if (n >= 20 && n <= 29 && TARGET_SWAP && TARGET_V2
++	       && !optimize_function_for_size_p (cfun))
++	{
++	  emit_insn (gen_lshrsi2_cnt16 (operands[0], operands[1]));
++	  operands[1] = operands[0];
++	  operands[2] = GEN_INT (n - 16);
++	  arc_split_lshr (operands);
++	  return;
++	}
+       else if (n == 30)
+ 	{
+ 	  rtx tmp = gen_reg_rtx (SImode);
+@@ -4638,6 +4667,13 @@ arc_split_lshr (rtx *operands)
+ 	  emit_insn (gen_scc_ltu_cc_c (operands[0]));
+ 	  return;
+ 	}
++      else if ((n & 1) != 0 && !optimize_function_for_size_p (cfun))
++	{
++	  emit_insn (gen_lshrsi3_cnt1 (operands[0], operands[1]));
++	  emit_insn (gen_lshrsi3_loop (operands[0], operands[0],
++				       GEN_INT (n - 1)));
++	  return;
++	}
+     }
+ 
+   emit_insn (gen_lshrsi3_loop (operands[0], operands[1], operands[2]));
+
+
