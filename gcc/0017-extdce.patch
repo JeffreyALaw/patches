@@ -1,5 +1,5 @@
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
-index 6d4b8858ec6..40636893809 100644
+index 6d4b8858ec6..7b16d8886af 100644
 --- a/gcc/ext-dce.cc
 +++ b/gcc/ext-dce.cc
 @@ -129,9 +129,11 @@ safe_for_live_propagation (rtx_code code)
@@ -186,7 +186,17 @@ index 6d4b8858ec6..40636893809 100644
  	}
  
        BITMAP_FREE (live_tmp);
-@@ -821,6 +855,14 @@ ext_dce_init (void)
+@@ -817,10 +851,30 @@ ext_dce_init (void)
+   bitmap_iterator bi;
+   EXECUTE_IF_SET_IN_BITMAP (refs, 0, i, bi)
+     {
+-      for (int j = 0; j < 4; j++)
++      int limit;
++      if (i > FIRST_PSEUDO_REGISTER)
++	limit = exact_log2 (GET_MODE_SIZE (GET_MODE (regno_reg_rtx[i])).to_constant ()) + 1;
++      else
++	limit = 4;
++      for (int j = 0; j < limit; j++)
  	bitmap_set_bit (&livein[EXIT_BLOCK], i * 4 + j);
      }
  
@@ -194,14 +204,21 @@ index 6d4b8858ec6..40636893809 100644
 +  FOR_EACH_BB_FN (bb, cfun)
 +    {
 +      EXECUTE_IF_SET_IN_BITMAP (DF_LR_IN (bb), 0, i, bi)
-+	for (int j = 0; j < 4; j++)
-+	  bitmap_set_bit (&livein[bb->index], i * 4 + j);
++	{
++	  int limit;
++	  if (i > FIRST_PSEUDO_REGISTER)
++	    limit = exact_log2 (GET_MODE_SIZE (GET_MODE (regno_reg_rtx[i])).to_constant ()) + 1;
++	  else
++	    limit = 4;
++	  for (int j = 0; j < limit; j++)
++	    bitmap_set_bit (&livein[bb->index], i * 4 + j);
++	}
 +    }
 +
    livenow = BITMAP_ALLOC (NULL);
    all_blocks = BITMAP_ALLOC (NULL);
    changed_pseudos = BITMAP_ALLOC (NULL);
-@@ -875,8 +917,6 @@ ext_dce_rd_transfer_n (int bb_index)
+@@ -875,8 +929,6 @@ ext_dce_rd_transfer_n (int bb_index)
       the generic dataflow code that something changed.  */
    if (!bitmap_equal_p (&livein[bb_index], livenow))
      {
