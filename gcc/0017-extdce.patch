@@ -1,5 +1,5 @@
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
-index 6d4b8858ec6..6f11679f2e6 100644
+index 6d4b8858ec6..fd775371cbe 100644
 --- a/gcc/ext-dce.cc
 +++ b/gcc/ext-dce.cc
 @@ -48,6 +48,32 @@ static bool modify;
@@ -56,7 +56,7 @@ index 6d4b8858ec6..6f11679f2e6 100644
  	      iter.skip_subrtxes ();
  	      continue;
  	    }
-@@ -189,15 +218,21 @@ ext_dce_process_sets (rtx_insn *insn, rtx obj, bitmap live_tmp)
+@@ -189,16 +218,34 @@ ext_dce_process_sets (rtx_insn *insn, rtx obj, bitmap live_tmp)
  		  /* Skip the subrtxs of the STRICT_LOW_PART.  We can't
  		     process them because it'll set objects as no longer
  		     live when they are in fact still live.  */
@@ -66,23 +66,34 @@ index 6d4b8858ec6..6f11679f2e6 100644
  		}
  
 -	      /* Transfer all the LIVENOW bits for X into LIVE_TMP.  */
-+	      /* Mark all the potentially set groups as live.  This must not
-+		 filter based on LIVE_TMP as we might have a matched source
-+		 and destination.  If the source wasn't already considered
-+		 live, then its groups wouldn't be marked in LIVE_TMP and
-+		 subsequent use processing would think all the bits in the
-+		 destination are dead.  */
++	      /* LIVE_TMP contains the set groups that are live-out
++		 and set in this insn.  It is used to narrow the groups
++		 live-in for the inputs of this insn.
++
++		 The simple thing to do is mark all the groups as live,
++		 but that will significantly inhibit optimization.
++
++		 We also need to be careful for of the case where we have
++		 an in-out operand.  If we're not careful we'd clear
++		 LIVE_TMP in that case which will cause problems later.
++
++		 The right thing to is to transfer the live groups from
++		 LIVENOW into LIVE_TMP.  If LIVE_TMP is empty afterwards,
++		 then set it based on the REG and its mode.  */
  	      HOST_WIDE_INT rn = REGNO (SUBREG_REG (x));
 -	      for (HOST_WIDE_INT i = 4 * rn; i < 4 * rn + 4; i++)
--		if (bitmap_bit_p (livenow, i))
--		  bitmap_set_bit (live_tmp, i);
 +	      int limit = group_limit (SUBREG_REG (x)) + 1;
 +	      for (HOST_WIDE_INT i = 4 * rn; i < 4 * rn + limit; i++)
-+		bitmap_set_bit (live_tmp, i);
+ 		if (bitmap_bit_p (livenow, i))
+ 		  bitmap_set_bit (live_tmp, i);
  
++	      if (bitmap_empty_p (live_tmp))
++		bitmap_set_range (live_tmp, 4 * rn, limit);
++
  	      /* The mode of the SUBREG tells us how many bits we can
  		 clear.  */
-@@ -217,11 +252,19 @@ ext_dce_process_sets (rtx_insn *insn, rtx obj, bitmap live_tmp)
+ 	      machine_mode mode = GET_MODE (x);
+@@ -217,11 +264,19 @@ ext_dce_process_sets (rtx_insn *insn, rtx obj, bitmap live_tmp)
  	    = GET_MODE_MASK (GET_MODE_INNER (GET_MODE (x)));
  	  if (SUBREG_P (x))
  	    {
@@ -105,7 +116,7 @@ index 6d4b8858ec6..6f11679f2e6 100644
  
  	      /* We can safely strip a paradoxical subreg.  The inner mode will
  		 be narrower than the outer mode.  We'll clear fewer bits in
-@@ -246,6 +289,7 @@ ext_dce_process_sets (rtx_insn *insn, rtx obj, bitmap live_tmp)
+@@ -246,6 +301,7 @@ ext_dce_process_sets (rtx_insn *insn, rtx obj, bitmap live_tmp)
  		 remain the same.  Thus we can not continue here, we must
  		 either figure out what part of the destination is modified
  		 or skip the sub-rtxs.  */
@@ -113,7 +124,7 @@ index 6d4b8858ec6..6f11679f2e6 100644
  	      iter.skip_subrtxes ();
  	      continue;
  	    }
-@@ -256,12 +300,15 @@ ext_dce_process_sets (rtx_insn *insn, rtx obj, bitmap live_tmp)
+@@ -256,13 +312,20 @@ ext_dce_process_sets (rtx_insn *insn, rtx obj, bitmap live_tmp)
  	  /* Now handle the actual object that was changed.  */
  	  if (REG_P (x))
  	    {
@@ -127,14 +138,17 @@ index 6d4b8858ec6..6f11679f2e6 100644
 +		 destination are dead.  */
  	      HOST_WIDE_INT rn = REGNO (x);
 -	      for (HOST_WIDE_INT i = 4 * rn; i < 4 * rn + 4; i++)
--		if (bitmap_bit_p (livenow, i))
--		  bitmap_set_bit (live_tmp, i);
 +	      for (HOST_WIDE_INT i = 4 * rn; i < 4 * rn + group_limit (x) + 1; i++)
-+		bitmap_set_bit (live_tmp, i);
+ 		if (bitmap_bit_p (livenow, i))
+ 		  bitmap_set_bit (live_tmp, i);
  
++	      if (bitmap_empty_p (live_tmp))
++		bitmap_set_range (live_tmp, 4 * rn, group_limit (x) + 1);
++
  	      /* Now clear the bits known written by this instruction.
  		 Note that BIT need not be a power of two, consider a
-@@ -286,9 +333,11 @@ ext_dce_process_sets (rtx_insn *insn, rtx obj, bitmap live_tmp)
+ 		 ZERO_EXTRACT destination.  */
+@@ -286,9 +349,11 @@ ext_dce_process_sets (rtx_insn *insn, rtx obj, bitmap live_tmp)
        else if (GET_CODE (x) == COND_EXEC)
  	{
  	  /* This isn't ideal, but may not be so bad in practice.  */
@@ -146,7 +160,7 @@ index 6d4b8858ec6..6f11679f2e6 100644
  }
  
  /* INSN has a sign/zero extended source inside SET that we will
-@@ -449,7 +498,12 @@ carry_backpropagate (unsigned HOST_WIDE_INT mask, enum rtx_code code, rtx x)
+@@ -449,7 +514,12 @@ carry_backpropagate (unsigned HOST_WIDE_INT mask, enum rtx_code code, rtx x)
        return mmask;
  
      case SIGN_EXTEND:
@@ -160,7 +174,7 @@ index 6d4b8858ec6..6f11679f2e6 100644
  	mask |= 1ULL << (GET_MODE_BITSIZE (mode).to_constant () - 1);
        return mask;
  
-@@ -482,7 +536,8 @@ carry_backpropagate (unsigned HOST_WIDE_INT mask, enum rtx_code code, rtx x)
+@@ -482,7 +552,8 @@ carry_backpropagate (unsigned HOST_WIDE_INT mask, enum rtx_code code, rtx x)
     eliminated in CHANGED_PSEUDOS.  */
  
  static void
@@ -170,7 +184,7 @@ index 6d4b8858ec6..6f11679f2e6 100644
  {
    subrtx_var_iterator::array_type array_var;
    FOR_EACH_SUBRTX_VAR (iter, array_var, obj, NONCONST)
-@@ -556,6 +611,15 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj, bitmap live_tmp)
+@@ -556,6 +627,15 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj, bitmap live_tmp)
  		  dst_mask |= mask_array[i];
  	      dst_mask >>= bit;
  
@@ -186,7 +200,7 @@ index 6d4b8858ec6..6f11679f2e6 100644
  	      /* ??? Could also handle ZERO_EXTRACT / SIGN_EXTRACT
  		 of the source specially to improve optimization.  */
  	      if (code == SIGN_EXTEND || code == ZERO_EXTEND)
-@@ -566,7 +630,7 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj, bitmap live_tmp)
+@@ -566,7 +646,7 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj, bitmap live_tmp)
  
  		  /* DST_MASK could be zero if we had something in the SET
  		     that we couldn't handle.  */
@@ -195,7 +209,7 @@ index 6d4b8858ec6..6f11679f2e6 100644
  		    ext_dce_try_optimize_insn (insn, x);
  
  		  dst_mask &= src_mask;
-@@ -574,12 +638,6 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj, bitmap live_tmp)
+@@ -574,12 +654,6 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj, bitmap live_tmp)
  		  code = GET_CODE (src);
  		}
  
@@ -208,7 +222,7 @@ index 6d4b8858ec6..6f11679f2e6 100644
  	      /* We will handle the other operand of a binary operator
  		 at the bottom of the loop by resetting Y.  */
  	      if (BINARY_P (src))
-@@ -689,7 +747,7 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj, bitmap live_tmp)
+@@ -689,7 +763,7 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj, bitmap live_tmp)
        /* If we have a register reference that is not otherwise handled,
  	 just assume all the chunks are live.  */
        else if (REG_P (x))
@@ -217,7 +231,7 @@ index 6d4b8858ec6..6f11679f2e6 100644
      }
  }
  
-@@ -716,14 +774,15 @@ ext_dce_process_bb (basic_block bb)
+@@ -716,14 +790,15 @@ ext_dce_process_bb (basic_block bb)
        bitmap live_tmp = BITMAP_ALLOC (NULL);
  
        /* First process any sets/clobbers in INSN.  */
@@ -236,7 +250,7 @@ index 6d4b8858ec6..6f11679f2e6 100644
  
        /* A nonlocal goto implicitly uses the frame pointer.  */
        if (JUMP_P (insn) && find_reg_note (insn, REG_NON_LOCAL_GOTO, NULL_RTX))
-@@ -746,7 +805,8 @@ ext_dce_process_bb (basic_block bb)
+@@ -746,7 +821,8 @@ ext_dce_process_bb (basic_block bb)
  	      if (global_regs[i])
  		bitmap_set_range (livenow, i * 4, 4);
  
@@ -246,7 +260,7 @@ index 6d4b8858ec6..6f11679f2e6 100644
  	}
  
        BITMAP_FREE (live_tmp);
-@@ -816,10 +876,7 @@ ext_dce_init (void)
+@@ -816,10 +892,7 @@ ext_dce_init (void)
    unsigned i;
    bitmap_iterator bi;
    EXECUTE_IF_SET_IN_BITMAP (refs, 0, i, bi)
@@ -258,7 +272,7 @@ index 6d4b8858ec6..6f11679f2e6 100644
  
    livenow = BITMAP_ALLOC (NULL);
    all_blocks = BITMAP_ALLOC (NULL);
-@@ -875,8 +932,6 @@ ext_dce_rd_transfer_n (int bb_index)
+@@ -875,8 +948,6 @@ ext_dce_rd_transfer_n (int bb_index)
       the generic dataflow code that something changed.  */
    if (!bitmap_equal_p (&livein[bb_index], livenow))
      {
