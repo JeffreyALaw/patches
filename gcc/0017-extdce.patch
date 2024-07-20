@@ -192,7 +192,7 @@ index 6d4b8858ec6..5b089dc006b 100644
  {
    subrtx_var_iterator::array_type array_var;
    FOR_EACH_SUBRTX_VAR (iter, array_var, obj, NONCONST)
-@@ -556,6 +628,15 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj, bitmap live_tmp)
+@@ -556,6 +628,11 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj, bitmap live_tmp)
  		  dst_mask |= mask_array[i];
  	      dst_mask >>= bit;
  
@@ -200,10 +200,6 @@ index 6d4b8858ec6..5b089dc006b 100644
 +		 consider all the bits live.  */
 +	      if (skipped_dest)
 +		dst_mask = -1;
-+
-+	      /* Make sure to account for carry_backpropagate before doing
-+		 optimization!  */
-+	      dst_mask = carry_backpropagate (dst_mask, code, src);
 +
  	      /* ??? Could also handle ZERO_EXTRACT / SIGN_EXTRACT
  		 of the source specially to improve optimization.  */
@@ -217,19 +213,6 @@ index 6d4b8858ec6..5b089dc006b 100644
  		    ext_dce_try_optimize_insn (insn, x);
  
  		  dst_mask &= src_mask;
-@@ -574,12 +655,6 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj, bitmap live_tmp)
- 		  code = GET_CODE (src);
- 		}
- 
--	      /* Optimization is done at this point.  We just want to make
--		 sure everything that should get marked as live is marked
--		 from here onward.  */
--
--	      dst_mask = carry_backpropagate (dst_mask, code, src);
--
- 	      /* We will handle the other operand of a binary operator
- 		 at the bottom of the loop by resetting Y.  */
- 	      if (BINARY_P (src))
 @@ -591,8 +666,10 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj, bitmap live_tmp)
  		 making things live.  Breaking from this loop will cause
  		 the iterator to work on sub-rtxs, so it is safe to break
