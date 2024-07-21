@@ -47,14 +47,6 @@ index 6d4b8858ec6..c4c38659701 100644
  /* Note this pass could be used to narrow memory loads too.  It's
     not clear if that's profitable or not in general.  */
  
-@@ -69,6 +107,7 @@ safe_for_live_propagation (rtx_code code)
-   switch (GET_RTX_CLASS (code))
-     {
-       case RTX_OBJ:
-+      case RTX_CONST_OBJ:
- 	return true;
- 
-       case RTX_COMPARE:
 @@ -129,9 +168,11 @@ safe_for_live_propagation (rtx_code code)
     within an object) are set by INSN, the more aggressive the
     optimization phase during use handling will be.  */
