@@ -1,0 +1,1275 @@
+
+
+
+This significantly reworks my previous patch to improve SImode right
+shifts on ARC CPUs without a barrel shifter when not optimizing for
+size.  This patch provides several additional implementation strategies
+further reducing the number of cycles required.
+
+One feature of !TARGET_BARREL_SHIFTER on ARC is that it doesn't provide
+a rotate-left instruction, but does have a rotate-left-through-carry.
+Consider the behaviour of repeatedly executing "adc.f r0,r0,r0" (or
+equivalently "rlc r0,r0").  This moves the top bits of a register to
+the low bits, but with a 1 bit latency.  So where (X<<C1)|(X>>C2) is an
+SImode rotation when C1+C2==32, repeated adc or rlc implement a
+"pseudo-rotation" (X<<C1)|(X>>C2), where C1+C2 is 33.
+
+Whilst 33-bit pseudo-rotations almost certainly doesn't occur frequently
+in real code, this provides a very useful building block.  Conventionally,
+rotations require 2 cycles per bit; one cycle to shift the top-bit out
+out of the source, and one cycle to shift this bit into the destination.
+The above pseudo rotation has twice the throughput, but leaves the
+upper bits in a unusual configuration.  It turns out that masking the
+top-bits out with AND after the pseudo-rotation provides a fast form
+of lshr with high shift counts, and even ashr can be improved using
+either a sign-extension instruction or sign-extension sequence after
+a lshr.
+
+With version #1 of this patch, lshr #29 took 31 cycles using 6 insns:
+
+lshr29:
+        lsr_s   r0,r0
+        mov     lp_count,14
+        lp      2f
+        lsr     r0,r0
+        lsr     r0,r0
+2:      # end single insn loop
+        j_s     [blink]
+
+with this latest patch, it takes 5 cycles using 5 insns:
+
+lshr29:
+        add.f   r0,r0,r0
+        adc.f   r0,r0,r0
+        adc.f   r0,r0,r0
+        adc.f   r0,r0,r0
+        j_s.d   [blink]
+        bmsk_s  r0,r0,2
+
+And as an arithmetic shift example, ashr #24 was 26 cycles using 4 insns:
+
+ashr24:
+        mov     lp_count,12
+        lp      2f
+        asr     r0,r0
+        asr     r0,r0
+2:      # end single insn loop
+        j_s     [blink]
+
+and now completes in 12 cycles using 6 insns:
+
+ashr24:
+        add.f   r0,r0,r0
+        mov     lp_count,4
+        lp      2f
+        rlc.f   r0,r0
+        rlc.f   r0,r0
+2:      # end single insn loop
+        j_s.d   [blink]
+        sexb_s  r0,r0
+
+In order to maintain/select between the different implementations I've
+changed ashr and lshr to use the same table-driven paradigm as currently
+used for ashl, which was inspired by similar tables in the H8300 backend.
+This approach has the additional benefit of allowing arc_rtx_costs to
+provide more accurate costs/estimates.
+
+Unfortunately without real hardware or a simulator to test on, I can't
+be 100% confident in this code, but on paper, shifts should now be much
+faster.  This patch has been tested on a cross-compiler to arc-linux
+hosted on x86_64 with no new failures in the compilation tests.
+
+Now that Claudiu has left Synopsys, is anyone able to test these changes?
+Thanks in advance.
+
+
+2024-07-22  Roger Sayle  <roger@nextmovesoftware.com>
+
+gcc/ChangeLog
+        * config/arc/arc-protos.h (output_rlc_loop): Prototype here.
+        (arc_split_rlc): Prototype here.
+        * config/arc/arc.cc (output_rlc_loop): Output a zero-overhead
+        loop of rlc.f instructions, required by new .
+        (arc_shift_alg): Add new enumerations for right shifts.
+        (arc_ashl_alg): Update.
+        (arc_ashr_alg): New table for SImode arithmetic right shifts.
+        (arc_lshr_alg): New table for SImode logical right shifts.
+        (arc_split_ashl_inline): New helper functon for expanding
+        ashl via a sequence of shift-adds, with specified zero register.
+        (arc_split_ashl): Update implementation to handle new enumerations.
+        (arc_split_ashr): Rewrite to table-driven implementation.
+        (arc_split_lshr): Likewise.
+        (arc_split_rlc): New function to split 33-bit pseudo-rotate.
+        (arc_rtx_costs) <case ASHIFTRT>: Use SImode costs from ashr table.
+        <case LSHIFTRT>: Likewise, use SImode costs from lshr table.
+        * config/arc/arc.md (ANY_OR_PLUS): New code iterator.
+        (rlcsi2_loop): New define_insn to iterate rlc.f using zero-overhead
+        loop.
+        (*rlcsi2_cnt): New define_insn_and_split to recognize suitable
+        pseudo-rotations during combine, and split them pre-reload.
+
+
+Thanks again,
+Roger
+--
+
+
+patchas2.txt
+
+diff --git a/gcc/config/arc/arc-protos.h b/gcc/config/arc/arc-protos.h
+index 281cdfc4ea9..343045c425b 100644
+--- a/gcc/config/arc/arc-protos.h
++++ b/gcc/config/arc/arc-protos.h
+@@ -26,11 +26,13 @@ extern struct rtx_def *gen_compare_reg (rtx, machine_mode);
+ 
+ /* Declarations for various fns used in the .md file.  */
+ extern const char *output_shift_loop (enum rtx_code, rtx *);
++extern const char *output_rlc_loop (rtx *);
+ extern void arc_split_ashl (rtx *);
+ extern void arc_split_ashr (rtx *);
+ extern void arc_split_lshr (rtx *);
+ extern void arc_split_rotl (rtx *);
+ extern void arc_split_rotr (rtx *);
++extern void arc_split_rlc (rtx *);
+ extern bool compact_sda_memory_operand (rtx, machine_mode, bool);
+ extern bool arc_double_limm_p (rtx);
+ extern void arc_print_operand (FILE *, rtx, int);
+diff --git a/gcc/config/arc/arc.cc b/gcc/config/arc/arc.cc
+index 686de0ff2d5..bb1f304960c 100644
+--- a/gcc/config/arc/arc.cc
++++ b/gcc/config/arc/arc.cc
+@@ -4223,15 +4223,56 @@ output_shift_loop (enum rtx_code code, rtx *operands)
+   return "";
+ }
+ 
++/* Output the assembler code for a zero-overhead loop doing a 33-bit
++   pseudo-rotation.  We know OPERANDS[0] == OPERANDS[1], and the integer
++   constant bit count is OPERANDS[3].  */
++
++const char *
++output_rlc_loop (rtx *operands)
++{
++  int n = INTVAL (operands[3]) & 31;
++  if ((n & 1) == 0)
++    {
++      /* Even loop counts.  */
++      operands[3] = GEN_INT (n >> 1);
++      output_asm_insn ("mov\tlp_count,%3", operands);
++      output_asm_insn ("lp\t2f", operands);
++      output_asm_insn ("rlc.f\t%0,%1", operands);
++      output_asm_insn ("rlc.f\t%0,%1", operands);
++    }
++  else
++    {
++      /* Odd loop counts.  */
++      output_asm_insn ("mov\tlp_count,%3", operands);
++      output_asm_insn ("lp\t2f", operands);
++      output_asm_insn ("rlc.f\t%0,%1", operands);
++      output_asm_insn ("nop", operands);
++    }
++  fprintf (asm_out_file, "2:\t%s end single insn loop\n", ASM_COMMENT_START);
++  return "";
++}
++
+ /* See below where shifts are handled for explanation of this enum.  */
+ enum arc_shift_alg
+ {
+   SHIFT_MOVE,		/* Register-to-register move.  */
+   SHIFT_LOOP,		/* Zero-overhead loop implementation.  */
+-  SHIFT_INLINE,		/* Mmultiple LSHIFTs and LSHIFT-PLUSs.  */ 
++  SHIFT_INLINE,		/* Multiple LSHIFTs and LSHIFT-PLUSs.  */ 
+   SHIFT_AND_ROT,        /* Bitwise AND, then ROTATERTs.  */
+   SHIFT_SWAP,		/* SWAP then multiple LSHIFTs/LSHIFT-PLUSs.  */
+-  SHIFT_AND_SWAP_ROT	/* Bitwise AND, then SWAP, then ROTATERTs.  */
++  SHIFT_SWAP_V2,	/* V2 SWAP then multiple LSHIFTs/LSHIFT-PLUSs.  */
++  SHIFT_AND_SWAP_ROT,	/* Bitwise AND, then SWAP, then ROTATERTs.  */
++  SHIFT_PEEL,           /* Peel single iteration before even-trip loop.  */
++  SHIFT_RLC_AND,        /* Rotate-left-through-carry then bitwise AND.  */
++  SHIFT_RLC_SEXT,       /* Rotate-left-through-carry then sign extend.  */
++  SHIFT_ASHL_1,		/* Special case ashl #1.  */
++  SHIFT_ASHL_2,		/* Special case ashl #2.  */
++  SHIFT_ASHR_24,        /* Special case ashr #24.  */
++  SHIFT_ASHR_29,        /* Special case ashr #29.  */
++  SHIFT_ASHR_30,        /* Special case ashr #30.  */
++  SHIFT_ASHR_31,        /* Special case ashr #31.  */
++  SHIFT_LSHR_30,        /* Special case lshr #30.  */
++  SHIFT_LSHR_31,        /* Special case lshr #31.  */
+ };
+ 
+ struct arc_shift_info {
+@@ -4265,10 +4306,10 @@ arc_shift_context_idx ()
+ }
+ 
+ static const arc_shift_info arc_ashl_alg[6][32] = {
+-  {  /* 0: -Os.  */
++  {  /* 0: ashl -Os.  */
+     { SHIFT_MOVE,         COSTS_N_INSNS (1) },  /*  0 */
+-    { SHIFT_INLINE,       COSTS_N_INSNS (1) },  /*  1 */
+-    { SHIFT_INLINE,       COSTS_N_INSNS (2) },  /*  2 */
++    { SHIFT_ASHL_1,       COSTS_N_INSNS (1) },  /*  1 */
++    { SHIFT_ASHL_2,       COSTS_N_INSNS (2) },  /*  2 */
+     { SHIFT_INLINE,       COSTS_N_INSNS (2) },  /*  3 */
+     { SHIFT_INLINE,       COSTS_N_INSNS (3) },  /*  4 */
+     { SHIFT_INLINE,       COSTS_N_INSNS (3) },  /*  5 */
+@@ -4299,10 +4340,10 @@ static const arc_shift_info arc_ashl_alg[6][32] = {
+     { SHIFT_AND_ROT,      COSTS_N_INSNS (3) },  /* 30 */
+     { SHIFT_AND_ROT,      COSTS_N_INSNS (2) }   /* 31 */
+   },
+-  {  /* 1: -Os -mswap TARGET_V2.  */
++  {  /* 1: ashl -Os -mswap TARGET_V2.  */
+     { SHIFT_MOVE,         COSTS_N_INSNS (1) },  /*  0 */
+-    { SHIFT_INLINE,       COSTS_N_INSNS (1) },  /*  1 */
+-    { SHIFT_INLINE,       COSTS_N_INSNS (2) },  /*  2 */
++    { SHIFT_ASHL_1,       COSTS_N_INSNS (1) },  /*  1 */
++    { SHIFT_ASHL_2,       COSTS_N_INSNS (2) },  /*  2 */
+     { SHIFT_INLINE,       COSTS_N_INSNS (2) },  /*  3 */
+     { SHIFT_INLINE,       COSTS_N_INSNS (3) },  /*  4 */
+     { SHIFT_INLINE,       COSTS_N_INSNS (3) },  /*  5 */
+@@ -4316,13 +4357,13 @@ static const arc_shift_info arc_ashl_alg[6][32] = {
+     { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 13 */
+     { SHIFT_AND_SWAP_ROT, COSTS_N_INSNS (4) },  /* 14 */
+     { SHIFT_AND_SWAP_ROT, COSTS_N_INSNS (3) },  /* 15 */
+-    { SHIFT_SWAP,         COSTS_N_INSNS (1) },  /* 16 */
+-    { SHIFT_SWAP,         COSTS_N_INSNS (2) },  /* 17 */
+-    { SHIFT_SWAP,         COSTS_N_INSNS (3) },  /* 18 */
+-    { SHIFT_SWAP,         COSTS_N_INSNS (3) },  /* 19 */
+-    { SHIFT_SWAP,         COSTS_N_INSNS (4) },  /* 20 */
+-    { SHIFT_SWAP,         COSTS_N_INSNS (4) },  /* 21 */
+-    { SHIFT_SWAP,         COSTS_N_INSNS (4) },  /* 22 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (1) },  /* 16 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (2) },  /* 17 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (3) },  /* 18 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (3) },  /* 19 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (4) },  /* 20 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (4) },  /* 21 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (4) },  /* 22 */
+     { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 23 */
+     { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 24 */
+     { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 25 */
+@@ -4333,10 +4374,10 @@ static const arc_shift_info arc_ashl_alg[6][32] = {
+     { SHIFT_AND_ROT,      COSTS_N_INSNS (3) },  /* 30 */
+     { SHIFT_AND_ROT,      COSTS_N_INSNS (2) }   /* 31 */
+   },
+-  {  /* 2: -Os -mswap !TARGET_V2.  */
++  {  /* 2: ashl -Os -mswap !TARGET_V2.  */
+     { SHIFT_MOVE,         COSTS_N_INSNS (1) },  /*  0 */
+-    { SHIFT_INLINE,       COSTS_N_INSNS (1) },  /*  1 */
+-    { SHIFT_INLINE,       COSTS_N_INSNS (2) },  /*  2 */
++    { SHIFT_ASHL_1,       COSTS_N_INSNS (1) },  /*  1 */
++    { SHIFT_ASHL_2,       COSTS_N_INSNS (2) },  /*  2 */
+     { SHIFT_INLINE,       COSTS_N_INSNS (2) },  /*  3 */
+     { SHIFT_INLINE,       COSTS_N_INSNS (3) },  /*  4 */
+     { SHIFT_INLINE,       COSTS_N_INSNS (3) },  /*  5 */
+@@ -4367,10 +4408,10 @@ static const arc_shift_info arc_ashl_alg[6][32] = {
+     { SHIFT_AND_ROT,      COSTS_N_INSNS (3) },  /* 30 */
+     { SHIFT_AND_ROT,      COSTS_N_INSNS (2) }   /* 31 */
+   },
+-  {  /* 3: -O2.  */
++  {  /* 3: ashl -O2.  */
+     { SHIFT_MOVE,         COSTS_N_INSNS (1) },  /*  0 */
+-    { SHIFT_INLINE,       COSTS_N_INSNS (1) },  /*  1 */
+-    { SHIFT_INLINE,       COSTS_N_INSNS (2) },  /*  2 */
++    { SHIFT_ASHL_1,       COSTS_N_INSNS (1) },  /*  1 */
++    { SHIFT_ASHL_2,       COSTS_N_INSNS (2) },  /*  2 */
+     { SHIFT_INLINE,       COSTS_N_INSNS (2) },  /*  3 */
+     { SHIFT_INLINE,       COSTS_N_INSNS (3) },  /*  4 */
+     { SHIFT_INLINE,       COSTS_N_INSNS (3) },  /*  5 */
+@@ -4401,10 +4442,10 @@ static const arc_shift_info arc_ashl_alg[6][32] = {
+     { SHIFT_AND_ROT,      COSTS_N_INSNS (3) },  /* 30 */
+     { SHIFT_AND_ROT,      COSTS_N_INSNS (2) }   /* 31 */
+   },
+-  {  /* 4: -O2 -mswap TARGET_V2.  */
++  {  /* 4: ashl -O2 -mswap TARGET_V2.  */
+     { SHIFT_MOVE,         COSTS_N_INSNS (1) },  /*  0 */
+-    { SHIFT_INLINE,       COSTS_N_INSNS (1) },  /*  1 */
+-    { SHIFT_INLINE,       COSTS_N_INSNS (2) },  /*  2 */
++    { SHIFT_ASHL_1,       COSTS_N_INSNS (1) },  /*  1 */
++    { SHIFT_ASHL_2,       COSTS_N_INSNS (2) },  /*  2 */
+     { SHIFT_INLINE,       COSTS_N_INSNS (2) },  /*  3 */
+     { SHIFT_INLINE,       COSTS_N_INSNS (3) },  /*  4 */
+     { SHIFT_INLINE,       COSTS_N_INSNS (3) },  /*  5 */
+@@ -4418,27 +4459,27 @@ static const arc_shift_info arc_ashl_alg[6][32] = {
+     { SHIFT_AND_SWAP_ROT, COSTS_N_INSNS (5) },  /* 13 */
+     { SHIFT_AND_SWAP_ROT, COSTS_N_INSNS (4) },  /* 14 */
+     { SHIFT_AND_SWAP_ROT, COSTS_N_INSNS (3) },  /* 15 */
+-    { SHIFT_SWAP,         COSTS_N_INSNS (1) },  /* 16 */
+-    { SHIFT_SWAP,         COSTS_N_INSNS (2) },  /* 17 */
+-    { SHIFT_SWAP,         COSTS_N_INSNS (3) },  /* 18 */
+-    { SHIFT_SWAP,         COSTS_N_INSNS (3) },  /* 19 */
+-    { SHIFT_SWAP,         COSTS_N_INSNS (4) },  /* 20 */
+-    { SHIFT_SWAP,         COSTS_N_INSNS (4) },  /* 21 */
+-    { SHIFT_SWAP,         COSTS_N_INSNS (4) },  /* 22 */
+-    { SHIFT_SWAP,         COSTS_N_INSNS (5) },  /* 23 */
+-    { SHIFT_SWAP,         COSTS_N_INSNS (5) },  /* 24 */
+-    { SHIFT_SWAP,         COSTS_N_INSNS (5) },  /* 25 */
+-    { SHIFT_SWAP,         COSTS_N_INSNS (6) },  /* 26 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (1) },  /* 16 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (2) },  /* 17 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (3) },  /* 18 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (3) },  /* 19 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (4) },  /* 20 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (4) },  /* 21 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (4) },  /* 22 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (5) },  /* 23 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (5) },  /* 24 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (5) },  /* 25 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (6) },  /* 26 */
+     { SHIFT_AND_ROT,      COSTS_N_INSNS (6) },  /* 27 */
+     { SHIFT_AND_ROT,      COSTS_N_INSNS (5) },  /* 28 */
+     { SHIFT_AND_ROT,      COSTS_N_INSNS (4) },  /* 29 */
+     { SHIFT_AND_ROT,      COSTS_N_INSNS (3) },  /* 30 */
+     { SHIFT_AND_ROT,      COSTS_N_INSNS (2) }   /* 31 */
+   },
+-  {  /* 5: -O2 -mswap !TARGET_V2.  */
++  {  /* 5: ashl -O2 -mswap !TARGET_V2.  */
+     { SHIFT_MOVE,         COSTS_N_INSNS (1) },  /*  0 */
+-    { SHIFT_INLINE,       COSTS_N_INSNS (1) },  /*  1 */
+-    { SHIFT_INLINE,       COSTS_N_INSNS (2) },  /*  2 */
++    { SHIFT_ASHL_1,       COSTS_N_INSNS (1) },  /*  1 */
++    { SHIFT_ASHL_2,       COSTS_N_INSNS (2) },  /*  2 */
+     { SHIFT_INLINE,       COSTS_N_INSNS (2) },  /*  3 */
+     { SHIFT_INLINE,       COSTS_N_INSNS (3) },  /*  4 */
+     { SHIFT_INLINE,       COSTS_N_INSNS (3) },  /*  5 */
+@@ -4471,58 +4512,488 @@ static const arc_shift_info arc_ashl_alg[6][32] = {
+   }
+ };
+ 
++static const arc_shift_info arc_ashr_alg[6][32] = {
++  {  /* 0: ashr -Os.  */
++    { SHIFT_MOVE,         COSTS_N_INSNS (1) },  /*  0 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (1) },  /*  1 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (2) },  /*  2 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (3) },  /*  3 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (4) },  /*  4 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  5 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  6 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  7 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  8 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  9 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 10 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 11 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 12 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 13 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 14 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 15 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 16 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 17 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 18 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 19 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 20 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 21 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 22 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 23 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 24 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 25 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 26 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 27 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 28 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 29 */
++    { SHIFT_ASHR_30,      COSTS_N_INSNS (4) },  /* 30 */
++    { SHIFT_ASHR_31,      COSTS_N_INSNS (2) }   /* 31 */
++  },
++  {  /* 1: ashr -Os -mswap TARGET_V2.  */
++    { SHIFT_MOVE,         COSTS_N_INSNS (1) },  /*  0 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (1) },  /*  1 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (2) },  /*  2 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (3) },  /*  3 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (4) },  /*  4 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  5 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  6 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  7 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  8 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  9 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 10 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 11 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 12 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 13 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 14 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (3) },  /* 15 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (2) },  /* 16 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (3) },  /* 17 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (4) },  /* 18 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (3) },  /* 19 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 20 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 21 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 22 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 23 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 24 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 25 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 26 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 27 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 28 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 29 */
++    { SHIFT_ASHR_30,      COSTS_N_INSNS (4) },  /* 30 */
++    { SHIFT_ASHR_31,      COSTS_N_INSNS (2) }   /* 31 */
++  },
++  {  /* 2: ashr -Os -mswap !TARGET_V2.  */
++    { SHIFT_MOVE,         COSTS_N_INSNS (1) },  /*  0 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (1) },  /*  1 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (2) },  /*  2 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (3) },  /*  3 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (4) },  /*  4 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  5 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  6 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  7 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  8 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  9 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 10 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 11 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 12 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 13 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 14 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (3) },  /* 15 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (2) },  /* 16 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (3) },  /* 17 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (4) },  /* 18 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 19 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 20 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 21 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 22 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 23 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 24 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 25 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 26 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 27 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 28 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 29 */
++    { SHIFT_ASHR_30,      COSTS_N_INSNS (4) },  /* 30 */
++    { SHIFT_ASHR_31,      COSTS_N_INSNS (2) }   /* 31 */
++  },
++  {  /* 3: ashr -O2.  */
++    { SHIFT_MOVE,         COSTS_N_INSNS (1) },  /*  0 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (1) },  /*  1 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (2) },  /*  2 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (3) },  /*  3 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (4) },  /*  4 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (5) },  /*  5 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (8) },  /*  6 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (9) },  /*  7 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (10) }, /*  8 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (11) }, /*  9 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (12) }, /* 10 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (13) }, /* 11 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (14) }, /* 12 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (15) }, /* 13 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (16) }, /* 14 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (17) }, /* 15 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (18) }, /* 16 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (19) }, /* 17 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (20) }, /* 18 */
++    { SHIFT_RLC_SEXT,     COSTS_N_INSNS (19) }, /* 19 */
++    { SHIFT_RLC_SEXT,     COSTS_N_INSNS (18) }, /* 20 */
++    { SHIFT_RLC_SEXT,     COSTS_N_INSNS (17) }, /* 21 */
++    { SHIFT_RLC_SEXT,     COSTS_N_INSNS (16) }, /* 22 */
++    { SHIFT_RLC_SEXT,     COSTS_N_INSNS (15) }, /* 23 */
++    { SHIFT_ASHR_24,      COSTS_N_INSNS (12) }, /* 24 */
++    { SHIFT_RLC_SEXT,     COSTS_N_INSNS (13) }, /* 25 */
++    { SHIFT_RLC_SEXT,     COSTS_N_INSNS (12) }, /* 26 */
++    { SHIFT_RLC_SEXT,     COSTS_N_INSNS (9) },  /* 27 */
++    { SHIFT_RLC_SEXT,     COSTS_N_INSNS (8) },  /* 28 */
++    { SHIFT_ASHR_29,      COSTS_N_INSNS (6) },  /* 29 */
++    { SHIFT_ASHR_30,      COSTS_N_INSNS (4) },  /* 30 */
++    { SHIFT_ASHR_31,      COSTS_N_INSNS (2) }   /* 31 */
++  },
++  {  /* 4: ashr -O2 -mswap TARGET_V2.  */
++    { SHIFT_MOVE,         COSTS_N_INSNS (1) },  /*  0 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (1) },  /*  1 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (2) },  /*  2 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (3) },  /*  3 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (4) },  /*  4 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (5) },  /*  5 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (8) },  /*  6 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (9) },  /*  7 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (10) }, /*  8 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (11) }, /*  9 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (12) }, /* 10 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (13) }, /* 11 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (14) }, /* 12 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (15) }, /* 13 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (16) }, /* 14 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (17) }, /* 15 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (2) },  /* 16 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (3) },  /* 17 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (4) },  /* 18 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (5) },  /* 19 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (6) },  /* 20 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (7) },  /* 21 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (10) }, /* 22 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (11) }, /* 23 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (12) }, /* 24 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (13) }, /* 25 */
++    { SHIFT_RLC_SEXT,     COSTS_N_INSNS (12) }, /* 26 */
++    { SHIFT_RLC_SEXT,     COSTS_N_INSNS (9) },  /* 27 */
++    { SHIFT_RLC_SEXT,     COSTS_N_INSNS (8) },  /* 28 */
++    { SHIFT_ASHR_29,      COSTS_N_INSNS (6) },  /* 29 */
++    { SHIFT_ASHR_30,      COSTS_N_INSNS (4) },  /* 30 */
++    { SHIFT_ASHR_31,      COSTS_N_INSNS (2) }   /* 31 */
++  },
++  {  /* 5: ashr -O2 -mswap !TARGET_V2.  */
++    { SHIFT_MOVE,         COSTS_N_INSNS (1) },  /*  0 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (1) },  /*  1 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (2) },  /*  2 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (3) },  /*  3 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (4) },  /*  4 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (5) },  /*  5 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (8) },  /*  6 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (9) },  /*  7 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (10) }, /*  8 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (11) }, /*  9 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (12) }, /* 10 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (13) }, /* 11 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (14) }, /* 12 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (15) }, /* 13 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (16) }, /* 14 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (17) }, /* 15 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (2) },  /* 16 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (3) },  /* 17 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (4) },  /* 18 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (5) },  /* 19 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (6) },  /* 20 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (7) },  /* 21 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (10) }, /* 22 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (11) }, /* 23 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (12) }, /* 24 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (13) }, /* 25 */
++    { SHIFT_RLC_SEXT,     COSTS_N_INSNS (12) }, /* 26 */
++    { SHIFT_RLC_SEXT,     COSTS_N_INSNS (9) },  /* 27 */
++    { SHIFT_RLC_SEXT,     COSTS_N_INSNS (8) },  /* 28 */
++    { SHIFT_ASHR_29,      COSTS_N_INSNS (6) },  /* 29 */
++    { SHIFT_ASHR_30,      COSTS_N_INSNS (4) },  /* 30 */
++    { SHIFT_ASHR_31,      COSTS_N_INSNS (2) }   /* 31 */
++  }
++};
++
++static const arc_shift_info arc_lshr_alg[6][32] = {
++  {  /* 0: lshr -Os.  */
++    { SHIFT_MOVE,         COSTS_N_INSNS (1) },  /*  0 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (1) },  /*  1 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (2) },  /*  2 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (3) },  /*  3 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (4) },  /*  4 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  5 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  6 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  7 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  8 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  9 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 10 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 11 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 12 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 13 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 14 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 15 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 16 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 17 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 18 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 19 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 20 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 21 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 22 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 23 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 24 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 25 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 26 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 27 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 28 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 29 */
++    { SHIFT_LSHR_30,      COSTS_N_INSNS (3) },  /* 30 */
++    { SHIFT_LSHR_31,      COSTS_N_INSNS (2) }   /* 31 */
++  },
++  {  /* 1: lshr -Os -mswap TARGET_V2.  */
++    { SHIFT_MOVE,         COSTS_N_INSNS (1) },  /*  0 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (1) },  /*  1 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (2) },  /*  2 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (3) },  /*  3 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (4) },  /*  4 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  5 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  6 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  7 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  8 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  9 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 10 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 11 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 12 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 13 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 14 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (3) },  /* 15 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (1) },  /* 16 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (2) },  /* 17 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (3) },  /* 18 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (4) },  /* 19 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 20 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 21 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 22 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 23 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 24 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 25 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 26 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 27 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 28 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 29 */
++    { SHIFT_LSHR_30,      COSTS_N_INSNS (4) },  /* 30 */
++    { SHIFT_LSHR_31,      COSTS_N_INSNS (2) }   /* 31 */
++  },
++  {  /* 2: lshr -Os -mswap !TARGET_V2.  */
++    { SHIFT_MOVE,         COSTS_N_INSNS (1) },  /*  0 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (1) },  /*  1 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (2) },  /*  2 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (3) },  /*  3 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (4) },  /*  4 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  5 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (3) },  /*  6 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  7 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  8 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /*  9 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 10 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 11 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 12 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 13 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 14 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (3) },  /* 15 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (2) },  /* 16 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (3) },  /* 17 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (4) },  /* 18 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 19 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 20 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 21 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 22 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 23 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 24 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 25 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 26 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 27 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 28 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (4) },  /* 29 */
++    { SHIFT_LSHR_30,      COSTS_N_INSNS (4) },  /* 30 */
++    { SHIFT_LSHR_31,      COSTS_N_INSNS (2) }   /* 31 */
++  },
++  {  /* 3: lshr -O2.  */
++    { SHIFT_MOVE,         COSTS_N_INSNS (1) },  /*  0 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (1) },  /*  1 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (2) },  /*  2 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (3) },  /*  3 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (4) },  /*  4 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (5) },  /*  5 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (8) },  /*  6 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (9) },  /*  7 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (10) }, /*  8 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (11) }, /*  9 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (12) }, /* 10 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (13) }, /* 11 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (14) }, /* 12 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (15) }, /* 13 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (16) }, /* 14 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (17) }, /* 15 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (18) }, /* 16 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (19) }, /* 17 */
++    { SHIFT_RLC_AND,      COSTS_N_INSNS (18) }, /* 18 */
++    { SHIFT_RLC_AND,      COSTS_N_INSNS (17) }, /* 19 */
++    { SHIFT_RLC_AND,      COSTS_N_INSNS (16) }, /* 20 */
++    { SHIFT_RLC_AND,      COSTS_N_INSNS (15) }, /* 21 */
++    { SHIFT_RLC_AND,      COSTS_N_INSNS (14) }, /* 22 */
++    { SHIFT_RLC_AND,      COSTS_N_INSNS (13) }, /* 23 */
++    { SHIFT_RLC_AND,      COSTS_N_INSNS (12) }, /* 24 */
++    { SHIFT_RLC_AND,      COSTS_N_INSNS (11) }, /* 25 */
++    { SHIFT_RLC_AND,      COSTS_N_INSNS (10) }, /* 26 */
++    { SHIFT_RLC_AND,      COSTS_N_INSNS (7) },  /* 27 */
++    { SHIFT_RLC_AND,      COSTS_N_INSNS (6) },  /* 28 */
++    { SHIFT_RLC_AND,      COSTS_N_INSNS (5) },  /* 29 */
++    { SHIFT_LSHR_30,      COSTS_N_INSNS (4) },  /* 30 */
++    { SHIFT_LSHR_31,      COSTS_N_INSNS (2) }   /* 31 */
++  },
++  {  /* 4: lshr -O2 -mswap TARGET_V2.  */
++    { SHIFT_MOVE,         COSTS_N_INSNS (1) },  /*  0 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (1) },  /*  1 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (2) },  /*  2 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (3) },  /*  3 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (4) },  /*  4 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (5) },  /*  5 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (8) },  /*  6 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (9) },  /*  7 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (10) }, /*  8 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (11) }, /*  9 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (12) }, /* 10 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (13) }, /* 11 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (14) }, /* 12 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (15) }, /* 13 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (16) }, /* 14 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (17) }, /* 15 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (1) },  /* 16 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (2) },  /* 17 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (3) },  /* 18 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (4) },  /* 19 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (5) },  /* 20 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (6) },  /* 21 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (9) },  /* 22 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (10) }, /* 23 */
++    { SHIFT_SWAP_V2,      COSTS_N_INSNS (11) }, /* 24 */
++    { SHIFT_RLC_AND,      COSTS_N_INSNS (11) }, /* 25 */
++    { SHIFT_RLC_AND,      COSTS_N_INSNS (10) }, /* 26 */
++    { SHIFT_RLC_AND,      COSTS_N_INSNS (7) },  /* 27 */
++    { SHIFT_RLC_AND,      COSTS_N_INSNS (6) },  /* 28 */
++    { SHIFT_RLC_AND,      COSTS_N_INSNS (5) },  /* 29 */
++    { SHIFT_LSHR_30,      COSTS_N_INSNS (4) },  /* 30 */
++    { SHIFT_LSHR_31,      COSTS_N_INSNS (2) }   /* 31 */
++  },
++  {  /* 5: lshr -O2 -mswap !TARGET_V2.  */
++    { SHIFT_MOVE,         COSTS_N_INSNS (1) },  /*  0 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (1) },  /*  1 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (2) },  /*  2 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (3) },  /*  3 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (4) },  /*  4 */
++    { SHIFT_INLINE,       COSTS_N_INSNS (5) },  /*  5 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (8) },  /*  6 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (9) },  /*  7 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (10) }, /*  8 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (11) }, /*  9 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (12) }, /* 10 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (13) }, /* 11 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (14) }, /* 12 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (15) }, /* 13 */
++    { SHIFT_LOOP,         COSTS_N_INSNS (16) }, /* 14 */
++    { SHIFT_PEEL,         COSTS_N_INSNS (17) }, /* 15 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (2) },  /* 16 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (3) },  /* 17 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (4) },  /* 18 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (5) },  /* 19 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (6) },  /* 20 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (7) },  /* 21 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (10) }, /* 22 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (11) }, /* 23 */
++    { SHIFT_SWAP,         COSTS_N_INSNS (12) }, /* 24 */
++    { SHIFT_RLC_AND,      COSTS_N_INSNS (11) }, /* 25 */
++    { SHIFT_RLC_AND,      COSTS_N_INSNS (10) }, /* 26 */
++    { SHIFT_RLC_AND,      COSTS_N_INSNS (7) }, /* 27 */
++    { SHIFT_RLC_AND,      COSTS_N_INSNS (6) }, /* 28 */
++    { SHIFT_RLC_AND,      COSTS_N_INSNS (5) }, /* 29 */
++    { SHIFT_LSHR_30,      COSTS_N_INSNS (4) },  /* 30 */
++    { SHIFT_LSHR_31,      COSTS_N_INSNS (2) }   /* 31 */
++  }
++};
++
++/* Helper function for arc_split_ashl. Generate OP0 = OP1 << N
++   where N is greater than two, using ZERO as a zero register.  */
++void
++arc_split_ashl_inline (rtx op0, rtx op1, rtx zero, int n)
++{
++  emit_insn (gen_add_shift (op0, op1, GEN_INT (3), zero));
++  for (n -= 3; n >= 3; n -= 3)
++    emit_insn (gen_add_shift (op0, op0, GEN_INT (3), zero));
++  if (n == 2)
++    emit_insn (gen_add_shift (op0, op0, const2_rtx, zero));
++  else if (n)
++    emit_insn (gen_ashlsi3_cnt1 (op0, op0));
++}
++
+ /* Split SImode left shift instruction.  */
+ void
+ arc_split_ashl (rtx *operands)
+ {
+-  if (CONST_INT_P (operands[2]))
++  if (!CONST_INT_P (operands[2]))
+     {
+-      int n = INTVAL (operands[2]) & 0x1f;
+-      switch (arc_ashl_alg [arc_shift_context_idx ()][n].alg)
++      emit_insn (gen_ashlsi3_loop (operands[0], operands[1], operands[2]));
++      return;
++    }
++
++  int n = INTVAL (operands[2]) & 0x1f;
++  const arc_shift_info *info = arc_ashl_alg [arc_shift_context_idx ()];
++  for (;;)
++    {
++      switch (info[n].alg)
+ 	{
+ 	case SHIFT_MOVE:
+ 	  emit_move_insn (operands[0], operands[1]);
+ 	  return;
+ 
+-	case SHIFT_SWAP:
+-	  if (!TARGET_V2)
+-	    {
+-	      emit_insn (gen_andsi3_i (operands[0], operands[1],
+-				       GEN_INT (0xffff)));
+-	      emit_insn (gen_rotrsi2_cnt16 (operands[0], operands[0]));
+-	    }
+-	  else
+-	    emit_insn (gen_ashlsi2_cnt16 (operands[0], operands[1]));
+-	  n -= 16;
+-	  if (n == 0)
+-	    return;
+-	  operands[1] = operands[0];
+-	  /* FALL THRU */
++	case SHIFT_ASHL_1:
++	  emit_insn (gen_ashlsi3_cnt1 (operands[0], operands[1]));
++	  return;
++
++	case SHIFT_ASHL_2:
++	  emit_insn (gen_ashlsi3_cnt1 (operands[0], operands[1]));
++	  emit_insn (gen_ashlsi3_cnt1 (operands[0], operands[0]));
++	  return;
+ 
+ 	case SHIFT_INLINE:
+-	  if (n <= 2)
+-	    {
+-	      emit_insn (gen_ashlsi3_cnt1 (operands[0], operands[1]));
+-	      if (n == 2)
+-		emit_insn (gen_ashlsi3_cnt1 (operands[0], operands[0]));
+-	    }
+-	  else
+-	    {
+-	      rtx zero = gen_reg_rtx (SImode);
+-	      emit_move_insn (zero, const0_rtx);
+-	      emit_insn (gen_add_shift (operands[0], operands[1],
+-					GEN_INT (3), zero));
+-	      for (n -= 3; n >= 3; n -= 3)
+-		emit_insn (gen_add_shift (operands[0], operands[0],
+-					  GEN_INT (3), zero));
+-	      if (n == 2)
+-		emit_insn (gen_add_shift (operands[0], operands[0],
+-					  const2_rtx, zero));
+-	      else if (n)
+-		emit_insn (gen_ashlsi3_cnt1 (operands[0], operands[0]));
+-	    }
++	  {
++	    rtx zero = gen_reg_rtx (SImode);
++	    emit_move_insn (zero, const0_rtx);
++	    arc_split_ashl_inline (operands[0], operands[1], zero, n);
++	  }
++	  return;
++
++	case SHIFT_LOOP:
++	  emit_insn (gen_ashlsi3_loop (operands[0], operands[1],
++				       GEN_INT (n)));
+ 	  return;
+ 
++	case SHIFT_SWAP:
++	  emit_insn (gen_andsi3_i (operands[0], operands[1],
++				   GEN_INT (0xffff)));
++	  emit_insn (gen_rotrsi2_cnt16 (operands[0], operands[0]));
++	  n -= 16;
++	  break;
++
++	case SHIFT_SWAP_V2:
++	  emit_insn (gen_ashlsi2_cnt16 (operands[0], operands[1]));
++	  n -= 16;
++	  break;
++
+ 	case SHIFT_AND_ROT:
+ 	  emit_insn (gen_andsi3_i (operands[0], operands[1],
+ 				   GEN_INT ((1 << (32 - n)) - 1)));
+@@ -4538,109 +5009,188 @@ arc_split_ashl (rtx *operands)
+ 	    emit_insn (gen_rotrsi3_cnt1 (operands[0], operands[0]));
+ 	  return;
+ 
+-	case SHIFT_LOOP:
+-	  break;
+-
+ 	default:
+ 	  gcc_unreachable ();
+ 	}
++      if (n == 0)
++	return;
++      operands[1] = operands[0];
+     }
+-
+-  emit_insn (gen_ashlsi3_loop (operands[0], operands[1], operands[2]));
+ }
+ 
+ /* Split SImode arithmetic right shift instruction.  */
+ void
+ arc_split_ashr (rtx *operands)
+ {
+-  if (CONST_INT_P (operands[2]))
++  if (!CONST_INT_P (operands[2]))
+     {
+-      int n = INTVAL (operands[2]) & 0x1f;
+-      if (n <= 4)
++      emit_insn (gen_ashrsi3_loop (operands[0], operands[1], operands[2]));
++      return;
++    }
++
++  int n = INTVAL (operands[2]) & 0x1f;
++  const arc_shift_info *info = arc_ashr_alg [arc_shift_context_idx ()];
++  for (;;)
++    {
++      switch (info[n].alg)
+ 	{
+-	  if (n != 0)
+-	    {
+-	      emit_insn (gen_ashrsi3_cnt1 (operands[0], operands[1]));
+-	      while (--n > 0)
+-		emit_insn (gen_ashrsi3_cnt1 (operands[0], operands[0]));
+-	    }
+-	  else
+-	    emit_move_insn (operands[0], operands[1]);
++	case SHIFT_MOVE:
++	  emit_move_insn (operands[0], operands[1]);
+ 	  return;
+-	}
+-      else if (n >= 16 && n <= 18 && TARGET_SWAP)
+-	{
++
++	case SHIFT_INLINE:
++	  emit_insn (gen_ashrsi3_cnt1 (operands[0], operands[1]));
++	  while (--n > 0)
++	    emit_insn (gen_ashrsi3_cnt1 (operands[0], operands[0]));
++	  return;
++
++	case SHIFT_PEEL:
++	  emit_insn (gen_ashrsi3_cnt1 (operands[0], operands[1]));
++	  n--;
++	  break;
++
++	case SHIFT_LOOP:
++	  emit_insn (gen_ashrsi3_loop (operands[0], operands[1],
++				       GEN_INT (n)));
++	  return;
++
++	case SHIFT_SWAP:
+ 	  emit_insn (gen_rotrsi2_cnt16 (operands[0], operands[1]));
+ 	  emit_insn (gen_extendhisi2 (operands[0],
+ 				      gen_lowpart (HImode, operands[0])));
+-	  while (--n >= 16)
+-	    emit_insn (gen_ashrsi3_cnt1 (operands[0], operands[0]));
++	  n -= 16;
++	  break;
++
++	case SHIFT_RLC_SEXT:
++	  operands[3] = GEN_INT (33 - n);
++	  arc_split_rlc (operands);
++	  emit_insn (gen_andsi3_i (operands[0], operands[0],
++				   GEN_INT ((1  << (32 - n)) - 1)));
++	  emit_insn (gen_xorsi3 (operands[0], operands[0],
++				 GEN_INT (1  << (31 - n))));
++	  emit_insn (gen_subsi3_insn (operands[0], operands[0],
++				      GEN_INT (1  << (31 - n))));
+ 	  return;
+-	}
+-      else if (n == 30)
+-	{
+-	  rtx tmp = gen_reg_rtx (SImode);
+-	  emit_insn (gen_add_f (tmp, operands[1], operands[1]));
+-	  emit_insn (gen_sbc (operands[0], operands[0], operands[0]));
+-	  emit_insn (gen_addsi_compare_2 (tmp, tmp));
+-	  emit_insn (gen_adc (operands[0], operands[0], operands[0]));
++
++	case SHIFT_ASHR_24:
++	  emit_insn (gen_add_f (operands[0], operands[1], operands[1]));
++	  emit_insn (gen_rlcsi2_loop (operands[0], operands[0], GEN_INT (25),
++		     GEN_INT (8), GEN_INT (7)));
++	  emit_insn (gen_extendqisi2 (operands[0],
++				      gen_lowpart (QImode, operands[0])));
+ 	  return;
+-	}
+-      else if (n == 31)
+-	{
++
++	case SHIFT_ASHR_29:
++	  {
++	    rtx tmp = gen_reg_rtx (SImode);
++	    emit_insn (gen_add_f (tmp, operands[1], operands[1]));
++	    emit_insn (gen_sbc (operands[0], operands[0], operands[0]));
++	    emit_insn (gen_add_f (tmp, tmp, tmp));
++	    emit_insn (gen_adc (operands[0], operands[0], operands[0]));
++	    emit_insn (gen_addsi_compare_2 (tmp, tmp));
++	    emit_insn (gen_adc (operands[0], operands[0], operands[0]));
++	  }
++	  return;
++
++	case SHIFT_ASHR_30:
++	  {
++	    rtx tmp = gen_reg_rtx (SImode);
++	    emit_insn (gen_add_f (tmp, operands[1], operands[1]));
++	    emit_insn (gen_sbc (operands[0], operands[0], operands[0]));
++	    emit_insn (gen_addsi_compare_2 (tmp, tmp));
++	    emit_insn (gen_adc (operands[0], operands[0], operands[0]));
++	  }
++	  return;
++
++	case SHIFT_ASHR_31:
+ 	  emit_insn (gen_addsi_compare_2 (operands[1], operands[1]));
+ 	  emit_insn (gen_sbc (operands[0], operands[0], operands[0]));
+ 	  return;
++
++	default:
++	  gcc_unreachable ();
+ 	}
++      if (n == 0)
++	return;
++      operands[1] = operands[0];
+     }
+-
+-  emit_insn (gen_ashrsi3_loop (operands[0], operands[1], operands[2]));
+ }
+ 
+ /* Split SImode logical right shift instruction.  */
+ void
+ arc_split_lshr (rtx *operands)
+ {
+-  if (CONST_INT_P (operands[2]))
++  if (!CONST_INT_P (operands[2]))
+     {
+-      int n = INTVAL (operands[2]) & 0x1f;
+-      if (n <= 4)
++      emit_insn (gen_lshrsi3_loop (operands[0], operands[1], operands[2]));
++      return;
++    }
++
++  int n = INTVAL (operands[2]) & 0x1f;
++  const arc_shift_info *info = arc_lshr_alg [arc_shift_context_idx ()];
++  for (;;)
++    {
++      switch (info[n].alg)
+ 	{
+-	  if (n != 0)
+-	    {
+-	      emit_insn (gen_lshrsi3_cnt1 (operands[0], operands[1]));
+-	      while (--n > 0)
+-		emit_insn (gen_lshrsi3_cnt1 (operands[0], operands[0]));
+-	    }
+-	  else
+-	    emit_move_insn (operands[0], operands[1]);
++	case SHIFT_MOVE:
++	  emit_move_insn (operands[0], operands[1]);
+ 	  return;
+-	}
+-      else if (n >= 16 && n <= 19 && TARGET_SWAP && TARGET_V2)
+-	{
+-	  emit_insn (gen_lshrsi2_cnt16 (operands[0], operands[1]));
+-	  while (--n >= 16)
++
++	case SHIFT_INLINE:
++	  emit_insn (gen_lshrsi3_cnt1 (operands[0], operands[1]));
++	  while (--n > 0)
+ 	    emit_insn (gen_lshrsi3_cnt1 (operands[0], operands[0]));
+ 	  return;
+-	}
+-      else if (n == 30)
+-	{
+-	  rtx tmp = gen_reg_rtx (SImode);
+-	  emit_insn (gen_add_f (tmp, operands[1], operands[1]));
+-	  emit_insn (gen_scc_ltu_cc_c (operands[0]));
+-	  emit_insn (gen_addsi_compare_2 (tmp, tmp));
++
++	case SHIFT_PEEL:
++	  emit_insn (gen_lshrsi3_cnt1 (operands[0], operands[1]));
++	  n--;
++	  break;
++
++	case SHIFT_LOOP:
++	  emit_insn (gen_lshrsi3_loop (operands[0], operands[1],
++				       GEN_INT (n)));
++	  return;
++
++	case SHIFT_SWAP:
++	  emit_insn (gen_rotrsi2_cnt16 (operands[0], operands[1]));
++	  emit_insn (gen_zero_extendhisi2 (operands[0],
++					   gen_lowpart (HImode,
++							operands[0])));
++	  n -= 16;
++	  break;
++
++	case SHIFT_SWAP_V2:
++	  emit_insn (gen_lshrsi2_cnt16 (operands[0], operands[1]));
++	  n -= 16;
++	  break;
++
++	case SHIFT_RLC_AND:
++	  operands[3] = GEN_INT (33 - n);
++	  arc_split_rlc (operands);
++	  emit_insn (gen_andsi3_i (operands[0], operands[0],
++				   GEN_INT ((1  << (32 - n)) - 1)));
++	  return;
++
++	case SHIFT_LSHR_30:
++	  emit_insn (gen_add_f (operands[0], operands[1], operands[1]));
++	  emit_insn (gen_adc_f (operands[0], operands[0], operands[0]));
+ 	  emit_insn (gen_adc (operands[0], operands[0], operands[0]));
++	  emit_insn (gen_andsi3_i (operands[0], operands[0], GEN_INT (3)));
+ 	  return;
+-	}
+-      else if (n == 31)
+-	{
++
++	case SHIFT_LSHR_31:
+ 	  emit_insn (gen_addsi_compare_2 (operands[1], operands[1]));
+ 	  emit_insn (gen_scc_ltu_cc_c (operands[0]));
+ 	  return;
++
++	default:
++	  gcc_unreachable ();
+ 	}
++      if (n == 0)
++	return;
++      operands[1] = operands[0];
+     }
+-
+-  emit_insn (gen_lshrsi3_loop (operands[0], operands[1], operands[2]));
+ }
+ 
+ /* Split SImode rotate left instruction.  */
+@@ -4742,6 +5292,32 @@ arc_split_rotr (rtx *operands)
+ 
+   emit_insn (gen_rotrsi3_loop (operands[0], operands[1], operands[2]));
+ }
++
++/* Split SImode 33-bit pseudo-rotate left instruction.
++   This is equivalent to clearing the carry flag, then performing
++   rotate left through carry (rlc), or equivalently adc.f r0,r0,r0,
++   OPERANDS[3] times.  */
++void
++arc_split_rlc (rtx *operands)
++{
++  int n = INTVAL (operands[3]) - 1;
++  int m = 0;
++
++  if (optimize_insn_for_size_p ())
++    m = n <= 4 ? n : 0;
++  else if (n <= 5)
++    m = n;
++  else if (n & 1)
++    m = 1;
++
++  n -= m;
++  emit_insn (gen_add_f (operands[0], operands[1], operands[1]));
++  for  (int i=0; i<m; i++)
++    emit_insn (gen_adc_f (operands[0], operands[0], operands[0]));
++  if (n)
++    emit_insn (gen_rlcsi2_loop (operands[0], operands[0], GEN_INT (33 - n),
++				GEN_INT (n), GEN_INT (n - 1)));
++}
+ 
+ /* Nested function support.  */
+ 
+@@ -5856,7 +6432,70 @@ arc_rtx_costs (rtx x, machine_mode mode, int outer_code,
+       return false;
+ 
+     case ASHIFTRT:
++      if (mode == DImode)
++	{
++	  if (XEXP (x, 1) == const1_rtx)
++	    {
++	      *total += rtx_cost (XEXP (x, 0), mode, ASHIFT, 0, speed)
++			+ COSTS_N_INSNS (2);
++	      return true;
++	    }
++	  return false;
++	}
++      if (TARGET_BARREL_SHIFTER)
++	{
++	  *total = COSTS_N_INSNS (1);
++	  if (CONST_INT_P (XEXP (x, 1)))
++	    {
++	      *total += rtx_cost (XEXP (x, 0), mode, ASHIFT, 0, speed);
++	      return true;
++	    }
++	}
++      else if (CONST_INT_P (XEXP (x, 1)))
++	{
++	  unsigned int n = INTVAL (XEXP (x, 1)) & 0x1f;
++	  *total = arc_ashr_alg[arc_shift_context_idx ()][n].cost
++		   + rtx_cost (XEXP (x, 0), mode, ASHIFT, 0, speed);
++	  return true;
++	}
++      else
++	/* Variable shift loop takes 2 * n + 2 cycles.  */
++	*total = speed ? COSTS_N_INSNS (64) : COSTS_N_INSNS (4);
++      return false;
++
++
+     case LSHIFTRT:
++      if (mode == DImode)
++	{
++	  if (XEXP (x, 1) == const1_rtx)
++	    {
++	      *total += rtx_cost (XEXP (x, 0), mode, ASHIFT, 0, speed)
++			+ COSTS_N_INSNS (2);
++	      return true;
++	    }
++	  return false;
++	}
++      if (TARGET_BARREL_SHIFTER)
++	{
++	  *total = COSTS_N_INSNS (1);
++	  if (CONST_INT_P (XEXP (x, 1)))
++	    {
++	      *total += rtx_cost (XEXP (x, 0), mode, ASHIFT, 0, speed);
++	      return true;
++	    }
++	}
++      else if (CONST_INT_P (XEXP (x, 1)))
++	{
++	  unsigned int n = INTVAL (XEXP (x, 1)) & 0x1f;
++	  *total = arc_lshr_alg[arc_shift_context_idx ()][n].cost
++		   + rtx_cost (XEXP (x, 0), mode, ASHIFT, 0, speed);
++	  return true;
++	}
++      else
++	/* Variable shift loop takes 2 * n + 2 cycles.  */
++	*total = speed ? COSTS_N_INSNS (64) : COSTS_N_INSNS (4);
++      return false;
++
+     case ROTATE:
+     case ROTATERT:
+       if (mode == DImode)
+diff --git a/gcc/config/arc/arc.md b/gcc/config/arc/arc.md
+index 9004b6085a2..5db838cb0e1 100644
+--- a/gcc/config/arc/arc.md
++++ b/gcc/config/arc/arc.md
+@@ -3390,6 +3390,7 @@ archs4x, archs4xd"
+ (define_code_iterator ANY_ROTATE [rotate rotatert])
+ (define_code_iterator ANY_SHIFT_ROTATE [ashift ashiftrt lshiftrt
+ 					rotate rotatert])
++(define_code_iterator ANY_OR_PLUS [plus ior xor])
+ 
+ (define_code_attr insn [(ashift "ashl") (ashiftrt "ashr") (lshiftrt "lshr")
+ 			(rotate "rotl") (rotatert "rotr")])
+@@ -3687,6 +3688,46 @@ archs4x, archs4xd"
+    (set_attr "predicable" "no")
+    (set_attr "length" "4")])
+ 
++(define_insn "rlcsi2_loop"
++  [(set (match_operand:SI 0 "dest_reg_operand" "=r")
++	(plus:SI
++	  (ashift:SI (ltu:SI (reg:CC_C CC_REG) (const_int 0))
++		     (match_operand:SI 4 "const_int_operand" "n"))
++	  (plus:SI (lshiftrt:SI (match_operand:SI 1 "register_operand" "0")
++				(match_operand:SI 2 "const_int_operand" "n"))
++		   (ashift:SI (match_dup 1)
++			      (match_operand:SI 3 "const_int_operand" "n")))))
++   (clobber (reg:SI LP_COUNT))
++   (clobber (reg:CC CC_REG))]
++  "!TARGET_BARREL_SHIFTER
++   && IN_RANGE (INTVAL (operands[3]), 2, 31)
++   && INTVAL (operands[2]) + INTVAL (operands[3]) == 33
++   && INTVAL (operands[3]) == INTVAL (operands[4]) + 1"
++  "* return output_rlc_loop (operands);"
++  [(set_attr "type" "shift")
++   (set_attr "length" "16")])
++
++;; Recognize a 33-bit pseudo-rotation
++(define_insn_and_split "*rlcsi2_cnt"
++  [(set (match_operand:SI 0 "dest_reg_operand")
++	(ANY_OR_PLUS:SI (lshiftrt:SI (match_operand:SI 1 "register_operand")
++				     (match_operand:SI 2 "const_int_operand"))
++			(ashift:SI (match_dup 1)
++				   (match_operand:SI 3 "const_int_operand"))))
++   (clobber (reg:CC CC_REG))]
++  "!TARGET_BARREL_SHIFTER
++   && IN_RANGE (INTVAL (operands[3]), 2,
++		(optimize_insn_for_size_p () ? 30 : 22))
++   && INTVAL (operands[2]) + INTVAL (operands[3]) == 33
++   && arc_pre_reload_split ()"
++  "#"
++  "&& 1"
++  [(const_int 0)]
++{
++  arc_split_rlc (operands);
++  DONE;
++})
++
+ ;; DImode Rotate instructions
+ 
+ (define_expand "rotldi3"
+
+
