@@ -3,3 +3,5 @@
 # reset.  
 sh4-linux-gnu
 sh4eb-linux-gnu
+riscv32-elf
+riscv64-elf
