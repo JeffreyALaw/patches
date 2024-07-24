@@ -49,3 +49,14 @@ index 00000000000..d67b9326de7
 +    abort ();
 +  return 0;
 +}
+diff --git a/gcc/testsuite/gcc.dg/torture/pr116037.c b/gcc/testsuite/gcc.dg/torture/pr116037.c
+index cb34ba4e5d4..86ab50de4b2 100644
+--- a/gcc/testsuite/gcc.dg/torture/pr116037.c
++++ b/gcc/testsuite/gcc.dg/torture/pr116037.c
+@@ -1,5 +1,5 @@
+ /* { dg-do run } */
+-/* { dg-require-effective-target int32 } */
++/* { dg-require-effective-target int128 } */
+ /* { dg-additional-options "-Wno-psabi" } */
+ 
+ typedef __attribute__((__vector_size__ (64))) unsigned char VC;
