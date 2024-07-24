@@ -1,121 +1,51 @@
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
-index c56dfb505b8..1ac9870cd91 100644
+index c94d1fc3414..08a111b34cc 100644
 --- a/gcc/ext-dce.cc
 +++ b/gcc/ext-dce.cc
-@@ -181,9 +181,11 @@ safe_for_live_propagation (rtx_code code)
-    within an object) are set by INSN, the more aggressive the
-    optimization phase during use handling will be.  */
+@@ -706,7 +706,7 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj,
+ 		    {
+ 		      /* For anything but (subreg (reg)), break the inner loop
+ 			 and process normally (conservatively).  */
+-		      if (!REG_P (SUBREG_REG (y)))
++		      if (!REG_P (SUBREG_REG (y)) || SUBREG_PROMOTED_VAR_P (y))
+ 			break;
+ 		      bit = subreg_lsb (y).to_constant ();
+ 		      if (dst_mask)
+@@ -785,6 +785,11 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj,
+ 	  HOST_WIDE_INT size = GET_MODE_BITSIZE (GET_MODE (x)).to_constant ();
+ 	  HOST_WIDE_INT rn = 4 * REGNO (SUBREG_REG (x));
  
--static void
-+static bool
- ext_dce_process_sets (rtx_insn *insn, rtx obj, bitmap live_tmp)
- {
-+  bool skipped_dest = false;
++	  /* If this is a promoted subreg, then more of it may be live than
++	     is otherwise obvious.  */
++	  if (SUBREG_PROMOTED_VAR_P (x))
++	    size = GET_MODE_BITSIZE (GET_MODE (SUBREG_REG (x))).to_constant ();
 +
-   subrtx_iterator::array_type array;
-   FOR_EACH_SUBRTX (iter, array, obj, NONCONST)
-     {
-@@ -210,6 +212,7 @@ ext_dce_process_sets (rtx_insn *insn, rtx obj, bitmap live_tmp)
- 	      /* Skip the subrtxs of this destination.  There is
- 		 little value in iterating into the subobjects, so
- 		 just skip them for a bit of efficiency.  */
-+	      skipped_dest = true;
- 	      iter.skip_subrtxes ();
- 	      continue;
- 	    }
-@@ -241,6 +244,7 @@ ext_dce_process_sets (rtx_insn *insn, rtx obj, bitmap live_tmp)
- 		  /* Skip the subrtxs of the STRICT_LOW_PART.  We can't
- 		     process them because it'll set objects as no longer
- 		     live when they are in fact still live.  */
-+		  skipped_dest = true;
- 		  iter.skip_subrtxes ();
- 		  continue;
- 		}
-@@ -291,6 +295,7 @@ ext_dce_process_sets (rtx_insn *insn, rtx obj, bitmap live_tmp)
- 	      if (!is_a <scalar_int_mode> (GET_MODE (SUBREG_REG (x)), &outer_mode)
- 		  || GET_MODE_BITSIZE (outer_mode) > 64)
- 		{
-+		  skipped_dest = true;
- 		  iter.skip_subrtxes ();
- 		  continue;
- 		}
-@@ -318,6 +323,7 @@ ext_dce_process_sets (rtx_insn *insn, rtx obj, bitmap live_tmp)
- 		 remain the same.  Thus we can not continue here, we must
- 		 either figure out what part of the destination is modified
- 		 or skip the sub-rtxs.  */
-+	      skipped_dest = true;
- 	      iter.skip_subrtxes ();
- 	      continue;
- 	    }
-@@ -370,9 +376,11 @@ ext_dce_process_sets (rtx_insn *insn, rtx obj, bitmap live_tmp)
-       else if (GET_CODE (x) == COND_EXEC)
- 	{
- 	  /* This isn't ideal, but may not be so bad in practice.  */
-+	  skipped_dest = true;
- 	  iter.skip_subrtxes ();
- 	}
-     }
-+  return skipped_dest;
- }
- 
- /* INSN has a sign/zero extended source inside SET that we will
-@@ -566,7 +574,8 @@ carry_backpropagate (unsigned HOST_WIDE_INT mask, enum rtx_code code, rtx x)
-    eliminated in CHANGED_PSEUDOS.  */
- 
- static void
--ext_dce_process_uses (rtx_insn *insn, rtx obj, bitmap live_tmp)
-+ext_dce_process_uses (rtx_insn *insn, rtx obj,
-+		      bitmap live_tmp, bool skipped_dest)
- {
-   subrtx_var_iterator::array_type array_var;
-   FOR_EACH_SUBRTX_VAR (iter, array_var, obj, NONCONST)
-@@ -640,6 +649,11 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj, bitmap live_tmp)
- 		  dst_mask |= mask_array[i];
- 	      dst_mask >>= bit;
- 
-+	      /* If we ignored a destination during set processing, then
-+		 consider all the bits live.  */
-+	      if (skipped_dest)
-+		dst_mask = -1;
+ 	  bitmap_set_bit (livenow, rn);
+ 	  if (size > 8)
+ 	    bitmap_set_bit (livenow, rn + 1);
+diff --git a/gcc/testsuite/gcc.dg/torture/pr116039.c b/gcc/testsuite/gcc.dg/torture/pr116039.c
+new file mode 100644
+index 00000000000..d67b9326de7
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/torture/pr116039.c
+@@ -0,0 +1,20 @@
++/* { dg-do run } */
++/* { dg-additional-options "-fsigned-char -fno-strict-aliasing -fwrapv" } */
 +
- 	      /* ??? Could also handle ZERO_EXTRACT / SIGN_EXTRACT
- 		 of the source specially to improve optimization.  */
- 	      if (code == SIGN_EXTEND || code == ZERO_EXTEND)
-@@ -650,7 +664,7 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj, bitmap live_tmp)
- 
- 		  /* DST_MASK could be zero if we had something in the SET
- 		     that we couldn't handle.  */
--		  if (modify && dst_mask && (dst_mask & ~src_mask) == 0)
-+		  if (modify && !skipped_dest && (dst_mask & ~src_mask) == 0)
- 		    ext_dce_try_optimize_insn (insn, x);
- 
- 		  dst_mask &= src_mask;
-@@ -802,14 +816,16 @@ ext_dce_process_bb (basic_block bb)
-       bitmap live_tmp = BITMAP_ALLOC (NULL);
- 
-       /* First process any sets/clobbers in INSN.  */
--      ext_dce_process_sets (insn, PATTERN (insn), live_tmp);
-+      bool skipped_dest = ext_dce_process_sets (insn, PATTERN (insn), live_tmp);
- 
-       /* CALL_INSNs need processing their fusage data.  */
-       if (CALL_P (insn))
--	ext_dce_process_sets (insn, CALL_INSN_FUNCTION_USAGE (insn), live_tmp);
-+	skipped_dest |= ext_dce_process_sets (insn,
-+					      CALL_INSN_FUNCTION_USAGE (insn),
-+					      live_tmp);
- 
-       /* And now uses, optimizing away SIGN/ZERO extensions as we go.  */
--      ext_dce_process_uses (insn, PATTERN (insn), live_tmp);
-+      ext_dce_process_uses (insn, PATTERN (insn), live_tmp, skipped_dest);
- 
-       /* A nonlocal goto implicitly uses the frame pointer.  */
-       if (JUMP_P (insn) && find_reg_note (insn, REG_NON_LOCAL_GOTO, NULL_RTX))
-@@ -832,7 +848,7 @@ ext_dce_process_bb (basic_block bb)
- 	      if (global_regs[i])
- 		bitmap_set_range (livenow, i * 4, 4);
- 
--	  ext_dce_process_uses (insn, CALL_INSN_FUNCTION_USAGE (insn), live_tmp);
-+	  ext_dce_process_uses (insn, CALL_INSN_FUNCTION_USAGE (insn), live_tmp, false);
- 	}
- 
-       BITMAP_FREE (live_tmp);
++extern void abort (void);
++
++int c[12];
++char d[12];
++int *f = c;
++int *z = (int *)1;
++long long y;
++int main() {
++  c[9] = 0xff;
++  for (int i = 0; i < 12; i += 3)
++    d[9] = z ? f[i] : 0;
++  for (long i = 0; i < 12; ++i)
++    y ^= d[i];
++  if (y != -1)
++    abort ();
++  return 0;
++}
