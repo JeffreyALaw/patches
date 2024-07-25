@@ -1,0 +1,107 @@
+diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
+index 9fc5215d6e3..e8876bf3c94 100644
+--- a/gcc/config/riscv/bitmanip.md
++++ b/gcc/config/riscv/bitmanip.md
+@@ -549,23 +549,34 @@ (define_insn "*<bitmanip_optab><mode>3"
+ 
+ ;; Optimize the common case of a SImode min/max against a constant
+ ;; that is safe both for sign- and zero-extension.
+-(define_insn_and_split "*minmax"
+-  [(set (match_operand:DI 0 "register_operand" "=r")
++(define_split
++  [(set (match_operand:DI 0 "register_operand")
+ 	(sign_extend:DI
+ 	  (subreg:SI
+-	    (bitmanip_minmax:DI (zero_extend:DI (match_operand:SI 1 "register_operand" "r"))
+-						(match_operand:DI 2 "immediate_operand" "i"))
++	    (bitmanip_minmax:DI (zero_extend:DI (match_operand:SI 1 "register_operand"))
++						(match_operand:DI 2 "immediate_operand"))
+ 	   0)))
+-   (clobber (match_scratch:DI 3 "=&r"))
+-   (clobber (match_scratch:DI 4 "=&r"))]
++   (clobber (match_operand:DI 3 "register_operand"))
++   (clobber (match_operand:DI 4 "register_operand"))]
+   "TARGET_64BIT && TARGET_ZBB && sext_hwi (INTVAL (operands[2]), 32) >= 0"
+-  "#"
+-  "&& reload_completed"
+-  [(set (match_dup 3) (sign_extend:DI (match_dup 1)))
+-   (set (match_dup 4) (match_dup 2))
+-   (set (match_dup 0) (<minmax_optab>:DI (match_dup 3) (match_dup 4)))]
+-  ""
+-  [(set_attr "type" "bitmanip")])
++  [(set (match_dup 0) (<uminmax_optab>:DI (match_dup 4) (match_dup 3)))]
++  "
++{
++  /* Load the constant into a regsiter.  */
++  emit_move_insn (operands[3], operands[2]);
++
++  /* Sign extend operands[1] if it isn't extended already.  */
++  /* If operands[1] is a sign extended SUBREG, then we can use it
++     directly.  Otherwise extend it into another temporary.  */
++  if (SUBREG_P (operands[1])
++      && SUBREG_PROMOTED_VAR_P (operands[1])
++      && SUBREG_PROMOTED_SIGNED_P (operands[1]))
++    operands[4] = SUBREG_REG (operands[1]);
++  else
++    emit_move_insn (operands[4], gen_rtx_SIGN_EXTEND (DImode, operands[1]));
++
++  /* The minmax is actually emitted from the split pattern.  */
++}")
+ 
+ ;; ZBS extension.
+ 
+diff --git a/gcc/config/riscv/iterators.md b/gcc/config/riscv/iterators.md
+index 734da041f0c..0a669f560e3 100644
+--- a/gcc/config/riscv/iterators.md
++++ b/gcc/config/riscv/iterators.md
+@@ -327,10 +327,11 @@ (define_code_attr atomic_optab
+   [(plus "add") (ior "or") (xor "xor") (and "and")])
+ 
+ ; bitmanip code attributes
+-(define_code_attr minmax_optab [(smin "smin")
+-				(smax "smax")
+-				(umin "umin")
+-				(umax "umax")])
++;; Unsigned variant of a min/max optab.
++(define_code_attr uminmax_optab [(smin "umin")
++				 (smax "umax")
++				 (umin "umin")
++				 (umax "umax")])
+ (define_code_attr bitmanip_optab [(smin "smin")
+ 				  (smax "smax")
+ 				  (umin "umin")
+diff --git a/gcc/testsuite/gcc.target/riscv/pr116085.c b/gcc/testsuite/gcc.target/riscv/pr116085.c
+new file mode 100644
+index 00000000000..998d82bd235
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr116085.c
+@@ -0,0 +1,29 @@
++/* { dg-do run } */
++/* { dg-require-effective-target rv64 } */
++/* { dg-options "-march=rv64gc_zbb -mabi=lp64d -fno-ext-dce" } */
++
++extern void abort (void);
++
++int a = 2;
++unsigned b = 0x80000000;
++int arr_5[2][23];
++void test(int, unsigned, int);
++int main() {
++  test(a, b, 1);
++  if (arr_5[1][0] != -2147483648)
++    abort ();
++  return 0;
++}
++
++#define c(a, b)                                                                \
++  ({                                                                           \
++    long d = a;                                                                \
++    long e = b;                                                                \
++    d > e ? d : e;                                                             \
++  })
++__attribute__((noipa))
++void test(int f, unsigned g, int h) {
++  for (int i = 0; i < h; i = f)
++    arr_5[1][i] = h ? c(g, 7) : 0;
++}
++
