@@ -1,3 +1,14 @@
+	PR target/116085
+gcc/
+	* config/riscv/bitmanip.md (minmax extension avoidance splitter):
+	Rewrite as a simpler define_split.  Adjust the opcode appropriately.
+	Avoid emitting sign extension if it's clearly not needed.
+	* config/riscv/iterators.md (minmax_optab): Rename to uminmax_optab
+	and map everything to unsigned variants.
+
+gcc/testsuite/
+	* gcc.target/riscv/pr116085.c: New test.
+
 diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
 index 9fc5215d6e3..e8876bf3c94 100644
 --- a/gcc/config/riscv/bitmanip.md
