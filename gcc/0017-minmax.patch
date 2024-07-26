@@ -43,7 +43,7 @@ index 9fc5215d6e3..e8876bf3c94 100644
 +  [(set (match_dup 0) (<uminmax_optab>:DI (match_dup 4) (match_dup 3)))]
 +  "
 +{
-+  /* Load the constant into a regsiter.  */
++  /* Load the constant into a register.  */
 +  emit_move_insn (operands[3], operands[2]);
 +
 +  /* Sign extend operands[1] if it isn't extended already.  */
