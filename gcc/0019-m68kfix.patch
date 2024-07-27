@@ -1,0 +1,23 @@
+diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
+index 14f163a01d6..da025db1a91 100644
+--- a/gcc/ext-dce.cc
++++ b/gcc/ext-dce.cc
+@@ -396,6 +396,18 @@ ext_dce_try_optimize_insn (rtx_insn *insn, rtx set)
+   if (!(REG_P (inner) || (SUBREG_P (inner) && REG_P (SUBREG_REG (inner)))))
+     return;
+ 
++  /* This is going to create a paradoxical subreg.  If INNER is a SUBREG and
++     its SUBREG_REG has the same mode as SRC and INNER is not the low part
++     of the subreg, then don't try to optimize it.
++
++     simplify_gen_subreg will collapse that to just SUBREG_REG, which seems
++     wrong semantically.  */
++  if (SUBREG_P (inner)
++      && REG_P (SUBREG_REG (inner))
++      && GET_MODE (src) == GET_MODE (SUBREG_REG (inner))
++      && !subreg_lowpart_p (inner))
++    return;
++ 
+   rtx new_pattern;
+   if (dump_file)
+     {
