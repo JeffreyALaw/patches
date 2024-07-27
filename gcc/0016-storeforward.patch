@@ -167,7 +167,7 @@ index 00000000000..6a5a8c9398a
 +
 +static rtx_insn *
 +generate_bit_insert_sequence (store_fwd_info *store_info, rtx dest,
-+			      machine_mode load_inner_mode)
++			      machine_mode)
 +{
 +  poly_uint64 store_mode_size
 +    = GET_MODE_SIZE (GET_MODE (store_info->store_mem));
