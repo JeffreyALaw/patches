@@ -1,0 +1,80 @@
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index a490b9598b0..288ea794392 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -1223,6 +1223,43 @@ riscv_build_integer (struct riscv_integer_op *codes, HOST_WIDE_INT value,
+ 	}
+ 
+     }
++  else if (cost > 3 && TARGET_64BIT && can_create_pseudo_p ())
++    {
++      struct riscv_integer_op alt_codes[RISCV_MAX_INTEGER_OPS];
++      int alt_cost;
++
++      unsigned HOST_WIDE_INT loval = value & 0xffffffff;
++      unsigned HOST_WIDE_INT hival = (value & ~loval) >> 32;
++      bool bit31 = (hival & 0x80000000) != 0;
++      /* Without pack we can generate it with a shift 32 followed by an or.  */
++      if (hival == loval && !bit31)
++	{
++	  alt_cost = 2 + riscv_build_integer_1 (alt_codes,
++						sext_hwi (loval, 32), mode);
++	  if (alt_cost < cost)
++	    {
++	      /* We need to save the first constant we build.  */
++	      alt_codes[alt_cost - 3].save_temporary = true;
++
++	      /* Now we want to shift the previously generated constant into the
++		 high half.  */
++	      alt_codes[alt_cost - 2].code = ASHIFT;
++	      alt_codes[alt_cost - 2].value = 32;
++	      alt_codes[alt_cost - 2].use_uw = false;
++	      alt_codes[alt_cost - 2].save_temporary = false;
++
++	      /* And the final step, IOR the two halves together.  Since this uses
++		 the saved temporary, use CONCAT similar to what we do for Zbkb.  */
++	      alt_codes[alt_cost - 1].code = CONCAT;
++	      alt_codes[alt_cost - 1].value = 0;
++	      alt_codes[alt_cost - 1].use_uw = false;
++	      alt_codes[alt_cost - 1].save_temporary = false;
++
++	      memcpy (codes, alt_codes, sizeof (alt_codes));
++	      cost = alt_cost;
++	    }
++	}
++    }
+ 
+   return cost;
+ }
+@@ -2786,12 +2823,25 @@ riscv_move_integer (rtx temp, rtx dest, HOST_WIDE_INT value,
+ 	    }
+ 	  else if (codes[i].code == CONCAT || codes[i].code == VEC_MERGE)
+ 	    {
+-	      rtx t = can_create_pseudo_p () ? gen_reg_rtx (mode) : temp;
+-	      rtx t2 = codes[i].code == VEC_MERGE ? old_value : x;
+-	      gcc_assert (t2);
+-	      t2 = gen_lowpart (SImode, t2);
+-	      emit_insn (gen_riscv_xpack_di_si_2 (t, x, GEN_INT (32), t2));
+-	      x = t;
++	      if (codes[i].code == CONCAT && !TARGET_ZBKB)
++		{
++		  gcc_assert (can_create_pseudo_p ());
++	          rtx t = gen_reg_rtx (mode);
++		  /* The two values should have no bits in common, so we can
++		     use PLUS instead of IOR which has a higher chance of
++		     using a compressed instruction.  */
++		  x = gen_rtx_PLUS (mode, x, old_value);
++		  x = riscv_emit_set (t, x);
++		}
++	      else
++		{
++		  rtx t = can_create_pseudo_p () ? gen_reg_rtx (mode) : temp;
++		  rtx t2 = codes[i].code == VEC_MERGE ? old_value : x;
++		  gcc_assert (t2);
++		  t2 = gen_lowpart (SImode, t2);
++		  emit_insn (gen_riscv_xpack_di_si_2 (t, x, GEN_INT (32), t2));
++		  x = t;
++		}
+ 	    }
+ 	  else
+ 	    x = gen_rtx_fmt_ee (codes[i].code, mode,
