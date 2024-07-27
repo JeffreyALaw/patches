@@ -12,10 +12,10 @@ index 8fba8f7db6a..43675288399 100644
  	stringpool.o \
 diff --git a/gcc/avoid-store-forwarding.cc b/gcc/avoid-store-forwarding.cc
 new file mode 100644
-index 00000000000..a29bccf0e73
+index 00000000000..6a5a8c9398a
 --- /dev/null
 +++ b/gcc/avoid-store-forwarding.cc
-@@ -0,0 +1,590 @@
+@@ -0,0 +1,589 @@
 +/* Avoid store forwarding optimization pass.
 +   Copyright (C) 2024 Free Software Foundation, Inc.
 +   Contributed by VRULL GmbH.
@@ -171,7 +171,6 @@ index 00000000000..a29bccf0e73
 +{
 +  poly_uint64 store_mode_size
 +    = GET_MODE_SIZE (GET_MODE (store_info->store_mem));
-+  poly_uint64 load_mode_size = GET_MODE_SIZE (load_inner_mode);
 +  unsigned HOST_WIDE_INT store_size = store_mode_size.to_constant ();
 +
 +  start_sequence ();
