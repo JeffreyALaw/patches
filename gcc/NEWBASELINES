@@ -3,5 +3,3 @@
 # reset.  
 sh4-linux-gnu
 sh4eb-linux-gnu
-msp430-elf
-avr-elf
