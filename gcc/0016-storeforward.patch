@@ -99,7 +99,7 @@ index 00000000000..6a5a8c9398a
 +  /* opt_pass methods: */
 +  virtual bool gate (function *)
 +    {
-+      return optimize >= 1
++      return 0 && optimize >= 1
 +	     && optimize_insn_for_speed_p ();
 +    }
 +
