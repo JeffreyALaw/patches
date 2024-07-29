@@ -222,7 +222,7 @@ patches/jobs/setupsources.sh $TARGET master binutils-gdb gcc newlib-cygwin > $LO
 # Step 1, build binutils
 echo Building binutils
 cd ${TARGET}-obj/binutils
-${SRCDIR}/binutils-gdb/configure --enable-warn-rwx-segments=no --enable-warn-execstack=no --enable-lto --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} >> $LOGFILE 2>&1
+${SRCDIR}/binutils-gdb/configure --enable-check=rtl,rtlflag --enable-warn-rwx-segments=no --enable-warn-execstack=no --enable-lto --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} >> $LOGFILE 2>&1
 make -j $NPROC -l $NPROC all-gas all-binutils all-ld $SIMTARG >> $LOGFILE 2>&1
 make install-gas install-binutils install-ld $SIMINSTALLTARG >> $LOGFILE 2>&1
 cd ../..
