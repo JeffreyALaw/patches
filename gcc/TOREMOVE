@@ -64,4 +64,4 @@ gcc/testsuite/g++.dg/tls/thread_local4.C
 gcc/testsuite/g++.dg/tls/thread_local4g.C
 
 # Temporary until David fixes things up
-gcc.dg/sarif-output/include-chain-2.c
+gcc/testsuite/gcc.dg/sarif-output/include-chain-2.c
