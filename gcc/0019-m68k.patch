@@ -1,0 +1,20 @@
+diff --git a/gcc/rtlanal.cc b/gcc/rtlanal.cc
+index 4158a531bdd..1d85f87e676 100644
+--- a/gcc/rtlanal.cc
++++ b/gcc/rtlanal.cc
+@@ -4321,6 +4321,15 @@ subreg_regno (const_rtx x)
+   rtx subreg = SUBREG_REG (x);
+   int regno = REGNO (subreg);
+ 
++  /* Some SUBREGs can't have their offset computed by subreg_regno_offset.
++     This happens (for example) on a WORDS_BIG_ENDIAN target for a
++     paradoxical subreg.  It's often benign, but if REGNO (SUBREG_REG (x))
++     is zero, then we would return -1 which is catastrophic.  Return
++     the original register number in that case, which should be sensible.  */
++  if (simplify_subreg_regno (regno, GET_MODE (subreg),
++			     SUBREG_BYTE (x), GET_MODE (x)) == -1)
++    return regno;
++  
+   ret = regno + subreg_regno_offset (regno,
+ 				     GET_MODE (subreg),
+ 				     SUBREG_BYTE (x),
