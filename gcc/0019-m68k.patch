@@ -1,20 +1,45 @@
+diff --git a/gcc/final.cc b/gcc/final.cc
+index eb9e065d9f0..0167b2f8602 100644
+--- a/gcc/final.cc
++++ b/gcc/final.cc
+@@ -3123,7 +3123,17 @@ alter_subreg (rtx *xp, bool final_p)
+ 	  unsigned int regno;
+ 	  poly_int64 offset;
+ 
+-	  regno = subreg_regno (x);
++	  /* A paradoxical should always be REGNO (y) + 0.  Using subreg_regno
++	     for something like (subreg:DI (reg:SI N) 0) on a WORDS_BIG_ENDIAN
++	     target will return N-1 which is catastrophic for N == 0 and just
++	     wrong for other cases.
++
++	     Fixing subreg_regno would be a better option, except that reload
++	     depends on its current behavior.  */
++	  if (paradoxical_subreg_p (x))
++	    regno = REGNO (y);
++	  else
++	    regno = subreg_regno (x);
+ 	  if (subreg_lowpart_p (x))
+ 	    offset = byte_lowpart_offset (GET_MODE (x), GET_MODE (y));
+ 	  else
 diff --git a/gcc/rtlanal.cc b/gcc/rtlanal.cc
-index 4158a531bdd..1d85f87e676 100644
+index 4158a531bdd..6f6e6544755 100644
 --- a/gcc/rtlanal.cc
 +++ b/gcc/rtlanal.cc
-@@ -4321,6 +4321,15 @@ subreg_regno (const_rtx x)
-   rtx subreg = SUBREG_REG (x);
-   int regno = REGNO (subreg);
+@@ -4313,7 +4313,16 @@ lowpart_subreg_regno (unsigned int regno, machine_mode xmode,
+   return simplify_subreg_regno (regno, xmode, offset, ymode);
+ }
  
-+  /* Some SUBREGs can't have their offset computed by subreg_regno_offset.
-+     This happens (for example) on a WORDS_BIG_ENDIAN target for a
-+     paradoxical subreg.  It's often benign, but if REGNO (SUBREG_REG (x))
-+     is zero, then we would return -1 which is catastrophic.  Return
-+     the original register number in that case, which should be sensible.  */
-+  if (simplify_subreg_regno (regno, GET_MODE (subreg),
-+			     SUBREG_BYTE (x), GET_MODE (x)) == -1)
-+    return regno;
-+  
-   ret = regno + subreg_regno_offset (regno,
- 				     GET_MODE (subreg),
- 				     SUBREG_BYTE (x),
+-/* Return the final regno that a subreg expression refers to.  */
++/* Return the final regno that a subreg expression refers to.
++
++   Callers such as reload_inner_reg_of_subreg rely on this returning
++   the simplified hard reg, even if that result is not a valid regno for
++   the given mode.  That triggers reloading the inner part of the
++   subreg.
++
++   That inherently means other uses of this routine probably need
++   to be audited for their behavior when requested subreg can't
++   be expressed as a hard register after apply the offset.  */
+ unsigned int
+ subreg_regno (const_rtx x)
+ {
