@@ -68,3 +68,24 @@ index b19295cd942..6872ee56022 100644
    [(set_attr "type" "bitmanip")])
  
  (define_insn "*bset<mode>_1_mask"
+diff --git a/gcc/testsuite/gcc.target/riscv/pr116283.c b/gcc/testsuite/gcc.target/riscv/pr116283.c
+new file mode 100644
+index 00000000000..21861557edc
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr116283.c
+@@ -0,0 +1,15 @@
++/* { dg-do compile } */
++/* { dg-additional-options "-march=rv64id_zbs -mabi=lp64d" } */
++
++char c;
++#define d(a, b)                                                                \
++  {                                                                            \
++    __typeof__(a) e = a;                                                       \
++    e;                                                                         \
++  }
++long f;
++void g(signed h[][9][9][9][9]) {
++  for (unsigned i = f; i; i += 3)
++    c = (d(1 << (3629 & h[i][i][1][5][i]), ));
++}
++
