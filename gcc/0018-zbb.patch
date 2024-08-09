@@ -75,7 +75,7 @@ index 00000000000..21861557edc
 +++ b/gcc/testsuite/gcc.target/riscv/pr116283.c
 @@ -0,0 +1,15 @@
 +/* { dg-do compile } */
-+/* { dg-additional-options "-march=rv64id_zbs -mabi=lp64d" } */
++/* { dg-additional-options "-std=gnu99 -w -march=rv64id_zbs -mabi=lp64d" } */
 +
 +char c;
 +#define d(a, b)                                                                \
