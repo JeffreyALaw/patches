@@ -1,3 +1,106 @@
+
+
+This pass detects cases of expensive store forwarding and tries to avoid them
+by reordering the stores and using suitable bit insertion sequences.
+For example it can transform this:
+
+     strb    w2, [x1, 1]
+     ldr     x0, [x1]      # Expensive store forwarding to larger load.
+
+To:
+
+     ldr     x0, [x1]
+     strb    w2, [x1]
+     bfi     x0, x2, 0, 8
+
+Assembly like this can appear with bitfields or type punning / unions.
+On stress-ng when running the cpu-union microbenchmark the following speedups
+have been observed.
+
+  Neoverse-N1:      +29.4%
+  Intel Coffeelake: +13.1%
+  AMD 5950X:        +17.5%
+
+gcc/ChangeLog:
+
+	* Makefile.in: Add avoid-store-forwarding.o
+	* common.opt: New option -favoid-store-forwarding.
+	* doc/invoke.texi: New param store-forwarding-max-distance.
+	* doc/passes.texi: Document new pass.
+	* doc/tm.texi: Regenerate.
+	* doc/tm.texi.in: Document new pass.
+	* params.opt: New param store-forwarding-max-distance.
+	* passes.def: Schedule a new pass.
+	* target.def (HOOK_PREFIX): New target hook avoid_store_forwarding_p.
+	* target.h (struct store_fwd_info): Declare.
+	* tree-pass.h (make_pass_rtl_avoid_store_forwarding): Declare.
+	* avoid-store-forwarding.cc: New file.
+	* avoid-store-forwarding.h: New file.
+
+gcc/testsuite/ChangeLog:
+
+	* gcc.target/aarch64/avoid-store-forwarding-1.c: New test.
+	* gcc.target/aarch64/avoid-store-forwarding-2.c: New test.
+	* gcc.target/aarch64/avoid-store-forwarding-3.c: New test.
+	* gcc.target/aarch64/avoid-store-forwarding-4.c: New test.
+	* gcc.target/aarch64/avoid-store-forwarding-5.c: New test.
+
+Signed-off-by: Manolis Tsamis <manolis.tsamis@vrull.eu>
+---
+
+Changes in v5:
+        - Fix bug with BIG_ENDIAN targets.
+        - Fix bug with unrecognized instructions.
+        - Fix / simplify pass init/fini.
+
+Changes in v4:
+        - Change pass scheduling to run after sched1.
+        - Add target hook to decide whether a store forwarding instance
+        should be avoided or not.
+        - Fix bugs.
+
+Changes in v3:
+        - Only emit SUBREG after calling validate_subreg.
+        - Fix memory corruption due to vec self-reference.
+        - Fix bitmap_bit_in_range_p ICE due to BLKMode.
+        - Reject MEM to MEM sets.
+        - Add get_load_mem comment.
+        - Add new testcase.
+
+Changes in v2:
+        - Allow modes that are not scalar_int_mode.
+        - Introduce simple costing to avoid unprofitable transformations.
+        - Reject bit insert sequences that spill to memory.
+        - Document new pass.
+        - Fix and add testcases.
+
+ gcc/Makefile.in                               |   1 +
+ gcc/avoid-store-forwarding.cc                 | 616 ++++++++++++++++++
+ gcc/avoid-store-forwarding.h                  |  56 ++
+ gcc/common.opt                                |   4 +
+ gcc/doc/invoke.texi                           |   9 +
+ gcc/doc/passes.texi                           |   8 +
+ gcc/doc/tm.texi                               |   9 +
+ gcc/doc/tm.texi.in                            |   2 +
+ gcc/params.opt                                |   4 +
+ gcc/passes.def                                |   1 +
+ gcc/target.def                                |  11 +
+ gcc/target.h                                  |   3 +
+ .../aarch64/avoid-store-forwarding-1.c        |  28 +
+ .../aarch64/avoid-store-forwarding-2.c        |  39 ++
+ .../aarch64/avoid-store-forwarding-3.c        |  31 +
+ .../aarch64/avoid-store-forwarding-4.c        |  23 +
+ .../aarch64/avoid-store-forwarding-5.c        |  38 ++
+ gcc/tree-pass.h                               |   1 +
+ 18 files changed, 884 insertions(+)
+ create mode 100644 gcc/avoid-store-forwarding.cc
+ create mode 100644 gcc/avoid-store-forwarding.h
+ create mode 100644 gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-1.c
+ create mode 100644 gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-2.c
+ create mode 100644 gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-3.c
+ create mode 100644 gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-4.c
+ create mode 100644 gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-5.c
+
 diff --git a/gcc/Makefile.in b/gcc/Makefile.in
 index 8fba8f7db6a..43675288399 100644
 --- a/gcc/Makefile.in
@@ -12,10 +115,10 @@ index 8fba8f7db6a..43675288399 100644
  	stringpool.o \
 diff --git a/gcc/avoid-store-forwarding.cc b/gcc/avoid-store-forwarding.cc
 new file mode 100644
-index 00000000000..6a5a8c9398a
+index 00000000000..4a0343c0314
 --- /dev/null
 +++ b/gcc/avoid-store-forwarding.cc
-@@ -0,0 +1,589 @@
+@@ -0,0 +1,616 @@
 +/* Avoid store forwarding optimization pass.
 +   Copyright (C) 2024 Free Software Foundation, Inc.
 +   Contributed by VRULL GmbH.
@@ -99,7 +202,7 @@ index 00000000000..6a5a8c9398a
 +  /* opt_pass methods: */
 +  virtual bool gate (function *)
 +    {
-+      return 0 && optimize >= 1
++      return 1 && optimize >= 1
 +	     && optimize_insn_for_speed_p ();
 +    }
 +
@@ -167,7 +270,7 @@ index 00000000000..6a5a8c9398a
 +
 +static rtx_insn *
 +generate_bit_insert_sequence (store_fwd_info *store_info, rtx dest,
-+			      machine_mode)
++			      machine_mode load_inner_mode)
 +{
 +  poly_uint64 store_mode_size
 +    = GET_MODE_SIZE (GET_MODE (store_info->store_mem));
@@ -296,6 +399,46 @@ index 00000000000..6a5a8c9398a
 +
 +      total_cost += seq_cost (insns, true);
 +      it->bits_insert_insns = insns;
++
++      rtx store_set = single_set (it->store_insn);
++
++      /* Create a register move at the store's original position to save the
++	 stored value.  */
++      start_sequence ();
++      rtx mov1 = gen_move_insn (it->mov_reg, SET_SRC (store_set));
++      rtx_insn *insn1 = emit_insn (mov1);
++      end_sequence ();
++
++      if (recog_memoized (insn1) < 0)
++	{
++	  if (dump_file)
++	    {
++	      fprintf (dump_file, "Failed due to unrecognizable insn: ");
++	      print_rtl_single (dump_file, insn1);
++	    }
++	  return false;
++	}
++
++      it->save_store_value_insn = insn1;
++
++      /* Create a new store after the load with the saved original value.
++	 This avoids the forwarding stall.  */
++      start_sequence ();
++      rtx mov2 = gen_move_insn (SET_DEST (store_set), it->mov_reg);
++      rtx_insn *insn2 = emit_insn (mov2);
++      end_sequence ();
++
++      if (recog_memoized (insn2) < 0)
++	{
++	  if (dump_file)
++	    {
++	      fprintf (dump_file, "Failed due to unrecognizable insn: ");
++	      print_rtl_single (dump_file, insn2);
++	    }
++	  return false;
++	}
++
++      it->store_saved_value_insn = insn2;
 +    }
 +
 +  if (load_elim)
@@ -389,25 +532,16 @@ index 00000000000..6a5a8c9398a
 +
 +  stats_sf_avoided++;
 +
++  /* Done, emit all the generated instructions and delete the stores.  */
++
 +  FOR_EACH_VEC_ELT (stores, i, it)
-+    {
-+      /* Emit code that updated the loaded value to account for the
-+	 missing store.  */
-+      df_insn_rescan (emit_insn_after (it->bits_insert_insns, load_insn));
-+    }
++    df_insn_rescan (emit_insn_after (it->bits_insert_insns, load_insn));
 +
 +  FOR_EACH_VEC_ELT (stores, i, it)
 +    {
-+      rtx store_set = single_set (it->store_insn);
-+      /* Create a register move at the store's original position to save the
-+	 stored value.  */
-+      rtx mov1 = gen_move_insn (it->mov_reg, SET_SRC (store_set));
-+      df_insn_rescan (emit_insn_before (mov1, it->store_insn));
-+      /* Create a new store after the load with the saved original value.
-+	 This avoids the forwarding stall.  */
-+      rtx mov2 = gen_move_insn (SET_DEST (store_set), it->mov_reg);
-+      df_insn_rescan (emit_insn_after (mov2, load_insn));
-+      /* Done, delete the original store.  */
++      df_insn_rescan (emit_insn_before (it->save_store_value_insn,
++					it->store_insn));
++      df_insn_rescan (emit_insn_after (it->store_saved_value_insn, load_insn));
 +      set_insn_deleted (it->store_insn);
 +    }
 +
@@ -574,10 +708,8 @@ index 00000000000..6a5a8c9398a
 +pass_rtl_avoid_store_forwarding::execute (function *fn)
 +{
 +  df_set_flags (DF_DEFER_INSN_RESCAN);
-+  df_note_add_problem ();
 +
 +  init_alias_analysis ();
-+  cselib_init (CSELIB_RECORD_MEMORY | CSELIB_PRESERVE_CONSTANTS);
 +
 +  stats_sf_detected = 0;
 +  stats_sf_avoided = 0;
@@ -587,8 +719,6 @@ index 00000000000..6a5a8c9398a
 +    avoid_store_forwarding (bb);
 +
 +  end_alias_analysis ();
-+  cselib_finish ();
-+  df_analyze ();
 +
 +  statistics_counter_event (fn, "Store forwardings detected: ",
 +			    stats_sf_detected);
@@ -607,10 +737,10 @@ index 00000000000..6a5a8c9398a
 +}
 diff --git a/gcc/avoid-store-forwarding.h b/gcc/avoid-store-forwarding.h
 new file mode 100644
-index 00000000000..216336672b7
+index 00000000000..55a0c97f008
 --- /dev/null
 +++ b/gcc/avoid-store-forwarding.h
-@@ -0,0 +1,50 @@
+@@ -0,0 +1,56 @@
 +/* Avoid store forwarding optimization pass.
 +   Copyright (C) 2024 Free Software Foundation, Inc.
 +   Contributed by VRULL GmbH.
@@ -652,6 +782,12 @@ index 00000000000..216336672b7
 +  /* The instruction sequence that inserts the stored value's bits at the
 +     appropriate position in the loaded value.  */
 +  rtx_insn *bits_insert_insns;
++  /* An instruction that saves the store's value in a register temporarily,
++     (set (reg X) (SET_SRC (store_insn))).  */
++  rtx_insn *save_store_value_insn;
++  /* An instruction that stores the saved value back to memory,
++     (set (SET_DEST (store_insn)) (reg X)).  */
++  rtx_insn *store_saved_value_insn;
 +  /* The byte offset for the store's position within the load.  */
 +  HOST_WIDE_INT offset;
 +
@@ -677,10 +813,10 @@ index ea39f87ae71..7d080fbc513 100644
  Common Var(flag_gcse_las) Init(0) Optimization
  Perform redundant load after store elimination in global common subexpression
 diff --git a/gcc/doc/invoke.texi b/gcc/doc/invoke.texi
-index 9fb0925ed29..5c5f5a63a17 100644
+index 27539a01785..4f8c145ff1f 100644
 --- a/gcc/doc/invoke.texi
 +++ b/gcc/doc/invoke.texi
-@@ -12785,6 +12785,15 @@ loop unrolling.
+@@ -12797,6 +12797,15 @@ loop unrolling.
  This option is enabled by default at optimization levels @option{-O1},
  @option{-O2}, @option{-O3}, @option{-Os}.
  
@@ -716,10 +852,10 @@ index 4ac7a2306a1..639f6b325c8 100644
  
  This pass removes redundant computation within basic blocks, and
 diff --git a/gcc/doc/tm.texi b/gcc/doc/tm.texi
-index c7535d07f4d..a5a2abc8874 100644
+index cc33084ed32..47ada0c6bf5 100644
 --- a/gcc/doc/tm.texi
 +++ b/gcc/doc/tm.texi
-@@ -7337,6 +7337,15 @@ the @code{POLY_VALUE_MIN}, @code{POLY_VALUE_MAX} and
+@@ -7348,6 +7348,15 @@ the @code{POLY_VALUE_MIN}, @code{POLY_VALUE_MAX} and
  implementation returns the lowest possible value of @var{val}.
  @end deftypefn
  
@@ -736,10 +872,10 @@ index c7535d07f4d..a5a2abc8874 100644
  @section Adjusting the Instruction Scheduler
  
 diff --git a/gcc/doc/tm.texi.in b/gcc/doc/tm.texi.in
-index 64cea3b1eda..51f90c9f793 100644
+index 8af3f414505..73ae1a1b8fe 100644
 --- a/gcc/doc/tm.texi.in
 +++ b/gcc/doc/tm.texi.in
-@@ -4743,6 +4743,8 @@ Define this macro if a non-short-circuit operation produced by
+@@ -4745,6 +4745,8 @@ Define this macro if a non-short-circuit operation produced by
  
  @hook TARGET_ESTIMATED_POLY_VALUE
  
@@ -776,10 +912,10 @@ index b06d6d45f63..7f7fd96e336 100644
        NEXT_PASS (pass_ira);
        NEXT_PASS (pass_reload);
 diff --git a/gcc/target.def b/gcc/target.def
-index 3de1aad4c84..0b98badf3e7 100644
+index 1d0ea6f30ca..c90ec9c7edd 100644
 --- a/gcc/target.def
 +++ b/gcc/target.def
-@@ -6946,6 +6946,17 @@ HOOK_VECTOR_END (shrink_wrap)
+@@ -6959,6 +6959,17 @@ HOOK_VECTOR_END (shrink_wrap)
  #undef HOOK_PREFIX
  #define HOOK_PREFIX "TARGET_"
  
@@ -798,7 +934,7 @@ index 3de1aad4c84..0b98badf3e7 100644
  DEFHOOK
  (debug_unwind_info,
 diff --git a/gcc/target.h b/gcc/target.h
-index c1f99b97b86..5996738878c 100644
+index 837651d273a..2f59f3c6a80 100644
 --- a/gcc/target.h
 +++ b/gcc/target.h
 @@ -165,6 +165,9 @@ class function_arg_info;
@@ -1012,3 +1148,7 @@ index 3a0cf13089e..75b1d9cbae4 100644
  extern rtl_opt_pass *make_pass_rtl_store_motion (gcc::context *ctxt);
  extern rtl_opt_pass *make_pass_cse_after_global_opts (gcc::context *ctxt);
  extern rtl_opt_pass *make_pass_rtl_ifcvt (gcc::context *ctxt);
+-- 
+2.46.0
+
+
