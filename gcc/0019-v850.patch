@@ -1,0 +1,40 @@
+diff --git a/gcc/config/v850/v850.md b/gcc/config/v850/v850.md
+index f810a27fa2e..813135d1b2d 100644
+--- a/gcc/config/v850/v850.md
++++ b/gcc/config/v850/v850.md
+@@ -1325,17 +1325,6 @@ (define_split
+ ;; ---------------------------------------------------------------------
+ ;; BYTE SWAP INSTRUCTIONS
+ ;; ---------------------------------------------------------------------
+-(define_expand "rotlhi3"
+-  [(parallel [(set (match_operand:HI 0 "register_operand" "")
+-		   (rotate:HI (match_operand:HI 1 "register_operand" "")
+-			      (match_operand:HI 2 "const_int_operand" "")))
+-	      (clobber (reg:CC CC_REGNUM))])]
+-  "(TARGET_V850E_UP)"
+-  {
+-    if (INTVAL (operands[2]) != 8)
+-      FAIL;
+-  })
+-
+ (define_insn "*rotlhi3_8"
+   [(set (match_operand:HI 0 "register_operand" "=r")
+ 	(rotate:HI (match_operand:HI 1 "register_operand" "r")
+@@ -1345,17 +1334,6 @@ (define_insn "*rotlhi3_8"
+   "bsh %1,%0"
+   [(set_attr "length" "4")])
+ 
+-(define_expand "rotlsi3"
+-  [(parallel [(set (match_operand:SI 0 "register_operand" "")
+-		   (rotate:SI (match_operand:SI 1 "register_operand" "")
+-			      (match_operand:SI 2 "const_int_operand" "")))
+-	      (clobber (reg:CC CC_REGNUM))])]
+-  "(TARGET_V850E_UP)"
+-  {
+-    if (INTVAL (operands[2]) != 16)
+-      FAIL;
+-  })
+-
+ (define_insn "rotlsi3_a"
+   [(set (match_operand:SI 0 "register_operand" "=r")
+      (match_operator:SI 4 "ior_operator"
