@@ -1,0 +1,154 @@
+
+
+Currently maybe_push_res_to_seq does not handle non-const builtins (it does handle internal
+functions though). So we need to disable factoring out non-const builtins. This will be fixed in
+a better way later but this fixes the regression at hand and does not change what was goal on
+moving factor_out_conditional_operation over to use gimple_match_op.
+
+Bootstrapped and tested on x86_64-linux-gnu with no regressions.
+
+	PR  tree-optimization/116409
+
+gcc/ChangeLog:
+
+	* tree-ssa-phiopt.cc (factor_out_conditional_operation): Reject
+	non const builtins (except for internal functions).
+
+gcc/testsuite/ChangeLog:
+
+	* gcc.dg/torture/pr116409-1.c: New test.
+	* gcc.dg/torture/pr116409-2.c: New test.
+
+Signed-off-by: Andrew Pinski <quic_apinski@quicinc.com>
+---
+ gcc/testsuite/gcc.dg/torture/pr116409-1.c |  7 +++++++
+ gcc/testsuite/gcc.dg/torture/pr116409-2.c |  7 +++++++
+ gcc/tree-ssa-phiopt.cc                    | 18 ++++++++++++++++++
+ 3 files changed, 32 insertions(+)
+ create mode 100644 gcc/testsuite/gcc.dg/torture/pr116409-1.c
+ create mode 100644 gcc/testsuite/gcc.dg/torture/pr116409-2.c
+
+diff --git a/gcc/testsuite/gcc.dg/torture/pr116409-1.c b/gcc/testsuite/gcc.dg/torture/pr116409-1.c
+new file mode 100644
+index 00000000000..7bf8d49c9a0
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/torture/pr116409-1.c
+@@ -0,0 +1,7 @@
++/* { dg-do compile } */
++/* { dg-additional-options "-frounding-math -fno-math-errno" } */
++double f(int c, double a, double b) {
++  if (c)
++    return __builtin_sqrt(a);
++  return __builtin_sqrt(b);
++}
+diff --git a/gcc/testsuite/gcc.dg/torture/pr116409-2.c b/gcc/testsuite/gcc.dg/torture/pr116409-2.c
+new file mode 100644
+index 00000000000..c27f11312d9
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/torture/pr116409-2.c
+@@ -0,0 +1,7 @@
++/* { dg-do compile } */
++
++int f (int t, char *a, char *b) {
++  if (t)
++    return __builtin_strlen (a);
++  return __builtin_strlen (b);
++}
+diff --git a/gcc/tree-ssa-phiopt.cc b/gcc/tree-ssa-phiopt.cc
+index 2d4aba5b087..770f3629fe1 100644
+--- a/gcc/tree-ssa-phiopt.cc
++++ b/gcc/tree-ssa-phiopt.cc
+@@ -54,6 +54,7 @@ along with GCC; see the file COPYING3.  If not see
+ #include "dbgcnt.h"
+ #include "tree-ssa-propagate.h"
+ #include "tree-ssa-dce.h"
++#include "calls.h"
+ 
+ /* Return the singleton PHI in the SEQ of PHIs for edges E0 and E1. */
+ 
+@@ -367,6 +368,23 @@ factor_out_conditional_operation (edge e0, edge e1, gphi *phi,
+   if (!types_compatible_p (TREE_TYPE (new_arg0), TREE_TYPE (new_arg1)))
+     return NULL;
+ 
++  /* Function calls can only be const or an internal function
++     as maybe_push_res_to_seq only handles those currently.  */
++  if (!arg0_op.code.is_tree_code ())
++    {
++      auto fn = combined_fn (arg0_op.code);
++      if (!internal_fn_p (fn))
++	{
++	  tree decl = builtin_decl_implicit (as_builtin_fn (fn));
++	  if (!decl)
++	    return NULL;
++
++	  /* Non-const functions are not supported currently.  */
++	  if (!(flags_from_decl_or_type (decl) & ECF_CONST))
++	    return NULL;
++	}
++    }
++
+   /* Create a new PHI stmt.  */
+   result = PHI_RESULT (phi);
+   temp = make_ssa_name (TREE_TYPE (new_arg0), NULL);
+-- 
+2.43.0
+
+
+
+
+After the conversion to use maybe_push_res_to_seq, sometimes (REALPART_EXPR
+and IMAGPART_EXPR and VCE) the argument will not be a gimple value and
+then phiopt here would create an invalid PHI.
+Just add a check for gimple val is the way to fix this.
+
+Bootstrapped and tested on x86_64-linux-gnu.
+
+	PR tree-optimization/116412
+
+gcc/ChangeLog:
+
+	* tree-ssa-phiopt.cc (factor_out_conditional_operation): Make sure new_arg0
+	and new_arg1 are both gimple values.
+
+gcc/testsuite/ChangeLog:
+
+	* gcc.dg/torture/pr116412-1.c: New test.
+
+Signed-off-by: Andrew Pinski <quic_apinski@quicinc.com>
+---
+ gcc/testsuite/gcc.dg/torture/pr116412-1.c | 6 ++++++
+ gcc/tree-ssa-phiopt.cc                    | 4 ++++
+ 2 files changed, 10 insertions(+)
+ create mode 100644 gcc/testsuite/gcc.dg/torture/pr116412-1.c
+
+diff --git a/gcc/testsuite/gcc.dg/torture/pr116412-1.c b/gcc/testsuite/gcc.dg/torture/pr116412-1.c
+new file mode 100644
+index 00000000000..3bc26ecd8b8
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/torture/pr116412-1.c
+@@ -0,0 +1,6 @@
++/* { dg-do compile } */
++double f(_Complex double a, _Complex double *b, int c)
++{
++  if (c) return __real__ a;
++  return __real__ *b;
++}
+diff --git a/gcc/tree-ssa-phiopt.cc b/gcc/tree-ssa-phiopt.cc
+index 770f3629fe1..be95798a065 100644
+--- a/gcc/tree-ssa-phiopt.cc
++++ b/gcc/tree-ssa-phiopt.cc
+@@ -368,6 +368,10 @@ factor_out_conditional_operation (edge e0, edge e1, gphi *phi,
+   if (!types_compatible_p (TREE_TYPE (new_arg0), TREE_TYPE (new_arg1)))
+     return NULL;
+ 
++  /* The new args need to be both gimple values. */
++  if (!is_gimple_val (new_arg0) || !is_gimple_val (new_arg1))
++    return NULL;
++
+   /* Function calls can only be const or an internal function
+      as maybe_push_res_to_seq only handles those currently.  */
+   if (!arg0_op.code.is_tree_code ())
+-- 
+2.43.0
+
+
