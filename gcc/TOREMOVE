@@ -9,6 +9,7 @@ gcc/testsuite/gcc.dg/long_branch.c
 gcc/testsuite/gcc.dg/torture/pr112344.c
 gcc/testsuite/gcc.dg/pr48141.c
 gcc/testsuite/gcc.dg/torture/pr67947.c
+gcc/testsuite/gcc.dg/pr97459-5.c
 
 # These seem to have duplicated testnames, some passing, some failing
 gcc/testsuite/c-c++-common/Wattributes.c
