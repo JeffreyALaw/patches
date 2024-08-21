@@ -1,4 +1,3 @@
-gcc/testsuite/gcc.dg/c11-atomic-exec-4.c
 gcc/testsuite/c-c++-common/goacc/kernels-decompose-pr100400-1-2.c
 # Occasionally these time out
 gcc/testsuite/gcc.target/sh/pr49263.c

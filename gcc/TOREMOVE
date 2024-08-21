@@ -59,6 +59,12 @@ gcc/testsuite/gcc.dg/cleanup-9.c
 gcc/testsuite/gcc.dg/cleanup-10.c
 gcc/testsuite/gcc.dg/cleanup-11.c
 
+# These can take a lot time, especially on qemu emulated targets
+gcc/testsuite/gcc.dg/atomic/c11-atomic-exec-2.c
+gcc/testsuite/gcc.dg/atomic/c11-atomic-exec-3.c
+gcc/testsuite/gcc.dg/atomic/c11-atomic-exec-4.c
+gcc/testsuite/gcc.dg/atomic/c11-atomic-exec-5.c
+
 
 # Flakey on multiple platforms (sh4*, aarch64, loongarch64)
 gcc/testsuite/g++.dg/tls/thread_local4.C
