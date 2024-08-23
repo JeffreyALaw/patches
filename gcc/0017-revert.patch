@@ -1,0 +1,109 @@
+commit 675de64031d4de0e614a9b75a71553a21f40b989
+Author: Jeff Law <jlaw@ventanamicro.com>
+Date:   Fri Aug 23 07:59:44 2024 -0600
+
+    Revert "RISC-V: Enable -gvariable-location-views by default"
+    
+    This reverts commit 76c29548b3de8bd06c3eef6084c19696019a7a2f.
+
+diff --git a/gcc/dwarf2out.cc b/gcc/dwarf2out.cc
+index a26a07e3424..75ce91efd47 100644
+--- a/gcc/dwarf2out.cc
++++ b/gcc/dwarf2out.cc
+@@ -10396,10 +10396,8 @@ dwarf2out_maybe_output_loclist_view_pair (dw_loc_list_ref curr)
+     }
+   else
+     {
+-      dw2_asm_output_data_uleb128 (ZERO_VIEW_P (curr->vbegin)
+-				   ? 0 : curr->vbegin, "Location view begin");
+-      dw2_asm_output_data_uleb128 (ZERO_VIEW_P (curr->vend)
+-				   ? 0 : curr->vend, "Location view end");
++      dw2_asm_output_data_uleb128 (curr->vbegin, "Location view begin");
++      dw2_asm_output_data_uleb128 (curr->vend, "Location view end");
+     }
+ #endif /* DW_LLE_view_pair */
+ 
+@@ -10462,12 +10460,10 @@ output_loc_list (dw_loc_list_ref list_head)
+ 	    }
+ 	  else
+ 	    {
+-	      dw2_asm_output_data_uleb128 (ZERO_VIEW_P (curr->vbegin)
+-					   ? 0 : curr->vbegin,
++	      dw2_asm_output_data_uleb128 (curr->vbegin,
+ 					   "View list begin (%s)",
+ 					   list_head->vl_symbol);
+-	      dw2_asm_output_data_uleb128 (ZERO_VIEW_P (curr->vend)
+-					   ? 0 : curr->vend,
++	      dw2_asm_output_data_uleb128 (curr->vend,
+ 					   "View list end (%s)",
+ 					   list_head->vl_symbol);
+ 	    }
+diff --git a/gcc/testsuite/gcc.dg/debug/dwarf2/inline2.c b/gcc/testsuite/gcc.dg/debug/dwarf2/inline2.c
+index 6893ddfa2eb..9c36450ae2d 100644
+--- a/gcc/testsuite/gcc.dg/debug/dwarf2/inline2.c
++++ b/gcc/testsuite/gcc.dg/debug/dwarf2/inline2.c
+@@ -30,9 +30,6 @@
+    layout.  */
+ /* { dg-final { scan-assembler-times "\\(DIE \\(\[^\n\]*\\) DW_TAG_lexical_block" 0 } } */
+ 
+-/* Each inline instance should have DW_AT_entry_pc and DW_AT_GNU_entry_view.  */
+-/* { dg-final { scan-assembler-times " DW_AT_entry_pc" 6 } } */
+-/* { dg-final { scan-assembler-times " DW_AT_GNU_entry_view" 6 } } */
+ 
+ /* There are 3 DW_AT_inline attributes: one per abstract inline instance.
+    The value of the attribute must be 0x3, meaning the function was
+diff --git a/gcc/testsuite/gcc.dg/debug/dwarf2/inline6.c b/gcc/testsuite/gcc.dg/debug/dwarf2/inline6.c
+index d7c86f89895..fde8c27820d 100644
+--- a/gcc/testsuite/gcc.dg/debug/dwarf2/inline6.c
++++ b/gcc/testsuite/gcc.dg/debug/dwarf2/inline6.c
+@@ -16,7 +16,7 @@
+ 
+ /* Explicitly use dwarf-5 which uses DW_FORM_implicit_const.  */
+ /* { dg-do compile } */
+-/* { dg-options "-O -g3 -gdwarf-5 -dA -fgnu89-inline -gno-as-loc-support" } */
++/* { dg-options "-O -g3 -gdwarf-5 -dA -fgnu89-inline" } */
+ 
+ /* There are 6 inlined subroutines:
+    - One for each subroutine inlined into main, that's 3.
+@@ -29,11 +29,6 @@
+    layout.  */
+ /* { dg-final { scan-assembler-times "\\(DIE \\(\[^\n\]*\\) DW_TAG_lexical_block" 0 } } */
+ 
+-/* Each inline instance should have DW_AT_entry_pc and DW_AT_GNU_entry_view. */
+-/* { dg-final { scan-assembler-times " DW_AT_entry_pc" 6 } } */
+-/* { dg-final { scan-assembler-times " DW_AT_GNU_entry_view" 6 } } */
+-/* { dg-final { scan-assembler-times "uleb128\[^\n\]*LVU\[^\n\]* (View list|Location view) (begin|end)" 0 } } */
+-/* { dg-final { scan-assembler-times "uleb128\[^\n\]*0xffffffff\[^\n\]* (View list|Location view) (begin|end)" 0 } } */
+ 
+ /* There are 3 DW_AT_inline attributes: one per abstract inline instance.
+    The value of the attribute must be 0x3, meaning the function was
+diff --git a/gcc/toplev.cc b/gcc/toplev.cc
+index bc442a08c63..f308fb15108 100644
+--- a/gcc/toplev.cc
++++ b/gcc/toplev.cc
+@@ -1505,14 +1505,6 @@ process_options ()
+     dwarf2out_as_loc_support = dwarf2out_default_as_loc_support ();
+   if (!OPTION_SET_P (dwarf2out_as_locview_support))
+     dwarf2out_as_locview_support = dwarf2out_default_as_locview_support ();
+-  if (dwarf2out_as_locview_support && !dwarf2out_as_loc_support)
+-    {
+-      if (OPTION_SET_P (dwarf2out_as_locview_support))
+-	warning_at (UNKNOWN_LOCATION, 0,
+-		    "%<-gas-locview-support%> is forced disabled "
+-		    "without %<-gas-loc-support%>");
+-      dwarf2out_as_locview_support = false;
+-    }
+ 
+   if (!OPTION_SET_P (debug_variable_location_views))
+     {
+@@ -1520,7 +1512,9 @@ process_options ()
+ 	= (flag_var_tracking
+ 	   && debug_info_level >= DINFO_LEVEL_NORMAL
+ 	   && dwarf_debuginfo_p ()
+-	   && !dwarf_strict);
++	   && !dwarf_strict
++	   && dwarf2out_as_loc_support
++	   && dwarf2out_as_locview_support);
+     }
+   else if (debug_variable_location_views == -1 && dwarf_version != 5)
+     {
