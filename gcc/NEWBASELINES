@@ -3,3 +3,4 @@
 # reset.  
 loongarch64-linux-gnu
 mcore-elf
+msp430-elf
