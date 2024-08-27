@@ -1,0 +1,63 @@
+diff --git a/gcc/config/mn10300/mn10300.cc b/gcc/config/mn10300/mn10300.cc
+index 1cf08114bd9..0d6a0dd99f7 100644
+--- a/gcc/config/mn10300/mn10300.cc
++++ b/gcc/config/mn10300/mn10300.cc
+@@ -1369,7 +1369,12 @@ mn10300_secondary_reload (bool in_p, rtx x, reg_class_t rclass_i,
+       if (xregno >= FIRST_PSEUDO_REGISTER)
+ 	xregno = true_regnum (x);
+       if (xregno != INVALID_REGNUM)
+-	xclass = REGNO_REG_CLASS (xregno);
++	{
++	  if (!in_p && xregno == FRAME_POINTER_REGNUM)
++	    xclass = SP_REGS;
++	  else
++	    xclass = REGNO_REG_CLASS (xregno);
++	}
+     }
+ 
+   if (!TARGET_AM33)
+@@ -3371,7 +3376,7 @@ mn10300_reorg (void)
+ #define TARGET_CASE_VALUES_THRESHOLD mn10300_case_values_threshold
+ 
+ #undef TARGET_LRA_P
+-#define TARGET_LRA_P hook_bool_void_false
++#define TARGET_LRA_P hook_bool_void_true
+ 
+ #undef  TARGET_LEGITIMATE_ADDRESS_P
+ #define TARGET_LEGITIMATE_ADDRESS_P	mn10300_legitimate_address_p
+diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
+index 4a2503f1831..d10de893b88 100644
+--- a/gcc/ext-dce.cc
++++ b/gcc/ext-dce.cc
+@@ -557,7 +557,10 @@ carry_backpropagate (unsigned HOST_WIDE_INT mask, enum rtx_code code, rtx x)
+       return mmask;
+ 
+     case SIGN_EXTEND:
+-      if (mask & ~GET_MODE_MASK (GET_MODE_INNER (GET_MODE (XEXP (x, 0)))))
++      /* We want the mode of the inner object.  We need to ensure its
++	 sign bit is on in MASK.  */
++      mode = GET_MODE (XEXP (x, 0));
++      if (mask & ~GET_MODE_MASK (GET_MODE_INNER (mode)))
+ 	mask |= 1ULL << (GET_MODE_BITSIZE (mode).to_constant () - 1);
+       return mask;
+ 
+@@ -670,6 +673,8 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj,
+ 	      if (skipped_dest)
+ 		dst_mask = -1;
+ 
++	      dst_mask = carry_backpropagate (dst_mask, code, src);
++
+ 	      /* ??? Could also handle ZERO_EXTRACT / SIGN_EXTRACT
+ 		 of the source specially to improve optimization.  */
+ 	      if (code == SIGN_EXTEND || code == ZERO_EXTEND)
+@@ -696,9 +701,7 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj,
+ 
+ 	      /* Optimization is done at this point.  We just want to make
+ 		 sure everything that should get marked as live is marked
+-		 from here onward.  Shouldn't the backpropagate step happen
+-		 before optimization?  */
+-	      dst_mask = carry_backpropagate (dst_mask, code, src);
++		 from here onward.  */
+ 
+ 	      /* We will handle the other operand of a binary operator
+ 		 at the bottom of the loop by resetting Y.  */
