@@ -1,0 +1,13 @@
+diff --git a/gcc/config/m68k/m68k.cc b/gcc/config/m68k/m68k.cc
+index 7986e92c511..c5d890007fd 100644
+--- a/gcc/config/m68k/m68k.cc
++++ b/gcc/config/m68k/m68k.cc
+@@ -308,7 +308,7 @@ static bool m68k_use_lra_p (void);
+ #endif
+ 
+ #undef TARGET_LRA_P
+-#define TARGET_LRA_P m68k_use_lra_p
++#define TARGET_LRA_P hook_bool_void_true
+ 
+ #undef TARGET_LEGITIMATE_ADDRESS_P
+ #define TARGET_LEGITIMATE_ADDRESS_P	m68k_legitimate_address_p
