@@ -1,0 +1,410 @@
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-13.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-13.c
+index c22787b4d94..72d17c0a971 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-13.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-13.c
+@@ -16,4 +16,4 @@
+ */
+ DEF_VEC_SAT_U_ADD_FMT_4(uint8_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-14.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-14.c
+index ced40d41c77..1aa4fbe701f 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-14.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-14.c
+@@ -17,4 +17,4 @@
+ */
+ DEF_VEC_SAT_U_ADD_FMT_4(uint16_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-15.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-15.c
+index 3c9162ce700..664fa61d67c 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-15.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-15.c
+@@ -17,4 +17,4 @@
+ */
+ DEF_VEC_SAT_U_ADD_FMT_4(uint32_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-16.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-16.c
+index f689440030f..f752327e951 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-16.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-16.c
+@@ -17,4 +17,4 @@
+ */
+ DEF_VEC_SAT_U_ADD_FMT_4(uint64_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-17.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-17.c
+index 3f2c409a587..352e22e56e5 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-17.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-17.c
+@@ -16,4 +16,4 @@
+ */
+ DEF_VEC_SAT_U_ADD_FMT_5(uint8_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-18.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-18.c
+index 5432cdc73de..7a1996d38bc 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-18.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-18.c
+@@ -17,4 +17,4 @@
+ */
+ DEF_VEC_SAT_U_ADD_FMT_5(uint16_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-19.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-19.c
+index ee8813f0372..c01c9f468a4 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-19.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-19.c
+@@ -17,4 +17,4 @@
+ */
+ DEF_VEC_SAT_U_ADD_FMT_5(uint32_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-20.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-20.c
+index 5f867a2c26f..66ca4cd2749 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-20.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add-20.c
+@@ -17,4 +17,4 @@
+ */
+ DEF_VEC_SAT_U_ADD_FMT_5(uint64_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-1.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-1.c
+index 74feae0db03..7f6d612e89b 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-1.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-1.c
+@@ -6,4 +6,4 @@
+ 
+ DEF_VEC_SAT_U_ADD_IMM_FMT_3(uint8_t, 9u)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-10.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-10.c
+index 41140955032..4ab4adee800 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-10.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-10.c
+@@ -6,4 +6,4 @@
+ 
+ DEF_VEC_SAT_U_ADD_IMM_FMT_3(uint32_t, 4294967205u)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-13.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-13.c
+index ff1136a2d31..61536cd684a 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-13.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-13.c
+@@ -6,4 +6,4 @@
+ 
+ DEF_VEC_SAT_U_ADD_IMM_FMT_3(uint64_t, 119u)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-14.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-14.c
+index 2157ed71fab..e63cf23e80f 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-14.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-14.c
+@@ -6,4 +6,4 @@
+ 
+ DEF_VEC_SAT_U_ADD_IMM_FMT_3(uint64_t, 18446744073709551615ull)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-15.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-15.c
+index 2fcf951a5eb..e12a69d6d43 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-15.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-15.c
+@@ -6,4 +6,4 @@
+ 
+ DEF_VEC_SAT_U_ADD_IMM_FMT_3(uint64_t, 9223372036854775807ull)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-2.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-2.c
+index 46dc6dc9606..f8033db7771 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-2.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-2.c
+@@ -6,4 +6,4 @@
+ 
+ DEF_VEC_SAT_U_ADD_IMM_FMT_3(uint8_t, 219)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-5.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-5.c
+index 4b4f70da15e..9e9509de524 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-5.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-5.c
+@@ -6,4 +6,4 @@
+ 
+ DEF_VEC_SAT_U_ADD_IMM_FMT_3(uint16_t, 9u)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-6.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-6.c
+index ce6c46b7242..c6c272754f9 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-6.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-6.c
+@@ -6,4 +6,4 @@
+ 
+ DEF_VEC_SAT_U_ADD_IMM_FMT_3(uint16_t, 65530)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-9.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-9.c
+index ef552b94830..33811b22ea9 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-9.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_add_imm_reconcile-9.c
+@@ -6,4 +6,4 @@
+ 
+ DEF_VEC_SAT_U_ADD_IMM_FMT_3(uint32_t, 911u)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_ADD " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-10.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-10.c
+index b40d004c561..fac941945e9 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-10.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-10.c
+@@ -17,4 +17,4 @@
+ */
+ DEF_VEC_SAT_U_SUB_FMT_3(uint16_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-11.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-11.c
+index cb83e007d03..0c6afc391b4 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-11.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-11.c
+@@ -17,4 +17,4 @@
+ */
+ DEF_VEC_SAT_U_SUB_FMT_3(uint32_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-12.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-12.c
+index b9d1b4f406e..41fe3b86deb 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-12.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-12.c
+@@ -17,4 +17,4 @@
+ */
+ DEF_VEC_SAT_U_SUB_FMT_3(uint64_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-13.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-13.c
+index 503d0206439..a52e38a7ed2 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-13.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-13.c
+@@ -16,4 +16,4 @@
+ */
+ DEF_VEC_SAT_U_SUB_FMT_4(uint8_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-14.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-14.c
+index 850279db715..1ee8391d883 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-14.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-14.c
+@@ -17,4 +17,4 @@
+ */
+ DEF_VEC_SAT_U_SUB_FMT_4(uint16_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-15.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-15.c
+index 0a6d4231543..d74a9822431 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-15.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-15.c
+@@ -17,4 +17,4 @@
+ */
+ DEF_VEC_SAT_U_SUB_FMT_4(uint32_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-16.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-16.c
+index 72be3b5187e..70284382fba 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-16.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-16.c
+@@ -17,4 +17,4 @@
+ */
+ DEF_VEC_SAT_U_SUB_FMT_4(uint64_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-17.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-17.c
+index 15e5038212b..d44514cdb97 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-17.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-17.c
+@@ -16,4 +16,4 @@
+ */
+ DEF_VEC_SAT_U_SUB_FMT_5(uint8_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-18.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-18.c
+index a1294611f70..5dbbf202b1f 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-18.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-18.c
+@@ -17,4 +17,4 @@
+ */
+ DEF_VEC_SAT_U_SUB_FMT_5(uint16_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-19.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-19.c
+index d2ebad7713e..4696753b903 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-19.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-19.c
+@@ -17,4 +17,4 @@
+ */
+ DEF_VEC_SAT_U_SUB_FMT_5(uint32_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-20.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-20.c
+index 0a755a3f612..b963ba1e1e1 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-20.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-20.c
+@@ -17,4 +17,4 @@
+ */
+ DEF_VEC_SAT_U_SUB_FMT_5(uint64_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-21.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-21.c
+index f4c1d950080..fc2682bd24f 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-21.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-21.c
+@@ -16,4 +16,4 @@
+ */
+ DEF_VEC_SAT_U_SUB_FMT_6(uint8_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-22.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-22.c
+index a0eeb3ed6a3..4e51e4aa7f8 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-22.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-22.c
+@@ -17,4 +17,4 @@
+ */
+ DEF_VEC_SAT_U_SUB_FMT_6(uint16_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-23.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-23.c
+index e758dd01908..b16925ebac3 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-23.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-23.c
+@@ -17,4 +17,4 @@
+ */
+ DEF_VEC_SAT_U_SUB_FMT_6(uint32_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-24.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-24.c
+index f4f9127e4b7..9d99a4ea71c 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-24.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-24.c
+@@ -17,4 +17,4 @@
+ */
+ DEF_VEC_SAT_U_SUB_FMT_6(uint64_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-33.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-33.c
+index 2c66b5abf16..2a5727677ed 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-33.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-33.c
+@@ -16,4 +16,4 @@
+ */
+ DEF_VEC_SAT_U_SUB_FMT_9(uint8_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-34.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-34.c
+index 84212c7100a..4a7d7e55c9f 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-34.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-34.c
+@@ -17,4 +17,4 @@
+ */
+ DEF_VEC_SAT_U_SUB_FMT_9(uint16_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-35.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-35.c
+index 8eb4712917e..cfad5d787e3 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-35.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-35.c
+@@ -17,4 +17,4 @@
+ */
+ DEF_VEC_SAT_U_SUB_FMT_9(uint32_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-36.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-36.c
+index 4c6064d1892..721fd27a288 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-36.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-36.c
+@@ -17,4 +17,4 @@
+ */
+ DEF_VEC_SAT_U_SUB_FMT_9(uint64_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-37.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-37.c
+index f9646bea88e..1e3b5e7bf3e 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-37.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-37.c
+@@ -16,4 +16,4 @@
+ */
+ DEF_VEC_SAT_U_SUB_FMT_10(uint8_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-38.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-38.c
+index 5502d7f649d..4bc3205dc30 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-38.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-38.c
+@@ -17,4 +17,4 @@
+ */
+ DEF_VEC_SAT_U_SUB_FMT_10(uint16_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-39.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-39.c
+index c429af3f2b2..3ec28cd3fc7 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-39.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-39.c
+@@ -17,4 +17,4 @@
+ */
+ DEF_VEC_SAT_U_SUB_FMT_10(uint32_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-40.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-40.c
+index 091edb624be..656c35cc22a 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-40.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-40.c
+@@ -17,4 +17,4 @@
+ */
+ DEF_VEC_SAT_U_SUB_FMT_10(uint64_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 4 "expand" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-9.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-9.c
+index 13034682d88..9eb26d9f52c 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-9.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/binop/vec_sat_u_sub-9.c
+@@ -16,4 +16,4 @@
+ */
+ DEF_VEC_SAT_U_SUB_FMT_3(uint8_t)
+ 
+-/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 2 "expand" } } */
++/* { dg-final { scan-rtl-dump-times ".SAT_SUB " 4 "expand" } } */
