@@ -1,8 +1,8 @@
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index d883b684f94..468794d72ea 100644
+index f82e64a6fec..ad8bcd3e959 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
-@@ -5100,13 +5100,31 @@ riscv_expand_int_scc (rtx target, enum rtx_code code, rtx op0, rtx op1, bool *in
+@@ -4891,13 +4891,31 @@ riscv_expand_int_scc (rtx target, enum rtx_code code, rtx op0, rtx op1, bool *in
    riscv_extend_comparands (code, &op0, &op1);
    op0 = force_reg (word_mode, op0);
  
@@ -36,3 +36,51 @@ index d883b684f94..468794d72ea 100644
  }
  
  /* Like riscv_expand_int_scc, but for floating-point comparisons.  */
+diff --git a/gcc/testsuite/gcc.target/riscv/sge.c b/gcc/testsuite/gcc.target/riscv/sge.c
+index 5f7e7ae82db..ab278d18d3b 100644
+--- a/gcc/testsuite/gcc.target/riscv/sge.c
++++ b/gcc/testsuite/gcc.target/riscv/sge.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-require-effective-target rv64 } */
+-/* { dg-skip-if "" { *-*-* } { "-O0" } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
+ 
+ int
+ sge (int x, int y)
+diff --git a/gcc/testsuite/gcc.target/riscv/sgeu.c b/gcc/testsuite/gcc.target/riscv/sgeu.c
+index 234b9aa52bd..38c2272a55f 100644
+--- a/gcc/testsuite/gcc.target/riscv/sgeu.c
++++ b/gcc/testsuite/gcc.target/riscv/sgeu.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-require-effective-target rv64 } */
+-/* { dg-skip-if "" { *-*-* } { "-O0" } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
+ 
+ int
+ sgeu (unsigned int x, unsigned int y)
+diff --git a/gcc/testsuite/gcc.target/riscv/sle.c b/gcc/testsuite/gcc.target/riscv/sle.c
+index 3259c191598..4371068c50e 100644
+--- a/gcc/testsuite/gcc.target/riscv/sle.c
++++ b/gcc/testsuite/gcc.target/riscv/sle.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-require-effective-target rv64 } */
+-/* { dg-skip-if "" { *-*-* } { "-O0" } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
+ 
+ int
+ sle (int x, int y)
+diff --git a/gcc/testsuite/gcc.target/riscv/sleu.c b/gcc/testsuite/gcc.target/riscv/sleu.c
+index 301b8c32eb7..8d4ee50b07c 100644
+--- a/gcc/testsuite/gcc.target/riscv/sleu.c
++++ b/gcc/testsuite/gcc.target/riscv/sleu.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-require-effective-target rv64 } */
+-/* { dg-skip-if "" { *-*-* } { "-O0" } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
+ 
+ int
+ sleu (unsigned int x, unsigned int y)
