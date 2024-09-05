@@ -1,21 +1,23 @@
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index a38cb72f09f..d597a8841b8 100644
+index a38cb72f09f..39489c4377e 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
-@@ -4218,11 +4218,31 @@ riscv_noce_conversion_profitable_p (rtx_insn *seq,
+@@ -4218,11 +4218,29 @@ riscv_noce_conversion_profitable_p (rtx_insn *seq,
  	      riscv_if_info.original_cost += COSTS_N_INSNS (1);
  	      riscv_if_info.max_seq_cost += COSTS_N_INSNS (1);
  	    }
 -	  last_dest = NULL_RTX;
 +
  	  rtx dest = SET_DEST (x);
+-	  if (COMPARISON_P (src)
 +
 +	  /* Do something similar for the  moves that are likely to
 +	     turn into NOP moves by the time the register allocator is
 +	     done.  These are also side effects of how our sCC expanders
 +	     work.  We'll want to check and update LAST_DEST here too.  */
 +	  if (last_dest
-+	      && REG_P (dest)
+ 	      && REG_P (dest)
+-	      && GET_MODE (dest) == SImode)
 +	      && GET_MODE (dest) == SImode
 +	      && SUBREG_P (src)
 +	      && SUBREG_PROMOTED_VAR_P (src)
@@ -29,14 +31,11 @@ index a38cb72f09f..d597a8841b8 100644
 +	  else
 +	    last_dest = NULL_RTX;
 +
- 	  if (COMPARISON_P (src)
- 	      && REG_P (dest)
--	      && GET_MODE (dest) == SImode)
-+	      && GET_MODE (dest) == DImode)
++	  if (COMPARISON_P (src) && REG_P (dest))
  	    last_dest = dest;
  	}
        else
-@@ -4904,13 +4924,31 @@ riscv_expand_int_scc (rtx target, enum rtx_code code, rtx op0, rtx op1, bool *in
+@@ -4904,13 +4922,31 @@ riscv_expand_int_scc (rtx target, enum rtx_code code, rtx op0, rtx op1, bool *in
    riscv_extend_comparands (code, &op0, &op1);
    op0 = force_reg (word_mode, op0);
  
