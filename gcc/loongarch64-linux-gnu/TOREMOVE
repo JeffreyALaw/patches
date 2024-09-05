@@ -1,0 +1,4 @@
+# Bounces back and forth regularly
+gcc/testsuite/g++.target/loongarch/bstrins-run.C
+
+
