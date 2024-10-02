@@ -151,8 +151,8 @@ index 1a3e7104bd8..4737b25b457 100644
  /* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
 -/* { dg-options "-march=rv32gc -mtune=sifive-7-series -mbranch-cost=1 -fdump-rtl-ce1" { target { rv32 } } } */
 -/* { dg-options "-march=rv64gc -mtune=sifive-7-series -mbranch-cost=1 -fdump-rtl-ce1" { target { rv64 } } } */
-+/* { dg-options "-march=rv32gc -mtune=sifive-7-series -mbranch-cost=1 -fno-ssa-phopt -fdump-rtl-ce1" { target { rv32 } } } */
-+/* { dg-options "-march=rv64gc -mtune=sifive-7-series -mbranch-cost=1 -fno-ssa-phopt -fdump-rtl-ce1" { target { rv64 } } } */
++/* { dg-options "-march=rv32gc -mtune=sifive-7-series -mbranch-cost=1 -fno-ssa-phiopt -fdump-rtl-ce1" { target { rv32 } } } */
++/* { dg-options "-march=rv64gc -mtune=sifive-7-series -mbranch-cost=1 -fno-ssa-phiopt -fdump-rtl-ce1" { target { rv64 } } } */
  
  int
  foo (long a, long b)
