@@ -1,4 +1,7 @@
 # Bounces back and forth regularly
 gcc/testsuite/g++.target/loongarch/bstrins-run.C
 
+# I'm pretty sure I've seen this bounce back and forth
+gcc/testsuite/gfortran.dg/bind-c-contiguous-5.f90
+
 
