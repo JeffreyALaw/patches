@@ -10,6 +10,8 @@ gcc/testsuite/gcc.target/riscv/rvv/autovec/partial/slp-16.c
 gcc/testsuite/gcc.target/riscv/rvv/autovec/partial/slp-17.c
 gcc/testsuite/gcc.target/riscv/rvv/autovec/partial/slp-18.c
 gcc/testsuite/gcc.target/riscv/rvv/autovec/partial/slp-19.c
+gcc/testsuite/gcc.target/riscv/rvv/autvec/bin/vwsll-run.c
+
 
 # Flakey
 gcc/testsuite/gfortran.dg/sizeof_6.f90

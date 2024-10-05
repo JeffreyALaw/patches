@@ -19,6 +19,7 @@ gcc/testsuite/gcc.target/riscv/rvv/autovec/partial/slp_run-16.c
 gcc/testsuite/gcc.target/riscv/rvv/autovec/partial/slp_run-17.c
 gcc/testsuite/gcc.target/riscv/rvv/autovec/partial/slp_run-18.c
 gcc/testsuite/gcc.target/riscv/rvv/autovec/partial/slp_run-19.c
+gcc/testsuite/gcc.target/riscv/rvv/autvec/bin/vwsll-run.c
 
 # Temporary as we sort things out
 gcc/testsuite/gcc.target/riscv/reg_subreg_costs.c
