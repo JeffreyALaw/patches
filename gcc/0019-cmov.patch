@@ -1,3 +1,14 @@
+       * config/riscv/iterators.md (scc_0): New code iterator.
+       * config/riscv/zicond.md: New splitters to improve code generated for
+       cases like (and (scc) (scc)) for zicond, xventanacondops, xtheadcondmov.
+
+       * gcc.target/riscv/cset-sext-sfb.c: Turn off ssa-phiopt.
+       * gcc.target/riscv/cset-sext-thead.c: Do not check CE output anymore.
+       * gcc.target/riscv/cset-sext-ventana.c: Similarly.  Adjust branch cost.
+       * gcc.target/riscv/cset-sext-zicond.c: Similarly.
+       * gcc.target/riscv/cset-sext.c: Similarly.  No longer allow
+       "neg" in asm output.
+
 diff --git a/gcc/config/riscv/iterators.md b/gcc/config/riscv/iterators.md
 index 2844cb02ff0..872c542e906 100644
 --- a/gcc/config/riscv/iterators.md
