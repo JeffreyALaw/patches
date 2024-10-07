@@ -11,3 +11,20 @@ index 3aecb43f831..53b7b2a40ed 100644
  /* Control the assembler format that we output.  */
  
  /* Output to assembler file text saying following lines
+diff --git a/gcc/testsuite/gcc.target/riscv/cset-sext-sfb.c b/gcc/testsuite/gcc.target/riscv/cset-sext-sfb.c
+index 6e9f8cc61de..6329d73041b 100644
+--- a/gcc/testsuite/gcc.target/riscv/cset-sext-sfb.c
++++ b/gcc/testsuite/gcc.target/riscv/cset-sext-sfb.c
+@@ -1,9 +1,9 @@
+ /* { dg-do compile } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-Og" "-O1" } } */
+-/* { dg-options "-march=rv32gc -mtune=sifive-7-series -mbranch-cost=1 -fno-ssa-phiopt -fdump-rtl-ce1" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gc -mtune=sifive-7-series -mbranch-cost=1 -fno-ssa-phiopt -fdump-rtl-ce1" { target { rv64 } } } */
++/* { dg-options "-march=rv32gc -mtune=sifive-7-series -mbranch-cost=1 -fdump-rtl-ce1" { target { rv32 } } } */
++/* { dg-options "-march=rv64gc -mtune=sifive-7-series -mbranch-cost=1 -fdump-rtl-ce1" { target { rv64 } } } */
+ 
+-int
++bool
+ foo (long a, long b)
+ {
+   if (!b)
