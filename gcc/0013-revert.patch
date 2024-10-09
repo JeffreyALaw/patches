@@ -19,3 +19,24 @@ index 60595a3e356..2adebe0b6f2 100644
    {"d", "f"},
    {"f", "zicsr"},
    {"d", "zicsr"},
+commit b977520403052ed43a72378bf64d8af0a14d72ff
+Author: Jeff Law <jlaw@ventanamicro.com>
+Date:   Wed Oct 9 10:45:47 2024 -0600
+
+    Revert "RISC-V: Enable builtin __riscv_mul with Zmmul extension."
+    
+    This reverts commit 2990f5802a727cbd717587c3a345fa940193049f.
+
+diff --git a/gcc/config/riscv/riscv-c.cc b/gcc/config/riscv/riscv-c.cc
+index 7e9c478e97b..71112d9c66d 100644
+--- a/gcc/config/riscv/riscv-c.cc
++++ b/gcc/config/riscv/riscv-c.cc
+@@ -123,7 +123,7 @@ riscv_cpu_cpp_builtins (cpp_reader *pfile)
+   if (TARGET_ATOMIC)
+     builtin_define ("__riscv_atomic");
+ 
+-  if (TARGET_ZMMUL)
++  if (TARGET_MUL)
+     builtin_define ("__riscv_mul");
+   if (TARGET_DIV)
+     builtin_define ("__riscv_div");
