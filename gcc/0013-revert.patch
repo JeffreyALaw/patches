@@ -1,0 +1,21 @@
+commit 2b3e068a598febc7e811344d9a6a48589f4f5a4e
+Author: Jeff Law <jlaw@ventanamicro.com>
+Date:   Wed Oct 9 09:18:12 2024 -0600
+
+    Revert "RISC-V: Add implication for M extension."
+    
+    This reverts commit 0a193466f2e87acef9b86e0d086bc6f6017518b0.
+
+diff --git a/gcc/common/config/riscv/riscv-common.cc b/gcc/common/config/riscv/riscv-common.cc
+index 60595a3e356..2adebe0b6f2 100644
+--- a/gcc/common/config/riscv/riscv-common.cc
++++ b/gcc/common/config/riscv/riscv-common.cc
+@@ -75,8 +75,6 @@ struct riscv_implied_info_t
+ /* Implied ISA info, must end with NULL sentinel.  */
+ static const riscv_implied_info_t riscv_implied_info[] =
+ {
+-  {"m", "zmmul"},
+-
+   {"d", "f"},
+   {"f", "zicsr"},
+   {"d", "zicsr"},
