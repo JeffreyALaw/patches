@@ -1,0 +1,62 @@
+diff --git a/gcc/config/riscv/constraints.md b/gcc/config/riscv/constraints.md
+index 45f8e9602d2..9638942b733 100644
+--- a/gcc/config/riscv/constraints.md
++++ b/gcc/config/riscv/constraints.md
+@@ -70,6 +70,11 @@ (define_constraint "c08"
+   (and (match_code "const_int")
+        (match_test "ival == 8")))
+ 
++(define_constraint "P"
++  "A 5-bit signed immediate for vmv.v.i."
++  (and (match_code "const_int")
++       (match_test "IN_RANGE (ival, -16, 15)")))
++
+ (define_constraint "K"
+   "A 5-bit unsigned immediate for CSR access instructions."
+   (and (match_code "const_int")
+diff --git a/gcc/config/riscv/vector.md b/gcc/config/riscv/vector.md
+index 7c8780dc7c7..b3038087aa5 100644
+--- a/gcc/config/riscv/vector.md
++++ b/gcc/config/riscv/vector.md
+@@ -2118,6 +2118,16 @@ (define_expand "@pred_broadcast<mode>"
+       emit_move_insn (tmp, gen_int_mode (value, Pmode));
+       operands[3] = gen_rtx_SIGN_EXTEND (<VEL>mode, tmp);
+     }
++  /* Never load (const_int 0) into a register, that's silly.  */
++  else if (operands[3] == CONST0_RTX (<VEL>mode))
++    ;
++  /* If we're broadcasting [-16..15] across more than just
++     element 0, then we can use vmv.v.i directly, thus avoiding
++     the load of the constant into a GPR.  */
++  else if (CONST_INT_P (operands[3])
++	   && IN_RANGE (INTVAL (operands[3]), -16, 15)
++	   && !satisfies_constraint_Wb1 (operands[1]))
++    ;
+   else
+     operands[3] = force_reg (<VEL>mode, operands[3]);
+ })
+@@ -2134,18 +2144,18 @@ (define_insn_and_split "*pred_broadcast<mode>"
+ 	     (reg:SI VL_REGNUM)
+ 	     (reg:SI VTYPE_REGNUM)] UNSPEC_VPREDICATE)
+ 	  (vec_duplicate:V_VLSI
+-	    (match_operand:<VEL> 3 "direct_broadcast_operand"       " r,  r,Wdm,Wdm,Wdm,Wdm,  r,  r"))
+-	  (match_operand:V_VLSI 2 "vector_merge_operand"            "vu,  0, vu,  0, vu,  0, vu,  0")))]
++	    (match_operand:<VEL> 3 "direct_broadcast_operand"       "rP,rP,Wdm,Wdm,Wdm,Wdm, rJ, rJ"))
++	  (match_operand:V_VLSI 2 "vector_merge_operand"            "vu, 0, vu,  0, vu,  0, vu,  0")))]
+   "TARGET_VECTOR"
+   "@
+-   vmv.v.x\t%0,%3
+-   vmv.v.x\t%0,%3
++   vmv.v.%o3\t%0,%3
++   vmv.v.%o3\t%0,%3
+    vlse<sew>.v\t%0,%3,zero,%1.t
+    vlse<sew>.v\t%0,%3,zero,%1.t
+    vlse<sew>.v\t%0,%3,zero
+    vlse<sew>.v\t%0,%3,zero
+-   vmv.s.x\t%0,%3
+-   vmv.s.x\t%0,%3"
++   vmv.s.x\t%0,%z3
++   vmv.s.x\t%0,%z3"
+   "(register_operand (operands[3], <VEL>mode)
+   || CONST_POLY_INT_P (operands[3]))
+   && GET_MODE_BITSIZE (<VEL>mode) > GET_MODE_BITSIZE (Pmode)"
