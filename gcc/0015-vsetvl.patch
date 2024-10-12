@@ -59,7 +59,7 @@ diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
 index e111cb07284..98041e79d3a 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
-@@ -9612,6 +9612,72 @@ riscv_issue_rate (void)
+@@ -9612,6 +9612,71 @@ riscv_issue_rate (void)
    return tune_param->issue_rate;
  }
  
@@ -126,7 +126,6 @@ index e111cb07284..98041e79d3a 100644
 +riscv_sched_init (FILE *, int, int)
 +{
 +  clear_vconfig ();
-+  printf("Clearing vconfig\n");
 +}
 +
  /* Implement TARGET_SCHED_VARIABLE_ISSUE.  */
