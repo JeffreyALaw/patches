@@ -31,9 +31,9 @@ make install-gas install-binutils install-ld >> $LOGFILE 2>&1
 popd
 
 # RV port takes insanely long to build right now
-if [ $TARGET == riscv64-linux-gnu ]; then
-  DISABLE_BOOTSTRAP=--disable-bootstrap
-fi
+#if [ $TARGET == riscv64-linux-gnu ]; then
+#  DISABLE_BOOTSTRAP=--disable-bootstrap
+#fi
 
 # MIPS is always multiarch
 if [ $TARGET == mips64el-linux-gnuabi64 ]; then
