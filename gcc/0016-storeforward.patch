@@ -236,7 +236,7 @@ index 00000000000..2e1efdaa06e
 +  /* opt_pass methods: */
 +  virtual bool gate (function *)
 +    {
-+      return optimize >= 1;
++      return 0 && optimize >= 1;
 +    }
 +
 +  virtual unsigned int execute (function *) override;
