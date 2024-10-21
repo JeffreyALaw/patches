@@ -1,28 +1,6 @@
-commit a8359ce53ecd60773e49fe58f91095281d1c383b
-Author: Jeff Law <jlaw@ventanamicro.com>
-Date:   Wed Aug 14 17:51:02 2024 -0600
-
-    First cut at hoisting vxrm more aggressively.
-    
-    It's been noted that vxrm may flush the pipeline on some uarchs and even
-    if it doesn't there's still advantages to speculating its sets.  In x264's
-    get_ref we have an inlined copy of pixel_avg.  That's the hot/important case.
-    
-    The vxrm assignment will get hoisted out of the inner loop of pixel_avg, but
-    not the outer loop as there's a path from the outer loop which bypasses the
-    inner vectorized loop.  Furthermore, the inner vectorized loop doesn't
-    actually iterate in practice.  The net is we have a vxrm assignment for
-    every loop iteration.
-    
-    The vxrm mode we need never changes in the function, so we could hoist it
-    into the prologue.  That's basically what this patch accomplishes, but it
-    also picks up one additional case in x264.
-    
-    We fake a need for vxrm state on the first insn if the function needs
-    vxrm sets and they're all the same mode.  That allows the LCM algorithm
-    to hoist the vxrm assignments very aggressively.
-    
-    (cherry picked from commit 4ada144924daba396eabcdb89bcc835ccafb4970)
+	* riscv.cc (singleton_vxrm_need): New function.
+	(riscv_mode_needed): See if there is a singleton need and if so,
+	claim it happens on the first insn in the chain.
 
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
 index 0cf7ee4904d..c9b48d6fac0 100644
