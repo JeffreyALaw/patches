@@ -1,5 +1,6 @@
 
 
+
 From: kelefth <konstantinos.eleftheriou@vrull.eu>
 
 This pass detects cases of expensive store forwarding and tries to avoid them
@@ -55,7 +56,11 @@ gcc/testsuite/ChangeLog:
 Signed-off-by: Philipp Tomsich <philipp.tomsich@vrull.eu>
 Signed-off-by: Konstantinos Eleftheriou <konstantinos.eleftheriou@vrull.eu>
 
-Series-version: 6
+Series-version: 7
+
+Series-changes: 7
+	- Fix bug when copying back the load register, in the case that the
+	  load is eliminated.
 
 Series-changes: 6
 	- Reject the transformation on cases that would cause store_bit_field
@@ -105,7 +110,7 @@ Series-changes: 2
 	- Fix and add testcases.
 ---
  gcc/Makefile.in                               |   1 +
- gcc/avoid-store-forwarding.cc                 | 630 ++++++++++++++++++
+ gcc/avoid-store-forwarding.cc                 | 634 ++++++++++++++++++
  gcc/avoid-store-forwarding.h                  |  56 ++
  gcc/common.opt                                |   4 +
  gcc/common.opt.urls                           |   3 +
@@ -125,7 +130,7 @@ Series-changes: 2
  .../aarch64/avoid-store-forwarding-4.c        |  26 +
  .../aarch64/avoid-store-forwarding-5.c        |  41 ++
  gcc/tree-pass.h                               |   1 +
- 21 files changed, 933 insertions(+)
+ 21 files changed, 937 insertions(+)
  create mode 100644 gcc/avoid-store-forwarding.cc
  create mode 100644 gcc/avoid-store-forwarding.h
  create mode 100644 gcc/testsuite/gcc.target/aarch64/avoid-store-forwarding-1.c
@@ -148,10 +153,10 @@ index 059cf2e8f79..8b3e3e45d2e 100644
  	stringpool.o \
 diff --git a/gcc/avoid-store-forwarding.cc b/gcc/avoid-store-forwarding.cc
 new file mode 100644
-index 00000000000..2e1efdaa06e
+index 00000000000..95777fc70cc
 --- /dev/null
 +++ b/gcc/avoid-store-forwarding.cc
-@@ -0,0 +1,630 @@
+@@ -0,0 +1,634 @@
 +/* Avoid store forwarding optimization pass.
 +   Copyright (C) 2024 Free Software Foundation, Inc.
 +   Contributed by VRULL GmbH.
@@ -236,7 +241,7 @@ index 00000000000..2e1efdaa06e
 +  /* opt_pass methods: */
 +  virtual bool gate (function *)
 +    {
-+      return 0 && optimize >= 1;
++      return optimize >= 1;
 +    }
 +
 +  virtual unsigned int execute (function *) override;
@@ -481,21 +486,25 @@ index 00000000000..2e1efdaa06e
 +  if (load_elim)
 +    {
 +      machine_mode outer_mode = GET_MODE (SET_DEST (load));
++      rtx load_move;
 +      if (outer_mode != load_mem_mode)
 +	{
-+	  start_sequence ();
 +	  rtx load_value = simplify_gen_unary (GET_CODE (SET_SRC (load)),
 +					       outer_mode, dest, load_mem_mode);
-+	  rtx load_move = gen_rtx_SET (SET_DEST (load), load_value);
-+	  rtx_insn *insn = emit_insn (load_move);
-+	  rtx_insn *seq = get_insns ();
-+	  end_sequence ();
-+
-+	  if (recog_memoized (insn) < 0)
-+	    return false;
-+
-+	  emit_insn_after (seq, load_insn);
++	  load_move = gen_rtx_SET (SET_DEST (load), load_value);
 +	}
++      else
++	  load_move = gen_rtx_SET (SET_DEST (load), dest);
++
++      start_sequence ();
++      rtx_insn *insn = emit_insn (load_move);
++      rtx_insn *seq = get_insns ();
++      end_sequence ();
++
++      if (recog_memoized (insn) < 0)
++	return false;
++
++      emit_insn_after (seq, load_insn);
 +    }
 +
 +  if (dump_file)
@@ -874,10 +883,10 @@ index e31736cd994..8325b2c28c3 100644
  UrlSuffix(gcc/Optimize-Options.html#index-fgcse-las)
  
 diff --git a/gcc/doc/invoke.texi b/gcc/doc/invoke.texi
-index 4f4ca637549..e09a8e86e85 100644
+index aebcc9082ff..24c0e32a37e 100644
 --- a/gcc/doc/invoke.texi
 +++ b/gcc/doc/invoke.texi
-@@ -12613,6 +12613,15 @@ loop unrolling.
+@@ -12614,6 +12614,15 @@ loop unrolling.
  This option is enabled by default at optimization levels @option{-O1},
  @option{-O2}, @option{-O3}, @option{-Os}.
  
@@ -945,10 +954,10 @@ index 9f147ccb95c..59a478971ab 100644
  @section Adjusting the Instruction Scheduler
  
 diff --git a/gcc/params.opt b/gcc/params.opt
-index a08e4c1042d..9995198e9e4 100644
+index 24f440bbe71..bcaf47fd159 100644
 --- a/gcc/params.opt
 +++ b/gcc/params.opt
-@@ -1036,6 +1036,10 @@ Allow the store merging pass to introduce unaligned stores if it is legal to do
+@@ -1040,6 +1040,10 @@ Allow the store merging pass to introduce unaligned stores if it is legal to do
  Common Joined UInteger Var(param_store_merging_max_size) Init(65536) IntegerRange(1, 65536) Param Optimization
  Maximum size of a single store merging region in bytes.
  
@@ -1272,6 +1281,7 @@ index a928cbe4557..f8bb875cf9f 100644
  extern rtl_opt_pass *make_pass_rtl_ifcvt (gcc::context *ctxt);
 -- 
 2.46.0
+
 
 
 
