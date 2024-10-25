@@ -1037,7 +1037,7 @@ new file mode 100644
 index 00000000000..a556bc92467
 --- /dev/null
 +++ b/gcc/crc-verification.cc
-@@ -0,0 +1,1298 @@
+@@ -0,0 +1,1299 @@
 +/* Execute symbolically all paths of the loop.
 +   Calculate the value of the polynomial by executing loop with real values to
 +   create LFSR state.
@@ -1061,6 +1061,7 @@ index 00000000000..a556bc92467
 +along with GCC; see the file COPYING3.  If not see
 +<http://www.gnu.org/licenses/>.   */
 +
++#define INCLUDE_MEMORY
 +#include "crc-verification.h"
 +#include "config.h"
 +#include "system.h"
@@ -3121,7 +3122,7 @@ new file mode 100644
 index 00000000000..9dee9be85d0
 --- /dev/null
 +++ b/gcc/gimple-crc-optimization.cc
-@@ -0,0 +1,1401 @@
+@@ -0,0 +1,1402 @@
 +/* CRC optimization.
 +   Copyright (C) 2022-2024 Free Software Foundation, Inc.
 +   Contributed by Mariam Arutunian <mariamarutunian@gmail.com>
@@ -3143,6 +3144,7 @@ index 00000000000..9dee9be85d0
 +<http://www.gnu.org/licenses/>.   */
 +
 +/* This pass performs CRC optimization.  */
++#define INCLUDE_MEMORY
 +#include "config.h"
 +#include "system.h"
 +#include "coretypes.h"
@@ -4704,7 +4706,8 @@ new file mode 100644
 index 00000000000..ef3f1e3fda5
 --- /dev/null
 +++ b/gcc/sym-exec/sym-exec-condition.cc
-@@ -0,0 +1,59 @@
+@@ -0,0 +1,60 @@
++#define INCLUDE_MEMORY
 +#include "sym-exec-condition.h"
 +
 +bit_condition::bit_condition (value_bit *left, value_bit *right, tree_code code)
@@ -5021,11 +5024,12 @@ new file mode 100644
 index 00000000000..d34ebce6d3c
 --- /dev/null
 +++ b/gcc/sym-exec/sym-exec-expression.cc
-@@ -0,0 +1,426 @@
+@@ -0,0 +1,427 @@
 +/* Every class defined here represents a single bit value of a variable.
 +   Every variable will be represented as a vector of these classes which later
 +   will be used for bit-level symbolic execution.  */
 +
++#define INCLUDE_MEMORY
 +#include "sym-exec-expr-is-a-helper.h"
 +
 +/* Returns type of the bit.  */
@@ -5721,11 +5725,12 @@ new file mode 100644
 index 00000000000..5962a3d0bf2
 --- /dev/null
 +++ b/gcc/sym-exec/sym-exec-state.cc
-@@ -0,0 +1,2249 @@
+@@ -0,0 +1,2250 @@
 +/* State will store states of variables for a function's single execution path.
 +   It will be used for bit-level symbolic execution to determine values of bits
 +   of function's return value and symbolic marked arguments.  */
 +
++#define INCLUDE_MEMORY
 +#include "sym-exec-state.h"
 +
 +size_t min (size_t a, size_t b, size_t c)
