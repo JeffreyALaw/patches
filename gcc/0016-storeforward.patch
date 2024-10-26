@@ -241,7 +241,7 @@ index 00000000000..95777fc70cc
 +  /* opt_pass methods: */
 +  virtual bool gate (function *)
 +    {
-+      return optimize >= 1;
++      return flag_avoid_store_forward && optimize >= 1;
 +    }
 +
 +  virtual unsigned int execute (function *) override;
