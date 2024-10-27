@@ -1,0 +1,257 @@
+From 114731cd9cf28ad313de05a507b7253fb9bef3cb Mon Sep 17 00:00:00 2001
+From: Tsung Chun Lin <tclin914@gmail.com>
+Date: Tue, 8 Oct 2024 17:40:59 -0600
+Subject: [RISC-V] RISC-V: Add implication for M extension.
+
+That M implies Zmmul.
+
+gcc/ChangeLog:
+
+	* common/config/riscv/riscv-common.cc: M implies Zmmul.
+
+gcc/testsuite/ChangeLog:
+
+	* gcc/testsuite/gcc.target/riscv/attribute-15.c: Add _zmmul1p0 to arch string.
+	* gcc/testsuite/gcc.target/riscv/attribute-16.c: Ditto.
+	* gcc/testsuite/gcc.target/riscv/attribute-17.c: Ditto.
+	* gcc/testsuite/gcc.target/riscv/attribute-18.c: Ditto.
+	* gcc/testsuite/gcc.target/riscv/attribute-19.c: Ditto.
+	* gcc/testsuite/gcc.target/riscv/pr110696.c: Ditto.
+	* gcc/testsuite/gcc.target/riscv/target-attr-01.c: Ditto.
+	* gcc/testsuite/gcc.target/riscv/target-attr-02.c: Ditto.
+	* gcc/testsuite/gcc.target/riscv/target-attr-03.c: Ditto.
+	* gcc/testsuite/gcc.target/riscv/target-attr-04.c: Ditto.
+	* gcc/testsuite/gcc.target/riscv/target-attr-08.c: Ditto.
+	* gcc/testsuite/gcc.target/riscv/target-attr-11.c: Ditto.
+	* gcc/testsuite/gcc.target/riscv/target-attr-14.c: Ditto.
+	* gcc/testsuite/gcc.target/riscv/target-attr-15.c: Ditto.
+	* gcc/testsuite/gcc.target/riscv/target-attr-16.c: Ditto.
+---
+ gcc/common/config/riscv/riscv-common.cc         | 2 ++
+ gcc/testsuite/gcc.target/riscv/attribute-15.c   | 2 +-
+ gcc/testsuite/gcc.target/riscv/attribute-16.c   | 2 +-
+ gcc/testsuite/gcc.target/riscv/attribute-17.c   | 2 +-
+ gcc/testsuite/gcc.target/riscv/attribute-18.c   | 2 +-
+ gcc/testsuite/gcc.target/riscv/attribute-19.c   | 2 +-
+ gcc/testsuite/gcc.target/riscv/pr110696.c       | 2 +-
+ gcc/testsuite/gcc.target/riscv/target-attr-01.c | 2 +-
+ gcc/testsuite/gcc.target/riscv/target-attr-02.c | 2 +-
+ gcc/testsuite/gcc.target/riscv/target-attr-03.c | 2 +-
+ gcc/testsuite/gcc.target/riscv/target-attr-04.c | 2 +-
+ gcc/testsuite/gcc.target/riscv/target-attr-08.c | 2 +-
+ gcc/testsuite/gcc.target/riscv/target-attr-11.c | 2 +-
+ gcc/testsuite/gcc.target/riscv/target-attr-14.c | 4 ++--
+ gcc/testsuite/gcc.target/riscv/target-attr-15.c | 4 ++--
+ gcc/testsuite/gcc.target/riscv/target-attr-16.c | 4 ++--
+ 16 files changed, 20 insertions(+), 18 deletions(-)
+
+diff --git a/gcc/common/config/riscv/riscv-common.cc b/gcc/common/config/riscv/riscv-common.cc
+index 2adebe0b6f2..60595a3e356 100644
+--- a/gcc/common/config/riscv/riscv-common.cc
++++ b/gcc/common/config/riscv/riscv-common.cc
+@@ -75,6 +75,8 @@ struct riscv_implied_info_t
+ /* Implied ISA info, must end with NULL sentinel.  */
+ static const riscv_implied_info_t riscv_implied_info[] =
+ {
++  {"m", "zmmul"},
++
+   {"d", "f"},
+   {"f", "zicsr"},
+   {"d", "zicsr"},
+diff --git a/gcc/testsuite/gcc.target/riscv/attribute-15.c b/gcc/testsuite/gcc.target/riscv/attribute-15.c
+index ac6caaecd4f..d7a70e86aa1 100644
+--- a/gcc/testsuite/gcc.target/riscv/attribute-15.c
++++ b/gcc/testsuite/gcc.target/riscv/attribute-15.c
+@@ -3,4 +3,4 @@
+ int foo()
+ {
+ }
+-/* { dg-final { scan-assembler ".attribute arch, \"rv32i2p0_m2p0_a2p0_f2p0_d2p0_c2p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zcf1p0\"" } } */
++/* { dg-final { scan-assembler ".attribute arch, \"rv32i2p0_m2p0_a2p0_f2p0_d2p0_c2p0_zmmul1p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zcf1p0\"" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/attribute-16.c b/gcc/testsuite/gcc.target/riscv/attribute-16.c
+index 539e426ca97..4818cbe90d4 100644
+--- a/gcc/testsuite/gcc.target/riscv/attribute-16.c
++++ b/gcc/testsuite/gcc.target/riscv/attribute-16.c
+@@ -3,4 +3,4 @@
+ int foo()
+ {
+ }
+-/* { dg-final { scan-assembler ".attribute arch, \"rv32i2p1_m2p0_a2p0_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zcf1p0\"" } } */
++/* { dg-final { scan-assembler ".attribute arch, \"rv32i2p1_m2p0_a2p0_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zmmul1p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zcf1p0\"" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/attribute-17.c b/gcc/testsuite/gcc.target/riscv/attribute-17.c
+index 30928cb5b68..64b11b6a28c 100644
+--- a/gcc/testsuite/gcc.target/riscv/attribute-17.c
++++ b/gcc/testsuite/gcc.target/riscv/attribute-17.c
+@@ -3,4 +3,4 @@
+ int foo()
+ {
+ }
+-/* { dg-final { scan-assembler ".attribute arch, \"rv32i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zcf1p0\"" } } */
++/* { dg-final { scan-assembler ".attribute arch, \"rv32i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zmmul1p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zcf1p0\"" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/attribute-18.c b/gcc/testsuite/gcc.target/riscv/attribute-18.c
+index 9f7199f331a..43ae37b5089 100644
+--- a/gcc/testsuite/gcc.target/riscv/attribute-18.c
++++ b/gcc/testsuite/gcc.target/riscv/attribute-18.c
+@@ -1,4 +1,4 @@
+ /* { dg-do compile } */
+ /* { dg-options "-mriscv-attribute -march=rv64imafdc -mabi=lp64d -misa-spec=2.2" } */
+ int foo() {}
+-/* { dg-final { scan-assembler ".attribute arch, \"rv64i2p0_m2p0_a2p0_f2p0_d2p0_c2p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0\"" } } */
++/* { dg-final { scan-assembler ".attribute arch, \"rv64i2p0_m2p0_a2p0_f2p0_d2p0_c2p0_zmmul1p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0\"" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/attribute-19.c b/gcc/testsuite/gcc.target/riscv/attribute-19.c
+index 8150452f5b1..c9301589a19 100644
+--- a/gcc/testsuite/gcc.target/riscv/attribute-19.c
++++ b/gcc/testsuite/gcc.target/riscv/attribute-19.c
+@@ -1,4 +1,4 @@
+ /* { dg-do compile } */
+ /* { dg-options "-mriscv-attribute -march=rv64im -mabi=lp64 -misa-spec=2.2" } */
+ int foo() {}
+-/* { dg-final { scan-assembler ".attribute arch, \"rv64i2p0_m2p0\"" } } */
++/* { dg-final { scan-assembler ".attribute arch, \"rv64i2p0_m2p0_zmmul1p0\"" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/pr110696.c b/gcc/testsuite/gcc.target/riscv/pr110696.c
+index aae2afc6b28..8fb373d6c6b 100644
+--- a/gcc/testsuite/gcc.target/riscv/pr110696.c
++++ b/gcc/testsuite/gcc.target/riscv/pr110696.c
+@@ -4,4 +4,4 @@ int foo()
+ {
+ }
+ 
+-/* { dg-final { scan-assembler ".attribute arch, \"rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_v1p0_zicsr2p0_zifencei2p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zve32f1p0_zve32x1p0_zve64d1p0_zve64f1p0_zve64x1p0_zvl1024b1p0_zvl128b1p0_zvl2048b1p0_zvl256b1p0_zvl32b1p0_zvl4096b1p0_zvl512b1p0_zvl64b1p0\"" } } */
++/* { dg-final { scan-assembler ".attribute arch, \"rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_v1p0_zicsr2p0_zifencei2p0_zmmul1p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zve32f1p0_zve32x1p0_zve64d1p0_zve64f1p0_zve64x1p0_zvl1024b1p0_zvl128b1p0_zvl2048b1p0_zvl256b1p0_zvl32b1p0_zvl4096b1p0_zvl512b1p0_zvl64b1p0\"" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/target-attr-01.c b/gcc/testsuite/gcc.target/riscv/target-attr-01.c
+index bea1986dc5b..9830ab2f1b6 100644
+--- a/gcc/testsuite/gcc.target/riscv/target-attr-01.c
++++ b/gcc/testsuite/gcc.target/riscv/target-attr-01.c
+@@ -9,7 +9,7 @@
+ **   sh1add\s*a0,a1,a0
+ **   ...
+ */
+-/* { dg-final { scan-assembler ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zba1p0" } } */
++/* { dg-final { scan-assembler ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zmmul1p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zba1p0" } } */
+ long foo () __attribute__((target("arch=rv64gc_zba")));
+ long foo (long a, long b)
+ {
+diff --git a/gcc/testsuite/gcc.target/riscv/target-attr-02.c b/gcc/testsuite/gcc.target/riscv/target-attr-02.c
+index 6ff617fe373..3338ae46942 100644
+--- a/gcc/testsuite/gcc.target/riscv/target-attr-02.c
++++ b/gcc/testsuite/gcc.target/riscv/target-attr-02.c
+@@ -9,7 +9,7 @@
+ **   sh1add\s*a0,a1,a0
+ **   ...
+ */
+-/* { dg-final { scan-assembler ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zba1p0" } } */
++/* { dg-final { scan-assembler ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zmmul1p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zba1p0" } } */
+ long foo () __attribute__((target("arch=+zba")));
+ long foo (long a, long b)
+ {
+diff --git a/gcc/testsuite/gcc.target/riscv/target-attr-03.c b/gcc/testsuite/gcc.target/riscv/target-attr-03.c
+index 44fabf68fd0..673c0670106 100644
+--- a/gcc/testsuite/gcc.target/riscv/target-attr-03.c
++++ b/gcc/testsuite/gcc.target/riscv/target-attr-03.c
+@@ -10,7 +10,7 @@
+ **   add\s*a0,a1,a0
+ **   ...
+ */
+-/* { dg-final { scan-assembler ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zaamo1p0_zalrsc1p0" } } */
++/* { dg-final { scan-assembler ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zmmul1p0_zaamo1p0_zalrsc1p0" } } */
+ long foo () __attribute__((target("arch=rv64gc")));
+ long foo (long a, long b)
+ {
+diff --git a/gcc/testsuite/gcc.target/riscv/target-attr-04.c b/gcc/testsuite/gcc.target/riscv/target-attr-04.c
+index 258eaf4eb58..58c1698fac3 100644
+--- a/gcc/testsuite/gcc.target/riscv/target-attr-04.c
++++ b/gcc/testsuite/gcc.target/riscv/target-attr-04.c
+@@ -12,7 +12,7 @@
+ **   add\s*a0,a1,a0
+ **   ...
+ */
+-/* { dg-final { scan-assembler ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zaamo1p0_zalrsc1p0" } } */
++/* { dg-final { scan-assembler ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zmmul1p0_zaamo1p0_zalrsc1p0" } } */
+ long foo () __attribute__((target("cpu=sifive-u74")));
+ long foo (long a, long b)
+ {
+diff --git a/gcc/testsuite/gcc.target/riscv/target-attr-08.c b/gcc/testsuite/gcc.target/riscv/target-attr-08.c
+index 0c4ac1644c0..3cab5ff803c 100644
+--- a/gcc/testsuite/gcc.target/riscv/target-attr-08.c
++++ b/gcc/testsuite/gcc.target/riscv/target-attr-08.c
+@@ -13,7 +13,7 @@ __attribute__((target("arch=rv64gc_zba")));
+ **   sh1add\s*a0,a1,a0
+ **   ...
+ */
+-/* { dg-final { scan-assembler ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zba1p0" } } */
++/* { dg-final { scan-assembler ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zmmul1p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zba1p0" } } */
+ long foo (long a, long b)
+ {
+   return a + (b * 2);
+diff --git a/gcc/testsuite/gcc.target/riscv/target-attr-11.c b/gcc/testsuite/gcc.target/riscv/target-attr-11.c
+index d6eec04acaf..0a215b4ae9c 100644
+--- a/gcc/testsuite/gcc.target/riscv/target-attr-11.c
++++ b/gcc/testsuite/gcc.target/riscv/target-attr-11.c
+@@ -15,7 +15,7 @@ __attribute__((target("arch=rv64gc_zba")));
+ **   sh1add\s*a0,a1,a0
+ **   ...
+ */
+-/* { dg-final { scan-assembler ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zba1p0" } } */
++/* { dg-final { scan-assembler ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zmmul1p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zba1p0" } } */
+ long foo (long a, long b)
+ {
+   return a + (b * 2);
+diff --git a/gcc/testsuite/gcc.target/riscv/target-attr-14.c b/gcc/testsuite/gcc.target/riscv/target-attr-14.c
+index 03063c9a920..4e615dbb323 100644
+--- a/gcc/testsuite/gcc.target/riscv/target-attr-14.c
++++ b/gcc/testsuite/gcc.target/riscv/target-attr-14.c
+@@ -9,7 +9,7 @@
+ **   sh1add\s*a0,a1,a0
+ **   ...
+ */
+-/* { dg-final { scan-assembler ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zba1p0" } } */
++/* { dg-final { scan-assembler ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zmmul1p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zba1p0" } } */
+ long foo () __attribute__((target("arch=rv64gc_zba")));
+ long foo (long a, long b)
+ {
+@@ -34,7 +34,7 @@ long bar (long a, long b)
+ **   th.addsl\s*a0,a0,a1,1
+ **   ...
+ */
+-/* { dg-final { scan-assembler ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_xtheadba1p0" } } */
++/* { dg-final { scan-assembler ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zmmul1p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_xtheadba1p0" } } */
+ long foo_th () __attribute__((target("arch=rv64gc_xtheadba")));
+ long foo_th (long a, long b)
+ {
+diff --git a/gcc/testsuite/gcc.target/riscv/target-attr-15.c b/gcc/testsuite/gcc.target/riscv/target-attr-15.c
+index 914e1e682fe..bccb81aaad9 100644
+--- a/gcc/testsuite/gcc.target/riscv/target-attr-15.c
++++ b/gcc/testsuite/gcc.target/riscv/target-attr-15.c
+@@ -9,7 +9,7 @@
+ **   sh1add\s*a0,a1,a0
+ **   ...
+ */
+-/* { dg-final { scan-assembler ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zba1p0" } } */
++/* { dg-final { scan-assembler ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zmmul1p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zba1p0" } } */
+ long foo () __attribute__((target("arch=rv64gc_zba")));
+ long foo (long a, long b)
+ {
+@@ -34,7 +34,7 @@ long bar (long a, long b)
+ **   th.addsl\s*a0,a0,a1,1
+ **   ...
+ */
+-/* { dg-final { scan-assembler ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_xtheadba1p0" } } */
++/* { dg-final { scan-assembler ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zmmul1p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_xtheadba1p0" } } */
+ long foo_th () __attribute__((target("arch=+xtheadba")));
+ long foo_th (long a, long b)
+ {
+diff --git a/gcc/testsuite/gcc.target/riscv/target-attr-16.c b/gcc/testsuite/gcc.target/riscv/target-attr-16.c
+index c6b626d0c6c..f997ae8a9d1 100644
+--- a/gcc/testsuite/gcc.target/riscv/target-attr-16.c
++++ b/gcc/testsuite/gcc.target/riscv/target-attr-16.c
+@@ -24,5 +24,5 @@ void bar (void)
+ {
+ }
+ 
+-/* { dg-final { scan-assembler-times ".option arch, rv32i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zcf1p0_zba1p0_zbb1p0" 4 { target { rv32 } } } } */
+-/* { dg-final { scan-assembler-times ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zba1p0_zbb1p0" 4 { target { rv64 } } } } */
++/* { dg-final { scan-assembler-times ".option arch, rv32i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zmmul1p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zcf1p0_zba1p0_zbb1p0" 4 { target { rv32 } } } } */
++/* { dg-final { scan-assembler-times ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zmmul1p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zba1p0_zbb1p0" 4 { target { rv64 } } } } */
+-- 
+2.34.1
+
