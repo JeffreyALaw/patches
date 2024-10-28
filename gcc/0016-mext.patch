@@ -255,3 +255,44 @@ index c6b626d0c6c..f997ae8a9d1 100644
 -- 
 2.34.1
 
+diff --git a/gcc/testsuite/gcc.dg/pr90838.c b/gcc/testsuite/gcc.dg/pr90838.c
+index 40aad70499d..db7bcec3ea9 100644
+--- a/gcc/testsuite/gcc.dg/pr90838.c
++++ b/gcc/testsuite/gcc.dg/pr90838.c
+@@ -77,7 +77,7 @@ int ctz4 (unsigned long x)
+ /* { dg-final { scan-assembler-times "ctz\t"  1 { target { rv64 } } } } */
+ /* { dg-final { scan-assembler-times "ctzw\t" 3 { target { rv64 } } } } */
+ /* { dg-final { scan-assembler-times "andi\t" 2 { target { rv64 } } } } */
+-/* { dg-final { scan-assembler-not "mul" { target { rv64 } } } } */
++/* { dg-final { scan-assembler-not "mul\t" { target { rv64 } } } } */
+ 
+ /* { dg-final { scan-tree-dump-times {= \.CTZ} 3 "forwprop2" { target { rv32 } } } } */
+ /* { dg-final { scan-assembler-times "ctz\t" 3 { target { rv32 } } } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/base/pr114352-1.c b/gcc/testsuite/gcc.target/riscv/rvv/base/pr114352-1.c
+index 300d87324c6..c21be05889e 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/base/pr114352-1.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/base/pr114352-1.c
+@@ -54,5 +54,5 @@ test_3 (int *a, int *b, int *out, unsigned count)
+     out[i] = a[i] + b[i];
+ }
+ 
+-/* { dg-final { scan-assembler ".attribute arch, \"rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0\"" } } */
+-/* { dg-final { scan-assembler ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_v1p0_zicsr2p0_zifencei2p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zve32f1p0_zve32x1p0_zve64d1p0_zve64f1p0_zve64x1p0_zvl128b1p0_zvl32b1p0_zvl64b1p0" } } */
++/* { dg-final { scan-assembler ".attribute arch, \"rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zmmul1p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0\"" } } */
++/* { dg-final { scan-assembler ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_v1p0_zicsr2p0_zifencei2p0_zmmul1p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zve32f1p0_zve32x1p0_zve64d1p0_zve64f1p0_zve64x1p0_zvl128b1p0_zvl32b1p0_zvl64b1p0" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/base/pr114352-3.c b/gcc/testsuite/gcc.target/riscv/rvv/base/pr114352-3.c
+index da7a44ba08a..a764afbbbc1 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/base/pr114352-3.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/base/pr114352-3.c
+@@ -107,7 +107,7 @@ test_6 (_Float16 *a, _Float16 *b, _Float16 *out, unsigned count)
+     out[i] = a[i] + b[i];
+ }
+ 
+-/* { dg-final { scan-assembler ".attribute arch, \"rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0\"" } } */
+-/* { dg-final { scan-assembler ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_v1p0_zicsr2p0_zifencei2p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zve32f1p0_zve32x1p0_zve64d1p0_zve64f1p0_zve64x1p0_zvl128b1p0_zvl32b1p0_zvl64b1p0" } } */
+-/* { dg-final { scan-assembler ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zbb1p0" } } */
+-/* { dg-final { scan-assembler ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zaamo1p0_zalrsc1p0_zfh1p0_zfhmin1p0_zca1p0_zcd1p0" } } */
++/* { dg-final { scan-assembler ".attribute arch, \"rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zmmul1p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0\"" } } */
++/* { dg-final { scan-assembler ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_v1p0_zicsr2p0_zifencei2p0_zmmul1p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zve32f1p0_zve32x1p0_zve64d1p0_zve64f1p0_zve64x1p0_zvl128b1p0_zvl32b1p0_zvl64b1p0" } } */
++/* { dg-final { scan-assembler ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zmmul1p0_zaamo1p0_zalrsc1p0_zca1p0_zcd1p0_zbb1p0" } } */
++/* { dg-final { scan-assembler ".option arch, rv64i2p1_m2p0_a2p1_f2p2_d2p2_c2p0_zicsr2p0_zifencei2p0_zmmul1p0_zaamo1p0_zalrsc1p0_zfh1p0_zfhmin1p0_zca1p0_zcd1p0" } } */
