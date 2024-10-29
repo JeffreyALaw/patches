@@ -1,0 +1,231 @@
+diff --git a/gcc/config.gcc b/gcc/config.gcc
+index fd848228722..e2ed3b309cc 100644
+--- a/gcc/config.gcc
++++ b/gcc/config.gcc
+@@ -558,7 +558,7 @@ riscv*)
+ 	extra_objs="${extra_objs} riscv-vector-builtins.o riscv-vector-builtins-shapes.o riscv-vector-builtins-bases.o"
+ 	extra_objs="${extra_objs} thead.o riscv-target-attr.o"
+ 	d_target_objs="riscv-d.o"
+-	extra_headers="riscv_vector.h riscv_crypto.h riscv_bitmanip.h riscv_th_vector.h"
++	extra_headers="riscv_vector.h riscv_crypto.h riscv_bitmanip.h riscv_th_vector.h riscv_cmo.h"
+ 	target_gtfiles="$target_gtfiles \$(srcdir)/config/riscv/riscv-vector-builtins.cc"
+ 	target_gtfiles="$target_gtfiles \$(srcdir)/config/riscv/riscv-vector-builtins.h"
+ 	;;
+diff --git a/gcc/config/riscv/riscv_cmo.h b/gcc/config/riscv/riscv_cmo.h
+new file mode 100644
+index 00000000000..3514fd3f0fe
+--- /dev/null
++++ b/gcc/config/riscv/riscv_cmo.h
+@@ -0,0 +1,84 @@
++/* RISC-V CMO Extension intrinsics include file.
++   Copyright (C) 2024 Free Software Foundation, Inc.
++
++   This file is part of GCC.
++
++   GCC is free software; you can redistribute it and/or modify it
++   under the terms of the GNU General Public License as published
++   by the Free Software Foundation; either version 3, or (at your
++   option) any later version.
++
++   GCC is distributed in the hope that it will be useful, but WITHOUT
++   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
++   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
++   License for more details.
++
++   Under Section 7 of GPL version 3, you are granted additional
++   permissions described in the GCC Runtime Library Exception, version
++   3.1, as published by the Free Software Foundation.
++
++   You should have received a copy of the GNU General Public License and
++   a copy of the GCC Runtime Library Exception along with this program;
++   see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#ifndef __RISCV_CMO_H
++#define __RISCV_CMO_H
++
++#if defined (__riscv_zicbom)
++
++extern __inline void
++__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
++__riscv_cmo_clean (void *addr)
++{
++    __builtin_riscv_zicbom_cbo_clean (addr);
++}
++
++extern __inline void
++__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
++__riscv_cmo_flush (void *addr)
++{
++    __builtin_riscv_zicbom_cbo_flush (addr);
++}
++
++extern __inline void
++__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
++__riscv_cmo_inval (void *addr)
++{
++    __builtin_riscv_zicbom_cbo_inval (addr);
++}
++
++#endif // __riscv_zicbom
++
++#if defined (__riscv_zicbop)
++
++# define rnum 1
++
++extern __inline void
++__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
++__riscv_cmo_prefetch (void *addr, const int vs1, const int vs2)
++{
++    __builtin_prefetch (addr,vs1,vs2);
++}
++
++extern __inline int
++__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
++__riscv_cmo_prefetchi ()
++{
++    return __builtin_riscv_zicbop_cbo_prefetchi (rnum);
++}
++
++#endif // __riscv_zicbop
++
++#if defined (__riscv_zicboz)
++
++extern __inline void
++__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
++__riscv_cmo_zero (void *addr)
++{
++    __builtin_riscv_zicboz_cbo_zero (addr);
++}
++
++#endif // __riscv_zicboz
++
++#endif // __RISCV_CMO_H
+diff --git a/gcc/testsuite/gcc.target/riscv/cmo-32.c b/gcc/testsuite/gcc.target/riscv/cmo-32.c
+new file mode 100644
+index 00000000000..8e733cc05fc
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/cmo-32.c
+@@ -0,0 +1,58 @@
++/* { dg-do compile } */
++/* { dg-require-effective-target rv32} */
++/* { dg-options "-march=rv32gc_zicbom_zicbop_zicboz -mabi=ilp32" } */
++
++#include "riscv_cmo.h"
++
++void foo1 (void *addr)
++{
++    __riscv_cmo_clean(0);
++    __riscv_cmo_clean(addr);
++    __riscv_cmo_clean((void*)0x111);
++}
++
++void foo2 (void *addr)
++{
++    __riscv_cmo_flush(0);
++    __riscv_cmo_flush(addr);
++    __riscv_cmo_flush((void*)0x111);
++}
++
++void foo3 (void *addr)
++{
++    __riscv_cmo_inval(0);
++    __riscv_cmo_inval(addr);
++    __riscv_cmo_inval((void*)0x111);
++}
++
++void foo4 (void *addr)
++{
++    __riscv_cmo_prefetch(addr,0,0);
++    __riscv_cmo_prefetch(addr,0,1);
++    __riscv_cmo_prefetch(addr,0,2);
++    __riscv_cmo_prefetch(addr,0,3);
++    __riscv_cmo_prefetch(addr,1,0);
++    __riscv_cmo_prefetch(addr,1,1);
++    __riscv_cmo_prefetch(addr,1,2);
++    __riscv_cmo_prefetch(addr,1,3);
++}
++
++int foo5 (int num)
++{
++    return __riscv_cmo_prefetchi(num);
++}
++
++void foo6 (void *addr)
++{
++    __riscv_cmo_zero(0);
++    __riscv_cmo_zero(addr);
++    __riscv_cmo_zero((void*)0x121);
++}
++
++/* { dg-final { scan-assembler-times "cbo.clean\t" 3 } } */
++/* { dg-final { scan-assembler-times "cbo.flush\t" 3 } } */
++/* { dg-final { scan-assembler-times "cbo.inval\t" 3 } } */
++/* { dg-final { scan-assembler-times "prefetch.r\t" 4 } } */
++/* { dg-final { scan-assembler-times "prefetch.w\t" 4 } } */
++/* { dg-final { scan-assembler-times "prefetch.i\t" 1 } } */
++/* { dg-final { scan-assembler-times "cbo.zero\t" 3 } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/cmo-64.c b/gcc/testsuite/gcc.target/riscv/cmo-64.c
+new file mode 100644
+index 00000000000..e83eddbeb6f
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/cmo-64.c
+@@ -0,0 +1,58 @@
++/* { dg-do compile } */
++/* { dg-require-effective-target rv64 } */
++/* { dg-options "-march=rv64gc_zicbom_zicbop_zicboz -mabi=lp64d" } */
++
++#include "riscv_cmo.h"
++
++void foo1 (void *addr)
++{
++    __riscv_cmo_clean(0);
++    __riscv_cmo_clean(addr);
++    __riscv_cmo_clean((void*)0x111);
++}
++
++void foo2 (void *addr)
++{
++    __riscv_cmo_flush(0);
++    __riscv_cmo_flush(addr);
++    __riscv_cmo_flush((void*)0x111);
++}
++
++void foo3 (void *addr)
++{
++    __riscv_cmo_inval(0);
++    __riscv_cmo_inval(addr);
++    __riscv_cmo_inval((void*)0x111);
++}
++
++void foo4 (void *addr)
++{
++    __riscv_cmo_prefetch(addr,0,0);
++    __riscv_cmo_prefetch(addr,0,1);
++    __riscv_cmo_prefetch(addr,0,2);
++    __riscv_cmo_prefetch(addr,0,3);
++    __riscv_cmo_prefetch(addr,1,0);
++    __riscv_cmo_prefetch(addr,1,1);
++    __riscv_cmo_prefetch(addr,1,2);
++    __riscv_cmo_prefetch(addr,1,3);
++}
++
++int foo5 (int num)
++{
++    return __riscv_cmo_prefetchi(num);
++}
++
++void foo6 (void *addr)
++{
++    __riscv_cmo_zero(0);
++    __riscv_cmo_zero(addr);
++    __riscv_cmo_zero((void*)0x121);
++}
++
++/* { dg-final { scan-assembler-times "cbo.clean\t" 3 } } */
++/* { dg-final { scan-assembler-times "cbo.flush\t" 3 } } */
++/* { dg-final { scan-assembler-times "cbo.inval\t" 3 } } */
++/* { dg-final { scan-assembler-times "prefetch.r\t" 4 } } */
++/* { dg-final { scan-assembler-times "prefetch.w\t" 4 } } */
++/* { dg-final { scan-assembler-times "prefetch.i\t" 1 } } */
++/* { dg-final { scan-assembler-times "cbo.zero\t" 3 } } */
