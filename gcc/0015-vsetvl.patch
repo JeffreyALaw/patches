@@ -1,3 +1,18 @@
+	* config/riscv/riscv-protos.h (has_vtype_op): Declare.
+	(mask_agnostic_p, get_avl, vsetvl_insn_p): Likewise.
+	* config/riscv/riscv-vsetvl.cc (has_vtype_op): No longer static.
+	(vsetvl_insn_p, get_avl, mask_agnostic_p): Likewise.
+	* config/riscv/riscv.cc (last_vconfig): New structure.
+	(clear_vconfig, compatible_with_last_vconfig): New functions.
+	(riscv_sched_init, riscv_sched_reorder): Likewise.
+	(riscv_sched_variable_issue): Record vector config as insns
+	are issued.
+	(TARGET_SCHED_INIT, TARGET_SCHED_REORDER): Define.
+
+	* gcc.target/riscv/rvv/vsetvl/pr111037-1.c: Adjust expected output.
+	* gcc.target/riscv/rvv/vsetvl/pr111037-4.c: Likewise.
+	* gcc.target/riscv/rvv/vsetvl/pr113248.c: Likewise.
+
 diff --git a/gcc/config/riscv/riscv-protos.h b/gcc/config/riscv/riscv-protos.h
 index 1e6d10a1402..96d0e13577e 100644
 --- a/gcc/config/riscv/riscv-protos.h
