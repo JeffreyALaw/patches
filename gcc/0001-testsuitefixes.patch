@@ -8,7 +8,7 @@ index 5026c5906cd..0e346652ed5 100644
  	void foo (void) { }
 -    } "-fprofile-use -freorder-blocks-and-partition -Wno-missing-profile"] } {
 +    } "-fprofile-use -freorder-blocks-and-partition -Wno-missing-profile"] 
-+    && ! [istarget fr30*-*-*] && ! [istarget v850*-*-*] } {
++    && ! [istarget fr30*-*-*] } {
  	return 1
      }
      return 0
