@@ -23,17 +23,39 @@ index 3c6e5fb1f6c..80345dcdd7e 100644
  reg_ok_for_base_p (rtx r, bool strict)
  {
 diff --git a/gcc/config/ft32/ft32.opt b/gcc/config/ft32/ft32.opt
-index cecc54845e3..a03067bb1e8 100644
+index cecc54845e3..419c82a7102 100644
 --- a/gcc/config/ft32/ft32.opt
 +++ b/gcc/config/ft32/ft32.opt
-@@ -22,10 +22,6 @@ msim
- Target Mask(SIM)
+@@ -23,8 +23,8 @@ Target Mask(SIM)
  Target the software simulator.
  
--mlra
+ mlra
 -Target Var(ft32_lra_flag) Init(0) Save
 -Use LRA instead of reload.
--
++Target RejectNegative Ignore
++Ignored, but preserved for backward compatibility.
+ 
  mnodiv
  Target Mask(NODIV)
- Avoid use of the DIV and MOD instructions.
+diff --git a/gcc/config/riscv/riscv_cmo.h b/gcc/config/riscv/riscv_cmo.h
+index 3514fd3f0fe..b331409acb7 100644
+--- a/gcc/config/riscv/riscv_cmo.h
++++ b/gcc/config/riscv/riscv_cmo.h
+@@ -52,8 +52,6 @@ __riscv_cmo_inval (void *addr)
+ 
+ #if defined (__riscv_zicbop)
+ 
+-# define rnum 1
+-
+ extern __inline void
+ __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+ __riscv_cmo_prefetch (void *addr, const int vs1, const int vs2)
+@@ -65,7 +63,7 @@ extern __inline int
+ __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+ __riscv_cmo_prefetchi ()
+ {
+-    return __builtin_riscv_zicbop_cbo_prefetchi (rnum);
++    return __builtin_riscv_zicbop_cbo_prefetchi (1);
+ }
+ 
+ #endif // __riscv_zicbop
