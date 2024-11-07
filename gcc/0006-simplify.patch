@@ -1,0 +1,13 @@
+diff --git a/gcc/simplify-rtx.cc b/gcc/simplify-rtx.cc
+index d05efac20dc..abd72c48be7 100644
+--- a/gcc/simplify-rtx.cc
++++ b/gcc/simplify-rtx.cc
+@@ -1839,7 +1839,7 @@ simplify_context::simplify_unary_operation_1 (rtx_code code, machine_mode mode,
+ 	  && GET_MODE_PRECISION (int_mode) <= HOST_BITS_PER_WIDE_INT
+ 	  && GET_MODE_PRECISION (op_mode) < GET_MODE_PRECISION (int_mode)
+ 	  && (nonzero_bits (SUBREG_REG (op), mode)
+-	      & ~GET_MODE_MASK (op_mode)) == 0)
++	      & ~GET_MODE_MASK (GET_MODE (op))) == 0)
+ 	return SUBREG_REG (op);
+ 
+       /* Trying to optimize:
