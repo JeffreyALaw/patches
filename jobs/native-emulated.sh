@@ -35,9 +35,9 @@ popd
 #  DISABLE_BOOTSTRAP=--disable-bootstrap
 #fi
 # For testing purposes
-#if [ $TARGET == riscv64-linux-gnu ]; then
-#  NPROC=4
-#fi
+if [ $TARGET == riscv64-linux-gnu ]; then
+  NPROC=4
+fi
 
 # MIPS is always multiarch
 if [ $TARGET == mips64el-linux-gnuabi64 ]; then
