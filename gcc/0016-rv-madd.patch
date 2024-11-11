@@ -1,3 +1,15 @@
+	* config/riscv/vector.md (pred_mul_plus<mode>): Drop alternatives where
+	output doesn't have to match input.
+	(pred_madd<mode>, pred_macc<mode>): Likewise.
+	(pred_madd<mode>_scalar, pred_macc<mode>_scalar): Likewise.
+	(pred_madd<mode>_exended_scalar): Likewise.
+	(pred_macc<mode>_exended_scalar): Likewise.
+	(pred_minus_mul<mode>_undef): Likewise.
+	(pred_nmsub<mode>, pred_nmsac<mode>): Likewise.
+	(pred_nmsub<mode>_scalar, pred_nmsac<mode>_scalar): Likewise.
+	(pred_nmsub<mode>_exended_scalar): Likewise.
+	(pred_nmsac<mode>_exended_scalar): Likewise.
+
 diff --git a/gcc/config/riscv/vector.md b/gcc/config/riscv/vector.md
 index a21288f7af2..8bbae41c9f3 100644
 --- a/gcc/config/riscv/vector.md
