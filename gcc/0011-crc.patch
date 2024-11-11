@@ -1,8 +1,8 @@
 diff --git a/gcc/Makefile.in b/gcc/Makefile.in
-index 059cf2e8f79..a15b67fbc15 100644
+index eb578210411..a734c6b3094 100644
 --- a/gcc/Makefile.in
 +++ b/gcc/Makefile.in
-@@ -1717,6 +1717,11 @@ OBJS = \
+@@ -1722,6 +1722,11 @@ OBJS = \
  	tree-iterator.o \
  	tree-logical-location.o \
  	tree-loop-distribution.o \
@@ -15,7 +15,7 @@ index 059cf2e8f79..a15b67fbc15 100644
  	tree-nrv.o \
  	tree-object-size.o \
 diff --git a/gcc/builtin-types.def b/gcc/builtin-types.def
-index c97d6bad1de..a0c4b8b9ca6 100644
+index 25da582ce58..dba8023b373 100644
 --- a/gcc/builtin-types.def
 +++ b/gcc/builtin-types.def
 @@ -829,6 +829,26 @@ DEF_FUNCTION_TYPE_3 (BT_FN_PTR_SIZE_SIZE_PTRMODE,
@@ -46,7 +46,7 @@ index c97d6bad1de..a0c4b8b9ca6 100644
  DEF_FUNCTION_TYPE_4 (BT_FN_SIZE_CONST_PTR_SIZE_SIZE_FILEPTR,
  		     BT_SIZE, BT_CONST_PTR, BT_SIZE, BT_SIZE, BT_FILEPTR)
 diff --git a/gcc/builtins.cc b/gcc/builtins.cc
-index 37c7c98e5c7..15e59fde3a0 100644
+index 0d90c2ad5f8..f3c9cd63626 100644
 --- a/gcc/builtins.cc
 +++ b/gcc/builtins.cc
 @@ -2207,7 +2207,28 @@ associated_internal_fn (built_in_function fn, tree return_type)
@@ -185,7 +185,7 @@ index 37c7c98e5c7..15e59fde3a0 100644
        break;
      }
 diff --git a/gcc/builtins.def b/gcc/builtins.def
-index a3921aa6856..895be9bdc0a 100644
+index 0c76ebc5e31..9ea81fa9d7f 100644
 --- a/gcc/builtins.def
 +++ b/gcc/builtins.def
 @@ -708,7 +708,26 @@ DEF_EXT_LIB_BUILTIN    (BUILT_IN_Y1L, "y1l", BT_FN_LONGDOUBLE_LONGDOUBLE, ATTR_M
@@ -231,10 +231,10 @@ index 8d93f75a9a4..0094b9dcc3f 100644
  extern enum built_in_function builtin_mathfn_code (const_tree);
  extern tree fold_builtin_expect (location_t, tree, tree, tree, tree);
 diff --git a/gcc/common.opt b/gcc/common.opt
-index 12b25ff486d..ef2173f84a9 100644
+index 0b1f1ec26e1..6d3a90bc4c9 100644
 --- a/gcc/common.opt
 +++ b/gcc/common.opt
-@@ -2407,6 +2407,16 @@ fsave-optimization-record
+@@ -2411,6 +2411,16 @@ fsave-optimization-record
  Common Var(flag_save_optimization_record) Optimization
  Write a SRCFILE.opt-record.json file detailing what optimizations were performed.
  
@@ -252,10 +252,10 @@ index 12b25ff486d..ef2173f84a9 100644
  Common Ignore
  Does nothing. Preserved for backward compatibility.
 diff --git a/gcc/common.opt.urls b/gcc/common.opt.urls
-index e31736cd994..c4082195adc 100644
+index 78e0dc209d1..4e0f3e6e95a 100644
 --- a/gcc/common.opt.urls
 +++ b/gcc/common.opt.urls
-@@ -1007,6 +1007,9 @@ UrlSuffix(gcc/Developer-Options.html#index-fopt-info)
+@@ -1013,6 +1013,9 @@ UrlSuffix(gcc/Developer-Options.html#index-fopt-info)
  fsave-optimization-record
  UrlSuffix(gcc/Developer-Options.html#index-fsave-optimization-record)
  
@@ -265,11 +265,262 @@ index e31736cd994..c4082195adc 100644
  foptimize-sibling-calls
  UrlSuffix(gcc/Optimize-Options.html#index-foptimize-sibling-calls)
  
+diff --git a/gcc/config/aarch64/aarch64-protos.h b/gcc/config/aarch64/aarch64-protos.h
+index 05d3258abf7..20951af56a9 100644
+--- a/gcc/config/aarch64/aarch64-protos.h
++++ b/gcc/config/aarch64/aarch64-protos.h
+@@ -1205,5 +1205,8 @@ extern void aarch64_adjust_reg_alloc_order ();
+ 
+ bool aarch64_optimize_mode_switching (aarch64_mode_entity);
+ void aarch64_restore_za (rtx);
++void aarch64_expand_crc_using_pmull (scalar_mode, scalar_mode, rtx *);
++void aarch64_expand_reversed_crc_using_pmull (scalar_mode, scalar_mode, rtx *);
++
+ 
+ #endif /* GCC_AARCH64_PROTOS_H */
+diff --git a/gcc/config/aarch64/aarch64-simd.md b/gcc/config/aarch64/aarch64-simd.md
+index cfe95bd4c31..c5d776e2cf0 100644
+--- a/gcc/config/aarch64/aarch64-simd.md
++++ b/gcc/config/aarch64/aarch64-simd.md
+@@ -4357,7 +4357,7 @@ (define_insn "*aarch64_get_lane_zero_extend<GPI:mode><VDQQH:mode>"
+ ;; RTL uses GCC vector extension indices throughout so flip only for assembly.
+ ;; Extracting lane zero is split into a simple move when it is between SIMD
+ ;; registers or a store.
+-(define_insn_and_split "aarch64_get_lane<mode>"
++(define_insn_and_split "@aarch64_get_lane<mode>"
+   [(set (match_operand:<VEL> 0 "aarch64_simd_nonimmediate_operand" "=?r, w, Utv")
+ 	(vec_select:<VEL>
+ 	  (match_operand:VALL_F16 1 "register_operand" "w, w, w")
+diff --git a/gcc/config/aarch64/aarch64.cc b/gcc/config/aarch64/aarch64.cc
+index 00bcf18ae97..89c060e95bc 100644
+--- a/gcc/config/aarch64/aarch64.cc
++++ b/gcc/config/aarch64/aarch64.cc
+@@ -30853,6 +30853,137 @@ aarch64_retrieve_sysreg (const char *regname, bool write_p, bool is128op)
+   return sysreg->encoding;
+ }
+ 
++/* Generate assembly to calculate CRC
++   using carry-less multiplication instruction.
++   OPERANDS[1] is input CRC,
++   OPERANDS[2] is data (message),
++   OPERANDS[3] is the polynomial without the leading 1.  */
++
++void
++aarch64_expand_crc_using_pmull (scalar_mode crc_mode,
++				scalar_mode data_mode,
++				rtx *operands)
++{
++  /* Check and keep arguments.  */
++  gcc_assert (!CONST_INT_P (operands[0]));
++  gcc_assert (CONST_INT_P (operands[3]));
++  rtx crc = operands[1];
++  rtx data = operands[2];
++  rtx polynomial = operands[3];
++
++  unsigned HOST_WIDE_INT crc_size = GET_MODE_BITSIZE (crc_mode);
++  unsigned HOST_WIDE_INT data_size = GET_MODE_BITSIZE (data_mode);
++  gcc_assert (crc_size <= 32);
++  gcc_assert (data_size <= crc_size);
++
++  /* Calculate the quotient.  */
++  unsigned HOST_WIDE_INT
++      q = gf2n_poly_long_div_quotient (UINTVAL (polynomial), crc_size);
++  /* CRC calculation's main part.  */
++  if (crc_size > data_size)
++    crc = expand_shift (RSHIFT_EXPR, DImode, crc, crc_size - data_size,
++			NULL_RTX, 1);
++
++  rtx t0 = force_reg (DImode, gen_int_mode (q, DImode));
++  polynomial = simplify_gen_unary (ZERO_EXTEND, DImode, polynomial,
++				   GET_MODE (polynomial));
++  rtx t1 = force_reg (DImode, polynomial);
++
++  rtx a0 = expand_binop (DImode, xor_optab, crc, data, NULL_RTX, 1,
++			 OPTAB_WIDEN);
++
++  rtx pmull_res = gen_reg_rtx (TImode);
++  emit_insn (gen_aarch64_crypto_pmulldi (pmull_res, a0, t0));
++  a0 = gen_lowpart (DImode, pmull_res);
++
++  a0 = expand_shift (RSHIFT_EXPR, DImode, a0, crc_size, NULL_RTX, 1);
++
++  emit_insn (gen_aarch64_crypto_pmulldi (pmull_res, a0, t1));
++  a0 = gen_lowpart (DImode, pmull_res);
++
++  if (crc_size > data_size)
++    {
++      rtx crc_part = expand_shift (LSHIFT_EXPR, DImode, operands[1], data_size,
++				   NULL_RTX, 0);
++      a0 = expand_binop (DImode, xor_optab, a0, crc_part, NULL_RTX, 1,
++			 OPTAB_DIRECT);
++    }
++
++  aarch64_emit_move (operands[0], gen_lowpart (crc_mode, a0));
++}
++
++/* Generate assembly to calculate reversed CRC
++   using carry-less multiplication instruction.
++   OPERANDS[1] is input CRC,
++   OPERANDS[2] is data,
++   OPERANDS[3] is the polynomial without the leading 1.  */
++
++void
++aarch64_expand_reversed_crc_using_pmull (scalar_mode crc_mode,
++					 scalar_mode data_mode,
++					 rtx *operands)
++{
++  /* Check and keep arguments.  */
++  gcc_assert (!CONST_INT_P (operands[0]));
++  gcc_assert (CONST_INT_P (operands[3]));
++  rtx crc = operands[1];
++  rtx data = operands[2];
++  rtx polynomial = operands[3];
++
++  unsigned HOST_WIDE_INT crc_size = GET_MODE_BITSIZE (crc_mode);
++  unsigned HOST_WIDE_INT data_size = GET_MODE_BITSIZE (data_mode);
++  gcc_assert (crc_size <= 32);
++  gcc_assert (data_size <= crc_size);
++
++  /* Calculate the quotient.  */
++  unsigned HOST_WIDE_INT
++      q = gf2n_poly_long_div_quotient (UINTVAL (polynomial), crc_size);
++  /* Reflect the calculated quotient.  */
++  q = reflect_hwi (q, crc_size + 1);
++  rtx t0 = force_reg (DImode, gen_int_mode (q, DImode));
++
++  /* Reflect the polynomial.  */
++  unsigned HOST_WIDE_INT ref_polynomial = reflect_hwi (UINTVAL (polynomial),
++						       crc_size);
++  /* An unshifted multiplier would require the final result to be extracted
++     using a shift right by DATA_SIZE - 1 bits.  Shift the multiplier left
++     so that the shift right can be by CRC_SIZE bits instead.  */
++  ref_polynomial <<= crc_size - data_size + 1;
++  rtx t1 = force_reg (DImode, gen_int_mode (ref_polynomial, DImode));
++
++  /* CRC calculation's main part.  */
++  rtx a0 = expand_binop (DImode, xor_optab, crc, data, NULL_RTX, 1,
++			 OPTAB_WIDEN);
++
++  /* Perform carry-less multiplication and get low part.  */
++  rtx pmull_res = gen_reg_rtx (TImode);
++  emit_insn (gen_aarch64_crypto_pmulldi (pmull_res, a0, t0));
++  a0 = gen_lowpart (DImode, pmull_res);
++
++  a0 = expand_binop (DImode, and_optab, a0,
++		     gen_int_mode (GET_MODE_MASK (data_mode), DImode),
++		     NULL_RTX, 1, OPTAB_WIDEN);
++
++  /* Perform carry-less multiplication.  */
++  emit_insn (gen_aarch64_crypto_pmulldi (pmull_res, a0, t1));
++
++  /* Perform a shift right by CRC_SIZE as an extraction of lane 1.  */
++  machine_mode crc_vmode = aarch64_vq_mode (crc_mode).require ();
++  a0 = (crc_size > data_size ? gen_reg_rtx (crc_mode) : operands[0]);
++  emit_insn (gen_aarch64_get_lane (crc_vmode, a0,
++				   gen_lowpart (crc_vmode, pmull_res),
++				   aarch64_endian_lane_rtx (crc_vmode, 1)));
++
++  if (crc_size > data_size)
++    {
++      rtx crc_part = expand_shift (RSHIFT_EXPR, crc_mode, crc, data_size,
++				   NULL_RTX, 1);
++      a0 = expand_binop (crc_mode, xor_optab, a0, crc_part, operands[0], 1,
++			 OPTAB_WIDEN);
++      aarch64_emit_move (operands[0], a0);
++    }
++}
++
+ /* Target-specific selftests.  */
+ 
+ #if CHECKING_P
+diff --git a/gcc/config/aarch64/aarch64.md b/gcc/config/aarch64/aarch64.md
+index 8d10197c9e8..014edd9440b 100644
+--- a/gcc/config/aarch64/aarch64.md
++++ b/gcc/config/aarch64/aarch64.md
+@@ -4564,6 +4564,63 @@ (define_insn "aarch64_<crc_variant>"
+   [(set_attr "type" "crc")]
+ )
+ 
++;; Reversed CRC
++(define_expand "crc_rev<ALLI:mode><ALLX:mode>4"
++  [;; return value (calculated CRC)
++   (match_operand:ALLX 0 "register_operand" "=r")
++   ;; initial CRC
++   (match_operand:ALLX 1 "register_operand" "r")
++   ;; data
++   (match_operand:ALLI 2 "register_operand" "r")
++   ;; polynomial without leading 1
++   (match_operand:ALLX 3)]
++  ""
++  {
++    /* If the polynomial is the same as the polynomial of crc32c* instruction,
++       put that instruction.  crc32c uses iSCSI polynomial.  */
++    if (TARGET_CRC32 && INTVAL (operands[3]) == 0x1EDC6F41
++	&& <ALLX:MODE>mode == SImode)
++      emit_insn (gen_aarch64_crc32c<ALLI:crc_data_type> (operands[0],
++							 operands[1],
++							 operands[2]));
++    /* If the polynomial is the same as the polynomial of crc32* instruction,
++	put that instruction.  crc32 uses HDLC etc.  polynomial.  */
++    else if (TARGET_CRC32 && INTVAL (operands[3]) == 0x04C11DB7
++	     && <ALLX:MODE>mode == SImode)
++      emit_insn (gen_aarch64_crc32<ALLI:crc_data_type> (operands[0],
++							operands[1],
++							operands[2]));
++    else if (TARGET_AES && <ALLI:sizen> <= <ALLX:sizen>)
++      aarch64_expand_reversed_crc_using_pmull (<ALLX:MODE>mode,
++					       <ALLI:MODE>mode,
++					       operands);
++    else
++      /* Otherwise, generate table-based CRC.  */
++      expand_reversed_crc_table_based (operands[0], operands[1], operands[2],
++				       operands[3], <ALLI:MODE>mode,
++				       generate_reflecting_code_standard);
++    DONE;
++  }
++)
++
++;; Bit-forward CRC
++(define_expand "crc<ALLI:mode><ALLX:mode>4"
++  [;; return value (calculated CRC)
++   (match_operand:ALLX 0 "register_operand" "=r")
++   ;; initial CRC
++   (match_operand:ALLX 1 "register_operand" "r")
++   ;; data
++   (match_operand:ALLI 2 "register_operand" "r")
++   ;; polynomial without leading 1
++   (match_operand:ALLX 3)]
++  "TARGET_AES && <ALLI:sizen> <= <ALLX:sizen>"
++  {
++    aarch64_expand_crc_using_pmull (<ALLX:MODE>mode, <ALLI:MODE>mode,
++				    operands);
++    DONE;
++  }
++)
++
+ (define_insn "*csinc2<mode>_insn"
+   [(set (match_operand:GPI 0 "register_operand" "=r")
+         (plus:GPI (match_operand 2 "aarch64_comparison_operation" "")
+diff --git a/gcc/config/aarch64/iterators.md b/gcc/config/aarch64/iterators.md
+index 8e3b5731939..2146fcb46be 100644
+--- a/gcc/config/aarch64/iterators.md
++++ b/gcc/config/aarch64/iterators.md
+@@ -1323,6 +1323,10 @@ (define_mode_attr lconst2 [(SI "UsO") (DI "UsP")])
+ ;; Map a mode to a specific constraint character.
+ (define_mode_attr cmode [(QI "q") (HI "h") (SI "s") (DI "d")])
+ 
++;; Map a mode to a specific constraint character for calling
++;; appropriate version of crc.
++(define_mode_attr crc_data_type [(QI "b") (HI "h") (SI "w") (DI "x")])
++
+ ;; Map modes to Usg and Usj constraints for SISD right shifts
+ (define_mode_attr cmode_simd [(SI "g") (DI "j")])
+ 
 diff --git a/gcc/config/i386/i386-protos.h b/gcc/config/i386/i386-protos.h
-index c1f9147769c..1f69441cc61 100644
+index c26ae5e4f1d..db1db147402 100644
 --- a/gcc/config/i386/i386-protos.h
 +++ b/gcc/config/i386/i386-protos.h
-@@ -304,6 +304,8 @@ extern bool ix86_expand_vector_init_duplicate (bool, machine_mode, rtx,
+@@ -307,6 +307,8 @@ extern bool ix86_expand_vector_init_duplicate (bool, machine_mode, rtx,
  extern bool ix86_expand_vector_init_one_nonzero (bool, machine_mode, rtx,
  						 rtx, int);
  extern bool ix86_extract_perm_from_pool_constant (int*, rtx);
@@ -279,7 +530,7 @@ index c1f9147769c..1f69441cc61 100644
  /* In i386-c.cc  */
  extern void ix86_target_macros (void);
 diff --git a/gcc/config/i386/i386.cc b/gcc/config/i386/i386.cc
-index 9e5a6c0ffef..7cd864c3a91 100644
+index 6ac3a5d55f2..29d09773b41 100644
 --- a/gcc/config/i386/i386.cc
 +++ b/gcc/config/i386/i386.cc
 @@ -26528,6 +26528,135 @@ ix86_run_selftests (void)
@@ -419,7 +670,7 @@ index 9e5a6c0ffef..7cd864c3a91 100644
  
  static const scoped_attribute_specs *const ix86_attribute_table[] =
 diff --git a/gcc/config/i386/i386.md b/gcc/config/i386/i386.md
-index e4d1c56ea54..458fca3c05f 100644
+index f4aae80b7a9..ee9f294076a 100644
 --- a/gcc/config/i386/i386.md
 +++ b/gcc/config/i386/i386.md
 @@ -192,6 +192,10 @@ (define_c_enum "unspec" [
@@ -433,7 +684,7 @@ index e4d1c56ea54..458fca3c05f 100644
    ;; For LZCNT suppoprt
    UNSPEC_LZCNT
  
-@@ -28658,6 +28662,61 @@ (define_insn "sse4_2_crc32di"
+@@ -28720,6 +28724,61 @@ (define_insn "sse4_2_crc32di"
     (set_attr "prefix_extra" "1")
     (set_attr "mode" "DI")])
  
@@ -587,7 +838,7 @@ index 081659499a9..fae89893ecb 100644
  
  (define_mode_iterator ANYI_QUAD_TRUNC [SI (DI "TARGET_64BIT")])
 diff --git a/gcc/config/riscv/riscv-protos.h b/gcc/config/riscv/riscv-protos.h
-index d690162bb0c..533fbac1803 100644
+index 4ed04321d32..143befab31a 100644
 --- a/gcc/config/riscv/riscv-protos.h
 +++ b/gcc/config/riscv/riscv-protos.h
 @@ -175,6 +175,9 @@ extern bool riscv_reg_frame_related (rtx);
@@ -601,10 +852,10 @@ index d690162bb0c..533fbac1803 100644
  /* Routines implemented in riscv-c.cc.  */
  void riscv_cpu_cpp_builtins (cpp_reader *);
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index fc2a83b2187..00175fe068f 100644
+index 2e9ac280c8f..f1e3b5eb77c 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
-@@ -12599,6 +12599,161 @@ riscv_use_by_pieces_infrastructure_p (unsigned HOST_WIDE_INT size,
+@@ -12711,6 +12711,161 @@ riscv_use_by_pieces_infrastructure_p (unsigned HOST_WIDE_INT size,
    return default_use_by_pieces_infrastructure_p (size, alignment, op, speed_p);
  }
  
@@ -782,10 +1033,10 @@ index 5b7b73535a3..ac639dd9c04 100644
  
  (define_c_enum "unspecv" [
 diff --git a/gcc/configure b/gcc/configure
-index 5acc42c1e4d..56aabf2b6c3 100755
+index 150ab616414..242cffdb312 100755
 --- a/gcc/configure
 +++ b/gcc/configure
-@@ -36231,7 +36231,7 @@ $as_echo "$as_me: executing $ac_file commands" >&6;}
+@@ -36280,7 +36280,7 @@ $as_echo "$as_me: executing $ac_file commands" >&6;}
      "depdir":C) $SHELL $ac_aux_dir/mkinstalldirs $DEPDIR ;;
      "gccdepdir":C)
    ${CONFIG_SHELL-/bin/sh} $ac_aux_dir/mkinstalldirs build/$DEPDIR
@@ -796,7 +1047,7 @@ index 5acc42c1e4d..56aabf2b6c3 100755
    done ;;
 diff --git a/gcc/crc-verification.cc b/gcc/crc-verification.cc
 new file mode 100644
-index 00000000000..a556bc92467
+index 00000000000..c44a32504b4
 --- /dev/null
 +++ b/gcc/crc-verification.cc
 @@ -0,0 +1,1299 @@
@@ -806,6 +1057,7 @@ index 00000000000..a556bc92467
 +   After each iteration check that final states of calculated CRC values match
 +   determined LFSR.
 +   Copyright (C) 2022-2024 Free Software Foundation, Inc.
++   Contributed by Mariam Arutunian <mariamarutunian@gmail.com>
 +
 +This file is part of GCC.
 +
@@ -823,7 +1075,6 @@ index 00000000000..a556bc92467
 +along with GCC; see the file COPYING3.  If not see
 +<http://www.gnu.org/licenses/>.   */
 +
-+#define INCLUDE_MEMORY
 +#include "crc-verification.h"
 +#include "config.h"
 +#include "system.h"
@@ -1885,7 +2136,7 @@ index 00000000000..a556bc92467
 +	/* Check the case when in LFSR we have LFSR (i), where 0<i<LFSR_size.
 +	   In that case in resulting CRC we must have crc (i) case,
 +	   when condition is true or condition is false.
-+	   If we have just LFSR (i), that means polynomial's i +/- 1 bit is 0,
++	   If we have just LFSR (i), that means polynomial's i ± 1 bit is 0,
 +	   so despite CRC is xor-ed or not, we will have crc (i).  */
 +      else if (is_a<symbolic_bit *> ((*lfsr)[i]))
 +	{
@@ -2102,12 +2353,13 @@ index 00000000000..a556bc92467
 \ No newline at end of file
 diff --git a/gcc/crc-verification.h b/gcc/crc-verification.h
 new file mode 100644
-index 00000000000..4aa275d625e
+index 00000000000..d802f4ddb70
 --- /dev/null
 +++ b/gcc/crc-verification.h
-@@ -0,0 +1,161 @@
+@@ -0,0 +1,162 @@
 +/* Execute symbolically all paths of the loop.
 +   Copyright (C) 2022-2024 Free Software Foundation, Inc.
++   Contributed by Mariam Arutunian <mariamarutunian@gmail.com>
 +
 +This file is part of GCC.
 +
@@ -2268,10 +2520,10 @@ index 00000000000..4aa275d625e
 +
 +#endif //GCC_CRC_VERIFICATION
 diff --git a/gcc/doc/extend.texi b/gcc/doc/extend.texi
-index 42bd567119d..963ccf3f2f2 100644
+index c566474074d..8b8c93945ee 100644
 --- a/gcc/doc/extend.texi
 +++ b/gcc/doc/extend.texi
-@@ -16176,6 +16176,115 @@ Returns the openacc gang, worker or vector size depending on whether @var{x} is
+@@ -16272,6 +16272,115 @@ Returns the openacc gang, worker or vector size depending on whether @var{x} is
  0, 1 or 2.
  @enddefbuiltin
  
@@ -2388,10 +2640,10 @@ index 42bd567119d..963ccf3f2f2 100644
  @section Built-in Functions Specific to Particular Target Machines
  
 diff --git a/gcc/doc/invoke.texi b/gcc/doc/invoke.texi
-index 8437b2029ed..4c34cd45e01 100644
+index 93e9af3791c..b147fc8e8cd 100644
 --- a/gcc/doc/invoke.texi
 +++ b/gcc/doc/invoke.texi
-@@ -600,7 +600,7 @@ Objective-C and Objective-C++ Dialects}.
+@@ -603,7 +603,7 @@ Objective-C and Objective-C++ Dialects}.
  -fno-peephole2  -fno-printf-return-value  -fno-sched-interblock
  -fno-sched-spec  -fno-signed-zeros
  -fno-toplevel-reorder  -fno-trapping-math  -fno-zero-initialized-in-bss
@@ -2400,7 +2652,7 @@ index 8437b2029ed..4c34cd45e01 100644
  -fpartial-inlining  -fpeel-loops  -fpredictive-commoning
  -fprefetch-loop-arrays
  -fprofile-correction
-@@ -12479,6 +12479,7 @@ also turns on the following optimization flags:
+@@ -12599,6 +12599,7 @@ also turns on the following optimization flags:
  -fipa-ra  -fipa-sra  -fipa-vrp
  -fisolate-erroneous-paths-dereference
  -flra-remat
@@ -2408,7 +2660,7 @@ index 8437b2029ed..4c34cd45e01 100644
  -foptimize-sibling-calls
  -foptimize-strlen
  -fpartial-inlining
-@@ -12643,6 +12644,19 @@ leaf functions.
+@@ -12763,6 +12764,19 @@ leaf functions.
  
  Enabled by default at @option{-O1} and higher.
  
@@ -2429,10 +2681,10 @@ index 8437b2029ed..4c34cd45e01 100644
  @item -foptimize-sibling-calls
  Optimize sibling and tail recursive calls.
 diff --git a/gcc/doc/md.texi b/gcc/doc/md.texi
-index 6d9c8643739..91f2b9d561d 100644
+index 25ded86f0d1..ae942dfc7c2 100644
 --- a/gcc/doc/md.texi
 +++ b/gcc/doc/md.texi
-@@ -8593,6 +8593,20 @@ Return 1 if operand 1 is a normal floating point number and 0
+@@ -8620,6 +8620,20 @@ Return 1 if operand 1 is a normal floating point number and 0
  otherwise.  @var{m} is a scalar floating point mode.  Operand 0
  has mode @code{SImode}, and operand 1 has mode @var{m}.
  
@@ -2454,10 +2706,10 @@ index 6d9c8643739..91f2b9d561d 100644
  
  @end ifset
 diff --git a/gcc/expr.cc b/gcc/expr.cc
-index 87f9e002c07..63f65727ee5 100644
+index caa1a72ba0b..f507b388f9b 100644
 --- a/gcc/expr.cc
 +++ b/gcc/expr.cc
-@@ -14135,3 +14135,401 @@ int_expr_size (const_tree exp)
+@@ -14136,3 +14136,402 @@ int_expr_size (const_tree exp)
  
    return tree_to_shwi (size);
  }
@@ -2674,16 +2926,17 @@ index 87f9e002c07..63f65727ee5 100644
 +void
 +emit_crc (machine_mode crc_mode, rtx* crc, rtx* op0)
 +{
-+  if (GET_MODE_BITSIZE (crc_mode).to_constant () == 32
-+      && GET_MODE_BITSIZE (word_mode) == 64)
-+    {
-+      rtx a_low = gen_lowpart (crc_mode, *crc);
-+      *crc = gen_rtx_SIGN_EXTEND (word_mode, a_low);
-+    }
-+  rtx tgt = *op0;
 +  if (word_mode != crc_mode)
-+    tgt = simplify_gen_subreg (word_mode, *op0, crc_mode, 0);
-+  emit_move_insn (tgt, *crc);
++    {
++      rtx tgt = simplify_gen_subreg (word_mode, *op0, crc_mode, 0);
++      rtx crc_low = gen_lowpart (crc_mode, *crc);
++      if (SUBREG_P (*op0) && SUBREG_PROMOTED_VAR_P (*op0))
++	convert_move (tgt, crc_low, SUBREG_PROMOTED_SIGN (*op0));
++      else
++	convert_move (tgt, crc_low, 0);
++    }
++    else
++      emit_move_insn (*op0, *crc);
 +}
 +
 +/* Generate table-based CRC code for the given CRC, INPUT_DATA and the
@@ -2884,7 +3137,7 @@ new file mode 100644
 index 00000000000..9dee9be85d0
 --- /dev/null
 +++ b/gcc/gimple-crc-optimization.cc
-@@ -0,0 +1,1402 @@
+@@ -0,0 +1,1401 @@
 +/* CRC optimization.
 +   Copyright (C) 2022-2024 Free Software Foundation, Inc.
 +   Contributed by Mariam Arutunian <mariamarutunian@gmail.com>
@@ -2906,7 +3159,6 @@ index 00000000000..9dee9be85d0
 +<http://www.gnu.org/licenses/>.   */
 +
 +/* This pass performs CRC optimization.  */
-+#define INCLUDE_MEMORY
 +#include "config.h"
 +#include "system.h"
 +#include "coretypes.h"
@@ -4315,7 +4567,7 @@ index e5c3619a35b..adb30e2b9ad 100644
 +}
 \ No newline at end of file
 diff --git a/gcc/hwint.h b/gcc/hwint.h
-index 25a94bedef1..5c3d40a9aa4 100644
+index 82416bf366e..f69b61db9cc 100644
 --- a/gcc/hwint.h
 +++ b/gcc/hwint.h
 @@ -284,6 +284,7 @@ extern HOST_WIDE_INT gcd (HOST_WIDE_INT, HOST_WIDE_INT);
@@ -4327,10 +4579,10 @@ index 25a94bedef1..5c3d40a9aa4 100644
  /* Like ctz_hwi, except 0 when x == 0.  */
  
 diff --git a/gcc/internal-fn.cc b/gcc/internal-fn.cc
-index d89a04fe412..c49cfb274ff 100644
+index 0ee5f5bc7c5..901d43cb92f 100644
 --- a/gcc/internal-fn.cc
 +++ b/gcc/internal-fn.cc
-@@ -189,6 +189,7 @@ init_internal_fns ()
+@@ -191,6 +191,7 @@ init_internal_fns ()
  #define mask_fold_left_direct { 1, 1, false }
  #define mask_len_fold_left_direct { 1, 1, false }
  #define check_ptrs_direct { 0, 0, false }
@@ -4338,7 +4590,7 @@ index d89a04fe412..c49cfb274ff 100644
  
  const direct_internal_fn_info direct_internal_fn_array[IFN_LAST + 1] = {
  #define DEF_INTERNAL_FN(CODE, FLAGS, FNSPEC) not_direct,
-@@ -3961,6 +3962,58 @@ expand_convert_optab_fn (internal_fn fn, gcall *stmt, convert_optab optab,
+@@ -4029,6 +4030,58 @@ expand_convert_optab_fn (internal_fn fn, gcall *stmt, convert_optab optab,
    expand_fn_using_insn (stmt, icode, 1, nargs);
  }
  
@@ -4397,7 +4649,7 @@ index d89a04fe412..c49cfb274ff 100644
  /* Expanders for optabs that can use expand_direct_optab_fn.  */
  
  #define expand_unary_optab_fn(FN, STMT, OPTAB) \
-@@ -4097,6 +4150,7 @@ multi_vector_optab_supported_p (convert_optab optab, tree_pair types,
+@@ -4165,6 +4218,7 @@ multi_vector_optab_supported_p (convert_optab optab, tree_pair types,
  #define direct_cond_len_unary_optab_supported_p direct_optab_supported_p
  #define direct_cond_len_binary_optab_supported_p direct_optab_supported_p
  #define direct_cond_len_ternary_optab_supported_p direct_optab_supported_p
@@ -4406,10 +4658,10 @@ index d89a04fe412..c49cfb274ff 100644
  #define direct_load_lanes_optab_supported_p multi_vector_optab_supported_p
  #define direct_mask_load_lanes_optab_supported_p multi_vector_optab_supported_p
 diff --git a/gcc/internal-fn.def b/gcc/internal-fn.def
-index 23b4ab02b30..5749a1d2cab 100644
+index c3d0efc0f2c..338bec221ac 100644
 --- a/gcc/internal-fn.def
 +++ b/gcc/internal-fn.def
-@@ -200,6 +200,8 @@ along with GCC; see the file COPYING3.  If not see
+@@ -202,6 +202,8 @@ along with GCC; see the file COPYING3.  If not see
  				cond_len_##UNSIGNED_OPTAB, cond_len_##TYPE)
  #endif
  
@@ -4419,7 +4671,7 @@ index 23b4ab02b30..5749a1d2cab 100644
  DEF_INTERNAL_OPTAB_FN (LOAD_LANES, ECF_CONST, vec_load_lanes, load_lanes)
  DEF_INTERNAL_OPTAB_FN (MASK_LOAD_LANES, ECF_PURE,
 diff --git a/gcc/optabs.def b/gcc/optabs.def
-index b48e2e5a5ac..0b1d9b1659f 100644
+index 75f39d85ada..5d75b1379ac 100644
 --- a/gcc/optabs.def
 +++ b/gcc/optabs.def
 @@ -85,6 +85,8 @@ OPTAB_CD(smsub_widen_optab, "msub$b$a4")
@@ -4432,10 +4684,10 @@ index b48e2e5a5ac..0b1d9b1659f 100644
  OPTAB_CD(vec_store_lanes_optab, "vec_store_lanes$a$b")
  OPTAB_CD(vec_mask_load_lanes_optab, "vec_mask_load_lanes$a$b")
 diff --git a/gcc/opts.cc b/gcc/opts.cc
-index acd53befdbf..9564443f354 100644
+index 64d130c46c0..1aa170c64da 100644
 --- a/gcc/opts.cc
 +++ b/gcc/opts.cc
-@@ -666,6 +666,7 @@ static const struct default_options default_options_table[] =
+@@ -669,6 +669,7 @@ static const struct default_options default_options_table[] =
        VECT_COST_MODEL_VERY_CHEAP },
      { OPT_LEVELS_2_PLUS, OPT_finline_functions, NULL, 1 },
      { OPT_LEVELS_2_PLUS, OPT_ftree_loop_distribute_patterns, NULL, 1 },
@@ -4443,7 +4695,7 @@ index acd53befdbf..9564443f354 100644
      { OPT_LEVELS_2_PLUS, OPT_flate_combine_instructions, NULL, 1 },
  
      /* -O2 and above optimizations, but not -Os or -Og.  */
-@@ -2097,6 +2098,7 @@ enable_fdo_optimizations (struct gcc_options *opts,
+@@ -2100,6 +2101,7 @@ enable_fdo_optimizations (struct gcc_options *opts,
    SET_OPTION_IF_UNSET (opts, opts_set, flag_loop_interchange, value);
    SET_OPTION_IF_UNSET (opts, opts_set, flag_unroll_jam, value);
    SET_OPTION_IF_UNSET (opts, opts_set, flag_tree_loop_distribution, value);
@@ -4465,12 +4717,36 @@ index 7d01227eed1..2ed56295581 100644
  	  NEXT_PASS (pass_graphite);
 diff --git a/gcc/sym-exec/sym-exec-condition.cc b/gcc/sym-exec/sym-exec-condition.cc
 new file mode 100644
-index 00000000000..ef3f1e3fda5
+index 00000000000..fef03d04d55
 --- /dev/null
 +++ b/gcc/sym-exec/sym-exec-condition.cc
-@@ -0,0 +1,60 @@
-+#define INCLUDE_MEMORY
+@@ -0,0 +1,86 @@
++/* Everything defined here is used for representing conditions for bits
++   and their status.
++   Copyright (C) 2022-2024 Free Software Foundation, Inc.
++   Contributed by Matevos Mehrabyan <matevosmehrabyan@gmail.com>
++
++This file is part of GCC.
++
++GCC is free software; you can redistribute it and/or modify it under
++the terms of the GNU General Public License as published by the Free
++Software Foundation; either version 3, or (at your option) any later
++version.
++
++GCC is distributed in the hope that it will be useful, but WITHOUT ANY
++WARRANTY; without even the implied warranty of MERCHANTABILITY or
++FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++for more details.
++
++You should have received a copy of the GNU General Public License
++along with GCC; see the file COPYING3.  If not see
++<http://www.gnu.org/licenses/>.  */
++
 +#include "sym-exec-condition.h"
++
++/* Constructor where the first argument is the bit left to the condition sign,
++   the second argument is the bit right to the condition sign and the third
++   argument is the code of the condition.  */
 +
 +bit_condition::bit_condition (value_bit *left, value_bit *right, tree_code code)
 +{
@@ -4480,6 +4756,8 @@ index 00000000000..ef3f1e3fda5
 +  m_type = BIT_CONDITION;
 +}
 +
++
++/* Copy constructor.  */
 +
 +bit_condition::bit_condition (const bit_condition &expr)
 +{
@@ -4532,14 +4810,38 @@ index 00000000000..ef3f1e3fda5
 \ No newline at end of file
 diff --git a/gcc/sym-exec/sym-exec-condition.h b/gcc/sym-exec/sym-exec-condition.h
 new file mode 100644
-index 00000000000..1d9d59512bb
+index 00000000000..ee5b8703f48
 --- /dev/null
 +++ b/gcc/sym-exec/sym-exec-condition.h
-@@ -0,0 +1,33 @@
+@@ -0,0 +1,63 @@
++/* Everything defined here is used for representing conditions for bits
++   and their status.
++   Copyright (C) 2022-2024 Free Software Foundation, Inc.
++   Contributed by Matevos Mehrabyan <matevosmehrabyan@gmail.com>
++
++This file is part of GCC.
++
++GCC is free software; you can redistribute it and/or modify it under
++the terms of the GNU General Public License as published by the Free
++Software Foundation; either version 3, or (at your option) any later
++version.
++
++GCC is distributed in the hope that it will be useful, but WITHOUT ANY
++WARRANTY; without even the implied warranty of MERCHANTABILITY or
++FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++for more details.
++
++You should have received a copy of the GNU General Public License
++along with GCC; see the file COPYING3.  If not see
++<http://www.gnu.org/licenses/>.  */
++
++
 +#ifndef SYM_EXEC_CONDITION_H
 +#define SYM_EXEC_CONDITION_H
 +
 +#include "sym-exec-expression.h"
++
++/* Enum representing condition status.  */
 +
 +enum condition_status {
 +  CS_NO_COND,
@@ -4548,6 +4850,7 @@ index 00000000000..1d9d59512bb
 +  CS_SYM
 +};
 +
++/* Class used for describing and storing condition for a single bit.  */
 +
 +class bit_condition : public bit_expression {
 + private:
@@ -4558,7 +4861,12 @@ index 00000000000..1d9d59512bb
 +  void print_expr_sign ();
 +
 + public:
++  /* Constructor where the first argument is the bit left to the condition sign,
++     the second argument is the bit right to the condition sign and the third
++     argument is the code of the condition.  */
 +  bit_condition (value_bit *left, value_bit *right, tree_code type);
++
++  /* Copy constructor.  */
 +  bit_condition (const bit_condition &expr);
 +
 +  /* Returns the condition's code.  */
@@ -4572,16 +4880,38 @@ index 00000000000..1d9d59512bb
 \ No newline at end of file
 diff --git a/gcc/sym-exec/sym-exec-expr-is-a-helper.h b/gcc/sym-exec/sym-exec-expr-is-a-helper.h
 new file mode 100644
-index 00000000000..369213e5146
+index 00000000000..1a262b47fad
 --- /dev/null
 +++ b/gcc/sym-exec/sym-exec-expr-is-a-helper.h
-@@ -0,0 +1,204 @@
+@@ -0,0 +1,287 @@
++/* Defining test functions for value conversion via dyn_cast.
++   Copyright (C) 2022-2024 Free Software Foundation, Inc.
++   Contributed by Matevos Mehrabyan <matevosmehrabyan@gmail.com>
++
++This file is part of GCC.
++
++GCC is free software; you can redistribute it and/or modify it under
++the terms of the GNU General Public License as published by the Free
++Software Foundation; either version 3, or (at your option) any later
++version.
++
++GCC is distributed in the hope that it will be useful, but WITHOUT ANY
++WARRANTY; without even the implied warranty of MERCHANTABILITY or
++FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++for more details.
++
++You should have received a copy of the GNU General Public License
++along with GCC; see the file COPYING3.  If not see
++<http://www.gnu.org/licenses/>.  */
++
++
 +#ifndef SYM_EXEC_EXPRESSION_IS_A_HELPER_H
 +#define SYM_EXEC_EXPRESSION_IS_A_HELPER_H
 +
 +#include "sym-exec-condition.h"
 +
-+/* Defining test functions for value conversion via dyn_cast.  */
++/* Test function used by dyn_cast checks if the value_bit is of
++   the value_type::SYMBOLIC_BIT type.  */
 +
 +template<>
 +template<>
@@ -4592,6 +4922,9 @@ index 00000000000..369213e5146
 +}
 +
 +
++/* Test function used by dyn_cast checks if the value_bit is of
++   the value_type::BIT type.  */
++
 +template<>
 +template<>
 +inline bool
@@ -4600,6 +4933,9 @@ index 00000000000..369213e5146
 +  return ptr->get_type () == value_type::BIT;
 +}
 +
++
++/* Test function used by dyn_cast checks if the value_bit
++   is a bit_expression.  */
 +
 +template<>
 +template<>
@@ -4619,6 +4955,9 @@ index 00000000000..369213e5146
 +}
 +
 +
++/* Test function used by dyn_cast checks if the value_bit
++   is a bit_and_expression.  */
++
 +template<>
 +template<>
 +inline bool
@@ -4627,6 +4966,9 @@ index 00000000000..369213e5146
 +  return ptr->get_type () == value_type::BIT_AND_EXPRESSION;
 +}
 +
++
++/* Test function used by dyn_cast checks if the value_bit
++   is a bit_or_expression.  */
 +
 +template<>
 +template<>
@@ -4637,6 +4979,9 @@ index 00000000000..369213e5146
 +}
 +
 +
++/* Test function used by dyn_cast checks if the value_bit
++   is a bit_xor_expression.  */
++
 +template<>
 +template<>
 +inline bool
@@ -4645,6 +4990,9 @@ index 00000000000..369213e5146
 +  return ptr->get_type () == value_type::BIT_XOR_EXPRESSION;
 +}
 +
++
++/* Test function used by dyn_cast checks if the value_bit
++   is a bit_complement_expression.  */
 +
 +template<>
 +template<>
@@ -4655,6 +5003,9 @@ index 00000000000..369213e5146
 +}
 +
 +
++/* Test function used by dyn_cast checks if the value_bit
++   is a shift_left_expression.  */
++
 +template<>
 +template<>
 +inline bool
@@ -4663,6 +5014,9 @@ index 00000000000..369213e5146
 +  return ptr->get_type () == value_type::SHIFT_LEFT_EXPRESSION;
 +}
 +
++
++/* Test function used by dyn_cast checks if the value_bit
++   is a shift_right_expression.  */
 +
 +template<>
 +template<>
@@ -4673,6 +5027,9 @@ index 00000000000..369213e5146
 +}
 +
 +
++/* Test function used by dyn_cast checks if the value_bit
++   is an add_expression.  */
++
 +template<>
 +template<>
 +inline bool
@@ -4681,6 +5038,9 @@ index 00000000000..369213e5146
 +  return ptr->get_type () == value_type::ADD_EXPRESSION;
 +}
 +
++
++/* Test function used by dyn_cast checks if the value_bit
++   is a sub_expression.  */
 +
 +template<>
 +template<>
@@ -4691,6 +5051,9 @@ index 00000000000..369213e5146
 +}
 +
 +
++/* Test function used by dyn_cast checks if the value_bit
++   is a bit_condition.  */
++
 +template<>
 +template<>
 +inline bool
@@ -4699,6 +5062,9 @@ index 00000000000..369213e5146
 +  return ptr->get_type () == value_type::BIT_CONDITION;
 +}
 +
++
++/* Test function used by dyn_cast checks if the bit_expression
++   is a bit_and_expression.  */
 +
 +template<>
 +template<>
@@ -4709,6 +5075,9 @@ index 00000000000..369213e5146
 +}
 +
 +
++/* Test function used by dyn_cast checks if the bit_expression
++   is a bit_or_expression.  */
++
 +template<>
 +template<>
 +inline bool
@@ -4717,6 +5086,9 @@ index 00000000000..369213e5146
 +  return ptr->get_type () == value_type::BIT_OR_EXPRESSION;
 +}
 +
++
++/* Test function used by dyn_cast checks if the bit_expression
++   is a bit_xor_expression.  */
 +
 +template<>
 +template<>
@@ -4727,6 +5099,9 @@ index 00000000000..369213e5146
 +}
 +
 +
++/* Test function used by dyn_cast checks if the bit_expression
++   is a bit_complement_expression.  */
++
 +template<>
 +template<>
 +inline bool
@@ -4736,6 +5111,9 @@ index 00000000000..369213e5146
 +}
 +
 +
++/* Test function used by dyn_cast checks if the bit_expression
++   is a shift_left_expression.  */
++
 +template<>
 +template<>
 +inline bool
@@ -4743,6 +5121,10 @@ index 00000000000..369213e5146
 +{
 +  return ptr->get_type () == value_type::SHIFT_LEFT_EXPRESSION;
 +}
++
++
++/* Test function used by dyn_cast checks if the bit_expression
++   is a shift_right_expression.  */
 +
 +template<>
 +template<>
@@ -4753,6 +5135,9 @@ index 00000000000..369213e5146
 +}
 +
 +
++/* Test function used by dyn_cast checks if the bit_expression
++   is a add_expression.  */
++
 +template<>
 +template<>
 +inline bool
@@ -4762,6 +5147,9 @@ index 00000000000..369213e5146
 +}
 +
 +
++/* Test function used by dyn_cast checks if the bit_expression
++   is a sub_expression.  */
++
 +template<>
 +template<>
 +inline bool
@@ -4770,6 +5158,9 @@ index 00000000000..369213e5146
 +  return ptr->get_type () == value_type::SUB_EXPRESSION;
 +}
 +
++
++/* Test function used by dyn_cast checks if the bit_expression
++   is a bit_condition_expression.  */
 +
 +template<>
 +template<>
@@ -4783,15 +5174,32 @@ index 00000000000..369213e5146
 \ No newline at end of file
 diff --git a/gcc/sym-exec/sym-exec-expression.cc b/gcc/sym-exec/sym-exec-expression.cc
 new file mode 100644
-index 00000000000..d34ebce6d3c
+index 00000000000..8abae6a993f
 --- /dev/null
 +++ b/gcc/sym-exec/sym-exec-expression.cc
-@@ -0,0 +1,427 @@
+@@ -0,0 +1,490 @@
 +/* Every class defined here represents a single bit value of a variable.
 +   Every variable will be represented as a vector of these classes which later
-+   will be used for bit-level symbolic execution.  */
++   will be used for bit-level symbolic execution.
++   Copyright (C) 2022-2024 Free Software Foundation, Inc.
++   Contributed by Matevos Mehrabyan <matevosmehrabyan@gmail.com>
 +
-+#define INCLUDE_MEMORY
++This file is part of GCC.
++
++GCC is free software; you can redistribute it and/or modify it under
++the terms of the GNU General Public License as published by the Free
++Software Foundation; either version 3, or (at your option) any later
++version.
++
++GCC is distributed in the hope that it will be useful, but WITHOUT ANY
++WARRANTY; without even the implied warranty of MERCHANTABILITY or
++FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++for more details.
++
++You should have received a copy of the GNU General Public License
++along with GCC; see the file COPYING3.  If not see
++<http://www.gnu.org/licenses/>.  */
++
 +#include "sym-exec-expr-is-a-helper.h"
 +
 +/* Returns type of the bit.  */
@@ -4803,12 +5211,16 @@ index 00000000000..d34ebce6d3c
 +}
 +
 +
++/* Constructor that sets the bit's initial position and its origin.  */
++
 +symbolic_bit::symbolic_bit (size_t i, tree orig)
 +    : value_bit (i), m_origin (orig)
 +{
 +  m_type = SYMBOLIC_BIT;
 +}
 +
++
++/* Constructor that sets m_val to the specified value.  */
 +
 +bit::bit (unsigned char i) : m_val (i)
 +{
@@ -4879,6 +5291,9 @@ index 00000000000..d34ebce6d3c
 +}
 +
 +
++/* Constructor that sets the left and right side bits
++   of the bit_complement_expression sign.  */
++
 +bit_complement_expression::bit_complement_expression (value_bit *right)
 +{
 +  /* As complement has only one argument, we use only the m_right.  */
@@ -4888,12 +5303,16 @@ index 00000000000..d34ebce6d3c
 +}
 +
 +
++/* Copy constructor for bit_complement_expression.  */
++
 +bit_complement_expression::bit_complement_expression (
 +  const bit_complement_expression &expr)
 +{
 +  bit_expression::copy (&expr);
 +}
 +
++
++/* Destructor for bit_expression.  */
 +
 +bit_expression::~bit_expression ()
 +{
@@ -5009,6 +5428,9 @@ index 00000000000..d34ebce6d3c
 +}
 +
 +
++/* Constructor that sets the left and right side bits
++   of the bit_xor_expression sign.  */
++
 +bit_xor_expression::bit_xor_expression (value_bit *left, value_bit *right)
 +{
 +  this->m_left = left;
@@ -5017,11 +5439,16 @@ index 00000000000..d34ebce6d3c
 +}
 +
 +
++/* Copy constructor for bit_xor_expression.  */
++
 +bit_xor_expression::bit_xor_expression (const bit_xor_expression &expr)
 +{
 +  bit_expression::copy (&expr);
 +}
 +
++
++/* Constructor that sets the left and right side bits
++   of the bit_and_expression sign.  */
 +
 +bit_and_expression::bit_and_expression (value_bit *left, value_bit *right)
 +{
@@ -5031,11 +5458,16 @@ index 00000000000..d34ebce6d3c
 +}
 +
 +
++/* Copy constructor for bit_and_expression.  */
++
 +bit_and_expression::bit_and_expression (const bit_and_expression &expr)
 +{
 +  bit_expression::copy (&expr);
 +}
 +
++
++/* Constructor that sets the left and right side bits
++   of the bit_or_expression sign.  */
 +
 +bit_or_expression::bit_or_expression (value_bit *left, value_bit *right)
 +{
@@ -5045,11 +5477,16 @@ index 00000000000..d34ebce6d3c
 +}
 +
 +
++/* Copy constructor for bit_or_expression.  */
++
 +bit_or_expression::bit_or_expression (const bit_or_expression &expr)
 +{
 +  bit_expression::copy (&expr);
 +}
 +
++
++/* Constructor that sets the left and right side bits
++   of the shift_right_expression sign.  */
 +
 +shift_right_expression::shift_right_expression (value_bit *left,
 +						value_bit *right)
@@ -5060,12 +5497,17 @@ index 00000000000..d34ebce6d3c
 +}
 +
 +
++/* Copy constructor for shift_right_expression.  */
++
 +shift_right_expression::shift_right_expression (
 +  const shift_right_expression &expr)
 +{
 +  bit_expression::copy (&expr);
 +}
 +
++
++/* Constructor that sets the left and right side bits
++   of the shift_left_expression sign.  */
 +
 +shift_left_expression::shift_left_expression (value_bit *left, value_bit *right)
 +{
@@ -5075,11 +5517,16 @@ index 00000000000..d34ebce6d3c
 +}
 +
 +
++/* Copy constructor for shift_left_expression.  */
++
 +shift_left_expression::shift_left_expression (const shift_left_expression &expr)
 +{
 +  bit_expression::copy (&expr);
 +}
 +
++
++/* Constructor that sets the left and right side bits
++   of the add_expression sign.  */
 +
 +add_expression::add_expression (value_bit *left, value_bit *right)
 +{
@@ -5089,11 +5536,16 @@ index 00000000000..d34ebce6d3c
 +}
 +
 +
++/* Copy constructor for add_expression.  */
++
 +add_expression::add_expression (const add_expression &expr)
 +{
 +  bit_expression::copy (&expr);
 +}
 +
++
++/* Constructor that sets the left and right side bits
++   of the sub_expression sign.  */
 +
 +sub_expression::sub_expression (value_bit *left, value_bit *right)
 +{
@@ -5102,6 +5554,8 @@ index 00000000000..d34ebce6d3c
 +  m_type = SUB_EXPRESSION;
 +}
 +
++
++/* Copy constructor for sub_expression.  */
 +
 +sub_expression::sub_expression (const sub_expression &expr)
 +{
@@ -5217,13 +5671,31 @@ index 00000000000..d34ebce6d3c
 \ No newline at end of file
 diff --git a/gcc/sym-exec/sym-exec-expression.h b/gcc/sym-exec/sym-exec-expression.h
 new file mode 100644
-index 00000000000..36b90ffb374
+index 00000000000..610088c9637
 --- /dev/null
 +++ b/gcc/sym-exec/sym-exec-expression.h
-@@ -0,0 +1,260 @@
+@@ -0,0 +1,332 @@
 +/* Every class defined here represents a single bit value of a variable.
 +   Every variable will be represented as a vector of these classes which later
-+   will be used for bit-level symbolic execution.  */
++   will be used for bit-level symbolic execution.
++   Copyright (C) 2022-2024 Free Software Foundation, Inc.
++   Contributed by Matevos Mehrabyan <matevosmehrabyan@gmail.com>
++
++This file is part of GCC.
++
++GCC is free software; you can redistribute it and/or modify it under
++the terms of the GNU General Public License as published by the Free
++Software Foundation; either version 3, or (at your option) any later
++version.
++
++GCC is distributed in the hope that it will be useful, but WITHOUT ANY
++WARRANTY; without even the implied warranty of MERCHANTABILITY or
++FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++for more details.
++
++You should have received a copy of the GNU General Public License
++along with GCC; see the file COPYING3.  If not see
++<http://www.gnu.org/licenses/>.  */
 +
 +#ifndef SYM_EXEC_EXPRESSION_H
 +#define SYM_EXEC_EXPRESSION_H
@@ -5257,6 +5729,7 @@ index 00000000000..36b90ffb374
 +  BIT_CONDITION
 +};
 +
++
 +/* Base class for single bit value.  */
 +
 +class value_bit {
@@ -5269,10 +5742,16 @@ index 00000000000..36b90ffb374
 +  value_type m_type;
 +
 + public:
++
++  /* Default constructor.  Sets m_index 0.  */
 +  value_bit () : m_index (0)
 +  {};
++
++  /* Constructor that sets m_index to the specified value.  */
 +  value_bit (size_t i) : m_index (i)
 +  {};
++
++  /* Copy constructor for value_bit.  */
 +  value_bit (const value_bit &val) : m_index (val.m_index)
 +  {};
 +
@@ -5287,16 +5766,23 @@ index 00000000000..36b90ffb374
 +
 +  /* Prints the bit.  Inherited classes must implement it.  */
 +  virtual void print () = 0;
++
++  /* Destructor.  */
 +  virtual ~value_bit () = default;
 +};
++
 +
 +/* Represents value of a single bit of symbolic marked variables.  */
 +
 +class symbolic_bit : public value_bit {
++  /* The Origin of the bit.  */
 +  tree m_origin = nullptr;
 +
 + public:
++  /* Constructor that sets the bit's initial position and its origin.  */
 +  symbolic_bit (size_t i, tree orig);
++
++  /* Copy constructor for symbolic_bit.  */
 +  symbolic_bit (const symbolic_bit &sym_bit) : symbolic_bit (sym_bit.m_index,
 +							     sym_bit.m_origin)
 +  {};
@@ -5320,7 +5806,10 @@ index 00000000000..36b90ffb374
 +  unsigned char m_val = 0;
 +
 + public:
++  /* Constructor that sets m_val to the specified value.  */
 +  bit (unsigned char i);
++
++  /* Copy constructor for bit.  */
 +  bit (const bit &b) : bit (b.m_val)
 +  {};
 +
@@ -5343,7 +5832,10 @@ index 00000000000..36b90ffb374
 +
 +class bit_expression : public value_bit {
 + protected:
++  /* The bit left to the expression sign.  */
 +  value_bit *m_left = nullptr;
++
++  /* The bit right to the expression sign.  */
 +  value_bit *m_right = nullptr;
 +
 +  /* Copies the given expression to it by copying
@@ -5361,6 +5853,7 @@ index 00000000000..36b90ffb374
 +  /* Returns right operand of the expression.  */
 +  value_bit *get_right ();
 +
++  /* Destructor for bit_expression.  */
 +  ~bit_expression ();
 +
 +  /* Sets left operand of the expression.  */
@@ -5383,7 +5876,11 @@ index 00000000000..36b90ffb374
 +
 +class bit_xor_expression : public bit_expression {
 + public:
++  /* Constructor that sets the left and right side bits
++     of the bit_xor_expression sign.  */
 +  bit_xor_expression (value_bit *left, value_bit *right);
++
++  /* Copy constructor for bit_xor_expression.  */
 +  bit_xor_expression (const bit_xor_expression &expr);
 +
 +  /* Returns a copy of the expression.  */
@@ -5397,7 +5894,11 @@ index 00000000000..36b90ffb374
 +
 +class bit_and_expression : public bit_expression {
 + public:
++  /* Constructor that sets the left and right side bits
++     of the bit_and_expression sign.  */
 +  bit_and_expression (value_bit *left, value_bit *right);
++
++  /* Copy constructor for bit_and_expression.  */
 +  bit_and_expression (const bit_and_expression &expr);
 +
 +  /* Returns a copy of the expression.  */
@@ -5411,7 +5912,11 @@ index 00000000000..36b90ffb374
 +
 +class bit_or_expression : public bit_expression {
 + public:
++  /* Constructor that sets the left and right side bits
++     of the bit_or_expression sign.  */
 +  bit_or_expression (value_bit *left, value_bit *right);
++
++  /* Copy constructor for bit_or_expression.  */
 +  bit_or_expression (const bit_or_expression &expr);
 +
 +  /* Returns a copy of the expression.  */
@@ -5423,7 +5928,11 @@ index 00000000000..36b90ffb374
 +
 +class shift_right_expression : public bit_expression {
 + public:
++  /* Constructor that sets the left and right side bits
++     of the shift_right_expression sign.  */
 +  shift_right_expression (value_bit *left, value_bit *right);
++
++  /* Copy constructor for shift_right_expression.  */
 +  shift_right_expression (const shift_right_expression &expr);
 +
 +  /* Returns a copy of the expression.  */
@@ -5435,7 +5944,11 @@ index 00000000000..36b90ffb374
 +
 +class shift_left_expression : public bit_expression {
 + public:
++  /* Constructor that sets the left and right side bits
++     of the shift_left_expression sign.  */
 +  shift_left_expression (value_bit *left, value_bit *right);
++
++  /* Copy constructor for shift_left_expression.  */
 +  shift_left_expression (const shift_left_expression &expr);
 +
 +  /* Returns a copy of the expression.  */
@@ -5447,7 +5960,11 @@ index 00000000000..36b90ffb374
 +
 +class add_expression : public bit_expression {
 + public:
++  /* Constructor that sets the left and right side bits
++     of the add_expression sign.  */
 +  add_expression (value_bit *left, value_bit *right);
++
++  /* Copy constructor for add_expression.  */
 +  add_expression (const add_expression &expr);
 +
 +  /* Returns a copy of the expression.  */
@@ -5459,18 +5976,27 @@ index 00000000000..36b90ffb374
 +
 +class sub_expression : public bit_expression {
 + public:
++  /* Constructor that sets the left and right side bits
++     of the sub_expression sign.  */
 +  sub_expression (value_bit *left, value_bit *right);
++
++  /* Copy constructor for sub_expression.  */
 +  sub_expression (const sub_expression &expr);
 +
 +  /* Returns a copy of the expression.  */
 +  value_bit *copy () const;
 +};
 +
++
 +/* Bit-level negation expression.  */
 +
 +class bit_complement_expression : public bit_expression {
 + public:
++  /* Constructor that sets the left and right side bits
++     of the bit_complement_expression sign.  */
 +  bit_complement_expression (value_bit *right);
++
++  /* Copy constructor for bit_complement_expression.  */
 +  bit_complement_expression (const bit_complement_expression &expr);
 +
 +  /* Returns a copy of the expression.  */
@@ -5484,16 +6010,174 @@ index 00000000000..36b90ffb374
 \ No newline at end of file
 diff --git a/gcc/sym-exec/sym-exec-state.cc b/gcc/sym-exec/sym-exec-state.cc
 new file mode 100644
-index 00000000000..5962a3d0bf2
+index 00000000000..c51e2aa3c1f
 --- /dev/null
 +++ b/gcc/sym-exec/sym-exec-state.cc
-@@ -0,0 +1,2250 @@
+@@ -0,0 +1,2422 @@
 +/* State will store states of variables for a function's single execution path.
 +   It will be used for bit-level symbolic execution to determine values of bits
-+   of function's return value and symbolic marked arguments.  */
++   of function's return value and symbolic marked arguments.
++   Copyright (C) 2022-2024 Free Software Foundation, Inc.
++   Contributed by Matevos Mehrabyan <matevosmehrabyan@gmail.com>
 +
-+#define INCLUDE_MEMORY
++This file is part of GCC.
++
++GCC is free software; you can redistribute it and/or modify it under
++the terms of the GNU General Public License as published by the Free
++Software Foundation; either version 3, or (at your option) any later
++version.
++
++GCC is distributed in the hope that it will be useful, but WITHOUT ANY
++WARRANTY; without even the implied warranty of MERCHANTABILITY or
++FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++for more details.
++
++You should have received a copy of the GNU General Public License
++along with GCC; see the file COPYING3.  If not see
++<http://www.gnu.org/licenses/>.  */
++
++/* This symbolic executor is designed to handle operations on the bit level.
++   It can save values of variables on the bit level.  For example byte x = 9
++   would be represented by the bit-vector x = <0, 0, 0, 0, 1, 0, 1, 0> of
++   size 8.  Variables without values will be represented by bit-vectors of
++   symbolic bits: x = <x[size - 1], ..., x[1], x[0]> where x[i] is the value
++   of bit i of variable x.
++
++   Operations are also performed on the bit level.  For example, for operation
++   z = x & y
++   where
++   x = <x[size - 1], ..., x[1], x[0]>
++   y = <y[size - 1], ..., y[1], y[0]>
++   z will have the value
++   z = <x[size - 1] & y[size - 1], ..., x[1] & y[1], x[0] & y[0]>
++
++   Each bit of variable can be accessed and examined separately if needed.
++   Moreover, it does basic optimizations in place.
++   For example, for operation
++   z = x | y
++   where
++   x = <x[size - 1], ..., x[1], x[0]>,
++   y = <1, ..., 0, 1>,
++   z will have the value
++   z = <1, ..., x[1], 1>
++   as x | 0 == x and x | 1 == 1
++
++   Besides variables, the symbolic executor can also store
++   conditions on the bit level.
++   For example, for x == y
++   It would add {x[size - 1] == y[size - 1], ..., x[1] == y[1], x[0] == y[0]}
++   conditions.
++
++   For a more complex condition x > y, it would add
++   {x[size - 1] > y[size - 1] || (x[size - 1] == y[size -1]
++	&& (x[size - 2] > y[size - 2] || (x[size - 2] == y[size - 2]
++		&& ... (x[0] >= y[0])...)}
++
++   The symbolic executor doesn't run by itself.  Instead, it must be dictated
++   what to do.  This makes it flexible and allows for various pre- and
++   post-processing tasks.  Developers adding new operation support must consider
++   that the operation must be represented on the bit level.  Because of
++   this restriction, it may be hard to add support for some operations.
++
++   To use the symbolic executor, you must create a state object.  It is the main
++   object that contains variables as bit-vectors and conditions.
++   It is the state object that provides operations for symbolic execution.
++
++   If you are going to execute multiple execution paths, you should clone
++   the state at branching instructions and execute one state for the execution
++   path where the branching condition evaluates to 'true', and
++   the other state for the execution path where the branching condition
++   evaluates to 'false'.  Besides that, you should add the corresponding
++   conditions to states if you need them.
++
++   Variables are stored in the state's 'var_states' field.  It maps the tree
++   object of the variable to its bit-vector.  Path conditions are stored in
++   the 'conditions' field.
++
++   To declare a variable, you should use 'declare_if_needed' method of state.
++   It declares the variable if it was not previously declared.
++   'create_val_for_const' is used for constant declaration.
++
++   The list of supported operations can be found in 'state::do_operation'
++   method.  It calls the corresponding operation based on the specified
++   tree_code operation.  This is the method that you should use to dictate
++   to the symbolic executor what operations to perform.  You can execute the
++   desired operations explicitly if needed.  Variables for participant
++   operands will be created implicitly if it was not previously declared.
++   To add conditions to the state, you should use 'state::add_*_cond' methods.
++
++   A sample usage of the symbolic executor:
++
++   // Example.
++
++   unsigned char foo (unsigned char x, unsigned char y)
++   {
++     unsigned char D.2352;
++     unsigned char result;
++
++     result = x & y;
++     result = result | 9;
++     if (result == 23) goto <D.2350>; else goto <D.2351>;
++     <D.2350>:
++     result = result ^ y;
++     <D.2351>:
++     D.2352 = result;
++     return D.2352;
++   }
++
++   // Now, we create the initial state and add the variables to it.
++   state s;
++   s.declare_if_needed (x, tree_to_uhwi (TYPE_SIZE (TREE_TYPE (x))));
++   s.declare_if_needed (y, tree_to_uhwi (TYPE_SIZE (TREE_TYPE (y))));
++   s.declare_if_needed (d_2352, tree_to_uhwi (TYPE_SIZE (TREE_TYPE (d_2352))));
++   s.declare_if_needed (result, tree_to_uhwi (TYPE_SIZE (TREE_TYPE (result))));
++
++   s.do_operation (BIT_AND_EXPR, x, y, result);
++   s.do_operation (BIT_OR_EXPR, result, 9, result);
++
++   state s2 (s);  // We duplicate the state to save values for each branch.
++   s.add_equal_cond (result, 23);
++   s2.add_not_equal_cond (result, 23);
++
++   s.do_operation (BIT_XOR_EXPR, result, y, result);
++   s.do_assign (result, d_2352);
++   s2.do_assign (result, d_2352);
++
++   // Now, we have variable values for each execution branch, and we can examine
++   // them to make decisions.
++
++   value * res = s.get_value (result);
++   if (is_a<bit_expression *> ((*res)[0]))
++   {
++     bit_expression * expr = is_a<bit_expression *> ((*res)[0]);
++     if (is_a<bit *> (expr->get_left ())
++	 && as_a<bit *> (expr->get_left ())->get_val () == 0)
++     {
++       ... // Do something.
++     }
++   }
++
++   A more general usage would be to iterate over instructions and
++   call the executor:
++
++   state s;
++   ...
++
++   for (inst : instructions)
++   {
++     enum tree_code rhs_code = gimple_assign_rhs_code (inst);
++     tree op1 = gimple_assign_rhs1 (gs);
++     tree op2 = gimple_assign_rhs2 (gs);
++     tree lhs = gimple_assign_lhs (gs);
++     s.do_operation (rhs_code, op1, op2, lhs);
++     ...
++   }
++
++   */
++
 +#include "sym-exec-state.h"
++
++/* Returns the minimum of A, B, C.  */
 +
 +size_t min (size_t a, size_t b, size_t c)
 +{
@@ -5501,6 +6185,9 @@ index 00000000000..5962a3d0bf2
 +  return min < c ? min : c;
 +}
 +
++
++/* Copy constructor for state.  It copies all variables and conditions
++   of the given state.  */
 +
 +state::state (const state &s)
 +{
@@ -5517,6 +6204,8 @@ index 00000000000..5962a3d0bf2
 +    conditions.add (as_a<bit_expression *> ((*iter)->copy ()));
 +}
 +
++
++/* Destructor for state.  */
 +
 +state::~state ()
 +{
@@ -6581,6 +7270,8 @@ index 00000000000..5962a3d0bf2
 +}
 +
 +
++/* Multiplies given values.  The result is stored in dest.  */
++
 +void
 +state::do_mul (value *arg1, value *arg2, tree dest)
 +{
@@ -7238,11 +7929,16 @@ index 00000000000..5962a3d0bf2
 +}
 +
 +
++/* Constructor for value.  The first argument is the size of the bit-vector
++   and the second argument is the sign of the number.  */
++
 +value::value (unsigned size, bool is_unsigned) : is_unsigned (is_unsigned)
 +{
 +  number.create (size);
 +}
 +
++
++/* Copy constructor for value.  */
 +
 +value::value (const value &other) : is_unsigned (other.is_unsigned)
 +{
@@ -7536,6 +8232,8 @@ index 00000000000..5962a3d0bf2
 +}
 +
 +
++/* Destructor for value.  */
++
 +value::~value ()
 +{
 +  free_bits ();
@@ -7740,13 +8438,31 @@ index 00000000000..5962a3d0bf2
 +}
 diff --git a/gcc/sym-exec/sym-exec-state.h b/gcc/sym-exec/sym-exec-state.h
 new file mode 100644
-index 00000000000..2fd4805f46a
+index 00000000000..07771a52288
 --- /dev/null
 +++ b/gcc/sym-exec/sym-exec-state.h
-@@ -0,0 +1,447 @@
+@@ -0,0 +1,482 @@
 +/* State will store states of variables for a function's single execution path.
 +   It will be used for bit-level symbolic execution to determine values of bits
-+   of function's return value and symbolic marked arguments.  */
++   of function's return value and symbolic marked arguments.
++   Copyright (C) 2022-2024 Free Software Foundation, Inc.
++   Contributed by Matevos Mehrabyan <matevosmehrabyan@gmail.com>
++
++This file is part of GCC.
++
++GCC is free software; you can redistribute it and/or modify it under
++the terms of the GNU General Public License as published by the Free
++Software Foundation; either version 3, or (at your option) any later
++version.
++
++GCC is distributed in the hope that it will be useful, but WITHOUT ANY
++WARRANTY; without even the implied warranty of MERCHANTABILITY or
++FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++for more details.
++
++You should have received a copy of the GNU General Public License
++along with GCC; see the file COPYING3.  If not see
++<http://www.gnu.org/licenses/>.  */
 +
 +
 +#ifndef SYM_EXEC_STATE_H
@@ -7756,14 +8472,22 @@ index 00000000000..2fd4805f46a
 +
 +#include "sym-exec-expr-is-a-helper.h"
 +
++/* Struct used for representing values.  */
++
 +struct value {
 + private:
++  /* bit-vector that represents the value.  */
 +  vec<value_bit *> number;
 +
 + public:
++  /* Used for denoting whether the number is unsigned.  */
 +  const bool is_unsigned;
 +
++  /* Constructor for value.  The first argument is the size of the bit-vector
++     and the second argument is the sign of the number.  */
 +  value (unsigned size, bool is_unsigned);
++
++  /* Copy constructor for value.  */
 +  value (const value &other);
 +
 +  /* Pushes the given bit to the end of the bit-vector.  */
@@ -7790,11 +8514,14 @@ index 00000000000..2fd4805f46a
 +
 +  /* Wrapper of vec<..>::operator[] const for the bit-vector.  */
 +  value_bit *operator[] (unsigned i) const;
++
++  /* Destructor for value.  */
 +  ~value ();
 +
 +  /* Removes given sequence of bits.  */
 +  void free_bits ();
 +};
++
 +
 +/* Stores states of variables' values on bit-level.  */
 +
@@ -8002,13 +8729,17 @@ index 00000000000..2fd4805f46a
 +				   const value &polynomial);
 +
 + public:
++  /* Default constructor for state.  */
 +  state () = default;
 +
++  /* Destructor for state.  */
 +  ~state ();
 +
 +  /* Adds an empty state for the given variable.  */
 +  bool decl_var (tree name, unsigned size);
 +
++  /* Copy constructor for state.  It copies all variables and conditions
++     of the given state.  */
 +  state (const state &s);
 +
 +  /* Adds the given variable to state.  */
@@ -8133,6 +8864,8 @@ index 00000000000..2fd4805f46a
 +  static value *create_lfsr (tree crc, value *polynomial, bool is_bit_forward);
 +};
 +
++
++/* Returns the minimum of A, B, C.  */
 +
 +size_t min (size_t a, size_t b, size_t c);
 +
@@ -16337,7 +17070,7 @@ index 00000000000..4da3e8b2543
 +/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
 \ No newline at end of file
 diff --git a/gcc/timevar.def b/gcc/timevar.def
-index 0f9d2c0b032..37460def292 100644
+index ae80a311a2d..e2d13f34688 100644
 --- a/gcc/timevar.def
 +++ b/gcc/timevar.def
 @@ -313,6 +313,7 @@ DEFTIMEVAR (TV_INITIALIZE_RTL        , "initialize rtl")
@@ -16345,9 +17078,9 @@ index 0f9d2c0b032..37460def292 100644
  DEFTIMEVAR (TV_TREE_LOOP_IFCVT       , "tree loop if-conversion")
  DEFTIMEVAR (TV_WARN_ACCESS           , "access analysis")
 +DEFTIMEVAR (TV_GIMPLE_CRC_OPTIMIZATION, "crc optimization")
+ DEFTIMEVAR (TV_EXT_DCE               , "ext dce")
  
  /* Everything else in rest_of_compilation not included above.  */
- DEFTIMEVAR (TV_EARLY_LOCAL	     , "early local passes")
 diff --git a/gcc/tree-pass.h b/gcc/tree-pass.h
 index a928cbe4557..7c778f600b5 100644
 --- a/gcc/tree-pass.h
