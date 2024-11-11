@@ -4733,10 +4733,10 @@ index 7d01227eed1..2ed56295581 100644
  	  NEXT_PASS (pass_graphite);
 diff --git a/gcc/sym-exec/sym-exec-condition.cc b/gcc/sym-exec/sym-exec-condition.cc
 new file mode 100644
-index 00000000000..fef03d04d55
+index 00000000000..1c5e7cfb98b
 --- /dev/null
 +++ b/gcc/sym-exec/sym-exec-condition.cc
-@@ -0,0 +1,86 @@
+@@ -0,0 +1,87 @@
 +/* Everything defined here is used for representing conditions for bits
 +   and their status.
 +   Copyright (C) 2022-2024 Free Software Foundation, Inc.
@@ -4758,6 +4758,7 @@ index 00000000000..fef03d04d55
 +along with GCC; see the file COPYING3.  If not see
 +<http://www.gnu.org/licenses/>.  */
 +
++#define INCLUDE_MEMORY
 +#include "sym-exec-condition.h"
 +
 +/* Constructor where the first argument is the bit left to the condition sign,
@@ -4823,7 +4824,6 @@ index 00000000000..fef03d04d55
 +	fprintf (dump_file, " ? ");
 +    }
 +}
-\ No newline at end of file
 diff --git a/gcc/sym-exec/sym-exec-condition.h b/gcc/sym-exec/sym-exec-condition.h
 new file mode 100644
 index 00000000000..ee5b8703f48
