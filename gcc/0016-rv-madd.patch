@@ -1,5 +1,5 @@
-	* config/riscv/vector.md (pred_mul_plus<mode>): Drop alternatives where
-	output doesn't have to match input.
+	* config/riscv/vector.md (pred_mul_plus<mode>_undef): Drop alternatives
+	where output doesn't have to match input.
 	(pred_madd<mode>, pred_macc<mode>): Likewise.
 	(pred_madd<mode>_scalar, pred_macc<mode>_scalar): Likewise.
 	(pred_madd<mode>_exended_scalar): Likewise.
