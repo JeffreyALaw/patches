@@ -6026,10 +6026,10 @@ index 00000000000..610088c9637
 \ No newline at end of file
 diff --git a/gcc/sym-exec/sym-exec-state.cc b/gcc/sym-exec/sym-exec-state.cc
 new file mode 100644
-index 00000000000..c51e2aa3c1f
+index 00000000000..71beb679022
 --- /dev/null
 +++ b/gcc/sym-exec/sym-exec-state.cc
-@@ -0,0 +1,2422 @@
+@@ -0,0 +1,2423 @@
 +/* State will store states of variables for a function's single execution path.
 +   It will be used for bit-level symbolic execution to determine values of bits
 +   of function's return value and symbolic marked arguments.
@@ -6191,6 +6191,7 @@ index 00000000000..c51e2aa3c1f
 +
 +   */
 +
++#define INCLUDE_MEMORY
 +#include "sym-exec-state.h"
 +
 +/* Returns the minimum of A, B, C.  */
