@@ -1,61 +1,57 @@
-commit e31ed6513a0278a5d19bdb922cc9c0df0ff6ee86
-Author: Jeff Law <jlaw@ventanamicro.com>
-Date:   Mon Nov 11 18:46:53 2024 -0700
 
-    Revert "[PATCH v2] RISC-V: zero_extend(not) -> xor optimization [PR112398]"
-    
-    This reverts commit 69bd93c167fefbdff0cb88614275358b7a2b2941.
+
+Updated testsuite/ChangeLog with respect to the original testcase author
+
+-- >8 --
+
+gcc/ChangeLog:
+
+	* simplify-rtx.cc (simplify_context::simplify_unary_operation_1):
+	Fix subreg mode check during zero_extend(not) -> xor optimization.
+
+gcc/testsuite/ChangeLog:
+
+	* gcc.dg/pr117476.c: New test. From Zhendong Su.
+
+Signed-off-by: Alexey Merzlyakov <alexey.merzlyakov@samsung.com>
+---
+ gcc/simplify-rtx.cc             |  2 +-
+ gcc/testsuite/gcc.dg/pr117476.c | 12 ++++++++++++
+ 2 files changed, 13 insertions(+), 1 deletion(-)
+ create mode 100644 gcc/testsuite/gcc.dg/pr117476.c
 
 diff --git a/gcc/simplify-rtx.cc b/gcc/simplify-rtx.cc
-index d05efac20dc..893c5f6e1ae 100644
+index d05efac20dc..2a9cabaad09 100644
 --- a/gcc/simplify-rtx.cc
 +++ b/gcc/simplify-rtx.cc
-@@ -1842,28 +1842,6 @@ simplify_context::simplify_unary_operation_1 (rtx_code code, machine_mode mode,
- 	      & ~GET_MODE_MASK (op_mode)) == 0)
- 	return SUBREG_REG (op);
- 
--      /* Trying to optimize:
--	 (zero_extend:M (subreg:N (not:M (X:M)))) ->
--	 (xor:M (zero_extend:M (subreg:N (X:M)), mask))
--	 where the mask is GET_MODE_MASK (N).
--	 For the cases when X:M doesn't have any non-zero bits
--	 outside of mode N, (zero_extend:M (subreg:N (X:M))
--	 will be simplified to just (X:M)
--	 and whole optimization will be -> (xor:M (X:M, mask)).  */
--      if (SUBREG_P (op)
--	  && GET_CODE (XEXP (op, 0)) == NOT
--	  && GET_MODE (XEXP (op, 0)) == mode
--	  && subreg_lowpart_p (op)
--	  && GET_MODE_SIZE (GET_MODE (op)).is_constant ()
--	  && (nonzero_bits (XEXP (XEXP (op, 0), 0), mode)
+@@ -1856,7 +1856,7 @@ simplify_context::simplify_unary_operation_1 (rtx_code code, machine_mode mode,
+ 	  && subreg_lowpart_p (op)
+ 	  && GET_MODE_SIZE (GET_MODE (op)).is_constant ()
+ 	  && (nonzero_bits (XEXP (XEXP (op, 0), 0), mode)
 -	      & ~GET_MODE_MASK (mode)) == 0)
--      {
--	const uint64_t mask = GET_MODE_MASK (GET_MODE (op));
--	return simplify_gen_binary (XOR, mode,
--				    XEXP (XEXP (op, 0), 0),
--				    gen_int_mode (mask, mode));
--      }
--
- #if defined(POINTERS_EXTEND_UNSIGNED)
-       /* As we do not know which address space the pointer is referring to,
- 	 we can do this only if the target does not support different pointer
-diff --git a/gcc/testsuite/gcc.target/riscv/pr112398.c b/gcc/testsuite/gcc.target/riscv/pr112398.c
-deleted file mode 100644
-index 624a665b76c..00000000000
---- a/gcc/testsuite/gcc.target/riscv/pr112398.c
-+++ /dev/null
-@@ -1,14 +0,0 @@
--/* { dg-do compile } */
--/* { dg-options "-march=rv64gc -mabi=lp64d" } */
--/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
--
--#include <stdint.h>
--
--uint8_t neg_u8 (const uint8_t src)
--{
--  return ~src;
--}
--
--/* { dg-final { scan-assembler-times "xori\t" 1 } } */
--/* { dg-final { scan-assembler-not "not\t" } } */
--/* { dg-final { scan-assembler-not "andi\t" } } */
++	      & ~GET_MODE_MASK (GET_MODE (op))) == 0)
+       {
+ 	const uint64_t mask = GET_MODE_MASK (GET_MODE (op));
+ 	return simplify_gen_binary (XOR, mode,
+diff --git a/gcc/testsuite/gcc.dg/pr117476.c b/gcc/testsuite/gcc.dg/pr117476.c
+new file mode 100644
+index 00000000000..b8f51e697bf
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/pr117476.c
+@@ -0,0 +1,12 @@
++/* PR rtl-optimization/117476 */
++/* { dg-do run } */
++/* { dg-options "-O1" } */
++
++int c = 0x1FF;
++
++int main()
++{
++  if (((c ^ 0xFF) & 0xFF) != 0)
++    __builtin_abort();
++  return 0;
++}
+-- 
+2.34.1
+
+
