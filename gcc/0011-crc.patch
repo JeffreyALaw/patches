@@ -17131,3 +17131,55 @@ index a928cbe4557..7c778f600b5 100644
  extern gimple_opt_pass *make_pass_vectorize (gcc::context *ctxt);
  extern gimple_opt_pass *make_pass_simduid_cleanup (gcc::context *ctxt);
  extern gimple_opt_pass *make_pass_slp_vectorize (gcc::context *ctxt);
+diff --git a/gcc/testsuite/gcc.dg/torture/crc-crc8-data8-loop-xorInFor.c b/gcc/testsuite/gcc.dg/torture/crc-crc8-data8-loop-xorInFor.c
+index 79e46d6057d..0b5980f9640 100644
+--- a/gcc/testsuite/gcc.dg/torture/crc-crc8-data8-loop-xorInFor.c
++++ b/gcc/testsuite/gcc.dg/torture/crc-crc8-data8-loop-xorInFor.c
+@@ -3,7 +3,7 @@
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-g" "-Os" "-funroll-loops" "-fpeel-loops" "-flto" } } */
+ 
+ #include <stddef.h>
+-#include <assert.h>
++#include <stdlib.h>
+ 
+ typedef unsigned char uint8_t;
+ 
+@@ -26,7 +26,9 @@ uint8_t gencrc (uint8_t *message, size_t len) {
+ int main()
+ {
+   uint8_t message[] = "Hello world!";
+-  assert (gencrc(message, 12) == 0x24);
++  if (gencrc(message, 12) != 0x24)
++    abort ();
++  exit (0);
+ }
+ 
+ /* { dg-final { scan-tree-dump "calculates CRC!" "crc" } } */
+diff --git a/gcc/testsuite/gcc.dg/torture/crc-crc8-data8-loop-xorOutsideFor.c b/gcc/testsuite/gcc.dg/torture/crc-crc8-data8-loop-xorOutsideFor.c
+index e1749fef607..c873fa3c368 100644
+--- a/gcc/testsuite/gcc.dg/torture/crc-crc8-data8-loop-xorOutsideFor.c
++++ b/gcc/testsuite/gcc.dg/torture/crc-crc8-data8-loop-xorOutsideFor.c
+@@ -2,8 +2,7 @@
+ /* { dg-options "-fdump-tree-crc-details" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-g" "-Os" "-funroll-loops" "-fpeel-loops" "-flto" } } */
+ 
+-#include <stddef.h>
+-#include <assert.h>
++#include <stdlib.h>
+ 
+ typedef unsigned char uint8_t;
+ 
+@@ -26,8 +25,10 @@ uint8_t gencrc (uint8_t *message, size_t len) {
+ int main()
+ {
+   uint8_t message[] = "Hello world!";
+-  assert (gencrc(message, 12) == 0x24);
++  if (gencrc(message, 12) != 0x24)
++    abort ();
++  exit (0);
+ }
+ 
+ /* { dg-final { scan-tree-dump "calculates CRC!" "crc" } } */
+-/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc" } } */
+\ No newline at end of file
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc" } } */
