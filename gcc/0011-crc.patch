@@ -516,27 +516,6 @@ index 8e3b5731939..2146fcb46be 100644
  ;; Map modes to Usg and Usj constraints for SISD right shifts
  (define_mode_attr cmode_simd [(SI "g") (DI "j")])
  
-diff --git a/gcc/config/c6x/c6x.md b/gcc/config/c6x/c6x.md
-index ea9ffe8b4e1..9e0aa61947e 100644
---- a/gcc/config/c6x/c6x.md
-+++ b/gcc/config/c6x/c6x.md
-@@ -365,12 +365,14 @@ (define_cond_exec
- (define_insn "nop"
-   [(const_int 0)]
-   ""
--  "nop")
-+  "nop"
-+  [(set_attr "dest_regfile" "unknown")])
- 
- (define_insn "nop_count"
-   [(unspec [(match_operand 0 "const_int_operand" "n")] UNSPEC_NOP)]
-   ""
--  "%|%.\\tnop\\t%0")
-+  "%|%.\\tnop\\t%0"
-+  [(set_attr "dest_regfile" "unknown")])
- 
- ;; -------------------------------------------------------------------------
- ;; Move instructions
 diff --git a/gcc/config/i386/i386-protos.h b/gcc/config/i386/i386-protos.h
 index c26ae5e4f1d..db1db147402 100644
 --- a/gcc/config/i386/i386-protos.h
