@@ -30,15 +30,6 @@ make -j $NPROC -l $NPROC all-gas all-binutils all-ld  >> $LOGFILE 2>&1
 make install-gas install-binutils install-ld >> $LOGFILE 2>&1
 popd
 
-# RV port takes insanely long to build right now
-#if [ $TARGET == riscv64-linux-gnu ]; then
-#  DISABLE_BOOTSTRAP=--disable-bootstrap
-#fi
-# For testing purposes
-if [ $TARGET == riscv64-linux-gnu ]; then
-  NPROC=4
-fi
-
 # MIPS is always multiarch
 if [ $TARGET == mips64el-linux-gnuabi64 ]; then
   ENABLE_MULTIARCH=--enable-multiarch
