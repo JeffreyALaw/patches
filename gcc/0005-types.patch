@@ -1,0 +1,28 @@
+diff --git a/gcc/config/riscv/vector.md b/gcc/config/riscv/vector.md
+index 8bbae41c9f3..ddc2ebf1790 100644
+--- a/gcc/config/riscv/vector.md
++++ b/gcc/config/riscv/vector.md
+@@ -1395,7 +1395,10 @@ (define_insn_and_split "*mov<mode>"
+     gcc_assert (ok_p);
+     DONE;
+   }
+-  [(set_attr "type" "vmov")]
++  [(set_attr "type" "vlde,vste,vmov")
++   (set_attr "mode" "<MODE>")
++   (set (attr "avl_type_idx") (const_int INVALID_ATTRIBUTE))
++   (set (attr "mode_idx") (const_int INVALID_ATTRIBUTE))]
+ )
+ 
+ (define_expand "mov<mode>"
+@@ -1442,7 +1445,10 @@ (define_insn_and_split "*mov<VLS_AVL_REG:mode><P:mode>_lra"
+     }
+   DONE;
+ }
+-  [(set_attr "type" "vmov")]
++  [(set_attr "type" "vlde,vste,vmov")
++   (set_attr "mode" "<VLS_AVL_REG:MODE>")
++   (set (attr "avl_type_idx") (const_int INVALID_ATTRIBUTE))
++   (set (attr "mode_idx") (const_int INVALID_ATTRIBUTE))]
+ )
+ 
+ (define_insn "*mov<mode>_vls"
