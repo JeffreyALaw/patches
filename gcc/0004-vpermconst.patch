@@ -1,3 +1,10 @@
+gcc/
+	* config.gcc (riscv*): Add riscv_vect-permconst.h to extra_objs.
+	* config/riscv/t-riscv: Add rules for riscv-vect-permconst.o
+	* config/riscv/riscv-passes.def: Add pass_vector_permconst after cse2.
+	* config/riscv/;riscv-protos.h: Add prototype for new pass.
+	* config/riscv/riscv-vect-permconst.cc: New file.
+
 commit 7a62350fbddc903e554457b07f72300536134618
 Author: Jeff Law <jlaw@ventanamicro.com>
 Date:   Wed Sep 25 16:27:32 2024 -0600
@@ -228,7 +235,7 @@ index 00000000000..f4ea2f525da
 +	continue;
 +
 +      /* A load from the constant pool should have a REG_EQUAL
-+	 note with the vector contant in the note.  */
++	 note with the vector constant in the note.  */
 +      rtx note = find_reg_equal_equiv_note (insn);
 +      if (!note
 +	  || REG_NOTE_KIND (note) != REG_EQUAL
