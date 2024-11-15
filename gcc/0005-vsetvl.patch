@@ -2,7 +2,7 @@ diff --git a/gcc/config/riscv/riscv-vsetvl.cc b/gcc/config/riscv/riscv-vsetvl.cc
 index 35c69a90357..d2ed6968324 100644
 --- a/gcc/config/riscv/riscv-vsetvl.cc
 +++ b/gcc/config/riscv/riscv-vsetvl.cc
-@@ -3069,6 +3069,37 @@ pre_vsetvl::earliest_fuse_vsetvl_info (int iter)
+@@ -3069,6 +3069,35 @@ pre_vsetvl::earliest_fuse_vsetvl_info (int iter)
  	  else
  	    {
  	      vsetvl_info &prev_info = src_block_info.get_exit_info ();
@@ -17,13 +17,11 @@ index 35c69a90357..d2ed6968324 100644
 +		  if (m_dem.sew_lmul_compatible_p (prev_info, curr_info))
 +		    {
 +		      m_dem.merge_sew_lmul (prev_info, curr_info);
-+		      changed = true;
 +		    }
 +
 +		  if (m_dem.policy_compatible_p (prev_info, curr_info))
 +		    {
 +		      m_dem.merge_policy (prev_info, curr_info);
-+		      changed = true;
 +		    }
 +
 +		  if (dump_file && (dump_flags & TDF_DETAILS))
