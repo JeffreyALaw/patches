@@ -67,3 +67,15 @@ index 3fce7e364..94aa061d2 100644
  {
    return TRAP0 (SYS_utime, path, times, 0);
  }
+diff --git a/libgloss/iq2000/trap.h b/libgloss/iq2000/trap.h
+index 27636c004..bf92be69c 100644
+--- a/libgloss/iq2000/trap.h
++++ b/libgloss/iq2000/trap.h
+@@ -1,5 +1,5 @@
+ #include "syscall.h"
+ 
+-int __trap0 ();
++int __trap0 (long, long, long, long);
+ 
+-#define TRAP0(f, p1, p2, p3) __trap0(f, (p1), (p2), (p3))
++#define TRAP0(f, p1, p2, p3) __trap0(f, (long)(p1), (long)(p2), (long)(p3))
