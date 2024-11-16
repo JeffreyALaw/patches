@@ -1,14 +1,3 @@
-diff --git a/gcc/testsuite/gcc.target/arc/add_n-combine.c b/gcc/testsuite/gcc.target/arc/add_n-combine.c
-index fd311b3839c..19690192fca 100644
---- a/gcc/testsuite/gcc.target/arc/add_n-combine.c
-+++ b/gcc/testsuite/gcc.target/arc/add_n-combine.c
-@@ -1,5 +1,5 @@
- /* { dg-do compile }  */
--/* { dg-options "-O2" }  */
-+/* { dg-options "-O2 -std=gnu17" }  */
- 
- struct b1 {
-       char c;
 diff --git a/gcc/testsuite/gcc.target/riscv/cmo-32.c b/gcc/testsuite/gcc.target/riscv/cmo-32.c
 index 8e733cc05fc..071586beacc 100644
 --- a/gcc/testsuite/gcc.target/riscv/cmo-32.c
