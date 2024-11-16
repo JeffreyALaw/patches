@@ -1,0 +1,16 @@
+diff --git a/gcc/testsuite/gcc.target/arc/add_n-combine.c b/gcc/testsuite/gcc.target/arc/add_n-combine.c
+index fd311b3839c..276c7522827 100644
+--- a/gcc/testsuite/gcc.target/arc/add_n-combine.c
++++ b/gcc/testsuite/gcc.target/arc/add_n-combine.c
+@@ -37,9 +37,9 @@ struct bj2 at2;
+ struct bj3 at3;
+ 
+ int bu;
+-void a();
++void a(struct b2 []);
+ 
+-void f() {
++void f(void) {
+   a(at1.bn[bu]);
+   a(at2.bn[bu]);
+   a(at3.bn[bu]);
