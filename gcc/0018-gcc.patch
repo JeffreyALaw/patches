@@ -1,0 +1,28 @@
+diff --git a/libgcc/config/csky/linux-atomic.c b/libgcc/config/csky/linux-atomic.c
+index 15c38156c77..67a5cd7ecb6 100644
+--- a/libgcc/config/csky/linux-atomic.c
++++ b/libgcc/config/csky/linux-atomic.c
+@@ -215,18 +215,18 @@ __sync_val_compare_and_swap_4 (int *ptr, int oldval, int newval)
+ SUBWORD_VAL_CAS (unsigned short, 2)
+ SUBWORD_VAL_CAS (unsigned char,	1)
+ 
+-typedef unsigned char bool;
++typedef unsigned char my_bool;
+ 
+-bool HIDDEN
+-__sync_bool_compare_and_swap_4 (int *ptr, int oldval, int newval)
++my_bool HIDDEN
++__sync_my_bool_compare_and_swap_4 (int *ptr, int oldval, int newval)
+ {
+   int failure = __kernel_cmpxchg (oldval, newval, ptr);
+   return (failure == 0);
+ }
+ 
+ #define SUBWORD_BOOL_CAS(TYPE, WIDTH)					\
+-  bool HIDDEN								\
+-  __sync_bool_compare_and_swap_##WIDTH (TYPE *ptr, TYPE oldval,		\
++  my_bool HIDDEN								\
++  __sync_my_bool_compare_and_swap_##WIDTH (TYPE *ptr, TYPE oldval,		\
+ 					TYPE newval)			\
+   {									\
+     TYPE actual_oldval							\
