@@ -27,3 +27,43 @@ index 0aae3c279..b4edcd99d 100644
  static void
  start1 (int argc, char **argv, char **env)
  {
+diff --git a/libgloss/mn10300/cygmon.c b/libgloss/mn10300/cygmon.c
+index 513115cd6..c164b2728 100644
+--- a/libgloss/mn10300/cygmon.c
++++ b/libgloss/mn10300/cygmon.c
+@@ -61,8 +61,7 @@ int __trap0(unsigned long func, unsigned long p1, unsigned long p2, unsigned lon
+ }
+ 
+ void *
+-get_mem_info (mem)
+-     struct s_mem *mem;
++get_mem_info (struct s_mem *mem)
+ {
+   unsigned long totmem = 0, topmem = 0;
+   register int numbanks;
+diff --git a/libgloss/mn10300/trap.h b/libgloss/mn10300/trap.h
+index 27636c004..386dbcb0d 100644
+--- a/libgloss/mn10300/trap.h
++++ b/libgloss/mn10300/trap.h
+@@ -1,5 +1,5 @@
+ #include "syscall.h"
+ 
+-int __trap0 ();
++int __trap0 (int, int, int, int);
+ 
+ #define TRAP0(f, p1, p2, p3) __trap0(f, (p1), (p2), (p3))
+diff --git a/libgloss/mn10300/utime.c b/libgloss/mn10300/utime.c
+index 3fce7e364..94aa061d2 100644
+--- a/libgloss/mn10300/utime.c
++++ b/libgloss/mn10300/utime.c
+@@ -5,9 +5,7 @@
+ 
+ 
+ int
+-utime (path, times)
+-     const char *path;
+-     char *times;
++utime (const char *path, char *times)
+ {
+   return TRAP0 (SYS_utime, path, times, 0);
+ }
