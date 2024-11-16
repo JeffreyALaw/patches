@@ -725,27 +725,3 @@ index f78b133bbed..4fe29c38e91 100644
  
  typedef int int8_t __attribute__ ((__mode__ (__QI__)));
  typedef int int16_t __attribute__ ((__mode__ (__HI__)));
-diff --git a/gcc/testsuite/lib/wrapper.exp b/gcc/testsuite/lib/wrapper.exp
-index 667002bb571..8363181621d 100644
---- a/gcc/testsuite/lib/wrapper.exp
-+++ b/gcc/testsuite/lib/wrapper.exp
-@@ -36,7 +36,7 @@ proc ${tool}_maybe_build_wrapper { filename args } {
- 	# passed to turn off all warnings.
- 	unset_currtarget_info wrap_compile_flags
- 	set_currtarget_info wrap_compile_flags \
--	    "$saved_wrap_compile_flags -w $flags"
-+	    "$saved_wrap_compile_flags -std=gnu17 -w $flags"
- 	set result [build_wrapper $filename]
- 	unset_currtarget_info wrap_compile_flags
- 	set_currtarget_info wrap_compile_flags "$saved_wrap_compile_flags"
-diff --git a/gcc/testsuite/gcc.target/pru/pr64366.c b/gcc/testsuite/gcc.target/pru/pr64366.c
-index 1608d469499..f13fc935470 100644
---- a/gcc/testsuite/gcc.target/pru/pr64366.c
-+++ b/gcc/testsuite/gcc.target/pru/pr64366.c
-@@ -1,5 +1,5 @@
- /* { dg-do compile } */
--/* { dg-options "-O2" } */
-+/* { dg-options "-O2 -std=gnu17" } */
- 
- typedef int int8_t __attribute__ ((__mode__ (__QI__)));
- typedef int int16_t __attribute__ ((__mode__ (__HI__)));
