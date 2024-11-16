@@ -10,7 +10,7 @@ index acc89ed6a..0e2188720 100644
 +extern void putDebugChar (unsigned char);	/* write a single character      */
  extern int getDebugChar ();	/* read and return a single char */
 -extern void exceptionHandler ();	/* assign an exception handler   */
-+extern void exceptionHandler (int, int[16]);	/* assign an exception handler   */
++extern void exceptionHandler (int, void *);	/* assign an exception handler   */
  
  /*****************************************************************************
   * BUFMAX defines the maximum number of characters in inbound/outbound buffers
