@@ -1,0 +1,16 @@
+diff --git a/libgloss/m32r/m32r-stub.c b/libgloss/m32r/m32r-stub.c
+index acc89ed6a..0e2188720 100644
+--- a/libgloss/m32r/m32r-stub.c
++++ b/libgloss/m32r/m32r-stub.c
+@@ -96,9 +96,9 @@
+  *
+  * external low-level support routines
+  */
+-extern void putDebugChar ();	/* write a single character      */
++extern void putDebugChar (unsigned char);	/* write a single character      */
+ extern int getDebugChar ();	/* read and return a single char */
+-extern void exceptionHandler ();	/* assign an exception handler   */
++extern void exceptionHandler (int, int[16]);	/* assign an exception handler   */
+ 
+ /*****************************************************************************
+  * BUFMAX defines the maximum number of characters in inbound/outbound buffers
