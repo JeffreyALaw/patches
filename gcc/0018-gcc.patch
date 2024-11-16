@@ -26,3 +26,16 @@ index 15c38156c77..67a5cd7ecb6 100644
  					TYPE newval)			\
    {									\
      TYPE actual_oldval							\
+diff --git a/libgcc/unwind-arm-common.inc b/libgcc/unwind-arm-common.inc
+index 576f7e93e8a..1e9a58dbab2 100644
+--- a/libgcc/unwind-arm-common.inc
++++ b/libgcc/unwind-arm-common.inc
+@@ -52,8 +52,6 @@
+ 
+ /* Definitions for C++ runtime support routines.  We make these weak
+    declarations to avoid pulling in libsupc++ unnecessarily.  */
+-typedef unsigned char bool;
+-
+ typedef struct _ZSt9type_info type_info; /* This names C++ type_info type */
+ enum __cxa_type_match_result
+   {
