@@ -14,3 +14,16 @@ index acc89ed6a..0e2188720 100644
  
  /*****************************************************************************
   * BUFMAX defines the maximum number of characters in inbound/outbound buffers
+diff --git a/libgloss/cris/lcrt0.c b/libgloss/cris/lcrt0.c
+index 0aae3c279..b4edcd99d 100644
+--- a/libgloss/cris/lcrt0.c
++++ b/libgloss/cris/lcrt0.c
+@@ -102,7 +102,7 @@ extern void __init__start (void) __attribute ((weak));
+ extern void __aout__ctors (void) __attribute ((weak));
+ extern int main (int argc, char **argv, char **env);
+ 
+-static void start1 () __asm__ ("__start1") __attribute ((__used__));
++static void start1 (int, char **, char **) __asm__ ("__start1") __attribute ((__used__));
+ static void
+ start1 (int argc, char **argv, char **env)
+ {
