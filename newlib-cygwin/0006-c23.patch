@@ -51,7 +51,7 @@ index 27636c004..386dbcb0d 100644
 -int __trap0 ();
 +int __trap0 (int, int, int, int);
  
- #define TRAP0(f, p1, p2, p3) __trap0(f, (p1), (p2), (p3))
+ #define TRAP0(f, p1, p2, p3) __trap0(f, (int)(p1), (int)(p2), (int)(p3))
 diff --git a/libgloss/mn10300/utime.c b/libgloss/mn10300/utime.c
 index 3fce7e364..94aa061d2 100644
 --- a/libgloss/mn10300/utime.c
