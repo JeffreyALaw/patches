@@ -1,29 +1,30 @@
-diff --git a/gcc/config/riscv/riscv-vsetvl.cc b/gcc/config/riscv/riscv-vsetvl.cc
-index 35c69a90357..d2ed6968324 100644
+
+index 35c69a90357..fbcad16db9e 100644
 --- a/gcc/config/riscv/riscv-vsetvl.cc
 +++ b/gcc/config/riscv/riscv-vsetvl.cc
-@@ -3069,6 +3069,37 @@ pre_vsetvl::earliest_fuse_vsetvl_info (int iter)
+@@ -3069,6 +3069,38 @@ pre_vsetvl::earliest_fuse_vsetvl_info (int iter)
  	  else
  	    {
  	      vsetvl_info &prev_info = src_block_info.get_exit_info ();
 +
++	      /* If we're dealing with the same object, then there's nothing
++		 to do.  */
++	      if (prev_info == curr_info)
++		continue;
++
 +	      // Try to merge each demand individually
 +	      if (prev_info.valid_p () && curr_info.valid_p ())
-+#if 0
-+		  && prev_info.vl_used_by_non_rvv_insn_p ()
-+		  && !curr_info.vl_used_by_non_rvv_insn_p ())
-+#endif
 +		{
 +		  if (m_dem.sew_lmul_compatible_p (prev_info, curr_info))
 +		    {
 +		      m_dem.merge_sew_lmul (prev_info, curr_info);
-+		      changed=true;
++		      changed = true;
 +		    }
 +
 +		  if (m_dem.policy_compatible_p (prev_info, curr_info))
 +		    {
 +		      m_dem.merge_policy (prev_info, curr_info);
-+		      changed=true;
++		      changed = true;
 +		    }
 +
 +		  if (dump_file && (dump_flags & TDF_DETAILS))
