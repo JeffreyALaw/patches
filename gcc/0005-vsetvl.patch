@@ -9,7 +9,7 @@ index 35c69a90357..fbcad16db9e 100644
 +
 +	      /* If we're dealing with the same object, then there's nothing
 +		 to do.  */
-+	      if (prev_info == curr_info)
++	      if (&prev_info == &curr_info)
 +		continue;
 +
 +	      // Try to merge each demand individually
