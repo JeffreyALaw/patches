@@ -1,3 +1,7 @@
+libgcc/
+	* config/csky/linux-atomic.c (bool): Remove unnecessary typedef.
+	* unwind-arm-common.inc (bool): Similarly.
+
 diff --git a/libgcc/config/csky/linux-atomic.c b/libgcc/config/csky/linux-atomic.c
 index 15c38156c77..27448554730 100644
 --- a/libgcc/config/csky/linux-atomic.c
