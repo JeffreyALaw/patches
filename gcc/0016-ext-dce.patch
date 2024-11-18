@@ -61,7 +61,7 @@ index 60ae09e45db..ab6473e7894 100644
    df_analyze ();
    ext_dce_init ();
  
-diff --git a/gcc/testsuite/gcc.dg/ext-dce-1.c b/gcc/testsuite/gcc.dg/ext-dce-1.c
+diff --git a/gcc/testsuite/gcc.target/riscv/ext-dce-1.c b/gcc/testsuite/gcc.target/riscv/ext-dce-1.c
 new file mode 100644
 index 00000000000..295d956ef55
 --- /dev/null
