@@ -39,6 +39,11 @@ if [ $TARGET == mipsel-linux-gnu ]; then
   ENABLE_MULTIARCH=--enable-multiarch
 fi
 
+# Abusing ENABLE_MULTIARCH...
+if [ $TARGET == riscv64-linux-gnu ]; then
+  ENABLE_MULTIARCH=--with-arch=rv64gcv_zba_zbb_zbs_zicond_zvl256b
+fi
+
 echo Building GCC
 pushd obj/gcc
 ../../gcc/configure --prefix=$PREFIX --disable-analyzer --prefix=$PREFIX --enable-languages=c,c++,fortran,lto $ENABLE_MULTIARCH --disable-multilib --disable-libsanitizer $DISABLE_BOOTSTRAP ${TARGET} >> $LOGFILE 2>&1
