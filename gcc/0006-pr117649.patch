@@ -27,11 +27,13 @@ index 7fa87832484..52fc1271c5b 100644
  /* { dg-final { scan-assembler-not "addi\t" } } */
 diff --git a/gcc/testsuite/gcc.target/riscv/pr117649.c b/gcc/testsuite/gcc.target/riscv/pr117649.c
 new file mode 100644
-index 00000000000..fdc67958578
+index 00000000000..d0e7414e97e
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/pr117649.c
-@@ -0,0 +1,13 @@
+@@ -0,0 +1,16 @@
 +/* { dg-do run } */
++
++void exit (int);
 +
 +void __attribute__ ((noinline))
 +f (unsigned int i)
@@ -43,4 +45,5 @@ index 00000000000..fdc67958578
 +main ()
 +{
 +  f (0xc0000022);
++  exit (0);
 +}
