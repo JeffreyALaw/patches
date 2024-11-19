@@ -25,3 +25,22 @@ index 7fa87832484..52fc1271c5b 100644
  /* { dg-final { scan-assembler-times "andi\t" 3 } } */
  /* { dg-final { scan-assembler-times "\tli\t" 3 } } */
  /* { dg-final { scan-assembler-not "addi\t" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/pr117649.c b/gcc/testsuite/gcc.target/riscv/pr117649.c
+new file mode 100644
+index 00000000000..fdc67958578
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr117649.c
+@@ -0,0 +1,13 @@
++/* { dg-do run } */
++
++void __attribute__ ((noinline))
++f (unsigned int i)
++{
++  if ((i & 0xf0000000) != 0xc0000000) __builtin_abort ();
++}
++
++int
++main ()
++{
++  f (0xc0000022);
++}
