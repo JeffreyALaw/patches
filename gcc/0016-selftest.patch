@@ -1,0 +1,98 @@
+[PATCH] json parsing: avoid relying on floating point equality [PR117677]
+David Malcolm dmalcolm@redhat.com
+Wed Nov 20 20:51:57 GMT 2024
+Previous message (by thread): [PATCH 7/8] json: add json parsing support
+Next message (by thread): [PATCH] json parsing: avoid relying on floating point equality [PR117677]
+Messages sorted by: [ date ] [ thread ] [ subject ] [ author ]
+Sorry about the breakage.
+
+I wasn't able to reproduce the failures myself, but the following
+patch seems plausible as a fix; does it fix the affected
+configurations?
+
+gcc/ChangeLog:
+	PR bootstrap/117677
+	* json-parsing.cc (selftest::test_parse_number): Replace
+	ASSERT_EQ of 'double' values with ASSERT_NEAR.  Eliminate
+	ASSERT_PRINT_EQ for such values.
+	* selftest.h (ASSERT_NEAR): New.
+	(ASSERT_NEAR_AT): New.
+
+Signed-off-by: David Malcolm <dmalcolm@redhat.com>
+---
+ gcc/json-parsing.cc |  9 +++------
+ gcc/selftest.h      | 20 ++++++++++++++++++++
+ 2 files changed, 23 insertions(+), 6 deletions(-)
+
+diff --git a/gcc/json-parsing.cc b/gcc/json-parsing.cc
+index 78188c4fef9c..457d78f97cfa 100644
+--- a/gcc/json-parsing.cc
++++ b/gcc/json-parsing.cc
+@@ -2028,8 +2028,7 @@ test_parse_number ()
+     ASSERT_EQ (tc.get_error (), nullptr);
+     const json::value *jv = tc.get_value ();
+     ASSERT_EQ (JSON_FLOAT, jv->get_kind ());
+-    ASSERT_EQ (3.141, ((const json::float_number *)jv)->get ());
+-    ASSERT_PRINT_EQ (*jv, true, "3.141");
++    ASSERT_NEAR (3.141, ((const json::float_number *)jv)->get (), 0.001);
+     auto range = tc.get_range_for_value (jv);
+     ASSERT_TRUE (range);
+     ASSERT_RANGE_EQ (*range,
+@@ -2044,8 +2043,7 @@ test_parse_number ()
+       ASSERT_EQ (tc.get_error (), nullptr);
+       const json::value *jv = tc.get_value ();
+       ASSERT_EQ (jv->get_kind (), JSON_FLOAT);
+-      ASSERT_EQ (as_a <const json::float_number *> (jv)->get (), 3.141);
+-      ASSERT_PRINT_EQ (*jv, true, "3.141");
++      ASSERT_NEAR (as_a <const json::float_number *> (jv)->get (), 3.141, 0.1);
+       auto range = tc.get_range_for_value (jv);
+       ASSERT_TRUE (range);
+       ASSERT_RANGE_EQ (*range,
+@@ -2070,8 +2068,7 @@ test_parse_number ()
+       ASSERT_EQ (tc.get_error (), nullptr);
+       const json::value *jv = tc.get_value ();
+       ASSERT_EQ (jv->get_kind (), JSON_FLOAT);
+-      ASSERT_EQ (as_a <const json::float_number *> (jv)->get (), 4.2);
+-      ASSERT_PRINT_EQ (*jv, true, "4.2");
++      ASSERT_NEAR (as_a <const json::float_number *> (jv)->get (), 4.2, 0.1);
+       auto range = tc.get_range_for_value (jv);
+       ASSERT_TRUE (range);
+       ASSERT_RANGE_EQ (*range,
+diff --git a/gcc/selftest.h b/gcc/selftest.h
+index c6206e55428d..500095da79ca 100644
+--- a/gcc/selftest.h
++++ b/gcc/selftest.h
+@@ -338,6 +338,26 @@ extern int num_passes;
+     ::selftest::fail ((LOC), desc_);			       \
+   SELFTEST_END_STMT
+ 
++/* Evaluate VAL1 and VAL2 and compare them, calling
++   ::selftest::pass if they are within ABS_ERROR of each other,
++   ::selftest::fail if they are not.  */
++
++#define ASSERT_NEAR(VAL1, VAL2, ABS_ERROR)	\
++  ASSERT_NEAR_AT ((SELFTEST_LOCATION), (VAL1), (VAL2), (ABS_ERROR))
++
++/* Like ASSERT_NEAR, but treat LOC as the effective location of the
++   selftest.  */
++
++#define ASSERT_NEAR_AT(LOC, VAL1, VAL2, ABS_ERROR)	       \
++  SELFTEST_BEGIN_STMT					       \
++  const char *desc_ = "ASSERT_NEAR (" #VAL1 ", " #VAL2 ", " #ABS_ERROR ")"; \
++  double error = fabs ((VAL1) - (VAL2));				\
++  if (error < (ABS_ERROR))						\
++    ::selftest::pass ((LOC), desc_);					\
++  else									\
++    ::selftest::fail ((LOC), desc_);					\
++  SELFTEST_END_STMT
++
+ /* Evaluate VAL1 and VAL2 and compare them with known_eq, calling
+    ::selftest::pass if they are always equal,
+    ::selftest::fail if they might be non-equal.  */
+-- 
+2.26.3
+
+Previous message (by thread): [PATCH 7/8] json: add json parsing support
+Next message (by thread): [PATCH] json parsing: avoid relying on floating point equality [PR117677]
+Messages sorted by: [ date ] [ thread ] [ subject ] [ author ]
+More information about the Gcc-patches mailing list
