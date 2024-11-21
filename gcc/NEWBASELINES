@@ -3,3 +3,4 @@
 # reset.  
 riscv64-elf
 riscv32-elf
+riscv64-linux-gnu
