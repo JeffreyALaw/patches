@@ -1,0 +1,51 @@
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index b423344d4d6..93702f71ec9 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -1328,16 +1328,20 @@ riscv_build_integer (struct riscv_integer_op *codes, HOST_WIDE_INT value,
+ 	    value = 9;
+ 
+ 	  if (value)
+-	    alt_cost = 2 + riscv_build_integer_1 (alt_codes,
++	    alt_cost = 3 + riscv_build_integer_1 (alt_codes,
+ 						  sext_hwi (loval, 32), mode);
+ 
+ 	  /* For constants where the upper half is a shNadd of the lower half
+ 	     we can do a similar transformation.  */
+ 	  if (value && alt_cost < cost)
+ 	    {
+-	      alt_codes[alt_cost - 3].save_temporary = true;
+-	      alt_codes[alt_cost - 2].code = FMA;
+-	      alt_codes[alt_cost - 2].value = value;
++	      alt_codes[alt_cost - 4].save_temporary = true;
++	      alt_codes[alt_cost - 3].code = FMA;
++	      alt_codes[alt_cost - 3].value = value;
++	      alt_codes[alt_cost - 3].use_uw = false;
++	      alt_codes[alt_cost - 3].save_temporary = false;
++	      alt_codes[alt_cost - 2].code = ASHIFT;
++	      alt_codes[alt_cost - 2].value = 32;
+ 	      alt_codes[alt_cost - 2].use_uw = false;
+ 	      alt_codes[alt_cost - 2].save_temporary = false;
+ 	      alt_codes[alt_cost - 1].code = CONCAT;
+diff --git a/gcc/testsuite/gcc.target/riscv/pr117690.c b/gcc/testsuite/gcc.target/riscv/pr117690.c
+new file mode 100644
+index 00000000000..9c06ab45ac8
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr117690.c
+@@ -0,0 +1,16 @@
++/* { dg-do run { target { riscv64*-*-* } } } */
++/* { dg-options "-march=rv64gc_zba_zbb -mabi=lp64d" } */
++
++#define myconst 0x4fffaffb0fffefffUL;
++volatile unsigned long a = myconst;
++unsigned long foo()
++{
++  return myconst;
++}
++
++int main()
++{
++  if (foo() != a)
++    __builtin_abort();
++  __builtin_exit (0);
++}
