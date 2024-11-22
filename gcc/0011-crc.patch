@@ -17125,3 +17125,133 @@ index a928cbe4557..7c778f600b5 100644
  extern gimple_opt_pass *make_pass_vectorize (gcc::context *ctxt);
  extern gimple_opt_pass *make_pass_simduid_cleanup (gcc::context *ctxt);
  extern gimple_opt_pass *make_pass_slp_vectorize (gcc::context *ctxt);
+diff --git a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-12.c b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-12.c
+index bc6b21a84e4..8ac69b9720f 100644
+--- a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-12.c
++++ b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-12.c
+@@ -1,5 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-fdump-tree-crc-details -O2" } */
++/* { dg-require-effective-target int32plus } */
+ 
+ // File - wifi.  Sizeof check is added for the test.
+ 
+@@ -71,4 +72,4 @@ int main ()
+   WIFI_calcCRC32 ("dfsf", 4);
+ }
+ 
+-/* { dg-final { scan-tree-dump "calculates CRC!" "crc" } } */
+\ No newline at end of file
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc" } } */
+diff --git a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-14.c b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-14.c
+index 9a9b5cb4133..94b2294562d 100644
+--- a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-14.c
++++ b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-14.c
+@@ -1,5 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-fdump-tree-crc-details -O2" } */
++/* { dg-require-effective-target int32plus } */
+ 
+ // File - base64, slightly modified
+ // We don't support the case when leading bit of the polynomial is kept.
+diff --git a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-17.c b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-17.c
+index ea1ca330379..84bd07c07b9 100644
+--- a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-17.c
++++ b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-17.c
+@@ -1,5 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-fdump-tree-crc-details -O2" } */
++/* { dg-require-effective-target int32plus } */
+ 
+ // File - crc.i.
+ // We don't support this case.
+@@ -49,4 +50,4 @@ uint32_t crc24_reverse(uint32_t crc, const uint8_t *data, uint8_t len)
+ 
+   return state;
+ }
+-/* { dg-final { scan-tree-dump "maybe contains CRC calculation." "crc" } } */
+\ No newline at end of file
++/* { dg-final { scan-tree-dump "maybe contains CRC calculation." "crc" } } */
+diff --git a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-18.c b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-18.c
+index 895b82f8303..0c628232a08 100644
+--- a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-18.c
++++ b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-18.c
+@@ -1,5 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-fdump-tree-crc-details -O2" } */
++/* { dg-require-effective-target int32plus } */
+ 
+ // File - cryptobonrrxternd.i
+ // We don't support this case.
+diff --git a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-19.c b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-19.c
+index d243e0cd70e..888121de90b 100644
+--- a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-19.c
++++ b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-19.c
+@@ -1,5 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-fdump-tree-crc-details  -O2" } */
++/* { dg-require-effective-target int32plus } */
+ 
+ // File - liboctasic_la-oct6100_chip_open
+ // We don't support this case.
+@@ -55,4 +56,4 @@ UINT32 Oct6100ApiProductionCrc(
+   *f_pulCrcResult = ulRemainder;
+ 
+   return 0x00000000;
+-}
+\ No newline at end of file
++}
+diff --git a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-20.c b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-20.c
+index 1e60e57bfbb..d497ea3e47a 100644
+--- a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-20.c
++++ b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-20.c
+@@ -1,5 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-fdump-tree-crc-details  -O2" } */
++/* { dg-require-effective-target int32plus } */
+ 
+ // File - scorelayout.i
+ // It is verified by the pass if we don't filter out the cases when data's size
+@@ -44,4 +45,4 @@ crc32 (guchar * message)
+   return bit_reverse (~crc);
+ }
+ 
+-/* { dg-final { scan-tree-dump "Loop iteration number and data's size differ." "crc" } } */
+\ No newline at end of file
++/* { dg-final { scan-tree-dump "Loop iteration number and data's size differ." "crc" } } */
+diff --git a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-28.c b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-28.c
+index 24c7d38c4a8..a48a4b85804 100644
+--- a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-28.c
++++ b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-28.c
+@@ -1,5 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-fdump-tree-crc-details -O2" } */
++/* { dg-require-effective-target int32plus } */
+ 
+ // File - crc32-2.i
+ 
+@@ -27,4 +28,4 @@ uint32_t* crc32_filltable(uint32_t *crc_table, int endian)
+     }
+ 
+   return crc_table - 256;
+-}
+\ No newline at end of file
++}
+diff --git a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-9.c b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-9.c
+index b070864ae25..cf655e2ce34 100644
+--- a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-9.c
++++ b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-9.c
+@@ -1,5 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-fdump-tree-crc-details -O2" } */
++/* { dg-require-effective-target int32plus } */
+ 
+ // File - nvme_mi
+ #include <stdlib.h>
+@@ -45,4 +46,4 @@ void nvme_mi_calc_req_mic (struct nvme_mi_req *req)
+   req->mic = ~crc;
+ }
+ 
+-/* { dg-final { scan-tree-dump "calculates CRC!" "crc" } } */
+\ No newline at end of file
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc" } } */
