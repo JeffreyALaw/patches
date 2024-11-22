@@ -1,8 +1,8 @@
 diff --git a/gcc/Makefile.in b/gcc/Makefile.in
-index eb578210411..a734c6b3094 100644
+index 0cbb3633e01..bbfe8221a32 100644
 --- a/gcc/Makefile.in
 +++ b/gcc/Makefile.in
-@@ -1722,6 +1722,11 @@ OBJS = \
+@@ -1729,6 +1729,11 @@ OBJS = \
  	tree-iterator.o \
  	tree-logical-location.o \
  	tree-loop-distribution.o \
@@ -15,10 +15,10 @@ index eb578210411..a734c6b3094 100644
  	tree-nrv.o \
  	tree-object-size.o \
 diff --git a/gcc/builtin-types.def b/gcc/builtin-types.def
-index 25da582ce58..dba8023b373 100644
+index 427af741c6b..fa988d35064 100644
 --- a/gcc/builtin-types.def
 +++ b/gcc/builtin-types.def
-@@ -829,6 +829,26 @@ DEF_FUNCTION_TYPE_3 (BT_FN_PTR_SIZE_SIZE_PTRMODE,
+@@ -840,6 +840,26 @@ DEF_FUNCTION_TYPE_3 (BT_FN_PTR_SIZE_SIZE_PTRMODE,
  		     BT_PTR, BT_SIZE, BT_SIZE, BT_PTRMODE)
  DEF_FUNCTION_TYPE_3 (BT_FN_VOID_PTR_UINT8_PTRMODE, BT_VOID, BT_PTR, BT_UINT8,
  		     BT_PTRMODE)
@@ -46,14 +46,13 @@ index 25da582ce58..dba8023b373 100644
  DEF_FUNCTION_TYPE_4 (BT_FN_SIZE_CONST_PTR_SIZE_SIZE_FILEPTR,
  		     BT_SIZE, BT_CONST_PTR, BT_SIZE, BT_SIZE, BT_FILEPTR)
 diff --git a/gcc/builtins.cc b/gcc/builtins.cc
-index 0d90c2ad5f8..f3c9cd63626 100644
+index 029c561d466..7de60c0d3f6 100644
 --- a/gcc/builtins.cc
 +++ b/gcc/builtins.cc
-@@ -2207,7 +2207,28 @@ associated_internal_fn (built_in_function fn, tree return_type)
-       if (REAL_MODE_FORMAT (TYPE_MODE (return_type))->b == 2)
+@@ -2208,6 +2208,29 @@ associated_internal_fn (built_in_function fn, tree return_type)
  	return IFN_LDEXP;
        return IFN_LAST;
--
+ 
 +    case BUILT_IN_CRC8_DATA8:
 +    case BUILT_IN_CRC16_DATA8:
 +    case BUILT_IN_CRC16_DATA16:
@@ -76,10 +75,11 @@ index 0d90c2ad5f8..f3c9cd63626 100644
 +    case BUILT_IN_REV_CRC64_DATA32:
 +    case BUILT_IN_REV_CRC64_DATA64:
 +      return IFN_CRC_REV;
++
      default:
        return IFN_LAST;
      }
-@@ -7745,6 +7766,37 @@ expand_speculation_safe_value (machine_mode mode, tree exp, rtx target,
+@@ -7745,6 +7768,37 @@ expand_speculation_safe_value (machine_mode mode, tree exp, rtx target,
    return targetm.speculation_safe_value (mode, target, val, failsafe);
  }
  
@@ -117,102 +117,116 @@ index 0d90c2ad5f8..f3c9cd63626 100644
  /* Expand an expression EXP that calls a built-in function,
     with result going to TARGET if that's convenient
     (and in mode MODE if that's convenient).
-@@ -8922,6 +8974,66 @@ expand_builtin (tree exp, rtx target, rtx subtarget, machine_mode mode,
+@@ -8923,6 +8977,66 @@ expand_builtin (tree exp, rtx target, rtx subtarget, machine_mode mode,
        mode = get_builtin_sync_mode (fcode - BUILT_IN_SPECULATION_SAFE_VALUE_1);
        return expand_speculation_safe_value (mode, exp, target, ignore);
  
-+      case BUILT_IN_CRC8_DATA8:
-+	return expand_builtin_crc_table_based (IFN_CRC, QImode, QImode, mode,
++    case BUILT_IN_CRC8_DATA8:
++      return expand_builtin_crc_table_based (IFN_CRC, QImode, QImode, mode,
 +					       exp, target);
-+      case BUILT_IN_CRC16_DATA8:
-+	return expand_builtin_crc_table_based (IFN_CRC, HImode, QImode, mode,
++    case BUILT_IN_CRC16_DATA8:
++      return expand_builtin_crc_table_based (IFN_CRC, HImode, QImode, mode,
 +					       exp, target);
-+      case BUILT_IN_CRC16_DATA16:
-+	return expand_builtin_crc_table_based (IFN_CRC, HImode, HImode, mode,
++    case BUILT_IN_CRC16_DATA16:
++      return expand_builtin_crc_table_based (IFN_CRC, HImode, HImode, mode,
 +					       exp, target);
-+      case BUILT_IN_CRC32_DATA8:
-+	return expand_builtin_crc_table_based (IFN_CRC, SImode, QImode, mode,
++    case BUILT_IN_CRC32_DATA8:
++      return expand_builtin_crc_table_based (IFN_CRC, SImode, QImode, mode,
 +					       exp, target);
-+      case BUILT_IN_CRC32_DATA16:
-+	return expand_builtin_crc_table_based (IFN_CRC, SImode, HImode, mode,
++    case BUILT_IN_CRC32_DATA16:
++      return expand_builtin_crc_table_based (IFN_CRC, SImode, HImode, mode,
 +					       exp, target);
-+      case BUILT_IN_CRC32_DATA32:
-+	return expand_builtin_crc_table_based (IFN_CRC, SImode, SImode, mode,
++    case BUILT_IN_CRC32_DATA32:
++      return expand_builtin_crc_table_based (IFN_CRC, SImode, SImode, mode,
 +					       exp, target);
-+      case BUILT_IN_CRC64_DATA8:
-+	return expand_builtin_crc_table_based (IFN_CRC, DImode, QImode, mode,
++    case BUILT_IN_CRC64_DATA8:
++      return expand_builtin_crc_table_based (IFN_CRC, DImode, QImode, mode,
 +					       exp, target);
-+      case BUILT_IN_CRC64_DATA16:
-+	return expand_builtin_crc_table_based (IFN_CRC, DImode, HImode, mode,
++    case BUILT_IN_CRC64_DATA16:
++      return expand_builtin_crc_table_based (IFN_CRC, DImode, HImode, mode,
 +					       exp, target);
-+      case BUILT_IN_CRC64_DATA32:
-+	return expand_builtin_crc_table_based (IFN_CRC, DImode, SImode, mode,
++    case BUILT_IN_CRC64_DATA32:
++      return expand_builtin_crc_table_based (IFN_CRC, DImode, SImode, mode,
 +					       exp, target);
-+      case BUILT_IN_CRC64_DATA64:
-+	return expand_builtin_crc_table_based (IFN_CRC, DImode, DImode, mode,
++    case BUILT_IN_CRC64_DATA64:
++      return expand_builtin_crc_table_based (IFN_CRC, DImode, DImode, mode,
 +					       exp, target);
-+      case BUILT_IN_REV_CRC8_DATA8:
-+	return expand_builtin_crc_table_based (IFN_CRC_REV, QImode, QImode,
++    case BUILT_IN_REV_CRC8_DATA8:
++      return expand_builtin_crc_table_based (IFN_CRC_REV, QImode, QImode,
 +					       mode, exp, target);
-+      case BUILT_IN_REV_CRC16_DATA8:
-+	return expand_builtin_crc_table_based (IFN_CRC_REV, HImode, QImode,
++    case BUILT_IN_REV_CRC16_DATA8:
++      return expand_builtin_crc_table_based (IFN_CRC_REV, HImode, QImode,
 +					       mode, exp, target);
-+      case BUILT_IN_REV_CRC16_DATA16:
-+	return expand_builtin_crc_table_based (IFN_CRC_REV, HImode, HImode,
++    case BUILT_IN_REV_CRC16_DATA16:
++      return expand_builtin_crc_table_based (IFN_CRC_REV, HImode, HImode,
 +					       mode, exp, target);
-+      case BUILT_IN_REV_CRC32_DATA8:
-+	return expand_builtin_crc_table_based (IFN_CRC_REV, SImode, QImode,
++    case BUILT_IN_REV_CRC32_DATA8:
++      return expand_builtin_crc_table_based (IFN_CRC_REV, SImode, QImode,
 +					       mode, exp, target);
-+      case BUILT_IN_REV_CRC32_DATA16:
-+	return expand_builtin_crc_table_based (IFN_CRC_REV, SImode, HImode,
++    case BUILT_IN_REV_CRC32_DATA16:
++      return expand_builtin_crc_table_based (IFN_CRC_REV, SImode, HImode,
 +					       mode, exp, target);
-+      case BUILT_IN_REV_CRC32_DATA32:
-+	return expand_builtin_crc_table_based (IFN_CRC_REV, SImode, SImode,
++    case BUILT_IN_REV_CRC32_DATA32:
++      return expand_builtin_crc_table_based (IFN_CRC_REV, SImode, SImode,
 +					       mode, exp, target);
-+      case BUILT_IN_REV_CRC64_DATA8:
-+	return expand_builtin_crc_table_based (IFN_CRC_REV, DImode, QImode,
++    case BUILT_IN_REV_CRC64_DATA8:
++      return expand_builtin_crc_table_based (IFN_CRC_REV, DImode, QImode,
 +					       mode, exp, target);
-+      case BUILT_IN_REV_CRC64_DATA16:
-+	return expand_builtin_crc_table_based (IFN_CRC_REV, DImode, HImode,
++    case BUILT_IN_REV_CRC64_DATA16:
++      return expand_builtin_crc_table_based (IFN_CRC_REV, DImode, HImode,
 +					       mode, exp, target);
-+      case BUILT_IN_REV_CRC64_DATA32:
-+	return expand_builtin_crc_table_based (IFN_CRC_REV, DImode, SImode,
++    case BUILT_IN_REV_CRC64_DATA32:
++      return expand_builtin_crc_table_based (IFN_CRC_REV, DImode, SImode,
 +					       mode, exp, target);
-+      case BUILT_IN_REV_CRC64_DATA64:
-+	return expand_builtin_crc_table_based (IFN_CRC_REV, DImode, DImode,
++    case BUILT_IN_REV_CRC64_DATA64:
++      return expand_builtin_crc_table_based (IFN_CRC_REV, DImode, DImode,
 +					       mode, exp, target);
      default:	/* just do library call, if unknown builtin */
        break;
      }
 diff --git a/gcc/builtins.def b/gcc/builtins.def
-index 0c76ebc5e31..9ea81fa9d7f 100644
+index fac6bc9ad16..a96062d0950 100644
 --- a/gcc/builtins.def
 +++ b/gcc/builtins.def
-@@ -708,7 +708,26 @@ DEF_EXT_LIB_BUILTIN    (BUILT_IN_Y1L, "y1l", BT_FN_LONGDOUBLE_LONGDOUBLE, ATTR_M
+@@ -71,6 +71,13 @@ along with GCC; see the file COPYING3.  If not see
+   DEF_BUILTIN (ENUM, "__builtin_" NAME, BUILT_IN_NORMAL, TYPE, BT_LAST,	\
+ 	       false, false, false, ATTRS, true, true)
+ 
++/* Like DEF_GCC_BUILTIN, except the builtins aren't available if their
++   datatypes are too wide.  */
++#undef DEF_GCC_CRC_BUILTIN
++#define DEF_GCC_CRC_BUILTIN(ENUM, NAME, TYPE, ATTRS, MAX_BITSIZE)	\
++  DEF_BUILTIN (ENUM, "__builtin_" NAME, BUILT_IN_NORMAL, TYPE, BT_LAST,	\
++	       false, false, false, ATTRS, true, MAX_BITSIZE <= GET_MODE_BITSIZE (word_mode))
++
+ /* Like DEF_GCC_BUILTIN, except we don't prepend "__builtin_".  */
+ #undef DEF_SYNC_BUILTIN
+ #define DEF_SYNC_BUILTIN(ENUM, NAME, TYPE, ATTRS)		\
+@@ -720,7 +727,26 @@ DEF_EXT_LIB_BUILTIN    (BUILT_IN_Y1L, "y1l", BT_FN_LONGDOUBLE_LONGDOUBLE, ATTR_M
  DEF_EXT_LIB_BUILTIN    (BUILT_IN_YN, "yn", BT_FN_DOUBLE_INT_DOUBLE, ATTR_MATHFN_FPROUNDING_ERRNO)
  DEF_EXT_LIB_BUILTIN    (BUILT_IN_YNF, "ynf", BT_FN_FLOAT_INT_FLOAT, ATTR_MATHFN_FPROUNDING_ERRNO)
  DEF_EXT_LIB_BUILTIN    (BUILT_IN_YNL, "ynl", BT_FN_LONGDOUBLE_INT_LONGDOUBLE, ATTR_MATHFN_FPROUNDING_ERRNO)
 -
-+DEF_GCC_BUILTIN	       (BUILT_IN_CRC8_DATA8, "crc8_data8", BT_FN_UINT8_UINT8_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_CRC16_DATA8, "crc16_data8", BT_FN_UINT16_UINT16_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_CRC16_DATA16, "crc16_data16", BT_FN_UINT16_UINT16_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_CRC32_DATA8, "crc32_data8", BT_FN_UINT32_UINT32_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_CRC32_DATA16, "crc32_data16", BT_FN_UINT32_UINT32_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_CRC32_DATA32, "crc32_data32", BT_FN_UINT32_UINT32_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_CRC64_DATA8, "crc64_data8", BT_FN_UINT64_UINT64_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_CRC64_DATA16, "crc64_data16", BT_FN_UINT64_UINT64_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_CRC64_DATA32, "crc64_data32", BT_FN_UINT64_UINT64_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_CRC64_DATA64, "crc64_data64", BT_FN_UINT64_UINT64_UINT64_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC8_DATA8, "rev_crc8_data8", BT_FN_UINT8_UINT8_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC16_DATA8, "rev_crc16_data8", BT_FN_UINT16_UINT16_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC16_DATA16, "rev_crc16_data16", BT_FN_UINT16_UINT16_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC32_DATA8, "rev_crc32_data8", BT_FN_UINT32_UINT32_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC32_DATA16, "rev_crc32_data16", BT_FN_UINT32_UINT32_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC32_DATA32, "rev_crc32_data32", BT_FN_UINT32_UINT32_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC64_DATA8, "rev_crc64_data8", BT_FN_UINT64_UINT64_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC64_DATA16, "rev_crc64_data16", BT_FN_UINT64_UINT64_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC64_DATA32, "rev_crc64_data32", BT_FN_UINT64_UINT64_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC64_DATA64, "rev_crc64_data64", BT_FN_UINT64_UINT64_UINT64_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC8_DATA8, "crc8_data8", BT_FN_UINT8_UINT8_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 8)
++DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC16_DATA8, "crc16_data8", BT_FN_UINT16_UINT16_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 16)
++DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC16_DATA16, "crc16_data16", BT_FN_UINT16_UINT16_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 16)
++DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC32_DATA8, "crc32_data8", BT_FN_UINT32_UINT32_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 32)
++DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC32_DATA16, "crc32_data16", BT_FN_UINT32_UINT32_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 32)
++DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC32_DATA32, "crc32_data32", BT_FN_UINT32_UINT32_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 32)
++DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC64_DATA8, "crc64_data8", BT_FN_UINT64_UINT64_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
++DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC64_DATA16, "crc64_data16", BT_FN_UINT64_UINT64_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
++DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC64_DATA32, "crc64_data32", BT_FN_UINT64_UINT64_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
++DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC64_DATA64, "crc64_data64", BT_FN_UINT64_UINT64_UINT64_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
++DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC8_DATA8, "rev_crc8_data8", BT_FN_UINT8_UINT8_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 8)
++DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC16_DATA8, "rev_crc16_data8", BT_FN_UINT16_UINT16_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 16)
++DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC16_DATA16, "rev_crc16_data16", BT_FN_UINT16_UINT16_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 16)
++DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC32_DATA8, "rev_crc32_data8", BT_FN_UINT32_UINT32_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 32)
++DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC32_DATA16, "rev_crc32_data16", BT_FN_UINT32_UINT32_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 32)
++DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC32_DATA32, "rev_crc32_data32", BT_FN_UINT32_UINT32_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 32)
++DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC64_DATA8, "rev_crc64_data8", BT_FN_UINT64_UINT64_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
++DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC64_DATA16, "rev_crc64_data16", BT_FN_UINT64_UINT64_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
++DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC64_DATA32, "rev_crc64_data32", BT_FN_UINT64_UINT64_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
++DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC64_DATA64, "rev_crc64_data64", BT_FN_UINT64_UINT64_UINT64_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
  /* Category: _Complex math builtins.  */
  DEF_C99_COMPL_BUILTIN        (BUILT_IN_CABS, "cabs", BT_FN_DOUBLE_COMPLEX_DOUBLE, ATTR_MATHFN_FPROUNDING)
  DEF_C99_COMPL_BUILTIN        (BUILT_IN_CABSF, "cabsf", BT_FN_FLOAT_COMPLEX_FLOAT, ATTR_MATHFN_FPROUNDING)
@@ -231,10 +245,10 @@ index 8d93f75a9a4..0094b9dcc3f 100644
  extern enum built_in_function builtin_mathfn_code (const_tree);
  extern tree fold_builtin_expect (location_t, tree, tree, tree, tree);
 diff --git a/gcc/common.opt b/gcc/common.opt
-index 0b1f1ec26e1..6d3a90bc4c9 100644
+index 33be6b8042a..8b2939979f4 100644
 --- a/gcc/common.opt
 +++ b/gcc/common.opt
-@@ -2411,6 +2411,16 @@ fsave-optimization-record
+@@ -2418,6 +2418,16 @@ fsave-optimization-record
  Common Var(flag_save_optimization_record) Optimization
  Write a SRCFILE.opt-record.json file detailing what optimizations were performed.
  
@@ -252,10 +266,10 @@ index 0b1f1ec26e1..6d3a90bc4c9 100644
  Common Ignore
  Does nothing. Preserved for backward compatibility.
 diff --git a/gcc/common.opt.urls b/gcc/common.opt.urls
-index 78e0dc209d1..4e0f3e6e95a 100644
+index db98158d652..b2253b42337 100644
 --- a/gcc/common.opt.urls
 +++ b/gcc/common.opt.urls
-@@ -1013,6 +1013,9 @@ UrlSuffix(gcc/Developer-Options.html#index-fopt-info)
+@@ -1019,6 +1019,9 @@ UrlSuffix(gcc/Developer-Options.html#index-fopt-info)
  fsave-optimization-record
  UrlSuffix(gcc/Developer-Options.html#index-fsave-optimization-record)
  
@@ -266,10 +280,10 @@ index 78e0dc209d1..4e0f3e6e95a 100644
  UrlSuffix(gcc/Optimize-Options.html#index-foptimize-sibling-calls)
  
 diff --git a/gcc/config/aarch64/aarch64-protos.h b/gcc/config/aarch64/aarch64-protos.h
-index 05d3258abf7..20951af56a9 100644
+index c6ce62190bc..ac8ffe355cb 100644
 --- a/gcc/config/aarch64/aarch64-protos.h
 +++ b/gcc/config/aarch64/aarch64-protos.h
-@@ -1205,5 +1205,8 @@ extern void aarch64_adjust_reg_alloc_order ();
+@@ -1218,6 +1218,9 @@ extern void aarch64_adjust_reg_alloc_order ();
  
  bool aarch64_optimize_mode_switching (aarch64_mode_entity);
  void aarch64_restore_za (rtx);
@@ -277,7 +291,8 @@ index 05d3258abf7..20951af56a9 100644
 +void aarch64_expand_reversed_crc_using_pmull (scalar_mode, scalar_mode, rtx *);
 +
  
- #endif /* GCC_AARCH64_PROTOS_H */
+ extern bool aarch64_gcs_enabled ();
+ 
 diff --git a/gcc/config/aarch64/aarch64-simd.md b/gcc/config/aarch64/aarch64-simd.md
 index cfe95bd4c31..c5d776e2cf0 100644
 --- a/gcc/config/aarch64/aarch64-simd.md
@@ -292,10 +307,10 @@ index cfe95bd4c31..c5d776e2cf0 100644
  	(vec_select:<VEL>
  	  (match_operand:VALL_F16 1 "register_operand" "w, w, w")
 diff --git a/gcc/config/aarch64/aarch64.cc b/gcc/config/aarch64/aarch64.cc
-index 00bcf18ae97..89c060e95bc 100644
+index 3b95ac50bbc..7d8dca3b424 100644
 --- a/gcc/config/aarch64/aarch64.cc
 +++ b/gcc/config/aarch64/aarch64.cc
-@@ -30853,6 +30853,137 @@ aarch64_retrieve_sysreg (const char *regname, bool write_p, bool is128op)
+@@ -30945,6 +30945,137 @@ aarch64_retrieve_sysreg (const char *regname, bool write_p, bool is128op)
    return sysreg->encoding;
  }
  
@@ -434,10 +449,10 @@ index 00bcf18ae97..89c060e95bc 100644
  
  #if CHECKING_P
 diff --git a/gcc/config/aarch64/aarch64.md b/gcc/config/aarch64/aarch64.md
-index 8d10197c9e8..014edd9440b 100644
+index 711e9adc757..d04ef49b26f 100644
 --- a/gcc/config/aarch64/aarch64.md
 +++ b/gcc/config/aarch64/aarch64.md
-@@ -4564,6 +4564,63 @@ (define_insn "aarch64_<crc_variant>"
+@@ -4672,6 +4672,63 @@ (define_insn "aarch64_<crc_variant>"
    [(set_attr "type" "crc")]
  )
  
@@ -502,10 +517,10 @@ index 8d10197c9e8..014edd9440b 100644
    [(set (match_operand:GPI 0 "register_operand" "=r")
          (plus:GPI (match_operand 2 "aarch64_comparison_operation" "")
 diff --git a/gcc/config/aarch64/iterators.md b/gcc/config/aarch64/iterators.md
-index 8e3b5731939..2146fcb46be 100644
+index 023893d35f3..86e909364b7 100644
 --- a/gcc/config/aarch64/iterators.md
 +++ b/gcc/config/aarch64/iterators.md
-@@ -1323,6 +1323,10 @@ (define_mode_attr lconst2 [(SI "UsO") (DI "UsP")])
+@@ -1346,6 +1346,10 @@ (define_mode_attr lconst2 [(SI "UsO") (DI "UsP")])
  ;; Map a mode to a specific constraint character.
  (define_mode_attr cmode [(QI "q") (HI "h") (SI "s") (DI "d")])
  
@@ -517,7 +532,7 @@ index 8e3b5731939..2146fcb46be 100644
  (define_mode_attr cmode_simd [(SI "g") (DI "j")])
  
 diff --git a/gcc/config/i386/i386-protos.h b/gcc/config/i386/i386-protos.h
-index c26ae5e4f1d..db1db147402 100644
+index 78e72c50c6d..e954caec644 100644
 --- a/gcc/config/i386/i386-protos.h
 +++ b/gcc/config/i386/i386-protos.h
 @@ -307,6 +307,8 @@ extern bool ix86_expand_vector_init_duplicate (bool, machine_mode, rtx,
@@ -530,10 +545,10 @@ index c26ae5e4f1d..db1db147402 100644
  /* In i386-c.cc  */
  extern void ix86_target_macros (void);
 diff --git a/gcc/config/i386/i386.cc b/gcc/config/i386/i386.cc
-index 6ac3a5d55f2..29d09773b41 100644
+index c7e70c21999..1b66938a82b 100644
 --- a/gcc/config/i386/i386.cc
 +++ b/gcc/config/i386/i386.cc
-@@ -26528,6 +26528,135 @@ ix86_run_selftests (void)
+@@ -26671,6 +26671,135 @@ ix86_run_selftests (void)
  
  } // namespace selftest
  
@@ -670,10 +685,10 @@ index 6ac3a5d55f2..29d09773b41 100644
  
  static const scoped_attribute_specs *const ix86_attribute_table[] =
 diff --git a/gcc/config/i386/i386.md b/gcc/config/i386/i386.md
-index f4aae80b7a9..ee9f294076a 100644
+index 1c1bf659fc2..51a6e10d1bb 100644
 --- a/gcc/config/i386/i386.md
 +++ b/gcc/config/i386/i386.md
-@@ -192,6 +192,10 @@ (define_c_enum "unspec" [
+@@ -191,6 +191,10 @@ (define_c_enum "unspec" [
    ;; For CRC32 support
    UNSPEC_CRC32
  
@@ -684,7 +699,7 @@ index f4aae80b7a9..ee9f294076a 100644
    ;; For LZCNT suppoprt
    UNSPEC_LZCNT
  
-@@ -28720,6 +28724,61 @@ (define_insn "sse4_2_crc32di"
+@@ -28699,6 +28703,61 @@ (define_insn "sse4_2_crc32di"
     (set_attr "prefix_extra" "1")
     (set_attr "mode" "DI")])
  
@@ -838,7 +853,7 @@ index 081659499a9..fae89893ecb 100644
  
  (define_mode_iterator ANYI_QUAD_TRUNC [SI (DI "TARGET_64BIT")])
 diff --git a/gcc/config/riscv/riscv-protos.h b/gcc/config/riscv/riscv-protos.h
-index 4ed04321d32..143befab31a 100644
+index 500b357f6eb..7d4e207f1a9 100644
 --- a/gcc/config/riscv/riscv-protos.h
 +++ b/gcc/config/riscv/riscv-protos.h
 @@ -175,6 +175,9 @@ extern bool riscv_reg_frame_related (rtx);
@@ -852,10 +867,10 @@ index 4ed04321d32..143befab31a 100644
  /* Routines implemented in riscv-c.cc.  */
  void riscv_cpu_cpp_builtins (cpp_reader *);
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 2e9ac280c8f..f1e3b5eb77c 100644
+index 93702f71ec9..6bad3456c53 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
-@@ -12711,6 +12711,161 @@ riscv_use_by_pieces_infrastructure_p (unsigned HOST_WIDE_INT size,
+@@ -13468,6 +13468,161 @@ riscv_use_by_pieces_infrastructure_p (unsigned HOST_WIDE_INT size,
    return default_use_by_pieces_infrastructure_p (size, alignment, op, speed_p);
  }
  
@@ -1018,7 +1033,7 @@ index 2e9ac280c8f..f1e3b5eb77c 100644
  #undef TARGET_ASM_ALIGNED_HI_OP
  #define TARGET_ASM_ALIGNED_HI_OP "\t.half\t"
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index 5b7b73535a3..ac639dd9c04 100644
+index eb5cd6fbe82..3bf4987f015 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
 @@ -95,6 +95,10 @@ (define_c_enum "unspec" [
@@ -1033,10 +1048,10 @@ index 5b7b73535a3..ac639dd9c04 100644
  
  (define_c_enum "unspecv" [
 diff --git a/gcc/configure b/gcc/configure
-index 150ab616414..242cffdb312 100755
+index 70d6e37796d..85d73df3387 100755
 --- a/gcc/configure
 +++ b/gcc/configure
-@@ -36280,7 +36280,7 @@ $as_echo "$as_me: executing $ac_file commands" >&6;}
+@@ -36304,7 +36304,7 @@ $as_echo "$as_me: executing $ac_file commands" >&6;}
      "depdir":C) $SHELL $ac_aux_dir/mkinstalldirs $DEPDIR ;;
      "gccdepdir":C)
    ${CONFIG_SHELL-/bin/sh} $ac_aux_dir/mkinstalldirs build/$DEPDIR
@@ -2520,10 +2535,10 @@ index 00000000000..d802f4ddb70
 +
 +#endif //GCC_CRC_VERIFICATION
 diff --git a/gcc/doc/extend.texi b/gcc/doc/extend.texi
-index c566474074d..8b8c93945ee 100644
+index 59644606261..b550cee74f8 100644
 --- a/gcc/doc/extend.texi
 +++ b/gcc/doc/extend.texi
-@@ -16272,6 +16272,115 @@ Returns the openacc gang, worker or vector size depending on whether @var{x} is
+@@ -16282,6 +16282,115 @@ Returns the openacc gang, worker or vector size depending on whether @var{x} is
  0, 1 or 2.
  @enddefbuiltin
  
@@ -2640,7 +2655,7 @@ index c566474074d..8b8c93945ee 100644
  @section Built-in Functions Specific to Particular Target Machines
  
 diff --git a/gcc/doc/invoke.texi b/gcc/doc/invoke.texi
-index 93e9af3791c..b147fc8e8cd 100644
+index 0951901f50a..1e0889523db 100644
 --- a/gcc/doc/invoke.texi
 +++ b/gcc/doc/invoke.texi
 @@ -603,7 +603,7 @@ Objective-C and Objective-C++ Dialects}.
@@ -2652,7 +2667,7 @@ index 93e9af3791c..b147fc8e8cd 100644
  -fpartial-inlining  -fpeel-loops  -fpredictive-commoning
  -fprefetch-loop-arrays
  -fprofile-correction
-@@ -12599,6 +12599,7 @@ also turns on the following optimization flags:
+@@ -12640,6 +12640,7 @@ also turns on the following optimization flags:
  -fipa-ra  -fipa-sra  -fipa-vrp
  -fisolate-erroneous-paths-dereference
  -flra-remat
@@ -2660,7 +2675,7 @@ index 93e9af3791c..b147fc8e8cd 100644
  -foptimize-sibling-calls
  -foptimize-strlen
  -fpartial-inlining
-@@ -12763,6 +12764,19 @@ leaf functions.
+@@ -12804,6 +12805,19 @@ leaf functions.
  
  Enabled by default at @option{-O1} and higher.
  
@@ -2681,10 +2696,10 @@ index 93e9af3791c..b147fc8e8cd 100644
  @item -foptimize-sibling-calls
  Optimize sibling and tail recursive calls.
 diff --git a/gcc/doc/md.texi b/gcc/doc/md.texi
-index 25ded86f0d1..4498ba763cd 100644
+index c8f1424a042..c4a48811ae8 100644
 --- a/gcc/doc/md.texi
 +++ b/gcc/doc/md.texi
-@@ -8620,6 +8620,20 @@ Return 1 if operand 1 is a normal floating point number and 0
+@@ -8639,6 +8639,20 @@ Return 1 if operand 1 is a normal floating point number and 0
  otherwise.  @var{m} is a scalar floating point mode.  Operand 0
  has mode @code{SImode}, and operand 1 has mode @var{m}.
  
@@ -2706,10 +2721,10 @@ index 25ded86f0d1..4498ba763cd 100644
  
  @end ifset
 diff --git a/gcc/expr.cc b/gcc/expr.cc
-index caa1a72ba0b..ccbc38d6cf0 100644
+index aa6ee85e719..78215f5e960 100644
 --- a/gcc/expr.cc
 +++ b/gcc/expr.cc
-@@ -14136,3 +14136,417 @@ int_expr_size (const_tree exp)
+@@ -14143,3 +14143,417 @@ int_expr_size (const_tree exp)
  
    return tree_to_shwi (size);
  }
@@ -4595,7 +4610,7 @@ index 82416bf366e..f69b61db9cc 100644
  /* Like ctz_hwi, except 0 when x == 0.  */
  
 diff --git a/gcc/internal-fn.cc b/gcc/internal-fn.cc
-index 0ee5f5bc7c5..901d43cb92f 100644
+index a45b3291800..25e7ee0d7f4 100644
 --- a/gcc/internal-fn.cc
 +++ b/gcc/internal-fn.cc
 @@ -191,6 +191,7 @@ init_internal_fns ()
@@ -4606,7 +4621,7 @@ index 0ee5f5bc7c5..901d43cb92f 100644
  
  const direct_internal_fn_info direct_internal_fn_array[IFN_LAST + 1] = {
  #define DEF_INTERNAL_FN(CODE, FLAGS, FNSPEC) not_direct,
-@@ -4029,6 +4030,58 @@ expand_convert_optab_fn (internal_fn fn, gcall *stmt, convert_optab optab,
+@@ -4054,6 +4055,58 @@ expand_convert_optab_fn (internal_fn fn, gcall *stmt, convert_optab optab,
    expand_fn_using_insn (stmt, icode, 1, nargs);
  }
  
@@ -4665,7 +4680,7 @@ index 0ee5f5bc7c5..901d43cb92f 100644
  /* Expanders for optabs that can use expand_direct_optab_fn.  */
  
  #define expand_unary_optab_fn(FN, STMT, OPTAB) \
-@@ -4165,6 +4218,7 @@ multi_vector_optab_supported_p (convert_optab optab, tree_pair types,
+@@ -4190,6 +4243,7 @@ multi_vector_optab_supported_p (convert_optab optab, tree_pair types,
  #define direct_cond_len_unary_optab_supported_p direct_optab_supported_p
  #define direct_cond_len_binary_optab_supported_p direct_optab_supported_p
  #define direct_cond_len_ternary_optab_supported_p direct_optab_supported_p
@@ -4674,7 +4689,7 @@ index 0ee5f5bc7c5..901d43cb92f 100644
  #define direct_load_lanes_optab_supported_p multi_vector_optab_supported_p
  #define direct_mask_load_lanes_optab_supported_p multi_vector_optab_supported_p
 diff --git a/gcc/internal-fn.def b/gcc/internal-fn.def
-index c3d0efc0f2c..338bec221ac 100644
+index e993c99c558..6e84c693697 100644
 --- a/gcc/internal-fn.def
 +++ b/gcc/internal-fn.def
 @@ -202,6 +202,8 @@ along with GCC; see the file COPYING3.  If not see
@@ -17087,10 +17102,10 @@ index 00000000000..4da3e8b2543
 +/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
 \ No newline at end of file
 diff --git a/gcc/timevar.def b/gcc/timevar.def
-index ae80a311a2d..e2d13f34688 100644
+index 115b2039253..13310032b8a 100644
 --- a/gcc/timevar.def
 +++ b/gcc/timevar.def
-@@ -313,6 +313,7 @@ DEFTIMEVAR (TV_INITIALIZE_RTL        , "initialize rtl")
+@@ -314,6 +314,7 @@ DEFTIMEVAR (TV_INITIALIZE_RTL        , "initialize rtl")
  DEFTIMEVAR (TV_GIMPLE_LADDRESS       , "address lowering")
  DEFTIMEVAR (TV_TREE_LOOP_IFCVT       , "tree loop if-conversion")
  DEFTIMEVAR (TV_WARN_ACCESS           , "access analysis")
@@ -17110,55 +17125,3 @@ index a928cbe4557..7c778f600b5 100644
  extern gimple_opt_pass *make_pass_vectorize (gcc::context *ctxt);
  extern gimple_opt_pass *make_pass_simduid_cleanup (gcc::context *ctxt);
  extern gimple_opt_pass *make_pass_slp_vectorize (gcc::context *ctxt);
-diff --git a/gcc/testsuite/gcc.dg/torture/crc-crc8-data8-loop-xorInFor.c b/gcc/testsuite/gcc.dg/torture/crc-crc8-data8-loop-xorInFor.c
-index 79e46d6057d..0b5980f9640 100644
---- a/gcc/testsuite/gcc.dg/torture/crc-crc8-data8-loop-xorInFor.c
-+++ b/gcc/testsuite/gcc.dg/torture/crc-crc8-data8-loop-xorInFor.c
-@@ -3,7 +3,7 @@
- /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-g" "-Os" "-funroll-loops" "-fpeel-loops" "-flto" } } */
- 
- #include <stddef.h>
--#include <assert.h>
-+#include <stdlib.h>
- 
- typedef unsigned char uint8_t;
- 
-@@ -26,7 +26,9 @@ uint8_t gencrc (uint8_t *message, size_t len) {
- int main()
- {
-   uint8_t message[] = "Hello world!";
--  assert (gencrc(message, 12) == 0x24);
-+  if (gencrc(message, 12) != 0x24)
-+    abort ();
-+  exit (0);
- }
- 
- /* { dg-final { scan-tree-dump "calculates CRC!" "crc" } } */
-diff --git a/gcc/testsuite/gcc.dg/torture/crc-crc8-data8-loop-xorOutsideFor.c b/gcc/testsuite/gcc.dg/torture/crc-crc8-data8-loop-xorOutsideFor.c
-index e1749fef607..c873fa3c368 100644
---- a/gcc/testsuite/gcc.dg/torture/crc-crc8-data8-loop-xorOutsideFor.c
-+++ b/gcc/testsuite/gcc.dg/torture/crc-crc8-data8-loop-xorOutsideFor.c
-@@ -2,8 +2,7 @@
- /* { dg-options "-fdump-tree-crc-details" } */
- /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-g" "-Os" "-funroll-loops" "-fpeel-loops" "-flto" } } */
- 
--#include <stddef.h>
--#include <assert.h>
-+#include <stdlib.h>
- 
- typedef unsigned char uint8_t;
- 
-@@ -26,8 +25,10 @@ uint8_t gencrc (uint8_t *message, size_t len) {
- int main()
- {
-   uint8_t message[] = "Hello world!";
--  assert (gencrc(message, 12) == 0x24);
-+  if (gencrc(message, 12) != 0x24)
-+    abort ();
-+  exit (0);
- }
- 
- /* { dg-final { scan-tree-dump "calculates CRC!" "crc" } } */
--/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc" } } */
-\ No newline at end of file
-+/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc" } } */
