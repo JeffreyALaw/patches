@@ -17148,18 +17148,22 @@ index a928cbe4557..7c778f600b5 100644
  extern gimple_opt_pass *make_pass_simduid_cleanup (gcc::context *ctxt);
  extern gimple_opt_pass *make_pass_slp_vectorize (gcc::context *ctxt);
 diff --git a/gcc/expr.cc b/gcc/expr.cc
-index d796a3f9446..bda931dba27 100644
+index d796a3f9446..048e5e17cd0 100644
 --- a/gcc/expr.cc
 +++ b/gcc/expr.cc
-@@ -14352,26 +14352,22 @@ calculate_table_based_CRC (rtx *crc, const rtx &input_data,
-   CRC is the initial CRC value.
-   OP0 is the target register.  */
+@@ -14346,34 +14346,6 @@ calculate_table_based_CRC (rtx *crc, const rtx &input_data,
+     }
+ }
  
+-/* Converts and moves a CRC value to a target register.
+-
+-  CRC_MODE is the mode (data type) of the CRC value.
+-  CRC is the initial CRC value.
+-  OP0 is the target register.  */
+-
 -void
 -emit_crc (machine_mode crc_mode, rtx* crc, rtx* op0)
-+static void
-+emit_crc (rtx *crc, rtx *op0)
- {
+-{
 -  if (word_mode != crc_mode)
 -    {
 -      /* If this ever trips, then we need to adjust the creation
@@ -17175,36 +17179,66 @@ index d796a3f9446..bda931dba27 100644
 -      else
 -	convert_move (tgt, crc_low, 0);
 -    }
-+  /* The CRC value is in *CRC and we need it in *OP0.  These objects my
-+     have different modes, they may be promoted SUBREGs, etc.
-+
-+     First get the result into a pseudo in the same mode as OP0, taking
-+     care to preserve any promoted SUBREG sematics.  */
-+  rtx tmp = gen_reg_rtx (GET_MODE (*op0));
-+  if (SUBREG_P (*op0) && SUBREG_PROMOTED_VAR_P (*op0))
-+    convert_move (tmp, *crc, SUBREG_PROMOTED_SIGN (*op0));
-   else
+-  else
 -    emit_move_insn (*op0, *crc);
-+    convert_move (tmp, *crc, 0);
-+
-+  /* Now we can move it dirctly into OP0.  */
-+  emit_move_insn (*op0, tmp);
- }
- 
+-}
+-
  /* Generate table-based CRC code for the given CRC, INPUT_DATA and the
-@@ -14402,7 +14398,7 @@ expand_crc_table_based (rtx op0, rtx op1, rtx op2, rtx op3,
+    POLYNOMIAL (without leading 1).
+ 
+@@ -14402,7 +14374,7 @@ expand_crc_table_based (rtx op0, rtx op1, rtx op2, rtx op3,
    rtx crc = gen_reg_rtx (word_mode);
    convert_move (crc, op1, 0);
    calculate_table_based_CRC (&crc, op2, op3, crc_mode, data_mode);
 -  emit_crc (crc_mode, &crc, &op0);
-+  emit_crc (&crc, &op0);
++  convert_move (op0, crc, 0);
  }
  
  /* Generate the common operation for reflecting values:
-@@ -14557,5 +14553,5 @@ expand_reversed_crc_table_based (rtx op0, rtx op1, rtx op2, rtx op3,
+@@ -14557,5 +14529,5 @@ expand_reversed_crc_table_based (rtx op0, rtx op1, rtx op2, rtx op3,
    calculate_table_based_CRC (&crc, data, op3, crc_mode, data_mode);
  
    gen_reflecting_code (&crc, word_size - crc_bit_size);
 -  emit_crc (crc_mode, &crc, &op0);
-+  emit_crc (&crc, &op0);
++  convert_move (op0, crc, 0);
  }
+diff --git a/gcc/internal-fn.cc b/gcc/internal-fn.cc
+index 25e7ee0d7f4..1e59c14fddc 100644
+--- a/gcc/internal-fn.cc
++++ b/gcc/internal-fn.cc
+@@ -4095,6 +4095,19 @@ expand_crc_optab_fn (internal_fn fn, gcall *stmt, convert_optab optab)
+     }
+   else
+     {
++      /* We're bypassing all the operand conversions that are done in the
++	 case when we get an icode, operands and pass that off to expand_insn.
++
++	 That path has special case handling for promoted return values which
++	 we must emulate here (is the same kind of special treatment ever
++	 needed for input arguments here?).
++
++	 In particular we do not want to store directly into a promoted
++	 SUBREG destination, instead store into a suitably sized pseudo.  */
++      rtx orig_dest = dest;
++      if (SUBREG_P (dest) && SUBREG_PROMOTED_VAR_P (dest))
++	dest = gen_reg_rtx (GET_MODE (dest));
++
+       /* If it's IFN_CRC generate bit-forward CRC.  */
+       if (fn == IFN_CRC)
+ 	expand_crc_table_based (dest, crc, data, polynomial,
+@@ -4104,6 +4117,15 @@ expand_crc_optab_fn (internal_fn fn, gcall *stmt, convert_optab optab)
+ 	expand_reversed_crc_table_based (dest, crc, data, polynomial,
+ 					 TYPE_MODE (data_type),
+ 					 generate_reflecting_code_standard);
++
++      /* Now get the return value where it needs to be, taking care to
++	 ensure it's promoted appropriately if the ABI demands it.
++
++	 Re-use assign_call_lhs to handle the details.  */
++      class expand_operand ops[4];
++      create_call_lhs_operand (&ops[0], dest, TYPE_MODE (result_type));
++      ops[0].value = dest;
++      assign_call_lhs (lhs, orig_dest, &ops[0]);
+     }
+ }
+ 
