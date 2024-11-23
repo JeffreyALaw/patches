@@ -41,7 +41,7 @@ fi
 
 # Abusing ENABLE_MULTIARCH...
 if [ $TARGET == riscv64-linux-gnu ]; then
-  ENABLE_MULTIARCH=--with-arch=rv64gcv_zba_zbb_zbs_zicond_zvl256b
+  ENABLE_MULTIARCH=--with-arch=rv64gcv_zba_zbb_zbs_zicond
 fi
 
 echo Building GCC
