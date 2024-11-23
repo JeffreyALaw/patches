@@ -17418,19 +17418,24 @@ index ae2067d63ee..dc260029a39 100644
      expand_crc_table_based (target, op1, op2, op3, data_mode);
    else
 diff --git a/gcc/expr.cc b/gcc/expr.cc
-index 7883e9f284f..63ad816bd51 100644
+index 7883e9f284f..d8c981dc698 100644
 --- a/gcc/expr.cc
 +++ b/gcc/expr.cc
-@@ -14363,7 +14363,7 @@ expand_crc_table_based (rtx op0, rtx op1, rtx op2, rtx op3,
+@@ -14363,9 +14363,11 @@ expand_crc_table_based (rtx op0, rtx op1, rtx op2, rtx op3,
    gcc_assert (!CONST_INT_P (op0));
    gcc_assert (CONST_INT_P (op3));
    machine_mode crc_mode = GET_MODE (op0);
 -  rtx crc = gen_reg_rtx (word_mode);
 +  rtx crc = gen_reg_rtx (crc_mode);
    convert_move (crc, op1, 0);
-   calculate_table_based_CRC (&crc, op2, op3, crc_mode, data_mode);
+-  calculate_table_based_CRC (&crc, op2, op3, crc_mode, data_mode);
++  rtx data = gen_reg_rtx (crc_mode);
++  convert_move (data, op2, 0);
++  calculate_table_based_CRC (&crc, data, op3, crc_mode, data_mode);
    convert_move (op0, crc, 0);
-@@ -14378,13 +14378,12 @@ gen_common_operation_to_reflect (rtx *op,
+ }
+ 
+@@ -14378,13 +14380,12 @@ gen_common_operation_to_reflect (rtx *op,
  				 unsigned HOST_WIDE_INT and2_value,
  				 unsigned shift_val)
  {
@@ -17450,7 +17455,7 @@ index 7883e9f284f..63ad816bd51 100644
  }
  
  /* Reflect 64-bit value for the 64-bit target.  */
-@@ -14473,7 +14472,7 @@ generate_reflecting_code_standard (rtx *op, int shift_val)
+@@ -14473,7 +14474,7 @@ generate_reflecting_code_standard (rtx *op, int shift_val)
    else
      reflect_8_bit_value (op);
  
@@ -17459,7 +17464,7 @@ index 7883e9f284f..63ad816bd51 100644
  }
  
  /* Generate table-based reversed CRC code for the given CRC, INPUT_DATA and
-@@ -14508,18 +14507,17 @@ expand_reversed_crc_table_based (rtx op0, rtx op1, rtx op2, rtx op3,
+@@ -14508,18 +14509,17 @@ expand_reversed_crc_table_based (rtx op0, rtx op1, rtx op2, rtx op3,
  
    unsigned short crc_bit_size = GET_MODE_BITSIZE (crc_mode).to_constant ();
    unsigned short data_bit_size = GET_MODE_BITSIZE (data_mode).to_constant ();
@@ -17503,3 +17508,192 @@ index 9dee9be85d0..e98e7a8161a 100644
  
    unsigned HOST_WIDE_INT
    data_size = tree_to_uhwi (m_crc_loop->nb_iterations) + 1;
+diff --git a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-2.c b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-2.c
+index b97775b72b9..41012e6e753 100644
+--- a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-2.c
++++ b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-2.c
+@@ -1,6 +1,5 @@
+ /* { dg-do compile } */
+ /* { dg-options "-fdump-tree-crc-details -O2" } */
+-/* { dg-require-effective-target int32plus } */
+ 
+ //File - Ac3 from Fedora, polynomial made const. Original crc-side-instr-21.c test
+ #include <stddef.h>
+diff --git a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-24.c b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-24.c
+index e416198c5f7..67e38333628 100644
+--- a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-24.c
++++ b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-24.c
+@@ -1,6 +1,5 @@
+ /* { dg-do compile } */
+ /* { dg-options "-fdump-tree-crc-details -O2" } */
+-/* { dg-require-effective-target int32plus } */
+ 
+ // File - utils.ii
+ /* We don't support the case when CRC variable's size is different from the
+diff --git a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-26.c b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-26.c
+index be8758386ea..ac49691b8c3 100644
+--- a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-26.c
++++ b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-26.c
+@@ -1,6 +1,5 @@
+ /* { dg-do compile } */
+ /* { dg-options "-fdump-tree-crc-details -O2" } */
+-/* { dg-require-effective-target int32plus } */
+ 
+ // File - 3way.cpp. Modified
+ typedef unsigned int word32;
+diff --git a/gcc/testsuite/gcc.dg/torture/crc-1.c b/gcc/testsuite/gcc.dg/torture/crc-1.c
+index a1e3c2ff59e..234ae60cc1f 100644
+--- a/gcc/testsuite/gcc.dg/torture/crc-1.c
++++ b/gcc/testsuite/gcc.dg/torture/crc-1.c
+@@ -1,7 +1,6 @@
+ /* { dg-do run } */
+ /* { dg-options "-fdump-tree-crc-details -fdisable-tree-phiopt2 -fdisable-tree-phiopt3" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto" } } */
+-/* { dg-require-effective-target int32plus } */
+ 
+ 
+ #include <stddef.h>
+diff --git a/gcc/testsuite/gcc.dg/torture/crc-10.c b/gcc/testsuite/gcc.dg/torture/crc-10.c
+index c1fa1d33315..396ccac75a6 100644
+--- a/gcc/testsuite/gcc.dg/torture/crc-10.c
++++ b/gcc/testsuite/gcc.dg/torture/crc-10.c
+@@ -1,7 +1,6 @@
+ /* { dg-do run } */
+ /* { dg-options "-fdump-tree-crc-details" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto" } } */
+-/* { dg-require-effective-target int32plus } */
+ 
+ 
+ #include <stdint.h>
+diff --git a/gcc/testsuite/gcc.dg/torture/crc-12.c b/gcc/testsuite/gcc.dg/torture/crc-12.c
+index d6a9c27426b..f4b1dfe8ba9 100644
+--- a/gcc/testsuite/gcc.dg/torture/crc-12.c
++++ b/gcc/testsuite/gcc.dg/torture/crc-12.c
+@@ -1,7 +1,6 @@
+ /* { dg-do run } */
+ /* { dg-options "-fdump-tree-crc -fdisable-tree-phiopt2 -fdisable-tree-phiopt3" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto" } } */
+-/* { dg-require-effective-target int32plus } */
+ 
+ #include <stdio.h>
+ #include <stdint.h>
+diff --git a/gcc/testsuite/gcc.dg/torture/crc-13.c b/gcc/testsuite/gcc.dg/torture/crc-13.c
+index 84da6068a65..06e7a0eb609 100644
+--- a/gcc/testsuite/gcc.dg/torture/crc-13.c
++++ b/gcc/testsuite/gcc.dg/torture/crc-13.c
+@@ -1,7 +1,6 @@
+ /* { dg-do run } */
+ /* { dg-options "-fdump-tree-crc-details" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto" } } */
+-/* { dg-require-effective-target int32plus } */
+ 
+ 
+ #include <stdlib.h>
+diff --git a/gcc/testsuite/gcc.dg/torture/crc-22.c b/gcc/testsuite/gcc.dg/torture/crc-22.c
+index a481b48801f..4a80a352f2d 100644
+--- a/gcc/testsuite/gcc.dg/torture/crc-22.c
++++ b/gcc/testsuite/gcc.dg/torture/crc-22.c
+@@ -1,7 +1,6 @@
+ /* { dg-do run } */
+ /* { dg-options "-fdump-tree-crc-details" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-g" "-Os" "-flto" } } */
+-/* { dg-require-effective-target int32plus } */
+ 
+ 
+ #include <stdlib.h>
+diff --git a/gcc/testsuite/gcc.dg/torture/crc-23.c b/gcc/testsuite/gcc.dg/torture/crc-23.c
+index 98dc9d7a0ae..c3d2f951f52 100644
+--- a/gcc/testsuite/gcc.dg/torture/crc-23.c
++++ b/gcc/testsuite/gcc.dg/torture/crc-23.c
+@@ -1,7 +1,6 @@
+ /* { dg-do run } */
+ /* { dg-options "-fdump-tree-crc-details -ftree-cselim" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-g" "-Os" "-flto" } } */
+-/* { dg-require-effective-target int32plus } */
+ 
+ 
+ // Modified example from crc-from-fedora-packages-24.c
+diff --git a/gcc/testsuite/gcc.dg/torture/crc-28.c b/gcc/testsuite/gcc.dg/torture/crc-28.c
+index 4db0553fea1..23258e22044 100644
+--- a/gcc/testsuite/gcc.dg/torture/crc-28.c
++++ b/gcc/testsuite/gcc.dg/torture/crc-28.c
+@@ -1,7 +1,6 @@
+ /* { dg-do run } */
+ /* { dg-options "-fdump-tree-crc-details" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-g" "-Os" "-funroll-loops" "-fpeel-loops" "-flto" } } */
+-/* { dg-require-effective-target int32plus } */
+ 
+ 
+ // Test from roms/u-boot/drivers/ram/octeon/dimm_spd_eeprom.c
+diff --git a/gcc/testsuite/gcc.dg/torture/crc-29.c b/gcc/testsuite/gcc.dg/torture/crc-29.c
+index 07acd10d618..38224619cb3 100644
+--- a/gcc/testsuite/gcc.dg/torture/crc-29.c
++++ b/gcc/testsuite/gcc.dg/torture/crc-29.c
+@@ -1,7 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-fdump-tree-crc-details" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-g" "-Os" "-flto" } } */
+-/* { dg-require-effective-target int32plus } */
+ 
+ 
+ /* This is a CRC, even though it may seem it's not.
+diff --git a/gcc/testsuite/gcc.dg/torture/crc-3.c b/gcc/testsuite/gcc.dg/torture/crc-3.c
+index 96e0bf25e4b..cf582f1f419 100644
+--- a/gcc/testsuite/gcc.dg/torture/crc-3.c
++++ b/gcc/testsuite/gcc.dg/torture/crc-3.c
+@@ -1,7 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-fdump-tree-crc-details" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-O3" "-flto" } } */
+-/* { dg-require-effective-target int32plus } */
+ 
+ 
+ //We don't verify this case as for the CRC unsigned int (32 bit) is used and
+diff --git a/gcc/testsuite/gcc.dg/torture/crc-4.c b/gcc/testsuite/gcc.dg/torture/crc-4.c
+index cc12e58eded..9941372d271 100644
+--- a/gcc/testsuite/gcc.dg/torture/crc-4.c
++++ b/gcc/testsuite/gcc.dg/torture/crc-4.c
+@@ -1,7 +1,6 @@
+ /* { dg-do run } */
+ /* { dg-options "-fdump-tree-crc-details" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto" } } */
+-/* { dg-require-effective-target int32plus } */
+ 
+ 
+ #include <stdint.h>
+diff --git a/gcc/testsuite/gcc.dg/torture/crc-5.c b/gcc/testsuite/gcc.dg/torture/crc-5.c
+index 809a8f41c19..b7467449676 100644
+--- a/gcc/testsuite/gcc.dg/torture/crc-5.c
++++ b/gcc/testsuite/gcc.dg/torture/crc-5.c
+@@ -1,7 +1,6 @@
+ /* { dg-do run } */
+ /* { dg-options "-fdump-tree-crc-details -w" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto" } } */
+-/* { dg-require-effective-target int32plus } */
+ 
+ 
+ #include <stdlib.h>
+diff --git a/gcc/testsuite/gcc.dg/torture/crc-7.c b/gcc/testsuite/gcc.dg/torture/crc-7.c
+index 6aebf35da43..e885918abc8 100644
+--- a/gcc/testsuite/gcc.dg/torture/crc-7.c
++++ b/gcc/testsuite/gcc.dg/torture/crc-7.c
+@@ -1,7 +1,6 @@
+ /* { dg-do run } */
+ /* { dg-options "-fdump-tree-crc-details" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto"} } */
+-/* { dg-require-effective-target int32plus } */
+ 
+ 
+ #include <stdint.h>
+diff --git a/gcc/testsuite/gcc.dg/torture/crc-coremark16-data16.c b/gcc/testsuite/gcc.dg/torture/crc-coremark16-data16.c
+index 17a46629af1..6b4de1a9600 100644
+--- a/gcc/testsuite/gcc.dg/torture/crc-coremark16-data16.c
++++ b/gcc/testsuite/gcc.dg/torture/crc-coremark16-data16.c
+@@ -1,7 +1,6 @@
+ /* { dg-do run } */
+ /* { dg-options "-fdump-tree-crc-details -w" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-g" "-Os" "-flto" } } */
+-/* { dg-require-effective-target int32plus } */
+ 
+ #include <stdlib.h>
+ typedef unsigned short ee_u16;
