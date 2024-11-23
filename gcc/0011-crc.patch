@@ -17446,6 +17446,26 @@ index 482fe04cc55..a1e3c2ff59e 100644
 -/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc" } } */
 \ No newline at end of file
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc" } } */
+diff --git a/gcc/testsuite/gcc.dg/torture/crc-10.c b/gcc/testsuite/gcc.dg/torture/crc-10.c
+index 24bdda1e3b5..c1fa1d33315 100644
+--- a/gcc/testsuite/gcc.dg/torture/crc-10.c
++++ b/gcc/testsuite/gcc.dg/torture/crc-10.c
+@@ -1,6 +1,8 @@
+ /* { dg-do run } */
+ /* { dg-options "-fdump-tree-crc-details" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto" } } */
++/* { dg-require-effective-target int32plus } */
++
+ 
+ #include <stdint.h>
+ #include <stdlib.h>
+@@ -45,4 +47,4 @@ int main ()
+ /* { dg-final { scan-tree-dump "Bit forward" "crc" } } */
+ /* { dg-final { scan-tree-dump "Polynomial's value is \\\{0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0\\\}" "crc" } } */
+ /* { dg-final { scan-tree-dump "calculates CRC!" "crc" } } */
+-/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc" } } */
+\ No newline at end of file
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc" } } */
 diff --git a/gcc/testsuite/gcc.dg/torture/crc-12.c b/gcc/testsuite/gcc.dg/torture/crc-12.c
 index a4fbc0268dd..d6a9c27426b 100644
 --- a/gcc/testsuite/gcc.dg/torture/crc-12.c
@@ -17459,6 +17479,66 @@ index a4fbc0268dd..d6a9c27426b 100644
  #include <stdio.h>
  #include <stdint.h>
 @@ -109,4 +110,4 @@ int main ()
+ /* { dg-final { scan-tree-dump "Loop iteration number is 15" "crc"} } */
+ /* { dg-final { scan-tree-dump "Bit forward" "crc"} } */
+ /* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
+-/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
+\ No newline at end of file
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
+diff --git a/gcc/testsuite/gcc.dg/torture/crc-13.c b/gcc/testsuite/gcc.dg/torture/crc-13.c
+index 9237056139f..84da6068a65 100644
+--- a/gcc/testsuite/gcc.dg/torture/crc-13.c
++++ b/gcc/testsuite/gcc.dg/torture/crc-13.c
+@@ -1,6 +1,8 @@
+ /* { dg-do run } */
+ /* { dg-options "-fdump-tree-crc-details" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto" } } */
++/* { dg-require-effective-target int32plus } */
++
+ 
+ #include <stdlib.h>
+ 
+@@ -55,4 +57,4 @@ int main ()
+ /* { dg-final { scan-tree-dump "Loop iteration number is 7" "crc" } } */
+ /* { dg-final { scan-tree-dump "Bit forward" "crc" } } */
+ /* { dg-final { scan-tree-dump "calculates CRC!" "crc" } } */
+-/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc" } } */
+\ No newline at end of file
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc" } } */
+diff --git a/gcc/testsuite/gcc.dg/torture/crc-22.c b/gcc/testsuite/gcc.dg/torture/crc-22.c
+index 023e08aa98c..a481b48801f 100644
+--- a/gcc/testsuite/gcc.dg/torture/crc-22.c
++++ b/gcc/testsuite/gcc.dg/torture/crc-22.c
+@@ -1,6 +1,8 @@
+ /* { dg-do run } */
+ /* { dg-options "-fdump-tree-crc-details" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-g" "-Os" "-flto" } } */
++/* { dg-require-effective-target int32plus } */
++
+ 
+ #include <stdlib.h>
+ 
+@@ -63,4 +65,4 @@ int main ()
+ /* { dg-final { scan-tree-dump "Loop iteration number is 15" "crc"} } */
+ /* { dg-final { scan-tree-dump "Bit reversed" "crc"} } */
+ /* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
+-/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
+\ No newline at end of file
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
+diff --git a/gcc/testsuite/gcc.dg/torture/crc-23.c b/gcc/testsuite/gcc.dg/torture/crc-23.c
+index e289e2f848c..98dc9d7a0ae 100644
+--- a/gcc/testsuite/gcc.dg/torture/crc-23.c
++++ b/gcc/testsuite/gcc.dg/torture/crc-23.c
+@@ -1,6 +1,8 @@
+ /* { dg-do run } */
+ /* { dg-options "-fdump-tree-crc-details -ftree-cselim" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-g" "-Os" "-flto" } } */
++/* { dg-require-effective-target int32plus } */
++
+ 
+ // Modified example from crc-from-fedora-packages-24.c
+ 
+@@ -71,4 +73,4 @@ int main ()
  /* { dg-final { scan-tree-dump "Loop iteration number is 15" "crc"} } */
  /* { dg-final { scan-tree-dump "Bit forward" "crc"} } */
  /* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
@@ -17503,10 +17583,167 @@ index c5a4b47aff7..8e38a6e787c 100644
 -/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 \ No newline at end of file
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
+diff --git a/gcc/testsuite/gcc.dg/torture/crc-28.c b/gcc/testsuite/gcc.dg/torture/crc-28.c
+index 0ecd8842e08..4db0553fea1 100644
+--- a/gcc/testsuite/gcc.dg/torture/crc-28.c
++++ b/gcc/testsuite/gcc.dg/torture/crc-28.c
+@@ -1,6 +1,8 @@
+ /* { dg-do run } */
+ /* { dg-options "-fdump-tree-crc-details" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-g" "-Os" "-funroll-loops" "-fpeel-loops" "-flto" } } */
++/* { dg-require-effective-target int32plus } */
++
+ 
+ // Test from roms/u-boot/drivers/ram/octeon/dimm_spd_eeprom.c
+ 
+@@ -87,4 +89,4 @@ int main ()
+ /* { dg-final { scan-tree-dump "Loop iteration number is 7" "crc"} } */
+ /* { dg-final { scan-tree-dump "Bit forward" "crc"} } */
+ /* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
+-/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
+\ No newline at end of file
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
+diff --git a/gcc/testsuite/gcc.dg/torture/crc-29.c b/gcc/testsuite/gcc.dg/torture/crc-29.c
+index 50833fb7a01..07acd10d618 100644
+--- a/gcc/testsuite/gcc.dg/torture/crc-29.c
++++ b/gcc/testsuite/gcc.dg/torture/crc-29.c
+@@ -1,6 +1,8 @@
+ /* { dg-do compile } */
+ /* { dg-options "-fdump-tree-crc-details" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-g" "-Os" "-flto" } } */
++/* { dg-require-effective-target int32plus } */
++
+ 
+ /* This is a CRC, even though it may seem it's not.
+    'j' is initialized with 4 (100) and increased by 2 each time.
+@@ -28,4 +30,4 @@ uint16_t crc (uint8_t data, uint16_t crc) {
+   return crc;
+ }
+ 
+-/* { dg-final { scan-tree-dump "calculates CRC!" "crc" } } */
+\ No newline at end of file
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc" } } */
+diff --git a/gcc/testsuite/gcc.dg/torture/crc-3.c b/gcc/testsuite/gcc.dg/torture/crc-3.c
+index 6297427320d..96e0bf25e4b 100644
+--- a/gcc/testsuite/gcc.dg/torture/crc-3.c
++++ b/gcc/testsuite/gcc.dg/torture/crc-3.c
+@@ -1,6 +1,8 @@
+ /* { dg-do compile } */
+ /* { dg-options "-fdump-tree-crc-details" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-O3" "-flto" } } */
++/* { dg-require-effective-target int32plus } */
++
+ 
+ //We don't verify this case as for the CRC unsigned int (32 bit) is used and
+ // the polynomial fits into 16 bit. Also, as the loop's iteration number and
+@@ -34,4 +36,4 @@ unsigned short crc16 (char *data_p, unsigned short length) {
+ /* { dg-final { scan-tree-dump "function maybe contains CRC calculation." "crc" } } */
+ /* { dg-final { scan-tree-dump "Loop iteration number is 7" "crc" } } */
+ /* { dg-final { scan-tree-dump "Bit reversed" "crc" } } */
+-/* { dg-final { scan-tree-dump "Loop iteration number and data's size differ." "crc" } } */
+\ No newline at end of file
++/* { dg-final { scan-tree-dump "Loop iteration number and data's size differ." "crc" } } */
+diff --git a/gcc/testsuite/gcc.dg/torture/crc-4.c b/gcc/testsuite/gcc.dg/torture/crc-4.c
+index e1771d9d6cf..cc12e58eded 100644
+--- a/gcc/testsuite/gcc.dg/torture/crc-4.c
++++ b/gcc/testsuite/gcc.dg/torture/crc-4.c
+@@ -1,6 +1,8 @@
+ /* { dg-do run } */
+ /* { dg-options "-fdump-tree-crc-details" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto" } } */
++/* { dg-require-effective-target int32plus } */
++
+ 
+ #include <stdint.h>
+ #include <stdlib.h>
+@@ -48,4 +50,4 @@ int main ()
+ /* { dg-final { scan-tree-dump "Bit reversed" "crc" } } */
+ /* { dg-final { scan-tree-dump "calculates CRC!" "crc" } } */
+ /* { dg-final { scan-tree-dump "Polynomial's value is \\\{1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1\\\}" "crc" } } */
+-/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc" } } */
+\ No newline at end of file
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc" } } */
+diff --git a/gcc/testsuite/gcc.dg/torture/crc-5.c b/gcc/testsuite/gcc.dg/torture/crc-5.c
+index ca30f0ddbef..809a8f41c19 100644
+--- a/gcc/testsuite/gcc.dg/torture/crc-5.c
++++ b/gcc/testsuite/gcc.dg/torture/crc-5.c
+@@ -1,6 +1,8 @@
+ /* { dg-do run } */
+ /* { dg-options "-fdump-tree-crc-details -w" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto" } } */
++/* { dg-require-effective-target int32plus } */
++
+ 
+ #include <stdlib.h>
+ 
+@@ -63,4 +65,4 @@ int main ()
+ /* { dg-final { scan-tree-dump "Bit reversed" "crc" } } */
+ /* { dg-final { scan-tree-dump "calculates CRC!" "crc" } } */
+ /* { dg-final { scan-tree-dump "Polynomial's value is \\\{\[0, \]*1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1\\\}" "crc" } } */
+-/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
+\ No newline at end of file
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
+diff --git a/gcc/testsuite/gcc.dg/torture/crc-7.c b/gcc/testsuite/gcc.dg/torture/crc-7.c
+index 53d88cb3310..6aebf35da43 100644
+--- a/gcc/testsuite/gcc.dg/torture/crc-7.c
++++ b/gcc/testsuite/gcc.dg/torture/crc-7.c
+@@ -1,6 +1,8 @@
+ /* { dg-do run } */
+ /* { dg-options "-fdump-tree-crc-details" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto"} } */
++/* { dg-require-effective-target int32plus } */
++
+ 
+ #include <stdint.h>
+ #include <stdlib.h>
+@@ -47,4 +49,4 @@ int main ()
+ /* { dg-final { scan-tree-dump "Bit forward" "crc"} } */
+ /* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
+ /* { dg-final { scan-tree-dump "Polynomial's value is \\\{0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1\\\}" "crc"} } */
+-/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
+\ No newline at end of file
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
+diff --git a/gcc/testsuite/gcc.dg/torture/crc-coremark16-data16.c b/gcc/testsuite/gcc.dg/torture/crc-coremark16-data16.c
+index 6b4de1a9600..17a46629af1 100644
+--- a/gcc/testsuite/gcc.dg/torture/crc-coremark16-data16.c
++++ b/gcc/testsuite/gcc.dg/torture/crc-coremark16-data16.c
+@@ -1,6 +1,7 @@
+ /* { dg-do run } */
+ /* { dg-options "-fdump-tree-crc-details -w" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-g" "-Os" "-flto" } } */
++/* { dg-require-effective-target int32plus } */
+ 
+ #include <stdlib.h>
+ typedef unsigned short ee_u16;
+diff --git a/gcc/testsuite/gcc.dg/torture/crc-coremark32-data16.c b/gcc/testsuite/gcc.dg/torture/crc-coremark32-data16.c
+index c53edfbda9e..4b56239d78b 100644
+--- a/gcc/testsuite/gcc.dg/torture/crc-coremark32-data16.c
++++ b/gcc/testsuite/gcc.dg/torture/crc-coremark32-data16.c
+@@ -1,6 +1,8 @@
+ /* { dg-do run } */
+ /* { dg-options "-fdump-tree-crc-details -w" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-g" "-Os" "-flto" } } */
++/* { dg-require-effective-target int32plus } */
++
+ 
+ #include <stdlib.h>
+ 
 diff --git a/gcc/testsuite/gcc.dg/torture/crc-coremark32-data32.c b/gcc/testsuite/gcc.dg/torture/crc-coremark32-data32.c
 index a4486413d35..442c4d04cbf 100644
 --- a/gcc/testsuite/gcc.dg/torture/crc-coremark32-data32.c
 +++ b/gcc/testsuite/gcc.dg/torture/crc-coremark32-data32.c
+@@ -1,6 +1,7 @@
+ /* { dg-do run } */
+ /* { dg-options "-fdump-tree-crc-details -w" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-g" "-Os" "-flto" } } */
++/* { dg-require-effective-target int32plus } */
+ 
+ #include <stdlib.h>
+ 
+diff --git a/gcc/testsuite/gcc.dg/torture/crc-coremark32-data8.c b/gcc/testsuite/gcc.dg/torture/crc-coremark32-data8.c
+index 783b0c7daa4..fedbf4b60a6 100644
+--- a/gcc/testsuite/gcc.dg/torture/crc-coremark32-data8.c
++++ b/gcc/testsuite/gcc.dg/torture/crc-coremark32-data8.c
 @@ -1,6 +1,7 @@
  /* { dg-do run } */
  /* { dg-options "-fdump-tree-crc-details -w" } */
