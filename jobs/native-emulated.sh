@@ -40,9 +40,9 @@ if [ $TARGET == mipsel-linux-gnu ]; then
 fi
 
 # Abusing ENABLE_MULTIARCH...
-if [ $TARGET == riscv64-linux-gnu ]; then
-  ENABLE_MULTIARCH=--with-arch=rv64gcv_zba_zbb_zbs_zicond
-fi
+#if [ $TARGET == riscv64-linux-gnu ]; then
+#  ENABLE_MULTIARCH=--with-arch=rv64gcv_zba_zbb_zbs_zicond
+#fi
 
 echo Building GCC
 pushd obj/gcc
