@@ -17147,3 +17147,64 @@ index a928cbe4557..7c778f600b5 100644
  extern gimple_opt_pass *make_pass_vectorize (gcc::context *ctxt);
  extern gimple_opt_pass *make_pass_simduid_cleanup (gcc::context *ctxt);
  extern gimple_opt_pass *make_pass_slp_vectorize (gcc::context *ctxt);
+diff --git a/gcc/expr.cc b/gcc/expr.cc
+index d796a3f9446..bda931dba27 100644
+--- a/gcc/expr.cc
++++ b/gcc/expr.cc
+@@ -14352,26 +14352,22 @@ calculate_table_based_CRC (rtx *crc, const rtx &input_data,
+   CRC is the initial CRC value.
+   OP0 is the target register.  */
+ 
+-void
+-emit_crc (machine_mode crc_mode, rtx* crc, rtx* op0)
++static void
++emit_crc (rtx *crc, rtx *op0)
+ {
+-  if (word_mode != crc_mode)
+-    {
+-      /* If this ever trips, then we need to adjust the creation
+-	 of the SUBREG below to take endianness into account.  */
+-      gcc_assert (word_mode >= crc_mode);
+-#if 0
+-      rtx tgt = simplify_gen_subreg (word_mode, *op0, crc_mode, 0);
+-#endif
+-      rtx tgt = force_reg (word_mode, *op0);
+-      rtx crc_low = gen_lowpart (crc_mode, *crc);
+-      if (SUBREG_P (*op0) && SUBREG_PROMOTED_VAR_P (*op0))
+-	convert_move (tgt, crc_low, SUBREG_PROMOTED_SIGN (*op0));
+-      else
+-	convert_move (tgt, crc_low, 0);
+-    }
++  /* The CRC value is in *CRC and we need it in *OP0.  These objects my
++     have different modes, they may be promoted SUBREGs, etc.
++
++     First get the result into a pseudo in the same mode as OP0, taking
++     care to preserve any promoted SUBREG sematics.  */
++  rtx tmp = gen_reg_rtx (GET_MODE (*op0));
++  if (SUBREG_P (*op0) && SUBREG_PROMOTED_VAR_P (*op0))
++    convert_move (tmp, *crc, SUBREG_PROMOTED_SIGN (*op0));
+   else
+-    emit_move_insn (*op0, *crc);
++    convert_move (tmp, *crc, 0);
++
++  /* Now we can move it dirctly into OP0.  */
++  emit_move_insn (*op0, tmp);
+ }
+ 
+ /* Generate table-based CRC code for the given CRC, INPUT_DATA and the
+@@ -14402,7 +14398,7 @@ expand_crc_table_based (rtx op0, rtx op1, rtx op2, rtx op3,
+   rtx crc = gen_reg_rtx (word_mode);
+   convert_move (crc, op1, 0);
+   calculate_table_based_CRC (&crc, op2, op3, crc_mode, data_mode);
+-  emit_crc (crc_mode, &crc, &op0);
++  emit_crc (&crc, &op0);
+ }
+ 
+ /* Generate the common operation for reflecting values:
+@@ -14557,5 +14553,5 @@ expand_reversed_crc_table_based (rtx op0, rtx op1, rtx op2, rtx op3,
+   calculate_table_based_CRC (&crc, data, op3, crc_mode, data_mode);
+ 
+   gen_reflecting_code (&crc, word_size - crc_bit_size);
+-  emit_crc (crc_mode, &crc, &op0);
++  emit_crc (&crc, &op0);
+ }
