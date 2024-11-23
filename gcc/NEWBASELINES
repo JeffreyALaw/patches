@@ -2,4 +2,3 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 riscv64-linux-gnu
-c6x-elf
