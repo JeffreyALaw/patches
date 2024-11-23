@@ -17148,10 +17148,69 @@ index a928cbe4557..7c778f600b5 100644
  extern gimple_opt_pass *make_pass_simduid_cleanup (gcc::context *ctxt);
  extern gimple_opt_pass *make_pass_slp_vectorize (gcc::context *ctxt);
 diff --git a/gcc/expr.cc b/gcc/expr.cc
-index d796a3f9446..048e5e17cd0 100644
+index d796a3f9446..7883e9f284f 100644
 --- a/gcc/expr.cc
 +++ b/gcc/expr.cc
-@@ -14346,34 +14346,6 @@ calculate_table_based_CRC (rtx *crc, const rtx &input_data,
+@@ -14288,23 +14288,23 @@ calculate_table_based_CRC (rtx *crc, const rtx &input_data,
+ {
+   unsigned short crc_bit_size = GET_MODE_BITSIZE (crc_mode).to_constant ();
+   unsigned short data_size = GET_MODE_SIZE (data_mode).to_constant ();
+-
++  machine_mode mode = GET_MODE (*crc);
+   rtx tab = generate_crc_table (UINTVAL (polynomial), crc_bit_size);
+ 
+   for (unsigned short i = 0; i < data_size; i++)
+     {
+       /* crc >> (crc_bit_size - 8).  */
+-      rtx op1 = expand_shift (RSHIFT_EXPR, word_mode, *crc, crc_bit_size - 8,
++      rtx op1 = expand_shift (RSHIFT_EXPR, mode, *crc, crc_bit_size - 8,
+ 			      NULL_RTX, 1);
+ 
+       /* data >> (8 * (GET_MODE_SIZE (data_mode).to_constant () - i - 1)).  */
+       unsigned range_8 = 8 * (data_size - i - 1);
+-      rtx data = expand_shift (RSHIFT_EXPR, word_mode, input_data, range_8,
++      rtx data = expand_shift (RSHIFT_EXPR, mode, input_data, range_8,
+ 			       NULL_RTX, 1);
+ 
+       /* data >> (8 * (GET_MODE_SIZE (data_mode)
+ 					.to_constant () - i - 1)) & 0xFF.  */
+-      rtx data_final = expand_and (word_mode, data,
++      rtx data_final = expand_and (mode, data,
+ 				   gen_int_mode (255, data_mode), NULL_RTX);
+ 
+       /* (crc >> (crc_bit_size - 8)) ^ data_8bit.  */
+@@ -14312,7 +14312,7 @@ calculate_table_based_CRC (rtx *crc, const rtx &input_data,
+ 			     NULL_RTX, 1, OPTAB_WIDEN);
+ 
+       /* ((crc >> (crc_bit_size - 8)) ^ data_8bit) & 0xFF.  */
+-      rtx index = expand_and (Pmode, in, gen_int_mode (255, word_mode),
++      rtx index = expand_and (Pmode, in, gen_int_mode (255, mode),
+ 			      NULL_RTX);
+       int log_crc_size = exact_log2 (GET_MODE_SIZE (crc_mode).to_constant ());
+       index = expand_shift (LSHIFT_EXPR, Pmode, index,
+@@ -14327,53 +14327,17 @@ calculate_table_based_CRC (rtx *crc, const rtx &input_data,
+       /* (crc << 8) if CRC is larger than 8, otherwise crc = 0.  */
+       rtx high = NULL_RTX;
+       if (crc_bit_size != 8)
+-	{
+-	  high = expand_shift (LSHIFT_EXPR, word_mode, *crc, 8, NULL_RTX, 0);
+-	  if (crc_mode != word_mode)
+-	    {
+-	      rtx crc_mode_mask = gen_int_mode (GET_MODE_MASK (crc_mode),
+-						word_mode);
+-	      high = expand_and (word_mode, high, crc_mode_mask, NULL_RTX);
+-	    }
+-	}
++	high = expand_shift (LSHIFT_EXPR, mode, *crc, 8, NULL_RTX, 0);
+       else
+-	high = gen_int_mode (0, word_mode);
++	high = gen_int_mode (0, mode);
+ 
+       /* crc = (crc << 8)
+ 	       ^ crc_table[(crc >> (crc_bit_size - 8)) ^ data_8bit];  */
+-      *crc = expand_binop (word_mode, xor_optab, tab_el, high, NULL_RTX, 1,
++      *crc = expand_binop (mode, xor_optab, tab_el, high, NULL_RTX, 1,
+ 			   OPTAB_WIDEN);
      }
  }
  
@@ -17186,7 +17245,7 @@ index d796a3f9446..048e5e17cd0 100644
  /* Generate table-based CRC code for the given CRC, INPUT_DATA and the
     POLYNOMIAL (without leading 1).
  
-@@ -14402,7 +14374,7 @@ expand_crc_table_based (rtx op0, rtx op1, rtx op2, rtx op3,
+@@ -14402,7 +14366,7 @@ expand_crc_table_based (rtx op0, rtx op1, rtx op2, rtx op3,
    rtx crc = gen_reg_rtx (word_mode);
    convert_move (crc, op1, 0);
    calculate_table_based_CRC (&crc, op2, op3, crc_mode, data_mode);
@@ -17195,7 +17254,7 @@ index d796a3f9446..048e5e17cd0 100644
  }
  
  /* Generate the common operation for reflecting values:
-@@ -14557,5 +14529,5 @@ expand_reversed_crc_table_based (rtx op0, rtx op1, rtx op2, rtx op3,
+@@ -14557,5 +14521,5 @@ expand_reversed_crc_table_based (rtx op0, rtx op1, rtx op2, rtx op3,
    calculate_table_based_CRC (&crc, data, op3, crc_mode, data_mode);
  
    gen_reflecting_code (&crc, word_size - crc_bit_size);
