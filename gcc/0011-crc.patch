@@ -17301,3 +17301,205 @@ index 25e7ee0d7f4..1e59c14fddc 100644
      }
  }
  
+commit 78a496f9e13386b2501071fca922618ad38a35fa
+Author: Jeff Law <jlaw@ventanamicro.com>
+Date:   Sat Nov 23 14:20:31 2024 -0700
+
+    Revert "Adjust builtins a bit"
+    
+    This reverts commit 6cd12b6a91128d98954db4c01c66a85315a25bcf.
+
+diff --git a/gcc/builtins.cc b/gcc/builtins.cc
+index 7de60c0d3f6..ae2067d63ee 100644
+--- a/gcc/builtins.cc
++++ b/gcc/builtins.cc
+@@ -2207,7 +2207,6 @@ associated_internal_fn (built_in_function fn, tree return_type)
+       if (REAL_MODE_FORMAT (TYPE_MODE (return_type))->b == 2)
+ 	return IFN_LDEXP;
+       return IFN_LAST;
+-
+     case BUILT_IN_CRC8_DATA8:
+     case BUILT_IN_CRC16_DATA8:
+     case BUILT_IN_CRC16_DATA16:
+@@ -2230,7 +2229,6 @@ associated_internal_fn (built_in_function fn, tree return_type)
+     case BUILT_IN_REV_CRC64_DATA32:
+     case BUILT_IN_REV_CRC64_DATA64:
+       return IFN_CRC_REV;
+-
+     default:
+       return IFN_LAST;
+     }
+diff --git a/gcc/builtins.def b/gcc/builtins.def
+index a96062d0950..d47ac281e99 100644
+--- a/gcc/builtins.def
++++ b/gcc/builtins.def
+@@ -71,13 +71,6 @@ along with GCC; see the file COPYING3.  If not see
+   DEF_BUILTIN (ENUM, "__builtin_" NAME, BUILT_IN_NORMAL, TYPE, BT_LAST,	\
+ 	       false, false, false, ATTRS, true, true)
+ 
+-/* Like DEF_GCC_BUILTIN, except the builtins aren't available if their
+-   datatypes are too wide.  */
+-#undef DEF_GCC_CRC_BUILTIN
+-#define DEF_GCC_CRC_BUILTIN(ENUM, NAME, TYPE, ATTRS, MAX_BITSIZE)	\
+-  DEF_BUILTIN (ENUM, "__builtin_" NAME, BUILT_IN_NORMAL, TYPE, BT_LAST,	\
+-	       false, false, false, ATTRS, true, MAX_BITSIZE <= GET_MODE_BITSIZE (word_mode))
+-
+ /* Like DEF_GCC_BUILTIN, except we don't prepend "__builtin_".  */
+ #undef DEF_SYNC_BUILTIN
+ #define DEF_SYNC_BUILTIN(ENUM, NAME, TYPE, ATTRS)		\
+@@ -727,26 +720,26 @@ DEF_EXT_LIB_BUILTIN    (BUILT_IN_Y1L, "y1l", BT_FN_LONGDOUBLE_LONGDOUBLE, ATTR_M
+ DEF_EXT_LIB_BUILTIN    (BUILT_IN_YN, "yn", BT_FN_DOUBLE_INT_DOUBLE, ATTR_MATHFN_FPROUNDING_ERRNO)
+ DEF_EXT_LIB_BUILTIN    (BUILT_IN_YNF, "ynf", BT_FN_FLOAT_INT_FLOAT, ATTR_MATHFN_FPROUNDING_ERRNO)
+ DEF_EXT_LIB_BUILTIN    (BUILT_IN_YNL, "ynl", BT_FN_LONGDOUBLE_INT_LONGDOUBLE, ATTR_MATHFN_FPROUNDING_ERRNO)
+-DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC8_DATA8, "crc8_data8", BT_FN_UINT8_UINT8_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 8)
+-DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC16_DATA8, "crc16_data8", BT_FN_UINT16_UINT16_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 16)
+-DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC16_DATA16, "crc16_data16", BT_FN_UINT16_UINT16_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 16)
+-DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC32_DATA8, "crc32_data8", BT_FN_UINT32_UINT32_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 32)
+-DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC32_DATA16, "crc32_data16", BT_FN_UINT32_UINT32_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 32)
+-DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC32_DATA32, "crc32_data32", BT_FN_UINT32_UINT32_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 32)
+-DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC64_DATA8, "crc64_data8", BT_FN_UINT64_UINT64_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
+-DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC64_DATA16, "crc64_data16", BT_FN_UINT64_UINT64_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
+-DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC64_DATA32, "crc64_data32", BT_FN_UINT64_UINT64_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
+-DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC64_DATA64, "crc64_data64", BT_FN_UINT64_UINT64_UINT64_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
+-DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC8_DATA8, "rev_crc8_data8", BT_FN_UINT8_UINT8_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 8)
+-DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC16_DATA8, "rev_crc16_data8", BT_FN_UINT16_UINT16_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 16)
+-DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC16_DATA16, "rev_crc16_data16", BT_FN_UINT16_UINT16_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 16)
+-DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC32_DATA8, "rev_crc32_data8", BT_FN_UINT32_UINT32_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 32)
+-DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC32_DATA16, "rev_crc32_data16", BT_FN_UINT32_UINT32_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 32)
+-DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC32_DATA32, "rev_crc32_data32", BT_FN_UINT32_UINT32_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 32)
+-DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC64_DATA8, "rev_crc64_data8", BT_FN_UINT64_UINT64_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
+-DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC64_DATA16, "rev_crc64_data16", BT_FN_UINT64_UINT64_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
+-DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC64_DATA32, "rev_crc64_data32", BT_FN_UINT64_UINT64_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
+-DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC64_DATA64, "rev_crc64_data64", BT_FN_UINT64_UINT64_UINT64_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC8_DATA8, "crc8_data8", BT_FN_UINT8_UINT8_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC16_DATA8, "crc16_data8", BT_FN_UINT16_UINT16_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC16_DATA16, "crc16_data16", BT_FN_UINT16_UINT16_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC32_DATA8, "crc32_data8", BT_FN_UINT32_UINT32_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC32_DATA16, "crc32_data16", BT_FN_UINT32_UINT32_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC32_DATA32, "crc32_data32", BT_FN_UINT32_UINT32_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC64_DATA8, "crc64_data8", BT_FN_UINT64_UINT64_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC64_DATA16, "crc64_data16", BT_FN_UINT64_UINT64_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC64_DATA32, "crc64_data32", BT_FN_UINT64_UINT64_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC64_DATA64, "crc64_data64", BT_FN_UINT64_UINT64_UINT64_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC8_DATA8, "rev_crc8_data8", BT_FN_UINT8_UINT8_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC16_DATA8, "rev_crc16_data8", BT_FN_UINT16_UINT16_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC16_DATA16, "rev_crc16_data16", BT_FN_UINT16_UINT16_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC32_DATA8, "rev_crc32_data8", BT_FN_UINT32_UINT32_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC32_DATA16, "rev_crc32_data16", BT_FN_UINT32_UINT32_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC32_DATA32, "rev_crc32_data32", BT_FN_UINT32_UINT32_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC64_DATA8, "rev_crc64_data8", BT_FN_UINT64_UINT64_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC64_DATA16, "rev_crc64_data16", BT_FN_UINT64_UINT64_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC64_DATA32, "rev_crc64_data32", BT_FN_UINT64_UINT64_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC64_DATA64, "rev_crc64_data64", BT_FN_UINT64_UINT64_UINT64_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
+ /* Category: _Complex math builtins.  */
+ DEF_C99_COMPL_BUILTIN        (BUILT_IN_CABS, "cabs", BT_FN_DOUBLE_COMPLEX_DOUBLE, ATTR_MATHFN_FPROUNDING)
+ DEF_C99_COMPL_BUILTIN        (BUILT_IN_CABSF, "cabsf", BT_FN_FLOAT_COMPLEX_FLOAT, ATTR_MATHFN_FPROUNDING)
+diff --git a/gcc/builtins.cc b/gcc/builtins.cc
+index ae2067d63ee..dc260029a39 100644
+--- a/gcc/builtins.cc
++++ b/gcc/builtins.cc
+@@ -7777,7 +7777,9 @@ expand_builtin_crc_table_based (internal_fn fn, scalar_mode data_mode,
+   tree rhs2 = CALL_EXPR_ARG (exp, 1); // data
+   tree rhs3 = CALL_EXPR_ARG (exp, 2); // polynomial
+ 
++#if 0
+   gcc_assert (word_mode >= crc_mode);
++#endif
+ 
+   if (!target || mode == VOIDmode)
+     target = gen_reg_rtx (crc_mode);
+@@ -7787,6 +7789,8 @@ expand_builtin_crc_table_based (internal_fn fn, scalar_mode data_mode,
+   gcc_assert (TREE_CODE (rhs3) == INTEGER_CST);
+   rtx op3 = gen_int_mode (TREE_INT_CST_LOW (rhs3), crc_mode);
+ 
++  op2 = force_reg (crc_mode, op2);
++
+   if (fn == IFN_CRC)
+     expand_crc_table_based (target, op1, op2, op3, data_mode);
+   else
+diff --git a/gcc/expr.cc b/gcc/expr.cc
+index 7883e9f284f..63ad816bd51 100644
+--- a/gcc/expr.cc
++++ b/gcc/expr.cc
+@@ -14363,7 +14363,7 @@ expand_crc_table_based (rtx op0, rtx op1, rtx op2, rtx op3,
+   gcc_assert (!CONST_INT_P (op0));
+   gcc_assert (CONST_INT_P (op3));
+   machine_mode crc_mode = GET_MODE (op0);
+-  rtx crc = gen_reg_rtx (word_mode);
++  rtx crc = gen_reg_rtx (crc_mode);
+   convert_move (crc, op1, 0);
+   calculate_table_based_CRC (&crc, op2, op3, crc_mode, data_mode);
+   convert_move (op0, crc, 0);
+@@ -14378,13 +14378,12 @@ gen_common_operation_to_reflect (rtx *op,
+ 				 unsigned HOST_WIDE_INT and2_value,
+ 				 unsigned shift_val)
+ {
+-  rtx op1 = expand_and (word_mode, *op, gen_int_mode (and1_value, word_mode),
+-			NULL_RTX);
+-  op1 = expand_shift (LSHIFT_EXPR, word_mode, op1, shift_val, op1, 0);
+-  rtx op2 = expand_and (word_mode, *op, gen_int_mode (and2_value, word_mode),
+-			NULL_RTX);
+-  op2 = expand_shift (RSHIFT_EXPR, word_mode, op2, shift_val, op2, 1);
+-  *op = expand_binop (word_mode, ior_optab, op1, op2, *op, 0, OPTAB_DIRECT);
++  machine_mode mode = GET_MODE (*op);
++  rtx op1 = expand_and (mode, *op, gen_int_mode (and1_value, mode), NULL_RTX);
++  op1 = expand_shift (LSHIFT_EXPR, mode, op1, shift_val, op1, 0);
++  rtx op2 = expand_and (mode, *op, gen_int_mode (and2_value, mode), NULL_RTX);
++  op2 = expand_shift (RSHIFT_EXPR, mode, op2, shift_val, op2, 1);
++  *op = expand_binop (mode, ior_optab, op1, op2, *op, 0, OPTAB_DIRECT);
+ }
+ 
+ /* Reflect 64-bit value for the 64-bit target.  */
+@@ -14473,7 +14472,7 @@ generate_reflecting_code_standard (rtx *op, int shift_val)
+   else
+     reflect_8_bit_value (op);
+ 
+-  *op = expand_shift (RSHIFT_EXPR, word_mode, *op, shift_val, *op, 1);
++  *op = expand_shift (RSHIFT_EXPR, GET_MODE (*op), *op, shift_val, *op, 1);
+ }
+ 
+ /* Generate table-based reversed CRC code for the given CRC, INPUT_DATA and
+@@ -14508,18 +14507,17 @@ expand_reversed_crc_table_based (rtx op0, rtx op1, rtx op2, rtx op3,
+ 
+   unsigned short crc_bit_size = GET_MODE_BITSIZE (crc_mode).to_constant ();
+   unsigned short data_bit_size = GET_MODE_BITSIZE (data_mode).to_constant ();
+-  unsigned short word_size = GET_MODE_BITSIZE (word_mode);
+ 
+-  rtx crc = gen_reg_rtx (word_mode);
++  rtx crc = gen_reg_rtx (crc_mode);
+   convert_move (crc, op1, 0);
+-  gen_reflecting_code (&crc, word_size - crc_bit_size);
++  gen_reflecting_code (&crc, crc_bit_size - crc_bit_size);
+ 
+-  rtx data = gen_reg_rtx (word_mode);
++  rtx data = gen_reg_rtx (data_mode);
+   convert_move (data, op2, 0);
+-  gen_reflecting_code (&data, word_size - data_bit_size);
++  gen_reflecting_code (&data, data_bit_size - data_bit_size);
+ 
+   calculate_table_based_CRC (&crc, data, op3, crc_mode, data_mode);
+ 
+-  gen_reflecting_code (&crc, word_size - crc_bit_size);
++  gen_reflecting_code (&crc, crc_bit_size - crc_bit_size);
+   convert_move (op0, crc, 0);
+ }
+diff --git a/gcc/gimple-crc-optimization.cc b/gcc/gimple-crc-optimization.cc
+index 9dee9be85d0..e98e7a8161a 100644
+--- a/gcc/gimple-crc-optimization.cc
++++ b/gcc/gimple-crc-optimization.cc
+@@ -1111,6 +1111,7 @@ bool crc_optimization::validate_crc_and_data ()
+ 				     loop_preheader_edge (m_crc_loop));
+   gcc_assert (m_crc_arg);
+ 
++#if 0
+   if (GET_MODE_SIZE (TYPE_MODE (TREE_TYPE (m_crc_arg))).to_constant ()
+       > GET_MODE_SIZE (word_mode))
+     {
+@@ -1118,6 +1119,7 @@ bool crc_optimization::validate_crc_and_data ()
+ 	fprintf (dump_file, "word_mode is less than CRC mode.\n");
+       return false;
+     }
++#endif
+ 
+   unsigned HOST_WIDE_INT
+   data_size = tree_to_uhwi (m_crc_loop->nb_iterations) + 1;
