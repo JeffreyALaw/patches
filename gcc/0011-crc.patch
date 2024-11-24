@@ -3036,7 +3036,7 @@ index cf87167ec0c..6156f1ffe1c 100644
 +generate_reflecting_code_standard (rtx *op, int shift_val)
 +{
 +  gcc_assert (GET_MODE_BITSIZE (GET_MODE (*op)).to_constant ()  >= 8
-+	      && GET_MODE_BITSIZE (GET_MODE (*op))constant () <= 64);
++	      && GET_MODE_BITSIZE (GET_MODE (*op)).to_constant () <= 64);
 +
 +  if (GET_MODE_BITSIZE (GET_MODE (*op)).to_constant () == 64)
 +    reflect_64_bit_value (op);
