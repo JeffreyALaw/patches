@@ -46,7 +46,7 @@ index 427af741c6b..fa988d35064 100644
  DEF_FUNCTION_TYPE_4 (BT_FN_SIZE_CONST_PTR_SIZE_SIZE_FILEPTR,
  		     BT_SIZE, BT_CONST_PTR, BT_SIZE, BT_SIZE, BT_FILEPTR)
 diff --git a/gcc/builtins.cc b/gcc/builtins.cc
-index 029c561d466..7abb2195fdf 100644
+index 029c561d466..ae2067d63ee 100644
 --- a/gcc/builtins.cc
 +++ b/gcc/builtins.cc
 @@ -2207,7 +2207,28 @@ associated_internal_fn (built_in_function fn, tree return_type)
@@ -79,7 +79,7 @@ index 029c561d466..7abb2195fdf 100644
      default:
        return IFN_LAST;
      }
-@@ -7745,6 +7766,35 @@ expand_speculation_safe_value (machine_mode mode, tree exp, rtx target,
+@@ -7745,6 +7766,37 @@ expand_speculation_safe_value (machine_mode mode, tree exp, rtx target,
    return targetm.speculation_safe_value (mode, target, val, failsafe);
  }
  
@@ -93,6 +93,8 @@ index 029c561d466..7abb2195fdf 100644
 +  tree rhs1 = CALL_EXPR_ARG (exp, 0); // crc
 +  tree rhs2 = CALL_EXPR_ARG (exp, 1); // data
 +  tree rhs3 = CALL_EXPR_ARG (exp, 2); // polynomial
++
++  gcc_assert (word_mode >= crc_mode);
 +
 +  if (!target || mode == VOIDmode)
 +    target = gen_reg_rtx (crc_mode);
@@ -115,7 +117,7 @@ index 029c561d466..7abb2195fdf 100644
  /* Expand an expression EXP that calls a built-in function,
     with result going to TARGET if that's convenient
     (and in mode MODE if that's convenient).
-@@ -8923,6 +8973,66 @@ expand_builtin (tree exp, rtx target, rtx subtarget, machine_mode mode,
+@@ -8923,6 +8975,66 @@ expand_builtin (tree exp, rtx target, rtx subtarget, machine_mode mode,
        mode = get_builtin_sync_mode (fcode - BUILT_IN_SPECULATION_SAFE_VALUE_1);
        return expand_speculation_safe_value (mode, exp, target, ignore);
  
@@ -2639,7 +2641,7 @@ index 59644606261..b550cee74f8 100644
  @section Built-in Functions Specific to Particular Target Machines
  
 diff --git a/gcc/doc/invoke.texi b/gcc/doc/invoke.texi
-index 8141811b453..fdb230335ae 100644
+index 44f0fd297b2..7337093048e 100644
 --- a/gcc/doc/invoke.texi
 +++ b/gcc/doc/invoke.texi
 @@ -605,7 +605,7 @@ Objective-C and Objective-C++ Dialects}.
@@ -2680,7 +2682,7 @@ index 8141811b453..fdb230335ae 100644
  @item -foptimize-sibling-calls
  Optimize sibling and tail recursive calls.
 diff --git a/gcc/doc/md.texi b/gcc/doc/md.texi
-index 9b76609dee3..a4079d3b689 100644
+index c8f1424a042..c4a48811ae8 100644
 --- a/gcc/doc/md.texi
 +++ b/gcc/doc/md.texi
 @@ -8639,6 +8639,20 @@ Return 1 if operand 1 is a normal floating point number and 0
@@ -2705,10 +2707,10 @@ index 9b76609dee3..a4079d3b689 100644
  
  @end ifset
 diff --git a/gcc/expr.cc b/gcc/expr.cc
-index cf87167ec0c..ed49786bdd3 100644
+index cf87167ec0c..6156f1ffe1c 100644
 --- a/gcc/expr.cc
 +++ b/gcc/expr.cc
-@@ -14142,3 +14142,377 @@ int_expr_size (const_tree exp)
+@@ -14142,3 +14142,386 @@ int_expr_size (const_tree exp)
  
    return tree_to_shwi (size);
  }
@@ -2871,7 +2873,7 @@ index cf87167ec0c..ed49786bdd3 100644
 +      /* data >> (8 * (GET_MODE_SIZE (data_mode).to_constant () - i - 1)).  */
 +      unsigned range_8 = 8 * (data_size - i - 1);
 +      rtx data = force_reg (data_mode, input_data);
-+      data = expand_shift (RSHIFT_EXPR, mode, data, range_8, NULL_RTX, 1);
++      data = expand_shift (RSHIFT_EXPR, mode, input_data, range_8, NULL_RTX, 1);
 +
 +      /* data >> (8 * (GET_MODE_SIZE (data_mode)
 +					.to_constant () - i - 1)) & 0xFF.  */
@@ -2949,12 +2951,13 @@ index cf87167ec0c..ed49786bdd3 100644
 +				 unsigned HOST_WIDE_INT and2_value,
 +				 unsigned shift_val)
 +{
-+  machine_mode mode = GET_MODE (*op);
-+  rtx op1 = expand_and (mode, *op, gen_int_mode (and1_value, mode), NULL_RTX);
-+  op1 = expand_shift (LSHIFT_EXPR, mode, op1, shift_val, op1, 0);
-+  rtx op2 = expand_and (mode, *op, gen_int_mode (and2_value, mode), NULL_RTX);
-+  op2 = expand_shift (RSHIFT_EXPR, mode, op2, shift_val, op2, 1);
-+  *op = expand_binop (mode, ior_optab, op1, op2, *op, 0, OPTAB_DIRECT);
++  rtx op1 = expand_and (GET_MODE (*op), *op, gen_int_mode (and1_value, GET_MODE (*op)),
++			NULL_RTX);
++  op1 = expand_shift (LSHIFT_EXPR, GET_MODE (*op), op1, shift_val, op1, 0);
++  rtx op2 = expand_and (GET_MODE (*op), *op, gen_int_mode (and2_value, GET_MODE (*op)),
++			NULL_RTX);
++  op2 = expand_shift (RSHIFT_EXPR, GET_MODE (*op), op2, shift_val, op2, 1);
++  *op = expand_binop (GET_MODE (*op), ior_optab, op1, op2, *op, 0, OPTAB_DIRECT);
 +}
 +
 +/* Reflect 64-bit value for the 64-bit target.  */
@@ -3030,18 +3033,21 @@ index cf87167ec0c..ed49786bdd3 100644
 +   we will get the desired one: 1000 1111.  */
 +
 +void
-+generate_reflecting_code_standard (rtx *op)
++generate_reflecting_code_standard (rtx *op, int shift_val)
 +{
-+  gcc_assert (BITS_PER_WORD >= 8 && BITS_PER_WORD <= 64);
++  gcc_assert (GET_MODE_BITSIZE (GET_MODE (*op)).to_constant ()  >= 8
++	      && GET_MODE_BITSIZE (GET_MODE (*op))constant () <= 64);
 +
-+  if (BITS_PER_WORD == 64)
++  if (GET_MODE_BITSIZE (GET_MODE (*op)).to_constant () == 64)
 +    reflect_64_bit_value (op);
-+  else if (BITS_PER_WORD == 32)
++  else if (GET_MODE_BITSIZE (GET_MODE (*op)).to_constant () == 32)
 +    reflect_32_bit_value (op);
-+  else if (BITS_PER_WORD == 16)
++  else if (GET_MODE_BITSIZE (GET_MODE (*op)).to_constant () == 16)
 +    reflect_16_bit_value (op);
 +  else
 +    reflect_8_bit_value (op);
++
++  *op = expand_shift (RSHIFT_EXPR, word_mode, *op, shift_val, *op, 1);
 +}
 +
 +/* Generate table-based reversed CRC code for the given CRC, INPUT_DATA and
@@ -3067,27 +3073,32 @@ index cf87167ec0c..ed49786bdd3 100644
 +void
 +expand_reversed_crc_table_based (rtx op0, rtx op1, rtx op2, rtx op3,
 +				 machine_mode data_mode,
-+				 void (*gen_reflecting_code) (rtx *op))
++				 void (*gen_reflecting_code) (rtx *op,
++							      int shift_val))
 +{
 +  gcc_assert (!CONST_INT_P (op0));
 +  gcc_assert (CONST_INT_P (op3));
 +  machine_mode crc_mode = GET_MODE (op0);
 +
++  unsigned short crc_bit_size = GET_MODE_BITSIZE (crc_mode).to_constant ();
++  unsigned short data_bit_size = GET_MODE_BITSIZE (data_mode).to_constant ();
++  unsigned short word_size = GET_MODE_BITSIZE (word_mode);
++
 +  rtx crc = gen_reg_rtx (crc_mode);
 +  convert_move (crc, op1, 0);
-+  gen_reflecting_code (&crc);
++  gen_reflecting_code (&crc, crc_bit_size - crc_bit_size);
 +
 +  rtx data = gen_reg_rtx (data_mode);
 +  convert_move (data, op2, 0);
-+  gen_reflecting_code (&data);
++  gen_reflecting_code (&data, data_bit_size - data_bit_size);
 +
 +  calculate_table_based_CRC (&crc, data, op3, crc_mode, data_mode);
 +
-+  gen_reflecting_code (&crc);
++  gen_reflecting_code (&crc, crc_bit_size - crc_bit_size);
 +  convert_move (op0, crc, 0);
 +}
 diff --git a/gcc/expr.h b/gcc/expr.h
-index 04782b15f19..fe93ee7238f 100644
+index 04782b15f19..e15300eebba 100644
 --- a/gcc/expr.h
 +++ b/gcc/expr.h
 @@ -377,4 +377,15 @@ extern rtx expr_size (tree);
@@ -3100,10 +3111,10 @@ index 04782b15f19..fe93ee7238f 100644
 +gf2n_poly_long_div_quotient (unsigned HOST_WIDE_INT, unsigned short);
 +
 +/* Generate table-based CRC.  */
-+extern void generate_reflecting_code_standard (rtx *);
++extern void generate_reflecting_code_standard (rtx *, int);
 +extern void expand_crc_table_based (rtx, rtx, rtx, rtx, machine_mode);
 +extern void expand_reversed_crc_table_based (rtx, rtx, rtx, rtx, machine_mode,
-+					     void (*) (rtx *));
++					     void (*) (rtx *, int));
 +
  #endif /* GCC_EXPR_H */
 diff --git a/gcc/gimple-crc-optimization.cc b/gcc/gimple-crc-optimization.cc
