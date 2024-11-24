@@ -290,6 +290,10 @@ else
   make install >> $LOGFILE 2>&1
   popd >& /dev/null
 
+  # Stuff gets installed into the wrong place too!
+  mv /home/jlaw/jenkins/workspace/avr-elf/avr-elf-installed/avr/include /home/jlaw/jenkins/workspace/avr-elf-installed/avr-elf
+  mv /home/jlaw/jenkins/workspace/avr-elf/avr-elf-installed/avr/lib/* /home/jlaw/jenkins/workspace/avr-elf-installed/avr-elf/lib
+
 #  # We also need to build the AVR simulator, which (of course) needs
 #  # cmake which we don't have in our newlib build docker container :(
 #  wget https://github.com/Kitware/CMake/releases/download/v3.26.4/cmake-3.26.4-linux-x86_64.sh
