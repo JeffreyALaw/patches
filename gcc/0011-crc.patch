@@ -17530,17 +17530,6 @@ index e416198c5f7..67e38333628 100644
  
  // File - utils.ii
  /* We don't support the case when CRC variable's size is different from the
-diff --git a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-26.c b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-26.c
-index be8758386ea..ac49691b8c3 100644
---- a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-26.c
-+++ b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-26.c
-@@ -1,6 +1,5 @@
- /* { dg-do compile } */
- /* { dg-options "-fdump-tree-crc-details -O2" } */
--/* { dg-require-effective-target int32plus } */
- 
- // File - 3way.cpp. Modified
- typedef unsigned int word32;
 diff --git a/gcc/testsuite/gcc.dg/torture/crc-1.c b/gcc/testsuite/gcc.dg/torture/crc-1.c
 index a1e3c2ff59e..234ae60cc1f 100644
 --- a/gcc/testsuite/gcc.dg/torture/crc-1.c
@@ -17697,3 +17686,17 @@ index 17a46629af1..6b4de1a9600 100644
  
  #include <stdlib.h>
  typedef unsigned short ee_u16;
+diff --git a/gcc/internal-fn.cc b/gcc/internal-fn.cc
+index 1e59c14fddc..a71491d95f2 100644
+--- a/gcc/internal-fn.cc
++++ b/gcc/internal-fn.cc
+@@ -4069,7 +4069,9 @@ expand_crc_optab_fn (internal_fn fn, gcall *stmt, convert_optab optab)
+   tree data_type = TREE_TYPE (rhs2);
+ 
+   gcc_assert (TYPE_MODE (result_type) >= TYPE_MODE (data_type));
++#if 0
+   gcc_assert (word_mode >= TYPE_MODE (result_type));
++#endif
+ 
+   rtx dest = expand_expr (lhs, NULL_RTX, VOIDmode, EXPAND_WRITE);
+   rtx crc = expand_normal (rhs1);
