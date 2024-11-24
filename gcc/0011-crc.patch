@@ -46,13 +46,14 @@ index 427af741c6b..fa988d35064 100644
  DEF_FUNCTION_TYPE_4 (BT_FN_SIZE_CONST_PTR_SIZE_SIZE_FILEPTR,
  		     BT_SIZE, BT_CONST_PTR, BT_SIZE, BT_SIZE, BT_FILEPTR)
 diff --git a/gcc/builtins.cc b/gcc/builtins.cc
-index 029c561d466..7de60c0d3f6 100644
+index 029c561d466..ae2067d63ee 100644
 --- a/gcc/builtins.cc
 +++ b/gcc/builtins.cc
-@@ -2208,6 +2208,29 @@ associated_internal_fn (built_in_function fn, tree return_type)
+@@ -2207,7 +2207,28 @@ associated_internal_fn (built_in_function fn, tree return_type)
+       if (REAL_MODE_FORMAT (TYPE_MODE (return_type))->b == 2)
  	return IFN_LDEXP;
        return IFN_LAST;
- 
+-
 +    case BUILT_IN_CRC8_DATA8:
 +    case BUILT_IN_CRC16_DATA8:
 +    case BUILT_IN_CRC16_DATA16:
@@ -75,11 +76,10 @@ index 029c561d466..7de60c0d3f6 100644
 +    case BUILT_IN_REV_CRC64_DATA32:
 +    case BUILT_IN_REV_CRC64_DATA64:
 +      return IFN_CRC_REV;
-+
      default:
        return IFN_LAST;
      }
-@@ -7745,6 +7768,37 @@ expand_speculation_safe_value (machine_mode mode, tree exp, rtx target,
+@@ -7745,6 +7766,37 @@ expand_speculation_safe_value (machine_mode mode, tree exp, rtx target,
    return targetm.speculation_safe_value (mode, target, val, failsafe);
  }
  
@@ -117,7 +117,7 @@ index 029c561d466..7de60c0d3f6 100644
  /* Expand an expression EXP that calls a built-in function,
     with result going to TARGET if that's convenient
     (and in mode MODE if that's convenient).
-@@ -8923,6 +8977,66 @@ expand_builtin (tree exp, rtx target, rtx subtarget, machine_mode mode,
+@@ -8923,6 +8975,66 @@ expand_builtin (tree exp, rtx target, rtx subtarget, machine_mode mode,
        mode = get_builtin_sync_mode (fcode - BUILT_IN_SPECULATION_SAFE_VALUE_1);
        return expand_speculation_safe_value (mode, exp, target, ignore);
  
@@ -185,48 +185,34 @@ index 029c561d466..7de60c0d3f6 100644
        break;
      }
 diff --git a/gcc/builtins.def b/gcc/builtins.def
-index fac6bc9ad16..a96062d0950 100644
+index fac6bc9ad16..d47ac281e99 100644
 --- a/gcc/builtins.def
 +++ b/gcc/builtins.def
-@@ -71,6 +71,13 @@ along with GCC; see the file COPYING3.  If not see
-   DEF_BUILTIN (ENUM, "__builtin_" NAME, BUILT_IN_NORMAL, TYPE, BT_LAST,	\
- 	       false, false, false, ATTRS, true, true)
- 
-+/* Like DEF_GCC_BUILTIN, except the builtins aren't available if their
-+   datatypes are too wide.  */
-+#undef DEF_GCC_CRC_BUILTIN
-+#define DEF_GCC_CRC_BUILTIN(ENUM, NAME, TYPE, ATTRS, MAX_BITSIZE)	\
-+  DEF_BUILTIN (ENUM, "__builtin_" NAME, BUILT_IN_NORMAL, TYPE, BT_LAST,	\
-+	       false, false, false, ATTRS, true, MAX_BITSIZE <= GET_MODE_BITSIZE (word_mode))
-+
- /* Like DEF_GCC_BUILTIN, except we don't prepend "__builtin_".  */
- #undef DEF_SYNC_BUILTIN
- #define DEF_SYNC_BUILTIN(ENUM, NAME, TYPE, ATTRS)		\
-@@ -720,7 +727,26 @@ DEF_EXT_LIB_BUILTIN    (BUILT_IN_Y1L, "y1l", BT_FN_LONGDOUBLE_LONGDOUBLE, ATTR_M
+@@ -720,7 +720,26 @@ DEF_EXT_LIB_BUILTIN    (BUILT_IN_Y1L, "y1l", BT_FN_LONGDOUBLE_LONGDOUBLE, ATTR_M
  DEF_EXT_LIB_BUILTIN    (BUILT_IN_YN, "yn", BT_FN_DOUBLE_INT_DOUBLE, ATTR_MATHFN_FPROUNDING_ERRNO)
  DEF_EXT_LIB_BUILTIN    (BUILT_IN_YNF, "ynf", BT_FN_FLOAT_INT_FLOAT, ATTR_MATHFN_FPROUNDING_ERRNO)
  DEF_EXT_LIB_BUILTIN    (BUILT_IN_YNL, "ynl", BT_FN_LONGDOUBLE_INT_LONGDOUBLE, ATTR_MATHFN_FPROUNDING_ERRNO)
 -
-+DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC8_DATA8, "crc8_data8", BT_FN_UINT8_UINT8_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 8)
-+DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC16_DATA8, "crc16_data8", BT_FN_UINT16_UINT16_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 16)
-+DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC16_DATA16, "crc16_data16", BT_FN_UINT16_UINT16_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 16)
-+DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC32_DATA8, "crc32_data8", BT_FN_UINT32_UINT32_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 32)
-+DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC32_DATA16, "crc32_data16", BT_FN_UINT32_UINT32_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 32)
-+DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC32_DATA32, "crc32_data32", BT_FN_UINT32_UINT32_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 32)
-+DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC64_DATA8, "crc64_data8", BT_FN_UINT64_UINT64_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
-+DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC64_DATA16, "crc64_data16", BT_FN_UINT64_UINT64_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
-+DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC64_DATA32, "crc64_data32", BT_FN_UINT64_UINT64_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
-+DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC64_DATA64, "crc64_data64", BT_FN_UINT64_UINT64_UINT64_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
-+DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC8_DATA8, "rev_crc8_data8", BT_FN_UINT8_UINT8_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 8)
-+DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC16_DATA8, "rev_crc16_data8", BT_FN_UINT16_UINT16_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 16)
-+DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC16_DATA16, "rev_crc16_data16", BT_FN_UINT16_UINT16_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 16)
-+DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC32_DATA8, "rev_crc32_data8", BT_FN_UINT32_UINT32_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 32)
-+DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC32_DATA16, "rev_crc32_data16", BT_FN_UINT32_UINT32_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 32)
-+DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC32_DATA32, "rev_crc32_data32", BT_FN_UINT32_UINT32_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 32)
-+DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC64_DATA8, "rev_crc64_data8", BT_FN_UINT64_UINT64_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
-+DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC64_DATA16, "rev_crc64_data16", BT_FN_UINT64_UINT64_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
-+DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC64_DATA32, "rev_crc64_data32", BT_FN_UINT64_UINT64_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
-+DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC64_DATA64, "rev_crc64_data64", BT_FN_UINT64_UINT64_UINT64_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC8_DATA8, "crc8_data8", BT_FN_UINT8_UINT8_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC16_DATA8, "crc16_data8", BT_FN_UINT16_UINT16_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC16_DATA16, "crc16_data16", BT_FN_UINT16_UINT16_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC32_DATA8, "crc32_data8", BT_FN_UINT32_UINT32_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC32_DATA16, "crc32_data16", BT_FN_UINT32_UINT32_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC32_DATA32, "crc32_data32", BT_FN_UINT32_UINT32_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC64_DATA8, "crc64_data8", BT_FN_UINT64_UINT64_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC64_DATA16, "crc64_data16", BT_FN_UINT64_UINT64_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC64_DATA32, "crc64_data32", BT_FN_UINT64_UINT64_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC64_DATA64, "crc64_data64", BT_FN_UINT64_UINT64_UINT64_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC8_DATA8, "rev_crc8_data8", BT_FN_UINT8_UINT8_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC16_DATA8, "rev_crc16_data8", BT_FN_UINT16_UINT16_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC16_DATA16, "rev_crc16_data16", BT_FN_UINT16_UINT16_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC32_DATA8, "rev_crc32_data8", BT_FN_UINT32_UINT32_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC32_DATA16, "rev_crc32_data16", BT_FN_UINT32_UINT32_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC32_DATA32, "rev_crc32_data32", BT_FN_UINT32_UINT32_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC64_DATA8, "rev_crc64_data8", BT_FN_UINT64_UINT64_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC64_DATA16, "rev_crc64_data16", BT_FN_UINT64_UINT64_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC64_DATA32, "rev_crc64_data32", BT_FN_UINT64_UINT64_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC64_DATA64, "rev_crc64_data64", BT_FN_UINT64_UINT64_UINT64_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
  /* Category: _Complex math builtins.  */
  DEF_C99_COMPL_BUILTIN        (BUILT_IN_CABS, "cabs", BT_FN_DOUBLE_COMPLEX_DOUBLE, ATTR_MATHFN_FPROUNDING)
  DEF_C99_COMPL_BUILTIN        (BUILT_IN_CABSF, "cabsf", BT_FN_FLOAT_COMPLEX_FLOAT, ATTR_MATHFN_FPROUNDING)
@@ -2721,10 +2707,10 @@ index c8f1424a042..c4a48811ae8 100644
  
  @end ifset
 diff --git a/gcc/expr.cc b/gcc/expr.cc
-index cf87167ec0c..d796a3f9446 100644
+index cf87167ec0c..7883e9f284f 100644
 --- a/gcc/expr.cc
 +++ b/gcc/expr.cc
-@@ -14142,3 +14142,420 @@ int_expr_size (const_tree exp)
+@@ -14142,3 +14142,384 @@ int_expr_size (const_tree exp)
  
    return tree_to_shwi (size);
  }
@@ -2874,23 +2860,23 @@ index cf87167ec0c..d796a3f9446 100644
 +{
 +  unsigned short crc_bit_size = GET_MODE_BITSIZE (crc_mode).to_constant ();
 +  unsigned short data_size = GET_MODE_SIZE (data_mode).to_constant ();
-+
++  machine_mode mode = GET_MODE (*crc);
 +  rtx tab = generate_crc_table (UINTVAL (polynomial), crc_bit_size);
 +
 +  for (unsigned short i = 0; i < data_size; i++)
 +    {
 +      /* crc >> (crc_bit_size - 8).  */
-+      rtx op1 = expand_shift (RSHIFT_EXPR, word_mode, *crc, crc_bit_size - 8,
++      rtx op1 = expand_shift (RSHIFT_EXPR, mode, *crc, crc_bit_size - 8,
 +			      NULL_RTX, 1);
 +
 +      /* data >> (8 * (GET_MODE_SIZE (data_mode).to_constant () - i - 1)).  */
 +      unsigned range_8 = 8 * (data_size - i - 1);
-+      rtx data = expand_shift (RSHIFT_EXPR, word_mode, input_data, range_8,
++      rtx data = expand_shift (RSHIFT_EXPR, mode, input_data, range_8,
 +			       NULL_RTX, 1);
 +
 +      /* data >> (8 * (GET_MODE_SIZE (data_mode)
 +					.to_constant () - i - 1)) & 0xFF.  */
-+      rtx data_final = expand_and (word_mode, data,
++      rtx data_final = expand_and (mode, data,
 +				   gen_int_mode (255, data_mode), NULL_RTX);
 +
 +      /* (crc >> (crc_bit_size - 8)) ^ data_8bit.  */
@@ -2898,7 +2884,7 @@ index cf87167ec0c..d796a3f9446 100644
 +			     NULL_RTX, 1, OPTAB_WIDEN);
 +
 +      /* ((crc >> (crc_bit_size - 8)) ^ data_8bit) & 0xFF.  */
-+      rtx index = expand_and (Pmode, in, gen_int_mode (255, word_mode),
++      rtx index = expand_and (Pmode, in, gen_int_mode (255, mode),
 +			      NULL_RTX);
 +      int log_crc_size = exact_log2 (GET_MODE_SIZE (crc_mode).to_constant ());
 +      index = expand_shift (LSHIFT_EXPR, Pmode, index,
@@ -2913,51 +2899,15 @@ index cf87167ec0c..d796a3f9446 100644
 +      /* (crc << 8) if CRC is larger than 8, otherwise crc = 0.  */
 +      rtx high = NULL_RTX;
 +      if (crc_bit_size != 8)
-+	{
-+	  high = expand_shift (LSHIFT_EXPR, word_mode, *crc, 8, NULL_RTX, 0);
-+	  if (crc_mode != word_mode)
-+	    {
-+	      rtx crc_mode_mask = gen_int_mode (GET_MODE_MASK (crc_mode),
-+						word_mode);
-+	      high = expand_and (word_mode, high, crc_mode_mask, NULL_RTX);
-+	    }
-+	}
++	high = expand_shift (LSHIFT_EXPR, mode, *crc, 8, NULL_RTX, 0);
 +      else
-+	high = gen_int_mode (0, word_mode);
++	high = gen_int_mode (0, mode);
 +
 +      /* crc = (crc << 8)
 +	       ^ crc_table[(crc >> (crc_bit_size - 8)) ^ data_8bit];  */
-+      *crc = expand_binop (word_mode, xor_optab, tab_el, high, NULL_RTX, 1,
++      *crc = expand_binop (mode, xor_optab, tab_el, high, NULL_RTX, 1,
 +			   OPTAB_WIDEN);
 +    }
-+}
-+
-+/* Converts and moves a CRC value to a target register.
-+
-+  CRC_MODE is the mode (data type) of the CRC value.
-+  CRC is the initial CRC value.
-+  OP0 is the target register.  */
-+
-+void
-+emit_crc (machine_mode crc_mode, rtx* crc, rtx* op0)
-+{
-+  if (word_mode != crc_mode)
-+    {
-+      /* If this ever trips, then we need to adjust the creation
-+	 of the SUBREG below to take endianness into account.  */
-+      gcc_assert (word_mode >= crc_mode);
-+#if 0
-+      rtx tgt = simplify_gen_subreg (word_mode, *op0, crc_mode, 0);
-+#endif
-+      rtx tgt = force_reg (word_mode, *op0);
-+      rtx crc_low = gen_lowpart (crc_mode, *crc);
-+      if (SUBREG_P (*op0) && SUBREG_PROMOTED_VAR_P (*op0))
-+	convert_move (tgt, crc_low, SUBREG_PROMOTED_SIGN (*op0));
-+      else
-+	convert_move (tgt, crc_low, 0);
-+    }
-+  else
-+    emit_move_insn (*op0, *crc);
 +}
 +
 +/* Generate table-based CRC code for the given CRC, INPUT_DATA and the
@@ -2988,7 +2938,7 @@ index cf87167ec0c..d796a3f9446 100644
 +  rtx crc = gen_reg_rtx (word_mode);
 +  convert_move (crc, op1, 0);
 +  calculate_table_based_CRC (&crc, op2, op3, crc_mode, data_mode);
-+  emit_crc (crc_mode, &crc, &op0);
++  convert_move (op0, crc, 0);
 +}
 +
 +/* Generate the common operation for reflecting values:
@@ -3143,7 +3093,7 @@ index cf87167ec0c..d796a3f9446 100644
 +  calculate_table_based_CRC (&crc, data, op3, crc_mode, data_mode);
 +
 +  gen_reflecting_code (&crc, word_size - crc_bit_size);
-+  emit_crc (crc_mode, &crc, &op0);
++  convert_move (op0, crc, 0);
 +}
 diff --git a/gcc/expr.h b/gcc/expr.h
 index 04782b15f19..e15300eebba 100644
@@ -4612,7 +4562,7 @@ index 82416bf366e..f69b61db9cc 100644
  /* Like ctz_hwi, except 0 when x == 0.  */
  
 diff --git a/gcc/internal-fn.cc b/gcc/internal-fn.cc
-index a45b3291800..25e7ee0d7f4 100644
+index a45b3291800..1e59c14fddc 100644
 --- a/gcc/internal-fn.cc
 +++ b/gcc/internal-fn.cc
 @@ -191,6 +191,7 @@ init_internal_fns ()
@@ -4623,7 +4573,7 @@ index a45b3291800..25e7ee0d7f4 100644
  
  const direct_internal_fn_info direct_internal_fn_array[IFN_LAST + 1] = {
  #define DEF_INTERNAL_FN(CODE, FLAGS, FNSPEC) not_direct,
-@@ -4054,6 +4055,58 @@ expand_convert_optab_fn (internal_fn fn, gcall *stmt, convert_optab optab,
+@@ -4054,6 +4055,80 @@ expand_convert_optab_fn (internal_fn fn, gcall *stmt, convert_optab optab,
    expand_fn_using_insn (stmt, icode, 1, nargs);
  }
  
@@ -4667,6 +4617,19 @@ index a45b3291800..25e7ee0d7f4 100644
 +    }
 +  else
 +    {
++      /* We're bypassing all the operand conversions that are done in the
++	 case when we get an icode, operands and pass that off to expand_insn.
++
++	 That path has special case handling for promoted return values which
++	 we must emulate here (is the same kind of special treatment ever
++	 needed for input arguments here?).
++
++	 In particular we do not want to store directly into a promoted
++	 SUBREG destination, instead store into a suitably sized pseudo.  */
++      rtx orig_dest = dest;
++      if (SUBREG_P (dest) && SUBREG_PROMOTED_VAR_P (dest))
++	dest = gen_reg_rtx (GET_MODE (dest));
++
 +      /* If it's IFN_CRC generate bit-forward CRC.  */
 +      if (fn == IFN_CRC)
 +	expand_crc_table_based (dest, crc, data, polynomial,
@@ -4676,13 +4639,22 @@ index a45b3291800..25e7ee0d7f4 100644
 +	expand_reversed_crc_table_based (dest, crc, data, polynomial,
 +					 TYPE_MODE (data_type),
 +					 generate_reflecting_code_standard);
++
++      /* Now get the return value where it needs to be, taking care to
++	 ensure it's promoted appropriately if the ABI demands it.
++
++	 Re-use assign_call_lhs to handle the details.  */
++      class expand_operand ops[4];
++      create_call_lhs_operand (&ops[0], dest, TYPE_MODE (result_type));
++      ops[0].value = dest;
++      assign_call_lhs (lhs, orig_dest, &ops[0]);
 +    }
 +}
 +
  /* Expanders for optabs that can use expand_direct_optab_fn.  */
  
  #define expand_unary_optab_fn(FN, STMT, OPTAB) \
-@@ -4190,6 +4243,7 @@ multi_vector_optab_supported_p (convert_optab optab, tree_pair types,
+@@ -4190,6 +4265,7 @@ multi_vector_optab_supported_p (convert_optab optab, tree_pair types,
  #define direct_cond_len_unary_optab_supported_p direct_optab_supported_p
  #define direct_cond_len_binary_optab_supported_p direct_optab_supported_p
  #define direct_cond_len_ternary_optab_supported_p direct_optab_supported_p
@@ -9003,11 +8975,13 @@ index 00000000000..c95704450cb
 +/* { dg-final { scan-assembler "crc_table_for_crc_32_polynomial_0x4002123|mul"} } */
 diff --git a/gcc/testsuite/gcc.dg/crc-builtin-rev-target64.c b/gcc/testsuite/gcc.dg/crc-builtin-rev-target64.c
 new file mode 100644
-index 00000000000..1eb6969068f
+index 00000000000..74b511ccfbe
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-builtin-rev-target64.c
-@@ -0,0 +1,60 @@
+@@ -0,0 +1,62 @@
 +/* { dg-do compile { target lp64 } } */
++/* { dg-require-effective-target int32plus } */
++
 +#include <stdint-gcc.h>
 +
 +int8_t rev_crc8_data8 ()
@@ -9067,7 +9041,6 @@ index 00000000000..1eb6969068f
 +/* { dg-final { scan-assembler "crc_table_for_crc_8_polynomial_0x12|mul" } } */
 +/* { dg-final { scan-assembler "crc_table_for_crc_16_polynomial_0x1021|mul" } } */
 +/* { dg-final { scan-assembler "crc_table_for_crc_32_polynomial_0x4002123|mul" } } */
-\ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/crc-builtin-target32.c b/gcc/testsuite/gcc.dg/crc-builtin-target32.c
 new file mode 100644
 index 00000000000..f19ee74a071
@@ -9114,11 +9087,13 @@ index 00000000000..f19ee74a071
 +/* { dg-final { scan-assembler "crc_table_for_crc_32_polynomial_0x4002123|mul"} } */
 diff --git a/gcc/testsuite/gcc.dg/crc-builtin-target64.c b/gcc/testsuite/gcc.dg/crc-builtin-target64.c
 new file mode 100644
-index 00000000000..41884be0fbc
+index 00000000000..1af403b4328
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/crc-builtin-target64.c
-@@ -0,0 +1,59 @@
+@@ -0,0 +1,61 @@
 +/* { dg-do compile { target lp64 } } */
++/* { dg-require-effective-target int32plus } */
++
 +#include <stdint-gcc.h>
 +
 +int8_t crc8_data8 ()
@@ -12197,7 +12172,7 @@ index 00000000000..477318e05e0
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/torture/crc-1.c b/gcc/testsuite/gcc.dg/torture/crc-1.c
 new file mode 100644
-index 00000000000..a1e3c2ff59e
+index 00000000000..29a9796197e
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/torture/crc-1.c
 @@ -0,0 +1,116 @@
@@ -12205,7 +12180,6 @@ index 00000000000..a1e3c2ff59e
 +/* { dg-options "-fdump-tree-crc-details -fdisable-tree-phiopt2 -fdisable-tree-phiopt3" } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto" } } */
 +/* { dg-require-effective-target int32plus } */
-+
 +
 +#include <stddef.h>
 +#include <stdint.h>
@@ -12301,15 +12275,16 @@ index 00000000000..a1e3c2ff59e
 +int main ()
 +{
 +  if (gen_crc16 ("hello", 5) != 13522)
-+    abort ();
++    __builtin_abort ();
 +
 +  for (uint8_t i = 0; i < 255; i++)
 +    {
 +      uint16_t res1 = gen_crc16_O0 (&i, 1);
 +      uint16_t res2 = gen_crc16 (&i, 1);
 +      if (res1 != res2)
-+	abort ();
++	__builtin_abort ();
 +    }
++  __builtin_exit (0);
 +}
 +/* { dg-final { scan-tree-dump "function maybe contains CRC calculation." "crc" } } */
 +/* { dg-final { scan-tree-dump "Loop iteration number is 15" "crc" } } */
@@ -12319,7 +12294,7 @@ index 00000000000..a1e3c2ff59e
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc" } } */
 diff --git a/gcc/testsuite/gcc.dg/torture/crc-10.c b/gcc/testsuite/gcc.dg/torture/crc-10.c
 new file mode 100644
-index 00000000000..c1fa1d33315
+index 00000000000..be76373607f
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/torture/crc-10.c
 @@ -0,0 +1,50 @@
@@ -12327,7 +12302,6 @@ index 00000000000..c1fa1d33315
 +/* { dg-options "-fdump-tree-crc-details" } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto" } } */
 +/* { dg-require-effective-target int32plus } */
-+
 +
 +#include <stdint.h>
 +#include <stdlib.h>
@@ -12364,8 +12338,9 @@ index 00000000000..c1fa1d33315
 +      u8 res1 = crc8_O0 (i);
 +      u8 res2 = crc8 (i);
 +      if (res1 != res2)
-+	abort ();
++	__builtin_abort ();
 +    }
++  __builtin_exit (0);
 +}
 +/* { dg-final { scan-tree-dump "function maybe contains CRC calculation." "crc" } } */
 +/* { dg-final { scan-tree-dump "Loop iteration number is 7" "crc" } } */
@@ -12402,10 +12377,10 @@ index 00000000000..44da2b28cff
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/torture/crc-12.c b/gcc/testsuite/gcc.dg/torture/crc-12.c
 new file mode 100644
-index 00000000000..d6a9c27426b
+index 00000000000..8fb24858003
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/torture/crc-12.c
-@@ -0,0 +1,113 @@
+@@ -0,0 +1,114 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc -fdisable-tree-phiopt2 -fdisable-tree-phiopt3" } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto" } } */
@@ -12511,8 +12486,9 @@ index 00000000000..d6a9c27426b
 +      uint16_t res1 = gen_crc16_O0 (&i, 1);
 +      uint16_t res2 = gen_crc16 (&i, 1);
 +      if (res1 != res2)
-+	abort ();
++	__builtin_abort ();
 +    }
++  __builtin_exit (0);
 +}
 +/* { dg-final { scan-tree-dump "function maybe contains CRC calculation." "crc"} } */
 +/* { dg-final { scan-tree-dump "Loop iteration number is 15" "crc"} } */
@@ -12521,7 +12497,7 @@ index 00000000000..d6a9c27426b
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/torture/crc-13.c b/gcc/testsuite/gcc.dg/torture/crc-13.c
 new file mode 100644
-index 00000000000..84da6068a65
+index 00000000000..4dee05f85e7
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/torture/crc-13.c
 @@ -0,0 +1,60 @@
@@ -12529,7 +12505,6 @@ index 00000000000..84da6068a65
 +/* { dg-options "-fdump-tree-crc-details" } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto" } } */
 +/* { dg-require-effective-target int32plus } */
-+
 +
 +#include <stdlib.h>
 +
@@ -12576,9 +12551,10 @@ index 00000000000..84da6068a65
 +      unsigned short res1 = crc16_O0 (crc, i);
 +      unsigned short res2 = crc16 (crc, i);
 +      if (res1 != res2)
-+	abort ();
++	__builtin_abort ();
 +      crc = res1;
 +    }
++  __builtin_exit (0);
 +}
 +/* { dg-final { scan-tree-dump "function maybe contains CRC calculation." "crc" } } */
 +/* { dg-final { scan-tree-dump "Loop iteration number is 7" "crc" } } */
@@ -12587,10 +12563,10 @@ index 00000000000..84da6068a65
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc" } } */
 diff --git a/gcc/testsuite/gcc.dg/torture/crc-14.c b/gcc/testsuite/gcc.dg/torture/crc-14.c
 new file mode 100644
-index 00000000000..855695bf38f
+index 00000000000..c5d5ad49e22
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/torture/crc-14.c
-@@ -0,0 +1,55 @@
+@@ -0,0 +1,56 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto" } } */
@@ -12637,8 +12613,9 @@ index 00000000000..855695bf38f
 +      uint8_t res1 = gencrc_O0 (&i);
 +      uint8_t res2 = gencrc (&i);
 +      if (res1 != res2)
-+	abort ();
++	__builtin_abort ();
 +    }
++  __builtin_exit (0);
 +}
 +
 +/* { dg-final { scan-tree-dump "gencrc function maybe contains CRC calculation." "crc" } } */
@@ -12646,7 +12623,6 @@ index 00000000000..855695bf38f
 +/* { dg-final { scan-tree-dump "Bit forward" "crc" } } */
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc" } } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc" } } */
-\ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/torture/crc-15.c b/gcc/testsuite/gcc.dg/torture/crc-15.c
 new file mode 100644
 index 00000000000..1a1fc6f7d17
@@ -12734,10 +12710,10 @@ index 00000000000..c0e5b1faf40
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/torture/crc-17.c b/gcc/testsuite/gcc.dg/torture/crc-17.c
 new file mode 100644
-index 00000000000..9ef5e49c001
+index 00000000000..6afd4edbc6b
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/torture/crc-17.c
-@@ -0,0 +1,72 @@
+@@ -0,0 +1,73 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto" } } */
@@ -12800,9 +12776,10 @@ index 00000000000..9ef5e49c001
 +      unsigned short res1 = calc_crc_O0 (crc, i);
 +      unsigned short res2 = calc_crc (crc, i);
 +      if (res1 != res2)
-+	abort ();
++	__builtin_abort ();
 +      crc = res1;
 +    }
++  __builtin_exit (0);
 +}
 +/* { dg-final { scan-tree-dump "calc_crc function maybe contains CRC calculation." "crc" } } */
 +/* { dg-final { scan-tree-dump "Loop iteration number is 7" "crc" } } */
@@ -12810,13 +12787,12 @@ index 00000000000..9ef5e49c001
 +/* { dg-final { scan-tree-dump-times "Polynomial's value is \\\{\[0, \]*1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1\\\}" 1 "crc"} } */
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
-\ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/torture/crc-18.c b/gcc/testsuite/gcc.dg/torture/crc-18.c
 new file mode 100644
-index 00000000000..9a9c7f9f3a4
+index 00000000000..03a3f6fb54a
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/torture/crc-18.c
-@@ -0,0 +1,42 @@
+@@ -0,0 +1,43 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto" } } */
@@ -12849,8 +12825,9 @@ index 00000000000..9a9c7f9f3a4
 +      unsigned char res1 = crc8_O0 (i);
 +      unsigned char res2 = crc8 (i);
 +      if (res1 != res2)
-+	abort ();
++	__builtin_abort ();
 +    }
++  __builtin_exit (0);
 +}
 +
 +/* { dg-final { scan-tree-dump "crc8 function maybe contains CRC calculation." "crc" } } */
@@ -12859,7 +12836,6 @@ index 00000000000..9a9c7f9f3a4
 +/* { dg-final { scan-tree-dump "Polynomial's value is \\\{\[0, \]*0, 0, 1, 1, 0, 0, 0, 1\\\}" "crc"} } */
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
-\ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/torture/crc-19.c b/gcc/testsuite/gcc.dg/torture/crc-19.c
 new file mode 100644
 index 00000000000..2cc4eaafffa
@@ -12978,10 +12954,10 @@ index 00000000000..a12d4130632
 +}
 diff --git a/gcc/testsuite/gcc.dg/torture/crc-21.c b/gcc/testsuite/gcc.dg/torture/crc-21.c
 new file mode 100644
-index 00000000000..49396a6fcd2
+index 00000000000..b41efc61e60
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/torture/crc-21.c
-@@ -0,0 +1,53 @@
+@@ -0,0 +1,54 @@
 +/* { dg-do run { target { lp64 } } } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto" } } */
@@ -13026,19 +13002,19 @@ index 00000000000..49396a6fcd2
 +      uint32_t res1 = _crc32_O0 (crc, i);
 +      uint32_t res2 = _crc32 (crc, i);
 +      if (res1 != res2)
-+	abort ();
++	__builtin_abort ();
 +      crc = res1;
 +    }
++  __builtin_exit (0);
 +}
 +/* { dg-final { scan-tree-dump "_crc32 function maybe contains CRC calculation." "crc" } } */
 +/* { dg-final { scan-tree-dump "Loop iteration number is 31" "crc"} } */
 +/* { dg-final { scan-tree-dump "Bit forward" "crc"} } */
 +/* { dg-final { scan-tree-dump "calculates CRC." "crc"} } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
-\ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/torture/crc-22.c b/gcc/testsuite/gcc.dg/torture/crc-22.c
 new file mode 100644
-index 00000000000..a481b48801f
+index 00000000000..97133d04bfb
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/torture/crc-22.c
 @@ -0,0 +1,68 @@
@@ -13046,7 +13022,6 @@ index 00000000000..a481b48801f
 +/* { dg-options "-fdump-tree-crc-details" } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-g" "-Os" "-flto" } } */
 +/* { dg-require-effective-target int32plus } */
-+
 +
 +#include <stdlib.h>
 +
@@ -13100,9 +13075,10 @@ index 00000000000..a481b48801f
 +      ee_u16 res1 = crcu16_O0 (i, crc);
 +      ee_u16 res2 = crcu16 (i, crc);
 +      if (res1 != res2)
-+	abort ();
++	__builtin_abort ();
 +      crc = res1;
 +    }
++  __builtin_exit (0);
 +}
 +
 +/* { dg-final { scan-tree-dump "function maybe contains CRC calculation." "crc" } } */
@@ -13112,7 +13088,7 @@ index 00000000000..a481b48801f
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/torture/crc-23.c b/gcc/testsuite/gcc.dg/torture/crc-23.c
 new file mode 100644
-index 00000000000..98dc9d7a0ae
+index 00000000000..fe569bce81a
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/torture/crc-23.c
 @@ -0,0 +1,76 @@
@@ -13120,7 +13096,6 @@ index 00000000000..98dc9d7a0ae
 +/* { dg-options "-fdump-tree-crc-details -ftree-cselim" } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-g" "-Os" "-flto" } } */
 +/* { dg-require-effective-target int32plus } */
-+
 +
 +// Modified example from crc-from-fedora-packages-24.c
 +
@@ -13182,9 +13157,10 @@ index 00000000000..98dc9d7a0ae
 +      crc_byte (i, &res2);
 +
 +      if (res1 != res2)
-+	abort ();
++	__builtin_abort ();
 +      crc = res1;
 +    }
++  __builtin_exit (0);
 +}
 +
 +/* { dg-final { scan-tree-dump "function maybe contains CRC calculation." "crc" } } */
@@ -13231,10 +13207,10 @@ index 00000000000..863569a009a
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/torture/crc-25.c b/gcc/testsuite/gcc.dg/torture/crc-25.c
 new file mode 100644
-index 00000000000..df52750bf97
+index 00000000000..668949e0996
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/torture/crc-25.c
-@@ -0,0 +1,79 @@
+@@ -0,0 +1,80 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-g" "-Os" "-funroll-loops" "-fpeel-loops" "-flto" } } */
@@ -13306,8 +13282,9 @@ index 00000000000..df52750bf97
 +      u32 res1 = mpc512x_fec_set_hwaddr_O0 (st);
 +      u32 res2 = mpc512x_fec_set_hwaddr (st);
 +      if (res1 != res2)
-+	abort ();
++	__builtin_abort ();
 +    }
++  __builtin_exit (0);
 +}
 +/* { dg-final { scan-tree-dump "function maybe contains CRC calculation." "crc" } } */
 +/* { dg-final { scan-tree-dump "Loop iteration number is 7" "crc"} } */
@@ -13316,10 +13293,10 @@ index 00000000000..df52750bf97
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/torture/crc-26.c b/gcc/testsuite/gcc.dg/torture/crc-26.c
 new file mode 100644
-index 00000000000..8e38a6e787c
+index 00000000000..9b7f1b80fdc
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/torture/crc-26.c
-@@ -0,0 +1,56 @@
+@@ -0,0 +1,57 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-g" "-Os" "-funroll-loops" "-fpeel-loops"  "-flto" } } */
@@ -13367,9 +13344,10 @@ index 00000000000..8e38a6e787c
 +      u32 res1 = crc32_le_O0 (crc, st, 2);
 +      u32 res2 = crc32_le (crc, st, 2);
 +      if (res1 != res2)
-+	abort ();
++	__builtin_abort ();
 +      crc = res1;
 +    }
++  __builtin_exit (0);
 +}
 +/* { dg-final { scan-tree-dump "function maybe contains CRC calculation." "crc" } } */
 +/* { dg-final { scan-tree-dump "Loop iteration number is 7" "crc"} } */
@@ -13412,7 +13390,7 @@ index 00000000000..cd1ab9404c9
 \ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/torture/crc-28.c b/gcc/testsuite/gcc.dg/torture/crc-28.c
 new file mode 100644
-index 00000000000..4db0553fea1
+index 00000000000..7dce581e4f5
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/torture/crc-28.c
 @@ -0,0 +1,92 @@
@@ -13420,7 +13398,6 @@ index 00000000000..4db0553fea1
 +/* { dg-options "-fdump-tree-crc-details" } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-g" "-Os" "-funroll-loops" "-fpeel-loops" "-flto" } } */
 +/* { dg-require-effective-target int32plus } */
-+
 +
 +// Test from roms/u-boot/drivers/ram/octeon/dimm_spd_eeprom.c
 +
@@ -13499,8 +13476,9 @@ index 00000000000..4db0553fea1
 +      u16 res1 = ddr3_crc16_modified_O0 (st, 2);
 +      u16 res2 = ddr3_crc16_modified (st, 2);
 +      if (res1 != res2)
-+	abort ();
++	__builtin_abort ();
 +    }
++  __builtin_exit (0);
 +}
 +
 +/* { dg-final { scan-tree-dump "function maybe contains CRC calculation." "crc"} } */
@@ -13510,15 +13488,14 @@ index 00000000000..4db0553fea1
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/torture/crc-29.c b/gcc/testsuite/gcc.dg/torture/crc-29.c
 new file mode 100644
-index 00000000000..07acd10d618
+index 00000000000..285f7061580
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/torture/crc-29.c
-@@ -0,0 +1,33 @@
+@@ -0,0 +1,32 @@
 +/* { dg-do compile } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-g" "-Os" "-flto" } } */
 +/* { dg-require-effective-target int32plus } */
-+
 +
 +/* This is a CRC, even though it may seem it's not.
 +   'j' is initialized with 4 (100) and increased by 2 each time.
@@ -13549,15 +13526,14 @@ index 00000000000..07acd10d618
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc" } } */
 diff --git a/gcc/testsuite/gcc.dg/torture/crc-3.c b/gcc/testsuite/gcc.dg/torture/crc-3.c
 new file mode 100644
-index 00000000000..96e0bf25e4b
+index 00000000000..89f406d4322
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/torture/crc-3.c
-@@ -0,0 +1,39 @@
+@@ -0,0 +1,38 @@
 +/* { dg-do compile } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-O3" "-flto" } } */
 +/* { dg-require-effective-target int32plus } */
-+
 +
 +//We don't verify this case as for the CRC unsigned int (32 bit) is used and
 +// the polynomial fits into 16 bit. Also, as the loop's iteration number and
@@ -13594,7 +13570,7 @@ index 00000000000..96e0bf25e4b
 +/* { dg-final { scan-tree-dump "Loop iteration number and data's size differ." "crc" } } */
 diff --git a/gcc/testsuite/gcc.dg/torture/crc-4.c b/gcc/testsuite/gcc.dg/torture/crc-4.c
 new file mode 100644
-index 00000000000..cc12e58eded
+index 00000000000..c8228bfc101
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/torture/crc-4.c
 @@ -0,0 +1,53 @@
@@ -13602,7 +13578,6 @@ index 00000000000..cc12e58eded
 +/* { dg-options "-fdump-tree-crc-details" } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto" } } */
 +/* { dg-require-effective-target int32plus } */
-+
 +
 +#include <stdint.h>
 +#include <stdlib.h>
@@ -13640,9 +13615,10 @@ index 00000000000..cc12e58eded
 +      uint16_t res1 = crc16_update (crc, i);
 +      uint16_t res2 = crc16_update_O0 (crc, i);
 +      if (res1 != res2)
-+	abort ();
++	__builtin_abort ();
 +      crc = res1;
 +    }
++  __builtin_exit (0);
 +}
 +
 +/* { dg-final { scan-tree-dump "function maybe contains CRC calculation." "crc" } } */
@@ -13653,7 +13629,7 @@ index 00000000000..cc12e58eded
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc" } } */
 diff --git a/gcc/testsuite/gcc.dg/torture/crc-5.c b/gcc/testsuite/gcc.dg/torture/crc-5.c
 new file mode 100644
-index 00000000000..809a8f41c19
+index 00000000000..4448e25ca21
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/torture/crc-5.c
 @@ -0,0 +1,68 @@
@@ -13661,7 +13637,6 @@ index 00000000000..809a8f41c19
 +/* { dg-options "-fdump-tree-crc-details -w" } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto" } } */
 +/* { dg-require-effective-target int32plus } */
-+
 +
 +#include <stdlib.h>
 +
@@ -13715,9 +13690,10 @@ index 00000000000..809a8f41c19
 +      ee_u16 res1 = crcu8_O0 (i, crc);
 +      ee_u16 res2 = crcu8 (i, crc);
 +      if (res1 != res2)
-+	abort ();
++	__builtin_abort ();
 +      crc = res1;
 +    }
++  __builtin_exit (0);
 +}
 +/* { dg-final { scan-tree-dump "crcu8 function maybe contains CRC calculation." "crc" } } */
 +/* { dg-final { scan-tree-dump "Loop iteration number is 7" "crc" } } */
@@ -13727,10 +13703,10 @@ index 00000000000..809a8f41c19
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/torture/crc-6.c b/gcc/testsuite/gcc.dg/torture/crc-6.c
 new file mode 100644
-index 00000000000..a3705d683bc
+index 00000000000..a022942a8fe
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/torture/crc-6.c
-@@ -0,0 +1,64 @@
+@@ -0,0 +1,65 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-O3" "-flto"} } */
@@ -13786,8 +13762,9 @@ index 00000000000..a3705d683bc
 +      crc res1 = crcSlow_O0 (&i, 1);
 +      crc res2 = crcSlow (&i, 1);
 +      if (res1 != res2)
-+	abort ();
++	__builtin_abort ();
 +    }
++  __builtin_exit (0);
 +}
 +/* { dg-final { scan-tree-dump "crcSlow function maybe contains CRC calculation." "crc"} } */
 +/* { dg-final { scan-tree-dump "Loop iteration number is 7" "crc"} } */
@@ -13795,10 +13772,9 @@ index 00000000000..a3705d683bc
 +/* { dg-final { scan-tree-dump "Polynomial's value is \\\{1, 1, 0, 1, 0, 0, 1, 0\\\}" "crc" } } */
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
-\ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/torture/crc-7.c b/gcc/testsuite/gcc.dg/torture/crc-7.c
 new file mode 100644
-index 00000000000..6aebf35da43
+index 00000000000..e71f1b9c7b9
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/torture/crc-7.c
 @@ -0,0 +1,52 @@
@@ -13806,7 +13782,6 @@ index 00000000000..6aebf35da43
 +/* { dg-options "-fdump-tree-crc-details" } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto"} } */
 +/* { dg-require-effective-target int32plus } */
-+
 +
 +#include <stdint.h>
 +#include <stdlib.h>
@@ -13844,9 +13819,10 @@ index 00000000000..6aebf35da43
 +      uint16_t res1 = crc_xmodem_update_O0 (i, crc);
 +      uint16_t res2 = crc_xmodem_update (i, crc);
 +      if (res1 != res2)
-+	abort ();
++	__builtin_abort ();
 +      crc = res1;
 +    }
++  __builtin_exit (0);
 +}
 +/* { dg-final { scan-tree-dump "crc_xmodem_update function maybe contains CRC calculation." "crc"} } */
 +/* { dg-final { scan-tree-dump "Loop iteration number is 7" "crc"} } */
@@ -13856,10 +13832,10 @@ index 00000000000..6aebf35da43
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 diff --git a/gcc/testsuite/gcc.dg/torture/crc-8.c b/gcc/testsuite/gcc.dg/torture/crc-8.c
 new file mode 100644
-index 00000000000..41f8f5797d5
+index 00000000000..6d025646922
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/torture/crc-8.c
-@@ -0,0 +1,50 @@
+@@ -0,0 +1,51 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto"} } */
@@ -13900,9 +13876,10 @@ index 00000000000..41f8f5797d5
 +      uint8_t res1 = _crc_ibutton_update_O0 (i, crc);
 +      uint8_t res2 = _crc_ibutton_update (i, crc);
 +      if (res1 != res2)
-+	abort ();
++	__builtin_abort ();
 +      crc = res1;
 +    }
++  __builtin_exit (0);
 +}
 +/* { dg-final { scan-tree-dump "_crc_ibutton_update function maybe contains CRC calculation." "crc"} } */
 +/* { dg-final { scan-tree-dump "Loop iteration number is 7" "crc"} } */
@@ -13910,13 +13887,12 @@ index 00000000000..41f8f5797d5
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump "Polynomial's value is \\\{\[0, \]*1, 0, 0, 0, 1, 1, 0, 0\\\}" "crc" } } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
-\ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/torture/crc-9.c b/gcc/testsuite/gcc.dg/torture/crc-9.c
 new file mode 100644
-index 00000000000..af7386b1bd8
+index 00000000000..b0f1733ef11
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/torture/crc-9.c
-@@ -0,0 +1,56 @@
+@@ -0,0 +1,57 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details" } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-O3" "-flto"} } */
@@ -13963,8 +13939,9 @@ index 00000000000..af7386b1bd8
 +      uint8_t res1 = gencrc_O0 (&i, 1);
 +      uint8_t res2 = gencrc (&i, 1);
 +      if (res1 != res2)
-+	abort ();
++	__builtin_abort ();
 +    }
++  __builtin_exit (0);
 +}
 +
 +/* { dg-final { scan-tree-dump "gencrc function maybe contains CRC calculation." "crc"} } */
@@ -13973,7 +13950,6 @@ index 00000000000..af7386b1bd8
 +/* { dg-final { scan-tree-dump "Polynomial's value is \\\{\[0, \]*0, 0, 1, 1, 0, 0, 0, 1\\\}" "crc" } } */
 +/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
-\ No newline at end of file
 diff --git a/gcc/testsuite/gcc.dg/torture/crc-CCIT-data16-xorOutside_InsideFor.c b/gcc/testsuite/gcc.dg/torture/crc-CCIT-data16-xorOutside_InsideFor.c
 new file mode 100644
 index 00000000000..edce64a55d1
@@ -14222,15 +14198,14 @@ index 00000000000..17a46629af1
 +/* { dg-final { scan-tree-dump "Polynomial's value is \\\{\[0, \]*1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1\\\}" "crc" } } */
 diff --git a/gcc/testsuite/gcc.dg/torture/crc-coremark32-data16.c b/gcc/testsuite/gcc.dg/torture/crc-coremark32-data16.c
 new file mode 100644
-index 00000000000..4b56239d78b
+index 00000000000..be72a014eab
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/torture/crc-coremark32-data16.c
-@@ -0,0 +1,66 @@
+@@ -0,0 +1,65 @@
 +/* { dg-do run } */
 +/* { dg-options "-fdump-tree-crc-details -w" } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-g" "-Os" "-flto" } } */
 +/* { dg-require-effective-target int32plus } */
-+
 +
 +#include <stdlib.h>
 +
@@ -17147,556 +17122,3 @@ index a928cbe4557..7c778f600b5 100644
  extern gimple_opt_pass *make_pass_vectorize (gcc::context *ctxt);
  extern gimple_opt_pass *make_pass_simduid_cleanup (gcc::context *ctxt);
  extern gimple_opt_pass *make_pass_slp_vectorize (gcc::context *ctxt);
-diff --git a/gcc/expr.cc b/gcc/expr.cc
-index d796a3f9446..7883e9f284f 100644
---- a/gcc/expr.cc
-+++ b/gcc/expr.cc
-@@ -14288,23 +14288,23 @@ calculate_table_based_CRC (rtx *crc, const rtx &input_data,
- {
-   unsigned short crc_bit_size = GET_MODE_BITSIZE (crc_mode).to_constant ();
-   unsigned short data_size = GET_MODE_SIZE (data_mode).to_constant ();
--
-+  machine_mode mode = GET_MODE (*crc);
-   rtx tab = generate_crc_table (UINTVAL (polynomial), crc_bit_size);
- 
-   for (unsigned short i = 0; i < data_size; i++)
-     {
-       /* crc >> (crc_bit_size - 8).  */
--      rtx op1 = expand_shift (RSHIFT_EXPR, word_mode, *crc, crc_bit_size - 8,
-+      rtx op1 = expand_shift (RSHIFT_EXPR, mode, *crc, crc_bit_size - 8,
- 			      NULL_RTX, 1);
- 
-       /* data >> (8 * (GET_MODE_SIZE (data_mode).to_constant () - i - 1)).  */
-       unsigned range_8 = 8 * (data_size - i - 1);
--      rtx data = expand_shift (RSHIFT_EXPR, word_mode, input_data, range_8,
-+      rtx data = expand_shift (RSHIFT_EXPR, mode, input_data, range_8,
- 			       NULL_RTX, 1);
- 
-       /* data >> (8 * (GET_MODE_SIZE (data_mode)
- 					.to_constant () - i - 1)) & 0xFF.  */
--      rtx data_final = expand_and (word_mode, data,
-+      rtx data_final = expand_and (mode, data,
- 				   gen_int_mode (255, data_mode), NULL_RTX);
- 
-       /* (crc >> (crc_bit_size - 8)) ^ data_8bit.  */
-@@ -14312,7 +14312,7 @@ calculate_table_based_CRC (rtx *crc, const rtx &input_data,
- 			     NULL_RTX, 1, OPTAB_WIDEN);
- 
-       /* ((crc >> (crc_bit_size - 8)) ^ data_8bit) & 0xFF.  */
--      rtx index = expand_and (Pmode, in, gen_int_mode (255, word_mode),
-+      rtx index = expand_and (Pmode, in, gen_int_mode (255, mode),
- 			      NULL_RTX);
-       int log_crc_size = exact_log2 (GET_MODE_SIZE (crc_mode).to_constant ());
-       index = expand_shift (LSHIFT_EXPR, Pmode, index,
-@@ -14327,53 +14327,17 @@ calculate_table_based_CRC (rtx *crc, const rtx &input_data,
-       /* (crc << 8) if CRC is larger than 8, otherwise crc = 0.  */
-       rtx high = NULL_RTX;
-       if (crc_bit_size != 8)
--	{
--	  high = expand_shift (LSHIFT_EXPR, word_mode, *crc, 8, NULL_RTX, 0);
--	  if (crc_mode != word_mode)
--	    {
--	      rtx crc_mode_mask = gen_int_mode (GET_MODE_MASK (crc_mode),
--						word_mode);
--	      high = expand_and (word_mode, high, crc_mode_mask, NULL_RTX);
--	    }
--	}
-+	high = expand_shift (LSHIFT_EXPR, mode, *crc, 8, NULL_RTX, 0);
-       else
--	high = gen_int_mode (0, word_mode);
-+	high = gen_int_mode (0, mode);
- 
-       /* crc = (crc << 8)
- 	       ^ crc_table[(crc >> (crc_bit_size - 8)) ^ data_8bit];  */
--      *crc = expand_binop (word_mode, xor_optab, tab_el, high, NULL_RTX, 1,
-+      *crc = expand_binop (mode, xor_optab, tab_el, high, NULL_RTX, 1,
- 			   OPTAB_WIDEN);
-     }
- }
- 
--/* Converts and moves a CRC value to a target register.
--
--  CRC_MODE is the mode (data type) of the CRC value.
--  CRC is the initial CRC value.
--  OP0 is the target register.  */
--
--void
--emit_crc (machine_mode crc_mode, rtx* crc, rtx* op0)
--{
--  if (word_mode != crc_mode)
--    {
--      /* If this ever trips, then we need to adjust the creation
--	 of the SUBREG below to take endianness into account.  */
--      gcc_assert (word_mode >= crc_mode);
--#if 0
--      rtx tgt = simplify_gen_subreg (word_mode, *op0, crc_mode, 0);
--#endif
--      rtx tgt = force_reg (word_mode, *op0);
--      rtx crc_low = gen_lowpart (crc_mode, *crc);
--      if (SUBREG_P (*op0) && SUBREG_PROMOTED_VAR_P (*op0))
--	convert_move (tgt, crc_low, SUBREG_PROMOTED_SIGN (*op0));
--      else
--	convert_move (tgt, crc_low, 0);
--    }
--  else
--    emit_move_insn (*op0, *crc);
--}
--
- /* Generate table-based CRC code for the given CRC, INPUT_DATA and the
-    POLYNOMIAL (without leading 1).
- 
-@@ -14402,7 +14366,7 @@ expand_crc_table_based (rtx op0, rtx op1, rtx op2, rtx op3,
-   rtx crc = gen_reg_rtx (word_mode);
-   convert_move (crc, op1, 0);
-   calculate_table_based_CRC (&crc, op2, op3, crc_mode, data_mode);
--  emit_crc (crc_mode, &crc, &op0);
-+  convert_move (op0, crc, 0);
- }
- 
- /* Generate the common operation for reflecting values:
-@@ -14557,5 +14521,5 @@ expand_reversed_crc_table_based (rtx op0, rtx op1, rtx op2, rtx op3,
-   calculate_table_based_CRC (&crc, data, op3, crc_mode, data_mode);
- 
-   gen_reflecting_code (&crc, word_size - crc_bit_size);
--  emit_crc (crc_mode, &crc, &op0);
-+  convert_move (op0, crc, 0);
- }
-diff --git a/gcc/internal-fn.cc b/gcc/internal-fn.cc
-index 25e7ee0d7f4..1e59c14fddc 100644
---- a/gcc/internal-fn.cc
-+++ b/gcc/internal-fn.cc
-@@ -4095,6 +4095,19 @@ expand_crc_optab_fn (internal_fn fn, gcall *stmt, convert_optab optab)
-     }
-   else
-     {
-+      /* We're bypassing all the operand conversions that are done in the
-+	 case when we get an icode, operands and pass that off to expand_insn.
-+
-+	 That path has special case handling for promoted return values which
-+	 we must emulate here (is the same kind of special treatment ever
-+	 needed for input arguments here?).
-+
-+	 In particular we do not want to store directly into a promoted
-+	 SUBREG destination, instead store into a suitably sized pseudo.  */
-+      rtx orig_dest = dest;
-+      if (SUBREG_P (dest) && SUBREG_PROMOTED_VAR_P (dest))
-+	dest = gen_reg_rtx (GET_MODE (dest));
-+
-       /* If it's IFN_CRC generate bit-forward CRC.  */
-       if (fn == IFN_CRC)
- 	expand_crc_table_based (dest, crc, data, polynomial,
-@@ -4104,6 +4117,15 @@ expand_crc_optab_fn (internal_fn fn, gcall *stmt, convert_optab optab)
- 	expand_reversed_crc_table_based (dest, crc, data, polynomial,
- 					 TYPE_MODE (data_type),
- 					 generate_reflecting_code_standard);
-+
-+      /* Now get the return value where it needs to be, taking care to
-+	 ensure it's promoted appropriately if the ABI demands it.
-+
-+	 Re-use assign_call_lhs to handle the details.  */
-+      class expand_operand ops[4];
-+      create_call_lhs_operand (&ops[0], dest, TYPE_MODE (result_type));
-+      ops[0].value = dest;
-+      assign_call_lhs (lhs, orig_dest, &ops[0]);
-     }
- }
- 
-commit 78a496f9e13386b2501071fca922618ad38a35fa
-Author: Jeff Law <jlaw@ventanamicro.com>
-Date:   Sat Nov 23 14:20:31 2024 -0700
-
-    Revert "Adjust builtins a bit"
-    
-    This reverts commit 6cd12b6a91128d98954db4c01c66a85315a25bcf.
-
-diff --git a/gcc/builtins.cc b/gcc/builtins.cc
-index 7de60c0d3f6..ae2067d63ee 100644
---- a/gcc/builtins.cc
-+++ b/gcc/builtins.cc
-@@ -2207,7 +2207,6 @@ associated_internal_fn (built_in_function fn, tree return_type)
-       if (REAL_MODE_FORMAT (TYPE_MODE (return_type))->b == 2)
- 	return IFN_LDEXP;
-       return IFN_LAST;
--
-     case BUILT_IN_CRC8_DATA8:
-     case BUILT_IN_CRC16_DATA8:
-     case BUILT_IN_CRC16_DATA16:
-@@ -2230,7 +2229,6 @@ associated_internal_fn (built_in_function fn, tree return_type)
-     case BUILT_IN_REV_CRC64_DATA32:
-     case BUILT_IN_REV_CRC64_DATA64:
-       return IFN_CRC_REV;
--
-     default:
-       return IFN_LAST;
-     }
-diff --git a/gcc/builtins.def b/gcc/builtins.def
-index a96062d0950..d47ac281e99 100644
---- a/gcc/builtins.def
-+++ b/gcc/builtins.def
-@@ -71,13 +71,6 @@ along with GCC; see the file COPYING3.  If not see
-   DEF_BUILTIN (ENUM, "__builtin_" NAME, BUILT_IN_NORMAL, TYPE, BT_LAST,	\
- 	       false, false, false, ATTRS, true, true)
- 
--/* Like DEF_GCC_BUILTIN, except the builtins aren't available if their
--   datatypes are too wide.  */
--#undef DEF_GCC_CRC_BUILTIN
--#define DEF_GCC_CRC_BUILTIN(ENUM, NAME, TYPE, ATTRS, MAX_BITSIZE)	\
--  DEF_BUILTIN (ENUM, "__builtin_" NAME, BUILT_IN_NORMAL, TYPE, BT_LAST,	\
--	       false, false, false, ATTRS, true, MAX_BITSIZE <= GET_MODE_BITSIZE (word_mode))
--
- /* Like DEF_GCC_BUILTIN, except we don't prepend "__builtin_".  */
- #undef DEF_SYNC_BUILTIN
- #define DEF_SYNC_BUILTIN(ENUM, NAME, TYPE, ATTRS)		\
-@@ -727,26 +720,26 @@ DEF_EXT_LIB_BUILTIN    (BUILT_IN_Y1L, "y1l", BT_FN_LONGDOUBLE_LONGDOUBLE, ATTR_M
- DEF_EXT_LIB_BUILTIN    (BUILT_IN_YN, "yn", BT_FN_DOUBLE_INT_DOUBLE, ATTR_MATHFN_FPROUNDING_ERRNO)
- DEF_EXT_LIB_BUILTIN    (BUILT_IN_YNF, "ynf", BT_FN_FLOAT_INT_FLOAT, ATTR_MATHFN_FPROUNDING_ERRNO)
- DEF_EXT_LIB_BUILTIN    (BUILT_IN_YNL, "ynl", BT_FN_LONGDOUBLE_INT_LONGDOUBLE, ATTR_MATHFN_FPROUNDING_ERRNO)
--DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC8_DATA8, "crc8_data8", BT_FN_UINT8_UINT8_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 8)
--DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC16_DATA8, "crc16_data8", BT_FN_UINT16_UINT16_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 16)
--DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC16_DATA16, "crc16_data16", BT_FN_UINT16_UINT16_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 16)
--DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC32_DATA8, "crc32_data8", BT_FN_UINT32_UINT32_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 32)
--DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC32_DATA16, "crc32_data16", BT_FN_UINT32_UINT32_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 32)
--DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC32_DATA32, "crc32_data32", BT_FN_UINT32_UINT32_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 32)
--DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC64_DATA8, "crc64_data8", BT_FN_UINT64_UINT64_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
--DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC64_DATA16, "crc64_data16", BT_FN_UINT64_UINT64_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
--DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC64_DATA32, "crc64_data32", BT_FN_UINT64_UINT64_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
--DEF_GCC_CRC_BUILTIN    (BUILT_IN_CRC64_DATA64, "crc64_data64", BT_FN_UINT64_UINT64_UINT64_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
--DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC8_DATA8, "rev_crc8_data8", BT_FN_UINT8_UINT8_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 8)
--DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC16_DATA8, "rev_crc16_data8", BT_FN_UINT16_UINT16_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 16)
--DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC16_DATA16, "rev_crc16_data16", BT_FN_UINT16_UINT16_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 16)
--DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC32_DATA8, "rev_crc32_data8", BT_FN_UINT32_UINT32_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 32)
--DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC32_DATA16, "rev_crc32_data16", BT_FN_UINT32_UINT32_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 32)
--DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC32_DATA32, "rev_crc32_data32", BT_FN_UINT32_UINT32_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 32)
--DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC64_DATA8, "rev_crc64_data8", BT_FN_UINT64_UINT64_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
--DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC64_DATA16, "rev_crc64_data16", BT_FN_UINT64_UINT64_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
--DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC64_DATA32, "rev_crc64_data32", BT_FN_UINT64_UINT64_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
--DEF_GCC_CRC_BUILTIN    (BUILT_IN_REV_CRC64_DATA64, "rev_crc64_data64", BT_FN_UINT64_UINT64_UINT64_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST, 64)
-+DEF_GCC_BUILTIN	       (BUILT_IN_CRC8_DATA8, "crc8_data8", BT_FN_UINT8_UINT8_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_CRC16_DATA8, "crc16_data8", BT_FN_UINT16_UINT16_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_CRC16_DATA16, "crc16_data16", BT_FN_UINT16_UINT16_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_CRC32_DATA8, "crc32_data8", BT_FN_UINT32_UINT32_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_CRC32_DATA16, "crc32_data16", BT_FN_UINT32_UINT32_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_CRC32_DATA32, "crc32_data32", BT_FN_UINT32_UINT32_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_CRC64_DATA8, "crc64_data8", BT_FN_UINT64_UINT64_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_CRC64_DATA16, "crc64_data16", BT_FN_UINT64_UINT64_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_CRC64_DATA32, "crc64_data32", BT_FN_UINT64_UINT64_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_CRC64_DATA64, "crc64_data64", BT_FN_UINT64_UINT64_UINT64_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC8_DATA8, "rev_crc8_data8", BT_FN_UINT8_UINT8_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC16_DATA8, "rev_crc16_data8", BT_FN_UINT16_UINT16_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC16_DATA16, "rev_crc16_data16", BT_FN_UINT16_UINT16_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC32_DATA8, "rev_crc32_data8", BT_FN_UINT32_UINT32_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC32_DATA16, "rev_crc32_data16", BT_FN_UINT32_UINT32_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC32_DATA32, "rev_crc32_data32", BT_FN_UINT32_UINT32_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC64_DATA8, "rev_crc64_data8", BT_FN_UINT64_UINT64_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC64_DATA16, "rev_crc64_data16", BT_FN_UINT64_UINT64_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC64_DATA32, "rev_crc64_data32", BT_FN_UINT64_UINT64_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
-+DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC64_DATA64, "rev_crc64_data64", BT_FN_UINT64_UINT64_UINT64_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
- /* Category: _Complex math builtins.  */
- DEF_C99_COMPL_BUILTIN        (BUILT_IN_CABS, "cabs", BT_FN_DOUBLE_COMPLEX_DOUBLE, ATTR_MATHFN_FPROUNDING)
- DEF_C99_COMPL_BUILTIN        (BUILT_IN_CABSF, "cabsf", BT_FN_FLOAT_COMPLEX_FLOAT, ATTR_MATHFN_FPROUNDING)
-diff --git a/gcc/builtins.cc b/gcc/builtins.cc
-index ae2067d63ee..dc260029a39 100644
---- a/gcc/builtins.cc
-+++ b/gcc/builtins.cc
-@@ -7777,7 +7777,9 @@ expand_builtin_crc_table_based (internal_fn fn, scalar_mode data_mode,
-   tree rhs2 = CALL_EXPR_ARG (exp, 1); // data
-   tree rhs3 = CALL_EXPR_ARG (exp, 2); // polynomial
- 
-+#if 0
-   gcc_assert (word_mode >= crc_mode);
-+#endif
- 
-   if (!target || mode == VOIDmode)
-     target = gen_reg_rtx (crc_mode);
-@@ -7787,6 +7789,8 @@ expand_builtin_crc_table_based (internal_fn fn, scalar_mode data_mode,
-   gcc_assert (TREE_CODE (rhs3) == INTEGER_CST);
-   rtx op3 = gen_int_mode (TREE_INT_CST_LOW (rhs3), crc_mode);
- 
-+  op2 = force_reg (crc_mode, op2);
-+
-   if (fn == IFN_CRC)
-     expand_crc_table_based (target, op1, op2, op3, data_mode);
-   else
-diff --git a/gcc/expr.cc b/gcc/expr.cc
-index 7883e9f284f..d8c981dc698 100644
---- a/gcc/expr.cc
-+++ b/gcc/expr.cc
-@@ -14363,9 +14363,11 @@ expand_crc_table_based (rtx op0, rtx op1, rtx op2, rtx op3,
-   gcc_assert (!CONST_INT_P (op0));
-   gcc_assert (CONST_INT_P (op3));
-   machine_mode crc_mode = GET_MODE (op0);
--  rtx crc = gen_reg_rtx (word_mode);
-+  rtx crc = gen_reg_rtx (crc_mode);
-   convert_move (crc, op1, 0);
--  calculate_table_based_CRC (&crc, op2, op3, crc_mode, data_mode);
-+  rtx data = gen_reg_rtx (crc_mode);
-+  convert_move (data, op2, 0);
-+  calculate_table_based_CRC (&crc, data, op3, crc_mode, data_mode);
-   convert_move (op0, crc, 0);
- }
- 
-@@ -14378,13 +14380,12 @@ gen_common_operation_to_reflect (rtx *op,
- 				 unsigned HOST_WIDE_INT and2_value,
- 				 unsigned shift_val)
- {
--  rtx op1 = expand_and (word_mode, *op, gen_int_mode (and1_value, word_mode),
--			NULL_RTX);
--  op1 = expand_shift (LSHIFT_EXPR, word_mode, op1, shift_val, op1, 0);
--  rtx op2 = expand_and (word_mode, *op, gen_int_mode (and2_value, word_mode),
--			NULL_RTX);
--  op2 = expand_shift (RSHIFT_EXPR, word_mode, op2, shift_val, op2, 1);
--  *op = expand_binop (word_mode, ior_optab, op1, op2, *op, 0, OPTAB_DIRECT);
-+  machine_mode mode = GET_MODE (*op);
-+  rtx op1 = expand_and (mode, *op, gen_int_mode (and1_value, mode), NULL_RTX);
-+  op1 = expand_shift (LSHIFT_EXPR, mode, op1, shift_val, op1, 0);
-+  rtx op2 = expand_and (mode, *op, gen_int_mode (and2_value, mode), NULL_RTX);
-+  op2 = expand_shift (RSHIFT_EXPR, mode, op2, shift_val, op2, 1);
-+  *op = expand_binop (mode, ior_optab, op1, op2, *op, 0, OPTAB_DIRECT);
- }
- 
- /* Reflect 64-bit value for the 64-bit target.  */
-@@ -14473,7 +14474,7 @@ generate_reflecting_code_standard (rtx *op, int shift_val)
-   else
-     reflect_8_bit_value (op);
- 
--  *op = expand_shift (RSHIFT_EXPR, word_mode, *op, shift_val, *op, 1);
-+  *op = expand_shift (RSHIFT_EXPR, GET_MODE (*op), *op, shift_val, *op, 1);
- }
- 
- /* Generate table-based reversed CRC code for the given CRC, INPUT_DATA and
-@@ -14508,18 +14509,17 @@ expand_reversed_crc_table_based (rtx op0, rtx op1, rtx op2, rtx op3,
- 
-   unsigned short crc_bit_size = GET_MODE_BITSIZE (crc_mode).to_constant ();
-   unsigned short data_bit_size = GET_MODE_BITSIZE (data_mode).to_constant ();
--  unsigned short word_size = GET_MODE_BITSIZE (word_mode);
- 
--  rtx crc = gen_reg_rtx (word_mode);
-+  rtx crc = gen_reg_rtx (crc_mode);
-   convert_move (crc, op1, 0);
--  gen_reflecting_code (&crc, word_size - crc_bit_size);
-+  gen_reflecting_code (&crc, crc_bit_size - crc_bit_size);
- 
--  rtx data = gen_reg_rtx (word_mode);
-+  rtx data = gen_reg_rtx (data_mode);
-   convert_move (data, op2, 0);
--  gen_reflecting_code (&data, word_size - data_bit_size);
-+  gen_reflecting_code (&data, data_bit_size - data_bit_size);
- 
-   calculate_table_based_CRC (&crc, data, op3, crc_mode, data_mode);
- 
--  gen_reflecting_code (&crc, word_size - crc_bit_size);
-+  gen_reflecting_code (&crc, crc_bit_size - crc_bit_size);
-   convert_move (op0, crc, 0);
- }
-diff --git a/gcc/gimple-crc-optimization.cc b/gcc/gimple-crc-optimization.cc
-index 9dee9be85d0..e98e7a8161a 100644
---- a/gcc/gimple-crc-optimization.cc
-+++ b/gcc/gimple-crc-optimization.cc
-@@ -1111,6 +1111,7 @@ bool crc_optimization::validate_crc_and_data ()
- 				     loop_preheader_edge (m_crc_loop));
-   gcc_assert (m_crc_arg);
- 
-+#if 0
-   if (GET_MODE_SIZE (TYPE_MODE (TREE_TYPE (m_crc_arg))).to_constant ()
-       > GET_MODE_SIZE (word_mode))
-     {
-@@ -1118,6 +1119,7 @@ bool crc_optimization::validate_crc_and_data ()
- 	fprintf (dump_file, "word_mode is less than CRC mode.\n");
-       return false;
-     }
-+#endif
- 
-   unsigned HOST_WIDE_INT
-   data_size = tree_to_uhwi (m_crc_loop->nb_iterations) + 1;
-diff --git a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-2.c b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-2.c
-index b97775b72b9..41012e6e753 100644
---- a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-2.c
-+++ b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-2.c
-@@ -1,6 +1,5 @@
- /* { dg-do compile } */
- /* { dg-options "-fdump-tree-crc-details -O2" } */
--/* { dg-require-effective-target int32plus } */
- 
- //File - Ac3 from Fedora, polynomial made const. Original crc-side-instr-21.c test
- #include <stddef.h>
-diff --git a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-24.c b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-24.c
-index e416198c5f7..67e38333628 100644
---- a/gcc/testsuite/gcc.dg/crc-from-fedora-packages-24.c
-+++ b/gcc/testsuite/gcc.dg/crc-from-fedora-packages-24.c
-@@ -1,6 +1,5 @@
- /* { dg-do compile } */
- /* { dg-options "-fdump-tree-crc-details -O2" } */
--/* { dg-require-effective-target int32plus } */
- 
- // File - utils.ii
- /* We don't support the case when CRC variable's size is different from the
-diff --git a/gcc/testsuite/gcc.dg/torture/crc-1.c b/gcc/testsuite/gcc.dg/torture/crc-1.c
-index a1e3c2ff59e..234ae60cc1f 100644
---- a/gcc/testsuite/gcc.dg/torture/crc-1.c
-+++ b/gcc/testsuite/gcc.dg/torture/crc-1.c
-@@ -1,7 +1,6 @@
- /* { dg-do run } */
- /* { dg-options "-fdump-tree-crc-details -fdisable-tree-phiopt2 -fdisable-tree-phiopt3" } */
- /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto" } } */
--/* { dg-require-effective-target int32plus } */
- 
- 
- #include <stddef.h>
-diff --git a/gcc/testsuite/gcc.dg/torture/crc-10.c b/gcc/testsuite/gcc.dg/torture/crc-10.c
-index c1fa1d33315..396ccac75a6 100644
---- a/gcc/testsuite/gcc.dg/torture/crc-10.c
-+++ b/gcc/testsuite/gcc.dg/torture/crc-10.c
-@@ -1,7 +1,6 @@
- /* { dg-do run } */
- /* { dg-options "-fdump-tree-crc-details" } */
- /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto" } } */
--/* { dg-require-effective-target int32plus } */
- 
- 
- #include <stdint.h>
-diff --git a/gcc/testsuite/gcc.dg/torture/crc-12.c b/gcc/testsuite/gcc.dg/torture/crc-12.c
-index d6a9c27426b..f4b1dfe8ba9 100644
---- a/gcc/testsuite/gcc.dg/torture/crc-12.c
-+++ b/gcc/testsuite/gcc.dg/torture/crc-12.c
-@@ -1,7 +1,6 @@
- /* { dg-do run } */
- /* { dg-options "-fdump-tree-crc -fdisable-tree-phiopt2 -fdisable-tree-phiopt3" } */
- /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto" } } */
--/* { dg-require-effective-target int32plus } */
- 
- #include <stdio.h>
- #include <stdint.h>
-diff --git a/gcc/testsuite/gcc.dg/torture/crc-13.c b/gcc/testsuite/gcc.dg/torture/crc-13.c
-index 84da6068a65..06e7a0eb609 100644
---- a/gcc/testsuite/gcc.dg/torture/crc-13.c
-+++ b/gcc/testsuite/gcc.dg/torture/crc-13.c
-@@ -1,7 +1,6 @@
- /* { dg-do run } */
- /* { dg-options "-fdump-tree-crc-details" } */
- /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto" } } */
--/* { dg-require-effective-target int32plus } */
- 
- 
- #include <stdlib.h>
-diff --git a/gcc/testsuite/gcc.dg/torture/crc-22.c b/gcc/testsuite/gcc.dg/torture/crc-22.c
-index a481b48801f..4a80a352f2d 100644
---- a/gcc/testsuite/gcc.dg/torture/crc-22.c
-+++ b/gcc/testsuite/gcc.dg/torture/crc-22.c
-@@ -1,7 +1,6 @@
- /* { dg-do run } */
- /* { dg-options "-fdump-tree-crc-details" } */
- /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-g" "-Os" "-flto" } } */
--/* { dg-require-effective-target int32plus } */
- 
- 
- #include <stdlib.h>
-diff --git a/gcc/testsuite/gcc.dg/torture/crc-23.c b/gcc/testsuite/gcc.dg/torture/crc-23.c
-index 98dc9d7a0ae..c3d2f951f52 100644
---- a/gcc/testsuite/gcc.dg/torture/crc-23.c
-+++ b/gcc/testsuite/gcc.dg/torture/crc-23.c
-@@ -1,7 +1,6 @@
- /* { dg-do run } */
- /* { dg-options "-fdump-tree-crc-details -ftree-cselim" } */
- /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-g" "-Os" "-flto" } } */
--/* { dg-require-effective-target int32plus } */
- 
- 
- // Modified example from crc-from-fedora-packages-24.c
-diff --git a/gcc/testsuite/gcc.dg/torture/crc-28.c b/gcc/testsuite/gcc.dg/torture/crc-28.c
-index 4db0553fea1..23258e22044 100644
---- a/gcc/testsuite/gcc.dg/torture/crc-28.c
-+++ b/gcc/testsuite/gcc.dg/torture/crc-28.c
-@@ -1,7 +1,6 @@
- /* { dg-do run } */
- /* { dg-options "-fdump-tree-crc-details" } */
- /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-g" "-Os" "-funroll-loops" "-fpeel-loops" "-flto" } } */
--/* { dg-require-effective-target int32plus } */
- 
- 
- // Test from roms/u-boot/drivers/ram/octeon/dimm_spd_eeprom.c
-diff --git a/gcc/testsuite/gcc.dg/torture/crc-29.c b/gcc/testsuite/gcc.dg/torture/crc-29.c
-index 07acd10d618..38224619cb3 100644
---- a/gcc/testsuite/gcc.dg/torture/crc-29.c
-+++ b/gcc/testsuite/gcc.dg/torture/crc-29.c
-@@ -1,7 +1,6 @@
- /* { dg-do compile } */
- /* { dg-options "-fdump-tree-crc-details" } */
- /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-g" "-Os" "-flto" } } */
--/* { dg-require-effective-target int32plus } */
- 
- 
- /* This is a CRC, even though it may seem it's not.
-diff --git a/gcc/testsuite/gcc.dg/torture/crc-3.c b/gcc/testsuite/gcc.dg/torture/crc-3.c
-index 96e0bf25e4b..cf582f1f419 100644
---- a/gcc/testsuite/gcc.dg/torture/crc-3.c
-+++ b/gcc/testsuite/gcc.dg/torture/crc-3.c
-@@ -1,7 +1,6 @@
- /* { dg-do compile } */
- /* { dg-options "-fdump-tree-crc-details" } */
- /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-O3" "-flto" } } */
--/* { dg-require-effective-target int32plus } */
- 
- 
- //We don't verify this case as for the CRC unsigned int (32 bit) is used and
-diff --git a/gcc/testsuite/gcc.dg/torture/crc-4.c b/gcc/testsuite/gcc.dg/torture/crc-4.c
-index cc12e58eded..9941372d271 100644
---- a/gcc/testsuite/gcc.dg/torture/crc-4.c
-+++ b/gcc/testsuite/gcc.dg/torture/crc-4.c
-@@ -1,7 +1,6 @@
- /* { dg-do run } */
- /* { dg-options "-fdump-tree-crc-details" } */
- /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto" } } */
--/* { dg-require-effective-target int32plus } */
- 
- 
- #include <stdint.h>
-diff --git a/gcc/testsuite/gcc.dg/torture/crc-5.c b/gcc/testsuite/gcc.dg/torture/crc-5.c
-index 809a8f41c19..b7467449676 100644
---- a/gcc/testsuite/gcc.dg/torture/crc-5.c
-+++ b/gcc/testsuite/gcc.dg/torture/crc-5.c
-@@ -1,7 +1,6 @@
- /* { dg-do run } */
- /* { dg-options "-fdump-tree-crc-details -w" } */
- /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto" } } */
--/* { dg-require-effective-target int32plus } */
- 
- 
- #include <stdlib.h>
-diff --git a/gcc/testsuite/gcc.dg/torture/crc-7.c b/gcc/testsuite/gcc.dg/torture/crc-7.c
-index 6aebf35da43..e885918abc8 100644
---- a/gcc/testsuite/gcc.dg/torture/crc-7.c
-+++ b/gcc/testsuite/gcc.dg/torture/crc-7.c
-@@ -1,7 +1,6 @@
- /* { dg-do run } */
- /* { dg-options "-fdump-tree-crc-details" } */
- /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-flto"} } */
--/* { dg-require-effective-target int32plus } */
- 
- 
- #include <stdint.h>
-diff --git a/gcc/testsuite/gcc.dg/torture/crc-coremark16-data16.c b/gcc/testsuite/gcc.dg/torture/crc-coremark16-data16.c
-index 17a46629af1..6b4de1a9600 100644
---- a/gcc/testsuite/gcc.dg/torture/crc-coremark16-data16.c
-+++ b/gcc/testsuite/gcc.dg/torture/crc-coremark16-data16.c
-@@ -1,7 +1,6 @@
- /* { dg-do run } */
- /* { dg-options "-fdump-tree-crc-details -w" } */
- /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-g" "-Os" "-flto" } } */
--/* { dg-require-effective-target int32plus } */
- 
- #include <stdlib.h>
- typedef unsigned short ee_u16;
-diff --git a/gcc/internal-fn.cc b/gcc/internal-fn.cc
-index 1e59c14fddc..a71491d95f2 100644
---- a/gcc/internal-fn.cc
-+++ b/gcc/internal-fn.cc
-@@ -4069,7 +4069,9 @@ expand_crc_optab_fn (internal_fn fn, gcall *stmt, convert_optab optab)
-   tree data_type = TREE_TYPE (rhs2);
- 
-   gcc_assert (TYPE_MODE (result_type) >= TYPE_MODE (data_type));
-+#if 0
-   gcc_assert (word_mode >= TYPE_MODE (result_type));
-+#endif
- 
-   rtx dest = expand_expr (lhs, NULL_RTX, VOIDmode, EXPAND_WRITE);
-   rtx crc = expand_normal (rhs1);
