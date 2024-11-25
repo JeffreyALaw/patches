@@ -46,7 +46,7 @@ index 427af741c6b..fa988d35064 100644
  DEF_FUNCTION_TYPE_4 (BT_FN_SIZE_CONST_PTR_SIZE_SIZE_FILEPTR,
  		     BT_SIZE, BT_CONST_PTR, BT_SIZE, BT_SIZE, BT_FILEPTR)
 diff --git a/gcc/builtins.cc b/gcc/builtins.cc
-index 029c561d466..ae2067d63ee 100644
+index 029c561d466..a7817a9ffd3 100644
 --- a/gcc/builtins.cc
 +++ b/gcc/builtins.cc
 @@ -2207,7 +2207,28 @@ associated_internal_fn (built_in_function fn, tree return_type)
@@ -86,8 +86,8 @@ index 029c561d466..ae2067d63ee 100644
 +/* Expand CRC* or REV_CRC* built-ins.  */
 +
 +rtx
-+expand_builtin_crc_table_based (internal_fn fn, scalar_mode data_mode,
-+				scalar_mode crc_mode, machine_mode mode,
++expand_builtin_crc_table_based (internal_fn fn, scalar_mode crc_mode,
++				scalar_mode data_mode, machine_mode mode,
 +				tree exp, rtx target)
 +{
 +  tree rhs1 = CALL_EXPR_ARG (exp, 0); // crc
@@ -2707,10 +2707,10 @@ index c8f1424a042..c4a48811ae8 100644
  
  @end ifset
 diff --git a/gcc/expr.cc b/gcc/expr.cc
-index cf87167ec0c..7f4ba7034d5 100644
+index cf87167ec0c..706da7733a7 100644
 --- a/gcc/expr.cc
 +++ b/gcc/expr.cc
-@@ -14142,3 +14142,385 @@ int_expr_size (const_tree exp)
+@@ -14142,3 +14142,387 @@ int_expr_size (const_tree exp)
  
    return tree_to_shwi (size);
  }
@@ -2873,7 +2873,7 @@ index cf87167ec0c..7f4ba7034d5 100644
 +      /* data >> (8 * (GET_MODE_SIZE (data_mode).to_constant () - i - 1)).  */
 +      unsigned range_8 = 8 * (data_size - i - 1);
 +      rtx data = force_reg (data_mode, input_data);
-+      data = expand_shift (RSHIFT_EXPR, mode, input_data, range_8, NULL_RTX, 1);
++      data = expand_shift (RSHIFT_EXPR, mode, data, range_8, NULL_RTX, 1);
 +
 +      /* data >> (8 * (GET_MODE_SIZE (data_mode)
 +					.to_constant () - i - 1)) & 0xFF.  */
@@ -2881,21 +2881,23 @@ index cf87167ec0c..7f4ba7034d5 100644
 +				   gen_int_mode (255, data_mode), NULL_RTX);
 +
 +      /* (crc >> (crc_bit_size - 8)) ^ data_8bit.  */
-+      rtx in = expand_binop (Pmode, xor_optab, op1, data_final,
++      rtx in = expand_binop (mode, xor_optab, op1, data_final,
 +			     NULL_RTX, 1, OPTAB_WIDEN);
 +
 +      /* ((crc >> (crc_bit_size - 8)) ^ data_8bit) & 0xFF.  */
-+      rtx index = expand_and (Pmode, in, gen_int_mode (255, mode),
++      rtx index = expand_and (mode, in, gen_int_mode (255, mode),
 +			      NULL_RTX);
 +      int log_crc_size = exact_log2 (GET_MODE_SIZE (crc_mode).to_constant ());
-+      index = expand_shift (LSHIFT_EXPR, Pmode, index,
++      index = expand_shift (LSHIFT_EXPR, mode, index,
 +			    log_crc_size, NULL_RTX, 0);
 +
-+      index = expand_binop (Pmode, add_optab, index, tab, NULL_RTX,
++      rtx addr = gen_reg_rtx (Pmode);
++      convert_move (addr, index, 1);
++      addr = expand_binop (Pmode, add_optab, addr, tab, NULL_RTX,
 +			    0, OPTAB_DIRECT);
 +
 +      /* crc_table[(crc >> (crc_bit_size - 8)) ^ data_8bit]  */
-+      rtx tab_el = validize_mem (gen_rtx_MEM (crc_mode, index));
++      rtx tab_el = validize_mem (gen_rtx_MEM (crc_mode, addr));
 +
 +      /* (crc << 8) if CRC is larger than 8, otherwise crc = 0.  */
 +      rtx high = NULL_RTX;
