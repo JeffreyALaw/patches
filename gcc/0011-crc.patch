@@ -353,7 +353,7 @@ index 91de13159cb..673feda5027 100644
 +      rtx crc_part = expand_shift (LSHIFT_EXPR, DImode, operands[1], data_size,
 +				   NULL_RTX, 0);
 +      a0 = expand_binop (DImode, xor_optab, a0, crc_part, NULL_RTX, 1,
-+			 OPTAB_DIRECT);
++			 OPTAB_WIDEN);
 +    }
 +
 +  aarch64_emit_move (operands[0], gen_lowpart (crc_mode, a0));
@@ -596,7 +596,7 @@ index b4d11dff4ee..0b81bba1462 100644
 +      rtx shift = expand_shift (LSHIFT_EXPR, DImode, operands[1], data_size,
 +				NULL_RTX, 1);
 +      crc_part = expand_binop (DImode, xor_optab, crc_part, shift, NULL_RTX, 1,
-+			       OPTAB_DIRECT);
++			       OPTAB_WIDEN);
 +    }
 +  /* Zero upper bits beyond crc_size.  */
 +  res = expand_shift (RSHIFT_EXPR, DImode, crc_part, DImode_size - crc_size,
@@ -663,7 +663,7 @@ index b4d11dff4ee..0b81bba1462 100644
 +      rtx shift = expand_shift (RSHIFT_EXPR, DImode, crc, data_size,
 +				NULL_RTX, 1);
 +      res_high = expand_binop (DImode, xor_optab, res_high, shift, NULL_RTX, 1,
-+			       OPTAB_DIRECT);
++			       OPTAB_WIDEN);
 +    }
 +  emit_move_insn (operands[0], gen_lowpart (GET_MODE (operands[0]), res_high));
 +}
@@ -2892,7 +2892,7 @@ index cf87167ec0c..6156f1ffe1c 100644
 +			    log_crc_size, NULL_RTX, 0);
 +
 +      index = expand_binop (Pmode, add_optab, index, tab, NULL_RTX,
-+			    0, OPTAB_DIRECT);
++			    0, OPTAB_WIDEN);
 +
 +      /* crc_table[(crc >> (crc_bit_size - 8)) ^ data_8bit]  */
 +      rtx tab_el = validize_mem (gen_rtx_MEM (crc_mode, index));
@@ -2957,7 +2957,7 @@ index cf87167ec0c..6156f1ffe1c 100644
 +  rtx op2 = expand_and (GET_MODE (*op), *op, gen_int_mode (and2_value, GET_MODE (*op)),
 +			NULL_RTX);
 +  op2 = expand_shift (RSHIFT_EXPR, GET_MODE (*op), op2, shift_val, op2, 1);
-+  *op = expand_binop (GET_MODE (*op), ior_optab, op1, op2, *op, 0, OPTAB_DIRECT);
++  *op = expand_binop (GET_MODE (*op), ior_optab, op1, op2, *op, 0, OPTAB_WIDEN);
 +}
 +
 +/* Reflect 64-bit value for the 64-bit target.  */
