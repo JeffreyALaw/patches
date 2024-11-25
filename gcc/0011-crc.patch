@@ -46,7 +46,7 @@ index 427af741c6b..fa988d35064 100644
  DEF_FUNCTION_TYPE_4 (BT_FN_SIZE_CONST_PTR_SIZE_SIZE_FILEPTR,
  		     BT_SIZE, BT_CONST_PTR, BT_SIZE, BT_SIZE, BT_FILEPTR)
 diff --git a/gcc/builtins.cc b/gcc/builtins.cc
-index 029c561d466..a7817a9ffd3 100644
+index 029c561d466..73d08b03a39 100644
 --- a/gcc/builtins.cc
 +++ b/gcc/builtins.cc
 @@ -2207,7 +2207,28 @@ associated_internal_fn (built_in_function fn, tree return_type)
@@ -79,7 +79,7 @@ index 029c561d466..a7817a9ffd3 100644
      default:
        return IFN_LAST;
      }
-@@ -7745,6 +7766,37 @@ expand_speculation_safe_value (machine_mode mode, tree exp, rtx target,
+@@ -7745,6 +7766,35 @@ expand_speculation_safe_value (machine_mode mode, tree exp, rtx target,
    return targetm.speculation_safe_value (mode, target, val, failsafe);
  }
  
@@ -93,8 +93,6 @@ index 029c561d466..a7817a9ffd3 100644
 +  tree rhs1 = CALL_EXPR_ARG (exp, 0); // crc
 +  tree rhs2 = CALL_EXPR_ARG (exp, 1); // data
 +  tree rhs3 = CALL_EXPR_ARG (exp, 2); // polynomial
-+
-+  gcc_assert (word_mode >= crc_mode);
 +
 +  if (!target || mode == VOIDmode)
 +    target = gen_reg_rtx (crc_mode);
@@ -117,7 +115,7 @@ index 029c561d466..a7817a9ffd3 100644
  /* Expand an expression EXP that calls a built-in function,
     with result going to TARGET if that's convenient
     (and in mode MODE if that's convenient).
-@@ -8923,6 +8975,66 @@ expand_builtin (tree exp, rtx target, rtx subtarget, machine_mode mode,
+@@ -8923,6 +8973,66 @@ expand_builtin (tree exp, rtx target, rtx subtarget, machine_mode mode,
        mode = get_builtin_sync_mode (fcode - BUILT_IN_SPECULATION_SAFE_VALUE_1);
        return expand_speculation_safe_value (mode, exp, target, ignore);
  
