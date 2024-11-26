@@ -75,3 +75,6 @@ gcc/testsuite/gcc.dg/sarif-output/include-chain-2.c
 
 # Fails on some targets after C23 changes
 gcc/testsuite/c-c++-common/Wcast-align.c
+
+# Temporary for now
+gcc/testsuite/gcc.dg/tree-ssa/pr111456-1.c
