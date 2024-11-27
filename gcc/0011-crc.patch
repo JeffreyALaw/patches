@@ -17796,3 +17796,37 @@ index d550f288a0f..215536ebf4f 100644
  	if { [check_no_compiler_messages  riscv_ext_$ext assembly [string map [list DEF __riscv_$ext] {
  		#ifndef DEF
  		#error "Not DEF"
+diff --git a/gcc/gimple-crc-optimization.cc b/gcc/gimple-crc-optimization.cc
+index 9dee9be85d0..e98e7a8161a 100644
+--- a/gcc/gimple-crc-optimization.cc
++++ b/gcc/gimple-crc-optimization.cc
+@@ -1111,6 +1111,7 @@ bool crc_optimization::validate_crc_and_data ()
+ 				     loop_preheader_edge (m_crc_loop));
+   gcc_assert (m_crc_arg);
+ 
++#if 0
+   if (GET_MODE_SIZE (TYPE_MODE (TREE_TYPE (m_crc_arg))).to_constant ()
+       > GET_MODE_SIZE (word_mode))
+     {
+@@ -1118,6 +1119,7 @@ bool crc_optimization::validate_crc_and_data ()
+ 	fprintf (dump_file, "word_mode is less than CRC mode.\n");
+       return false;
+     }
++#endif
+ 
+   unsigned HOST_WIDE_INT
+   data_size = tree_to_uhwi (m_crc_loop->nb_iterations) + 1;
+diff --git a/gcc/internal-fn.cc b/gcc/internal-fn.cc
+index 1e59c14fddc..a71491d95f2 100644
+--- a/gcc/internal-fn.cc
++++ b/gcc/internal-fn.cc
+@@ -4069,7 +4069,9 @@ expand_crc_optab_fn (internal_fn fn, gcall *stmt, convert_optab optab)
+   tree data_type = TREE_TYPE (rhs2);
+ 
+   gcc_assert (TYPE_MODE (result_type) >= TYPE_MODE (data_type));
++#if 0
+   gcc_assert (word_mode >= TYPE_MODE (result_type));
++#endif
+ 
+   rtx dest = expand_expr (lhs, NULL_RTX, VOIDmode, EXPAND_WRITE);
+   rtx crc = expand_normal (rhs1);
