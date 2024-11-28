@@ -1,9 +1,3 @@
-commit 882e9d20135b960134f9da0a2dce5e1a21c26464
-Author: Jeff Law <jlaw@ventanamicro.com>
-Date:   Mon Nov 11 12:52:30 2024 -0700
-
-    Patch #3 and patch #4 from Mariam (riscv support)
-
 diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
 index 06ff698bfe7..23dc47eaaef 100644
 --- a/gcc/config/riscv/bitmanip.md
@@ -96,24 +90,24 @@ index 081659499a9..fae89893ecb 100644
  
  (define_mode_iterator ANYI_QUAD_TRUNC [SI (DI "TARGET_64BIT")])
 diff --git a/gcc/config/riscv/riscv-protos.h b/gcc/config/riscv/riscv-protos.h
-index 500b357f6eb..7d4e207f1a9 100644
+index 500b357f6eb..99ee6ef1e0d 100644
 --- a/gcc/config/riscv/riscv-protos.h
 +++ b/gcc/config/riscv/riscv-protos.h
 @@ -175,6 +175,9 @@ extern bool riscv_reg_frame_related (rtx);
  extern void riscv_split_sum_of_two_s12 (HOST_WIDE_INT, HOST_WIDE_INT *,
  					HOST_WIDE_INT *);
  extern bool riscv_vector_float_type_p (const_tree type);
-+extern void generate_reflecting_code_using_brev (rtx *, int);
++extern void generate_reflecting_code_using_brev (rtx *);
 +extern void expand_crc_using_clmul (scalar_mode, scalar_mode, rtx *);
 +extern void expand_reversed_crc_using_clmul (scalar_mode, scalar_mode, rtx *);
  
  /* Routines implemented in riscv-c.cc.  */
  void riscv_cpu_cpp_builtins (cpp_reader *);
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 8f5b43e2c24..ebb095ab471 100644
+index efdb1d33283..7a1724d6e73 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
-@@ -13495,6 +13495,161 @@ riscv_use_by_pieces_infrastructure_p (unsigned HOST_WIDE_INT size,
+@@ -13502,6 +13502,163 @@ riscv_use_by_pieces_infrastructure_p (unsigned HOST_WIDE_INT size,
    return default_use_by_pieces_infrastructure_p (size, alignment, op, speed_p);
  }
  
@@ -126,9 +120,11 @@ index 8f5b43e2c24..ebb095ab471 100644
 +   we will get the desired one: 1000 1111.  */
 +
 +void
-+generate_reflecting_code_using_brev (rtx *op, int shift_val)
++generate_reflecting_code_using_brev (rtx *op)
 +{
-+
++  machine_mode op_mode = GET_MODE (*op);
++  HOST_WIDE_INT shift_val = (BITS_PER_WORD
++			     - GET_MODE_BITSIZE (op_mode).to_constant ());
 +  riscv_expand_op (BSWAP, word_mode, *op, *op, *op);
 +  riscv_expand_op (LSHIFTRT, word_mode, *op, *op,
 +		   gen_int_mode (shift_val, word_mode));
@@ -291,10 +287,10 @@ index eb5cd6fbe82..3bf4987f015 100644
  
  (define_c_enum "unspecv" [
 diff --git a/gcc/expr.cc b/gcc/expr.cc
-index ef50f1115e8..a9fdf365a8b 100644
+index de25437660e..70f2ecec998 100644
 --- a/gcc/expr.cc
 +++ b/gcc/expr.cc
-@@ -14143,6 +14143,33 @@ int_expr_size (const_tree exp)
+@@ -14178,6 +14178,33 @@ int_expr_size (const_tree exp)
    return tree_to_shwi (size);
  }
  
@@ -383,112 +379,11 @@ index 82416bf366e..f69b61db9cc 100644
  
  /* Like ctz_hwi, except 0 when x == 0.  */
  
-diff --git a/gcc/testsuite/gcc.target/riscv/crc-builtin-zbc32.c b/gcc/testsuite/gcc.target/riscv/crc-builtin-zbc32.c
-new file mode 100644
-index 00000000000..20d7d25f60e
---- /dev/null
-+++ b/gcc/testsuite/gcc.target/riscv/crc-builtin-zbc32.c
-@@ -0,0 +1,21 @@
-+/* { dg-do compile { target { riscv32*-*-* } } } */
-+/* { dg-options "-march=rv32gc_zbc" } */
-+
-+#include <stdint-gcc.h>
-+
-+int8_t crc8_data8 ()
-+{
-+  return __builtin_crc8_data8 (0x34, 'a', 0x12);
-+}
-+
-+int16_t crc16_data8 ()
-+{
-+  return __builtin_crc16_data8 (0x1234, 'a', 0x1021);
-+}
-+
-+int16_t crc16_data16 ()
-+{
-+  return __builtin_crc16_data16 (0x1234, 0x3214, 0x1021);
-+}
-+
-+/* { dg-final { scan-assembler-times "clmul\t" 6 } } */
-\ No newline at end of file
-diff --git a/gcc/testsuite/gcc.target/riscv/crc-builtin-zbc64.c b/gcc/testsuite/gcc.target/riscv/crc-builtin-zbc64.c
-new file mode 100644
-index 00000000000..c9509d56d01
---- /dev/null
-+++ b/gcc/testsuite/gcc.target/riscv/crc-builtin-zbc64.c
-@@ -0,0 +1,66 @@
-+/* { dg-do compile { target { riscv64*-*-* } } } */
-+/* { dg-options "-march=rv64gc_zbc" } */
-+
-+#include <stdint-gcc.h>
-+
-+int8_t crc8_data8 ()
-+{
-+  return __builtin_crc8_data8 (0x34, 'a', 0x12);
-+}
-+
-+int16_t crc16_data8 ()
-+{
-+  return __builtin_crc16_data8 (0x1234, 'a', 0x1021);
-+}
-+
-+int16_t crc16_data16 ()
-+{
-+  return __builtin_crc16_data16 (0x1234, 0x3214, 0x1021);
-+}
-+
-+int32_t crc32_data8 ()
-+{
-+  return __builtin_crc32_data8 (0xffffffff, 0x32, 0x4002123);
-+}
-+
-+int32_t crc32_data16 ()
-+{
-+  return __builtin_crc32_data16 (0xffffffff, 0x3232, 0x4002123);
-+}
-+
-+int32_t crc32_data32 ()
-+{
-+  return __builtin_crc32_data32 (0xffffffff, 0x123546ff, 0x4002123);
-+}
-+
-+int8_t rev_crc8_data8 ()
-+{
-+  return __builtin_rev_crc8_data8 (0x34, 'a', 0x12);
-+}
-+
-+int16_t rev_crc16_data8 ()
-+{
-+  return __builtin_rev_crc16_data8 (0x1234, 'a', 0x1021);
-+}
-+
-+int16_t rev_crc16_data16 ()
-+{
-+  return __builtin_rev_crc16_data16 (0x1234, 0x3214, 0x1021);
-+}
-+
-+int32_t rev_crc32_data8 ()
-+{
-+  return __builtin_rev_crc32_data8 (0xffffffff, 0x32, 0x4002123);
-+}
-+
-+int32_t rev_crc32_data16 ()
-+{
-+  return __builtin_rev_crc32_data16 (0xffffffff, 0x3232, 0x4002123);
-+}
-+
-+int32_t rev_crc32_data32 ()
-+{
-+  return __builtin_rev_crc32_data32 (0xffffffff, 0x123546ff, 0x4002123);
-+}
-+/* { dg-final { scan-assembler-times "clmul\t" 18 } } */
-+/* { dg-final { scan-assembler-times "clmulh" 6 } } */
-\ No newline at end of file
 diff --git a/gcc/testsuite/lib/target-supports.exp b/gcc/testsuite/lib/target-supports.exp
-index d550f288a0f..215536ebf4f 100644
+index 4d3e3ac04d4..e4b764b3d49 100644
 --- a/gcc/testsuite/lib/target-supports.exp
 +++ b/gcc/testsuite/lib/target-supports.exp
-@@ -2066,6 +2066,39 @@ proc check_effective_target_riscv_zvbb { } {
+@@ -2065,6 +2065,39 @@ proc check_effective_target_riscv_zvbb { } {
      }]
  }
  
@@ -528,7 +423,7 @@ index d550f288a0f..215536ebf4f 100644
  # Return 1 if the target arch supports the XTheadVector extension, 0 otherwise.
  # Cache the result.
  
-@@ -2154,6 +2187,77 @@ proc check_effective_target_riscv_zvfh_ok { } {
+@@ -2153,6 +2186,77 @@ proc check_effective_target_riscv_zvfh_ok { } {
      return 0
  }
  
@@ -606,7 +501,7 @@ index d550f288a0f..215536ebf4f 100644
  # Return 1 if we can execute code when using dg-add-options riscv_zvbb
  
  proc check_effective_target_riscv_zvbb_ok { } {
-@@ -2207,7 +2311,7 @@ proc check_effective_target_riscv_v_misalign_ok { } {
+@@ -2206,7 +2310,7 @@ proc check_effective_target_riscv_v_misalign_ok { } {
  proc riscv_get_arch { } {
      set gcc_march ""
      # ??? do we neeed to add more extensions to the list below?
