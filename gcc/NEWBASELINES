@@ -3,3 +3,4 @@
 # reset.  
 hppa-linux-gnu
 riscv64-linux-gnu
+iq2000-elf
