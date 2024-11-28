@@ -1,0 +1,150 @@
+
+
+This patch adds optimization of the following patterns:
+
+  (zero_extend:M (subreg:N (not:O==M (X:Q==M)))) ->
+  (xor:M (zero_extend:M (subreg:N (X:M)), mask))
+  ... where the mask is GET_MODE_MASK (N).
+
+For the cases when X:M doesn't have any non-zero bits outside of mode N,
+(zero_extend:M (subreg:N (X:M)) could be simplified to just (X:M)
+and whole optimization will be:
+
+  (zero_extend:M (subreg:N (not:M (X:M)))) ->
+  (xor:M (X:M, mask))
+
+Patch targets to handle code patterns like:
+  not   a0,a0
+  andi  a0,a0,0xff
+to be optimized to:
+  xori  a0,a0,255
+
+	PR rtl-optimization/112398
+	PR rtl-optimization/117476
+
+gcc/ChangeLog:
+
+	* simplify-rtx.cc (simplify_context::simplify_unary_operation_1):
+	Simplify ZERO_EXTEND (SUBREG (NOT X)) to XOR (X, GET_MODE_MASK(SUBREG))
+	when X doesn't have any non-zero bits outside of SUBREG mode.
+
+gcc/testsuite/ChangeLog:
+
+	* gcc.target/riscv/pr112398.c: New test.
+	* gcc.dg/torture/pr117476-1.c: New test. From Zhendong Su.
+	* gcc.dg/torture/pr117476-2.c: New test. From Zdenek Sojka.
+
+Signed-off-by: Alexey Merzlyakov <alexey.merzlyakov@samsung.com>
+---
+ gcc/simplify-rtx.cc                       | 23 +++++++++++++++++++++++
+ gcc/testsuite/gcc.dg/torture/pr117476-1.c | 12 ++++++++++++
+ gcc/testsuite/gcc.dg/torture/pr117476-2.c | 20 ++++++++++++++++++++
+ gcc/testsuite/gcc.target/riscv/pr112398.c | 14 ++++++++++++++
+ 4 files changed, 69 insertions(+)
+ create mode 100644 gcc/testsuite/gcc.dg/torture/pr117476-1.c
+ create mode 100644 gcc/testsuite/gcc.dg/torture/pr117476-2.c
+ create mode 100644 gcc/testsuite/gcc.target/riscv/pr112398.c
+
+diff --git a/gcc/simplify-rtx.cc b/gcc/simplify-rtx.cc
+index 893c5f6e1ae..86b3f331928 100644
+--- a/gcc/simplify-rtx.cc
++++ b/gcc/simplify-rtx.cc
+@@ -1842,6 +1842,29 @@ simplify_context::simplify_unary_operation_1 (rtx_code code, machine_mode mode,
+ 	      & ~GET_MODE_MASK (op_mode)) == 0)
+ 	return SUBREG_REG (op);
+ 
++      /* Trying to optimize:
++	 (zero_extend:M (subreg:N (not:M (X:M)))) ->
++	 (xor:M (zero_extend:M (subreg:N (X:M)), mask))
++	 where the mask is GET_MODE_MASK (N).
++	 For the cases when X:M doesn't have any non-zero bits
++	 outside of mode N, (zero_extend:M (subreg:N (X:M))
++	 will be simplified to just (X:M)
++	 and whole optimization will be -> (xor:M (X:M, mask)).  */
++      if (partial_subreg_p (op)
++	  && GET_CODE (XEXP (op, 0)) == NOT
++	  && GET_MODE (XEXP (op, 0)) == mode
++	  && subreg_lowpart_p (op)
++	  && HWI_COMPUTABLE_MODE_P (mode)
++	  && is_a <scalar_int_mode> (GET_MODE (op), &op_mode)
++	  && (nonzero_bits (XEXP (XEXP (op, 0), 0), mode)
++	      & ~GET_MODE_MASK (op_mode)) == 0)
++      {
++	unsigned HOST_WIDE_INT mask = GET_MODE_MASK (op_mode);
++	return simplify_gen_binary (XOR, mode,
++				    XEXP (XEXP (op, 0), 0),
++				    gen_int_mode (mask, mode));
++      }
++
+ #if defined(POINTERS_EXTEND_UNSIGNED)
+       /* As we do not know which address space the pointer is referring to,
+ 	 we can do this only if the target does not support different pointer
+diff --git a/gcc/testsuite/gcc.dg/torture/pr117476-1.c b/gcc/testsuite/gcc.dg/torture/pr117476-1.c
+new file mode 100644
+index 00000000000..d2955624040
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/torture/pr117476-1.c
+@@ -0,0 +1,12 @@
++/* PR rtl-optimization/117476.
++   First case checking out of mode N non-zero bits. */
++/* { dg-do run } */
++
++int c = 0x1FF;
++
++int main()
++{
++  if (((c ^ 0xFF) & 0xFF) != 0)
++    __builtin_abort();
++  return 0;
++}
+diff --git a/gcc/testsuite/gcc.dg/torture/pr117476-2.c b/gcc/testsuite/gcc.dg/torture/pr117476-2.c
+new file mode 100644
+index 00000000000..1973ebc45e4
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/torture/pr117476-2.c
+@@ -0,0 +1,20 @@
++/* PR rtl-optimization/117476.
++   Second case checking skipping of TI mode. */
++/* { dg-do run } */
++/* { dg-require-effective-target int128 } */
++
++unsigned __int128 g;
++
++void
++foo ()
++{
++  g += __builtin_add_overflow_p (~g, 0, 0ul);
++}
++
++int
++main ()
++{
++  foo();
++  if (!g)
++    __builtin_abort();
++}
+diff --git a/gcc/testsuite/gcc.target/riscv/pr112398.c b/gcc/testsuite/gcc.target/riscv/pr112398.c
+new file mode 100644
+index 00000000000..624a665b76c
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr112398.c
+@@ -0,0 +1,14 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc -mabi=lp64d" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
++
++#include <stdint.h>
++
++uint8_t neg_u8 (const uint8_t src)
++{
++  return ~src;
++}
++
++/* { dg-final { scan-assembler-times "xori\t" 1 } } */
++/* { dg-final { scan-assembler-not "not\t" } } */
++/* { dg-final { scan-assembler-not "andi\t" } } */
+-- 
+2.34.1
+
+
+
