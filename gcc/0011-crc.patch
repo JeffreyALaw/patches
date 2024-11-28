@@ -1,9 +1,337 @@
-commit 22c1e204951b4d6cd63752141f8467a1a74fa297
-Author: Jeff Law <jlaw@ventanamicro.com>
-Date:   Mon Nov 11 12:48:34 2024 -0700
-
-    Patch #1 from Mariam
-
+diff --git a/gcc/builtin-types.def b/gcc/builtin-types.def
+index 427af741c6b..fa988d35064 100644
+--- a/gcc/builtin-types.def
++++ b/gcc/builtin-types.def
+@@ -840,6 +840,26 @@ DEF_FUNCTION_TYPE_3 (BT_FN_PTR_SIZE_SIZE_PTRMODE,
+ 		     BT_PTR, BT_SIZE, BT_SIZE, BT_PTRMODE)
+ DEF_FUNCTION_TYPE_3 (BT_FN_VOID_PTR_UINT8_PTRMODE, BT_VOID, BT_PTR, BT_UINT8,
+ 		     BT_PTRMODE)
++DEF_FUNCTION_TYPE_3 (BT_FN_UINT8_UINT8_UINT8_CONST_SIZE, BT_UINT8, BT_UINT8,
++		     BT_UINT8, BT_CONST_SIZE)
++DEF_FUNCTION_TYPE_3 (BT_FN_UINT16_UINT16_UINT8_CONST_SIZE, BT_UINT16, BT_UINT16,
++		     BT_UINT8, BT_CONST_SIZE)
++DEF_FUNCTION_TYPE_3 (BT_FN_UINT16_UINT16_UINT16_CONST_SIZE, BT_UINT16,
++		     BT_UINT16, BT_UINT16, BT_CONST_SIZE)
++DEF_FUNCTION_TYPE_3 (BT_FN_UINT32_UINT32_UINT8_CONST_SIZE, BT_UINT32, BT_UINT32,
++		     BT_UINT8, BT_CONST_SIZE)
++DEF_FUNCTION_TYPE_3 (BT_FN_UINT32_UINT32_UINT16_CONST_SIZE, BT_UINT32,
++		     BT_UINT32, BT_UINT16, BT_CONST_SIZE)
++DEF_FUNCTION_TYPE_3 (BT_FN_UINT32_UINT32_UINT32_CONST_SIZE, BT_UINT32,
++		     BT_UINT32, BT_UINT32, BT_CONST_SIZE)
++DEF_FUNCTION_TYPE_3 (BT_FN_UINT64_UINT64_UINT8_CONST_SIZE, BT_UINT64, BT_UINT64,
++		     BT_UINT8, BT_CONST_SIZE)
++DEF_FUNCTION_TYPE_3 (BT_FN_UINT64_UINT64_UINT16_CONST_SIZE, BT_UINT64,
++		     BT_UINT64, BT_UINT16, BT_CONST_SIZE)
++DEF_FUNCTION_TYPE_3 (BT_FN_UINT64_UINT64_UINT32_CONST_SIZE, BT_UINT64,
++		     BT_UINT64, BT_UINT32, BT_CONST_SIZE)
++DEF_FUNCTION_TYPE_3 (BT_FN_UINT64_UINT64_UINT64_CONST_SIZE, BT_UINT64,
++		     BT_UINT64, BT_UINT64, BT_CONST_SIZE)
+ 
+ DEF_FUNCTION_TYPE_4 (BT_FN_SIZE_CONST_PTR_SIZE_SIZE_FILEPTR,
+ 		     BT_SIZE, BT_CONST_PTR, BT_SIZE, BT_SIZE, BT_FILEPTR)
+diff --git a/gcc/builtins.cc b/gcc/builtins.cc
+index 029c561d466..73d08b03a39 100644
+--- a/gcc/builtins.cc
++++ b/gcc/builtins.cc
+@@ -2207,7 +2207,28 @@ associated_internal_fn (built_in_function fn, tree return_type)
+       if (REAL_MODE_FORMAT (TYPE_MODE (return_type))->b == 2)
+ 	return IFN_LDEXP;
+       return IFN_LAST;
+-
++    case BUILT_IN_CRC8_DATA8:
++    case BUILT_IN_CRC16_DATA8:
++    case BUILT_IN_CRC16_DATA16:
++    case BUILT_IN_CRC32_DATA8:
++    case BUILT_IN_CRC32_DATA16:
++    case BUILT_IN_CRC32_DATA32:
++    case BUILT_IN_CRC64_DATA8:
++    case BUILT_IN_CRC64_DATA16:
++    case BUILT_IN_CRC64_DATA32:
++    case BUILT_IN_CRC64_DATA64:
++      return IFN_CRC;
++    case BUILT_IN_REV_CRC8_DATA8:
++    case BUILT_IN_REV_CRC16_DATA8:
++    case BUILT_IN_REV_CRC16_DATA16:
++    case BUILT_IN_REV_CRC32_DATA8:
++    case BUILT_IN_REV_CRC32_DATA16:
++    case BUILT_IN_REV_CRC32_DATA32:
++    case BUILT_IN_REV_CRC64_DATA8:
++    case BUILT_IN_REV_CRC64_DATA16:
++    case BUILT_IN_REV_CRC64_DATA32:
++    case BUILT_IN_REV_CRC64_DATA64:
++      return IFN_CRC_REV;
+     default:
+       return IFN_LAST;
+     }
+@@ -7745,6 +7766,35 @@ expand_speculation_safe_value (machine_mode mode, tree exp, rtx target,
+   return targetm.speculation_safe_value (mode, target, val, failsafe);
+ }
+ 
++/* Expand CRC* or REV_CRC* built-ins.  */
++
++rtx
++expand_builtin_crc_table_based (internal_fn fn, scalar_mode crc_mode,
++				scalar_mode data_mode, machine_mode mode,
++				tree exp, rtx target)
++{
++  tree rhs1 = CALL_EXPR_ARG (exp, 0); // crc
++  tree rhs2 = CALL_EXPR_ARG (exp, 1); // data
++  tree rhs3 = CALL_EXPR_ARG (exp, 2); // polynomial
++
++  if (!target || mode == VOIDmode)
++    target = gen_reg_rtx (crc_mode);
++
++  rtx op1 = expand_normal (rhs1);
++  rtx op2 = expand_normal (rhs2);
++  gcc_assert (TREE_CODE (rhs3) == INTEGER_CST);
++  rtx op3 = gen_int_mode (TREE_INT_CST_LOW (rhs3), crc_mode);
++
++  if (fn == IFN_CRC)
++    expand_crc_table_based (target, op1, op2, op3, data_mode);
++  else
++    /* If it's IFN_CRC_REV generate bit-reversed CRC.  */
++    expand_reversed_crc_table_based (target, op1, op2, op3,
++				     data_mode,
++				     generate_reflecting_code_standard);
++  return target;
++}
++
+ /* Expand an expression EXP that calls a built-in function,
+    with result going to TARGET if that's convenient
+    (and in mode MODE if that's convenient).
+@@ -8923,6 +8973,66 @@ expand_builtin (tree exp, rtx target, rtx subtarget, machine_mode mode,
+       mode = get_builtin_sync_mode (fcode - BUILT_IN_SPECULATION_SAFE_VALUE_1);
+       return expand_speculation_safe_value (mode, exp, target, ignore);
+ 
++    case BUILT_IN_CRC8_DATA8:
++      return expand_builtin_crc_table_based (IFN_CRC, QImode, QImode, mode,
++					       exp, target);
++    case BUILT_IN_CRC16_DATA8:
++      return expand_builtin_crc_table_based (IFN_CRC, HImode, QImode, mode,
++					       exp, target);
++    case BUILT_IN_CRC16_DATA16:
++      return expand_builtin_crc_table_based (IFN_CRC, HImode, HImode, mode,
++					       exp, target);
++    case BUILT_IN_CRC32_DATA8:
++      return expand_builtin_crc_table_based (IFN_CRC, SImode, QImode, mode,
++					       exp, target);
++    case BUILT_IN_CRC32_DATA16:
++      return expand_builtin_crc_table_based (IFN_CRC, SImode, HImode, mode,
++					       exp, target);
++    case BUILT_IN_CRC32_DATA32:
++      return expand_builtin_crc_table_based (IFN_CRC, SImode, SImode, mode,
++					       exp, target);
++    case BUILT_IN_CRC64_DATA8:
++      return expand_builtin_crc_table_based (IFN_CRC, DImode, QImode, mode,
++					       exp, target);
++    case BUILT_IN_CRC64_DATA16:
++      return expand_builtin_crc_table_based (IFN_CRC, DImode, HImode, mode,
++					       exp, target);
++    case BUILT_IN_CRC64_DATA32:
++      return expand_builtin_crc_table_based (IFN_CRC, DImode, SImode, mode,
++					       exp, target);
++    case BUILT_IN_CRC64_DATA64:
++      return expand_builtin_crc_table_based (IFN_CRC, DImode, DImode, mode,
++					       exp, target);
++    case BUILT_IN_REV_CRC8_DATA8:
++      return expand_builtin_crc_table_based (IFN_CRC_REV, QImode, QImode,
++					       mode, exp, target);
++    case BUILT_IN_REV_CRC16_DATA8:
++      return expand_builtin_crc_table_based (IFN_CRC_REV, HImode, QImode,
++					       mode, exp, target);
++    case BUILT_IN_REV_CRC16_DATA16:
++      return expand_builtin_crc_table_based (IFN_CRC_REV, HImode, HImode,
++					       mode, exp, target);
++    case BUILT_IN_REV_CRC32_DATA8:
++      return expand_builtin_crc_table_based (IFN_CRC_REV, SImode, QImode,
++					       mode, exp, target);
++    case BUILT_IN_REV_CRC32_DATA16:
++      return expand_builtin_crc_table_based (IFN_CRC_REV, SImode, HImode,
++					       mode, exp, target);
++    case BUILT_IN_REV_CRC32_DATA32:
++      return expand_builtin_crc_table_based (IFN_CRC_REV, SImode, SImode,
++					       mode, exp, target);
++    case BUILT_IN_REV_CRC64_DATA8:
++      return expand_builtin_crc_table_based (IFN_CRC_REV, DImode, QImode,
++					       mode, exp, target);
++    case BUILT_IN_REV_CRC64_DATA16:
++      return expand_builtin_crc_table_based (IFN_CRC_REV, DImode, HImode,
++					       mode, exp, target);
++    case BUILT_IN_REV_CRC64_DATA32:
++      return expand_builtin_crc_table_based (IFN_CRC_REV, DImode, SImode,
++					       mode, exp, target);
++    case BUILT_IN_REV_CRC64_DATA64:
++      return expand_builtin_crc_table_based (IFN_CRC_REV, DImode, DImode,
++					       mode, exp, target);
+     default:	/* just do library call, if unknown builtin */
+       break;
+     }
+diff --git a/gcc/builtins.def b/gcc/builtins.def
+index fac6bc9ad16..d47ac281e99 100644
+--- a/gcc/builtins.def
++++ b/gcc/builtins.def
+@@ -720,7 +720,26 @@ DEF_EXT_LIB_BUILTIN    (BUILT_IN_Y1L, "y1l", BT_FN_LONGDOUBLE_LONGDOUBLE, ATTR_M
+ DEF_EXT_LIB_BUILTIN    (BUILT_IN_YN, "yn", BT_FN_DOUBLE_INT_DOUBLE, ATTR_MATHFN_FPROUNDING_ERRNO)
+ DEF_EXT_LIB_BUILTIN    (BUILT_IN_YNF, "ynf", BT_FN_FLOAT_INT_FLOAT, ATTR_MATHFN_FPROUNDING_ERRNO)
+ DEF_EXT_LIB_BUILTIN    (BUILT_IN_YNL, "ynl", BT_FN_LONGDOUBLE_INT_LONGDOUBLE, ATTR_MATHFN_FPROUNDING_ERRNO)
+-
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC8_DATA8, "crc8_data8", BT_FN_UINT8_UINT8_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC16_DATA8, "crc16_data8", BT_FN_UINT16_UINT16_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC16_DATA16, "crc16_data16", BT_FN_UINT16_UINT16_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC32_DATA8, "crc32_data8", BT_FN_UINT32_UINT32_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC32_DATA16, "crc32_data16", BT_FN_UINT32_UINT32_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC32_DATA32, "crc32_data32", BT_FN_UINT32_UINT32_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC64_DATA8, "crc64_data8", BT_FN_UINT64_UINT64_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC64_DATA16, "crc64_data16", BT_FN_UINT64_UINT64_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC64_DATA32, "crc64_data32", BT_FN_UINT64_UINT64_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_CRC64_DATA64, "crc64_data64", BT_FN_UINT64_UINT64_UINT64_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC8_DATA8, "rev_crc8_data8", BT_FN_UINT8_UINT8_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC16_DATA8, "rev_crc16_data8", BT_FN_UINT16_UINT16_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC16_DATA16, "rev_crc16_data16", BT_FN_UINT16_UINT16_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC32_DATA8, "rev_crc32_data8", BT_FN_UINT32_UINT32_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC32_DATA16, "rev_crc32_data16", BT_FN_UINT32_UINT32_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC32_DATA32, "rev_crc32_data32", BT_FN_UINT32_UINT32_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC64_DATA8, "rev_crc64_data8", BT_FN_UINT64_UINT64_UINT8_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC64_DATA16, "rev_crc64_data16", BT_FN_UINT64_UINT64_UINT16_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC64_DATA32, "rev_crc64_data32", BT_FN_UINT64_UINT64_UINT32_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
++DEF_GCC_BUILTIN	       (BUILT_IN_REV_CRC64_DATA64, "rev_crc64_data64", BT_FN_UINT64_UINT64_UINT64_CONST_SIZE, ATTR_CONST_NOTHROW_LEAF_LIST)
+ /* Category: _Complex math builtins.  */
+ DEF_C99_COMPL_BUILTIN        (BUILT_IN_CABS, "cabs", BT_FN_DOUBLE_COMPLEX_DOUBLE, ATTR_MATHFN_FPROUNDING)
+ DEF_C99_COMPL_BUILTIN        (BUILT_IN_CABSF, "cabsf", BT_FN_FLOAT_COMPLEX_FLOAT, ATTR_MATHFN_FPROUNDING)
+diff --git a/gcc/builtins.h b/gcc/builtins.h
+index 8d93f75a9a4..0094b9dcc3f 100644
+--- a/gcc/builtins.h
++++ b/gcc/builtins.h
+@@ -133,6 +133,9 @@ extern void expand_builtin_trap (void);
+ extern void expand_ifn_atomic_bit_test_and (gcall *);
+ extern void expand_ifn_atomic_compare_exchange (gcall *);
+ extern void expand_ifn_atomic_op_fetch_cmp_0 (gcall *);
++extern rtx expand_builtin_crc_table_based (internal_fn, scalar_mode,
++					   scalar_mode, machine_mode,
++					   tree, rtx);
+ extern rtx expand_builtin (tree, rtx, rtx, machine_mode, int);
+ extern enum built_in_function builtin_mathfn_code (const_tree);
+ extern tree fold_builtin_expect (location_t, tree, tree, tree, tree);
+diff --git a/gcc/doc/extend.texi b/gcc/doc/extend.texi
+index 59644606261..b550cee74f8 100644
+--- a/gcc/doc/extend.texi
++++ b/gcc/doc/extend.texi
+@@ -16282,6 +16282,115 @@ Returns the openacc gang, worker or vector size depending on whether @var{x} is
+ 0, 1 or 2.
+ @enddefbuiltin
+ 
++@defbuiltin{uint8_t __builtin_rev_crc8_data8 (uint8_t @var{crc}, uint8_t @var{data}, uint8_t @var{poly})}
++Returns the calculated 8-bit bit-reversed CRC using the initial CRC (8-bit),
++data (8-bit) and the polynomial (8-bit).
++@var{crc} is the initial CRC, @var{data} is the data and
++@var{poly} is the polynomial without leading 1.
++Table-based or clmul-based CRC may be used for the
++calculation, depending on the target architecture.
++@enddefbuiltin
++
++@defbuiltin{uint16_t __builtin_rev_crc16_data16 (uint16_t @var{crc}, uint16_t @var{data}, uint16_t @var{poly})}
++Similar to @code{__builtin_rev_crc8_data8}, except the argument and return types
++are 16-bit.
++@enddefbuiltin
++
++@defbuiltin{uint16_t __builtin_rev_crc16_data8 (uint16_t @var{crc}, uint8_t @var{data}, uint16_t @var{poly})}
++Similar to @code{__builtin_rev_crc16_data16}, except the @var{data} argument
++type is 8-bit.
++@enddefbuiltin
++
++@defbuiltin{uint32_t __builtin_rev_crc32_data32 (uint32_t @var{crc}, uint32_t @var{data}, uint32_t @var{poly})}
++Similar to @code{__builtin_rev_crc8_data8}, except the argument and return types
++are 32-bit and for the CRC calculation may be also used crc* machine instruction
++depending on the target and the polynomial.
++@enddefbuiltin
++
++@defbuiltin{uint32_t __builtin_rev_crc32_data8 (uint32_t @var{crc}, uint8_t @var{data}, uint32_t @var{poly})}
++Similar to @code{__builtin_rev_crc32_data32}, except the @var{data} argument
++type is 8-bit.
++@enddefbuiltin
++
++@defbuiltin{uint32_t __builtin_rev_crc32_data16 (uint32_t @var{crc}, uint16_t @var{data}, uint32_t @var{poly})}
++Similar to @code{__builtin_rev_crc32_data32}, except the @var{data} argument
++type is 16-bit.
++@enddefbuiltin
++
++@defbuiltin{uint64_t __builtin_rev_crc64_data64 (uint64_t @var{crc}, uint64_t @var{data}, uint64_t @var{poly})}
++Similar to @code{__builtin_rev_crc8_data8}, except the argument and return types
++are 64-bit.
++@enddefbuiltin
++
++@defbuiltin{uint64_t __builtin_rev_crc64_data8 (uint64_t @var{crc}, uint8_t @var{data}, uint64_t @var{poly})}
++Similar to @code{__builtin_rev_crc64_data64}, except the @var{data} argument type
++is 8-bit.
++@enddefbuiltin
++
++@defbuiltin{uint64_t __builtin_rev_crc64_data16 (uint64_t @var{crc}, uint16_t @var{data}, uint64_t @var{poly})}
++Similar to @code{__builtin_rev_crc64_data64}, except the @var{data} argument type
++is 16-bit.
++@enddefbuiltin
++
++@defbuiltin{uint64_t __builtin_rev_crc64_data32 (uint64_t @var{crc}, uint32_t @var{data}, uint64_t @var{poly})}
++Similar to @code{__builtin_rev_crc64_data64}, except the @var{data} argument type
++is 32-bit.
++@enddefbuiltin
++
++@defbuiltin{uint8_t __builtin_crc8_data8 (uint8_t @var{crc}, uint8_t @var{data}, uint8_t @var{poly})}
++Returns the calculated 8-bit bit-forward CRC using the initial CRC (8-bit),
++data (8-bit) and the polynomial (8-bit).
++@var{crc} is the initial CRC, @var{data} is the data and
++@var{poly} is the polynomial without leading 1.
++Table-based or clmul-based CRC may be used for the
++calculation, depending on the target architecture.
++@enddefbuiltin
++
++@defbuiltin{uint16_t __builtin_crc16_data16 (uint16_t @var{crc}, uint16_t @var{data}, uint16_t @var{poly})}
++Similar to @code{__builtin_crc8_data8}, except the argument and return types
++are 16-bit.
++@enddefbuiltin
++
++@defbuiltin{uint16_t __builtin_crc16_data8 (uint16_t @var{crc}, uint8_t @var{data}, uint16_t @var{poly})}
++Similar to @code{__builtin_crc16_data16}, except the @var{data} argument type
++is 8-bit.
++@enddefbuiltin
++
++@defbuiltin{uint32_t __builtin_crc32_data32 (uint32_t @var{crc}, uint32_t @var{data}, uint32_t @var{poly})}
++Similar to @code{__builtin_crc8_data8}, except the argument and return types
++are 32-bit.
++@enddefbuiltin
++
++@defbuiltin{uint32_t __builtin_crc32_data8 (uint32_t @var{crc}, uint8_t @var{data}, uint32_t @var{poly})}
++Similar to @code{__builtin_crc32_data32}, except the @var{data} argument type
++is 8-bit.
++@enddefbuiltin
++
++@defbuiltin{uint32_t __builtin_crc32_data16 (uint32_t @var{crc}, uint16_t @var{data}, uint32_t @var{poly})}
++Similar to @code{__builtin_crc32_data32}, except the @var{data} argument type
++is 16-bit.
++@enddefbuiltin
++
++@defbuiltin{uint64_t __builtin_crc64_data64 (uint64_t @var{crc}, uint64_t @var{data}, uint64_t @var{poly})}
++Similar to @code{__builtin_crc8_data8}, except the argument and return types
++are 64-bit.
++@enddefbuiltin
++
++@defbuiltin{uint64_t __builtin_crc64_data8 (uint64_t @var{crc}, uint8_t @var{data}, uint64_t @var{poly})}
++Similar to @code{__builtin_crc64_data64}, except the @var{data} argument type
++is 8-bit.
++@enddefbuiltin
++
++@defbuiltin{uint64_t __builtin_crc64_data16 (uint64_t @var{crc}, uint16_t @var{data}, uint64_t @var{poly})}
++Similar to @code{__builtin_crc64_data64}, except the @var{data} argument type
++is 16-bit.
++@enddefbuiltin
++
++@defbuiltin{uint64_t __builtin_crc64_data32 (uint64_t @var{crc}, uint32_t @var{data}, uint64_t @var{poly})}
++Similar to @code{__builtin_crc64_data64}, except the @var{data} argument type
++is 32-bit.
++@enddefbuiltin
++
+ @node Target Builtins
+ @section Built-in Functions Specific to Particular Target Machines
+ 
 diff --git a/gcc/doc/md.texi b/gcc/doc/md.texi
 index c8f1424a042..c4a48811ae8 100644
 --- a/gcc/doc/md.texi
@@ -525,3 +853,226 @@ index 75f39d85ada..5d75b1379ac 100644
  OPTAB_CD(vec_load_lanes_optab, "vec_load_lanes$a$b")
  OPTAB_CD(vec_store_lanes_optab, "vec_store_lanes$a$b")
  OPTAB_CD(vec_mask_load_lanes_optab, "vec_mask_load_lanes$a$b")
+diff --git a/gcc/testsuite/gcc.dg/crc-builtin-rev-target32.c b/gcc/testsuite/gcc.dg/crc-builtin-rev-target32.c
+new file mode 100644
+index 00000000000..c95704450cb
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/crc-builtin-rev-target32.c
+@@ -0,0 +1,38 @@
++/* { dg-do compile } */
++/* { dg-require-effective-target int32plus } */
++
++#include <stdint-gcc.h>
++
++int8_t rev_crc8_data8 ()
++{
++  return __builtin_rev_crc8_data8 (0x34, 'a', 0x12);
++}
++
++int16_t rev_crc16_data8 ()
++{
++  return __builtin_rev_crc16_data8 (0x1234, 'a', 0x1021);
++}
++
++int16_t rev_crc16_data16 ()
++{
++  return __builtin_rev_crc16_data16 (0x1234, 0x3214, 0x1021);
++}
++
++int32_t rev_crc32_data8 ()
++{
++  return __builtin_rev_crc32_data8 (0xffffffff, 0x32, 0x4002123);
++}
++
++int32_t rev_crc32_data16 ()
++{
++  return __builtin_rev_crc32_data16 (0xffffffff, 0x3232, 0x4002123);
++}
++
++int32_t rev_crc32_data32 ()
++{
++  return __builtin_rev_crc32_data32 (0xffffffff, 0x123546ff, 0x4002123);
++}
++
++/* { dg-final { scan-assembler "crc_table_for_crc_8_polynomial_0x12|mul"} } */
++/* { dg-final { scan-assembler "crc_table_for_crc_16_polynomial_0x1021|mul"} } */
++/* { dg-final { scan-assembler "crc_table_for_crc_32_polynomial_0x4002123|mul"} } */
+diff --git a/gcc/testsuite/gcc.dg/crc-builtin-rev-target64.c b/gcc/testsuite/gcc.dg/crc-builtin-rev-target64.c
+new file mode 100644
+index 00000000000..74b511ccfbe
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/crc-builtin-rev-target64.c
+@@ -0,0 +1,62 @@
++/* { dg-do compile { target lp64 } } */
++/* { dg-require-effective-target int32plus } */
++
++#include <stdint-gcc.h>
++
++int8_t rev_crc8_data8 ()
++{
++  return __builtin_rev_crc8_data8 (0x34, 'a', 0x12);
++}
++
++int16_t rev_crc16_data8 ()
++{
++  return __builtin_rev_crc16_data8 (0x1234, 'a', 0x1021);
++}
++
++int16_t rev_crc16_data16 ()
++{
++  return __builtin_rev_crc16_data16 (0x1234, 0x3214, 0x1021);
++}
++
++int32_t rev_crc32_data8 ()
++{
++  return __builtin_rev_crc32_data8 (0xffffffff, 0x32, 0x4002123);
++}
++
++int32_t rev_crc32_data16 ()
++{
++  return __builtin_rev_crc32_data16 (0xffffffff, 0x3232, 0x4002123);
++}
++
++int32_t rev_crc32_data32 ()
++{
++  return __builtin_rev_crc32_data32 (0xffffffff, 0x123546ff, 0x4002123);
++}
++
++int64_t rev_crc64_data8 ()
++{
++  return __builtin_rev_crc64_data8 (0xffffffffffffffff, 0x32,
++				    0x40021234002123);
++}
++
++int64_t rev_crc64_data16 ()
++{
++  return __builtin_rev_crc64_data16 (0xffffffffffffffff, 0x3232,
++				     0x40021234002123);
++}
++
++int64_t rev_crc64_data32 ()
++{
++  return __builtin_rev_crc64_data32 (0xffffffffffffffff, 0x123546ff,
++				     0x40021234002123);
++}
++
++int64_t rev_crc64_data64 ()
++{
++  return __builtin_rev_crc64_data64 (0xffffffffffffffff, 0x123546ff123546ff,
++				     0x40021234002123);
++}
++
++/* { dg-final { scan-assembler "crc_table_for_crc_8_polynomial_0x12|mul" } } */
++/* { dg-final { scan-assembler "crc_table_for_crc_16_polynomial_0x1021|mul" } } */
++/* { dg-final { scan-assembler "crc_table_for_crc_32_polynomial_0x4002123|mul" } } */
+diff --git a/gcc/testsuite/gcc.dg/crc-builtin-target32.c b/gcc/testsuite/gcc.dg/crc-builtin-target32.c
+new file mode 100644
+index 00000000000..f19ee74a071
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/crc-builtin-target32.c
+@@ -0,0 +1,38 @@
++/* { dg-do compile } */
++/* { dg-require-effective-target int32plus } */
++
++#include <stdint-gcc.h>
++
++int8_t crc8_data8 ()
++{
++  return __builtin_crc8_data8 (0x34, 'a', 0x12);
++}
++
++int16_t crc16_data8 ()
++{
++  return __builtin_crc16_data8 (0x1234, 'a', 0x1021);
++}
++
++int16_t crc16_data16 ()
++{
++  return __builtin_crc16_data16 (0x1234, 0x3214, 0x1021);
++}
++
++int32_t crc32_data8 ()
++{
++  return __builtin_crc32_data8 (0xffffffff, 0x32, 0x4002123);
++}
++
++int32_t crc32_data16 ()
++{
++  return __builtin_crc32_data16 (0xffffffff, 0x3232, 0x4002123);
++}
++
++int32_t crc32_data32 ()
++{
++  return __builtin_crc32_data32 (0xffffffff, 0x123546ff, 0x4002123);
++}
++
++/* { dg-final { scan-assembler "crc_table_for_crc_8_polynomial_0x12|mul" } } */
++/* { dg-final { scan-assembler "crc_table_for_crc_16_polynomial_0x1021|mul"} } */
++/* { dg-final { scan-assembler "crc_table_for_crc_32_polynomial_0x4002123|mul"} } */
+diff --git a/gcc/testsuite/gcc.dg/crc-builtin-target64.c b/gcc/testsuite/gcc.dg/crc-builtin-target64.c
+new file mode 100644
+index 00000000000..1af403b4328
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/crc-builtin-target64.c
+@@ -0,0 +1,61 @@
++/* { dg-do compile { target lp64 } } */
++/* { dg-require-effective-target int32plus } */
++
++#include <stdint-gcc.h>
++
++int8_t crc8_data8 ()
++{
++  return __builtin_crc8_data8 (0x34, 'a', 0x12);
++}
++
++int16_t crc16_data8 ()
++{
++  return __builtin_crc16_data8 (0x1234, 'a', 0x1021);
++}
++
++int16_t crc16_data16 ()
++{
++  return __builtin_crc16_data16 (0x1234, 0x3214, 0x1021);
++}
++
++int32_t crc32_data8 ()
++{
++  return __builtin_crc32_data8 (0xffffffff, 0x32, 0x4002123);
++}
++
++int32_t crc32_data16 ()
++{
++  return __builtin_crc32_data16 (0xffffffff, 0x3232, 0x4002123);
++}
++
++int32_t crc32_data32 ()
++{
++  return __builtin_crc32_data32 (0xffffffff, 0x123546ff, 0x4002123);
++}
++
++int64_t crc64_data8 ()
++{
++  return __builtin_crc64_data8 (0xffffffffffffffff, 0x32, 0x40021234002123);
++}
++
++int64_t crc64_data16 ()
++{
++  return __builtin_crc64_data16 (0xffffffffffffffff, 0x3232, 0x40021234002123);
++}
++
++int64_t crc64_data32 ()
++{
++  return __builtin_crc64_data32 (0xffffffffffffffff, 0x123546ff,
++				 0x40021234002123);
++}
++
++int64_t crc64_data64 ()
++{
++  return __builtin_crc64_data64 (0xffffffffffffffff, 0x123546ff123546ff,
++				 0x40021234002123);
++}
++
++/* { dg-final { scan-assembler "crc_table_for_crc_8_polynomial_0x12|mul" } } */
++/* { dg-final { scan-assembler "crc_table_for_crc_16_polynomial_0x1021|mul" } } */
++/* { dg-final { scan-assembler "crc_table_for_crc_32_polynomial_0x4002123|mul" } } */
++/* { dg-final { scan-assembler "crc_table_for_crc_64_polynomial_0x40021234002123|mul" } } */
