@@ -510,3 +510,103 @@ index 4d3e3ac04d4..e4b764b3d49 100644
  	if { [check_no_compiler_messages  riscv_ext_$ext assembly [string map [list DEF __riscv_$ext] {
  		#ifndef DEF
  		#error "Not DEF"
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-builtin-zbc32.c b/gcc/testsuite/gcc.target/riscv/crc-builtin-zbc32.c
+new file mode 100644
+index 00000000000..20d7d25f60e
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-builtin-zbc32.c
+@@ -0,0 +1,21 @@
++/* { dg-do compile { target { riscv32*-*-* } } } */
++/* { dg-options "-march=rv32gc_zbc" } */
++
++#include <stdint-gcc.h>
++
++int8_t crc8_data8 ()
++{
++  return __builtin_crc8_data8 (0x34, 'a', 0x12);
++}
++
++int16_t crc16_data8 ()
++{
++  return __builtin_crc16_data8 (0x1234, 'a', 0x1021);
++}
++
++int16_t crc16_data16 ()
++{
++  return __builtin_crc16_data16 (0x1234, 0x3214, 0x1021);
++}
++
++/* { dg-final { scan-assembler-times "clmul\t" 6 } } */
+\ No newline at end of file
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-builtin-zbc64.c b/gcc/testsuite/gcc.target/riscv/crc-builtin-zbc64.c
+new file mode 100644
+index 00000000000..c9509d56d01
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-builtin-zbc64.c
+@@ -0,0 +1,66 @@
++/* { dg-do compile { target { riscv64*-*-* } } } */
++/* { dg-options "-march=rv64gc_zbc" } */
++
++#include <stdint-gcc.h>
++
++int8_t crc8_data8 ()
++{
++  return __builtin_crc8_data8 (0x34, 'a', 0x12);
++}
++
++int16_t crc16_data8 ()
++{
++  return __builtin_crc16_data8 (0x1234, 'a', 0x1021);
++}
++
++int16_t crc16_data16 ()
++{
++  return __builtin_crc16_data16 (0x1234, 0x3214, 0x1021);
++}
++
++int32_t crc32_data8 ()
++{
++  return __builtin_crc32_data8 (0xffffffff, 0x32, 0x4002123);
++}
++
++int32_t crc32_data16 ()
++{
++  return __builtin_crc32_data16 (0xffffffff, 0x3232, 0x4002123);
++}
++
++int32_t crc32_data32 ()
++{
++  return __builtin_crc32_data32 (0xffffffff, 0x123546ff, 0x4002123);
++}
++
++int8_t rev_crc8_data8 ()
++{
++  return __builtin_rev_crc8_data8 (0x34, 'a', 0x12);
++}
++
++int16_t rev_crc16_data8 ()
++{
++  return __builtin_rev_crc16_data8 (0x1234, 'a', 0x1021);
++}
++
++int16_t rev_crc16_data16 ()
++{
++  return __builtin_rev_crc16_data16 (0x1234, 0x3214, 0x1021);
++}
++
++int32_t rev_crc32_data8 ()
++{
++  return __builtin_rev_crc32_data8 (0xffffffff, 0x32, 0x4002123);
++}
++
++int32_t rev_crc32_data16 ()
++{
++  return __builtin_rev_crc32_data16 (0xffffffff, 0x3232, 0x4002123);
++}
++
++int32_t rev_crc32_data32 ()
++{
++  return __builtin_rev_crc32_data32 (0xffffffff, 0x123546ff, 0x4002123);
++}
++/* { dg-final { scan-assembler-times "clmul\t" 18 } } */
++/* { dg-final { scan-assembler-times "clmulh" 6 } } */
