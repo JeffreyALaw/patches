@@ -1,9 +1,9 @@
 gcc/
-	* config.gcc (riscv*): Add riscv_vect-permconst.h to extra_objs.
-	* config/riscv/t-riscv: Add rules for riscv-vect-permconst.o
-	* config/riscv/riscv-passes.def: Add pass_vector_permconst after cse2.
-	* config/riscv/;riscv-protos.h: Add prototype for new pass.
-	* config/riscv/riscv-vect-permconst.cc: New file.
+       * config.gcc (riscv*): Add riscv_vect-permconst.h to extra_objs.
+       * config/riscv/t-riscv: Add rules for riscv-vect-permconst.o
+       * config/riscv/riscv-passes.def: Add pass_vector_permconst after cse2.
+       * config/riscv/;riscv-protos.h: Add prototype for new pass.
+       * config/riscv/riscv-vect-permconst.cc: New file.
 
 commit 7a62350fbddc903e554457b07f72300536134618
 Author: Jeff Law <jlaw@ventanamicro.com>
@@ -16,17 +16,18 @@ Date:   Wed Sep 25 16:27:32 2024 -0600
     pool individually.  But we can trivially derive the second from the first
     with vadd.vi <dest>, <src>, -1 which saves a memory reference.
 
+
 diff --git a/gcc/config.gcc b/gcc/config.gcc
-index a3566f5c77d..1365cb507a4 100644
+index afa78453197..4071affbb92 100644
 --- a/gcc/config.gcc
 +++ b/gcc/config.gcc
-@@ -549,7 +549,7 @@ pru-*-*)
+@@ -551,7 +551,7 @@ pru-*-*)
  riscv*)
  	cpu_type=riscv
  	extra_objs="riscv-builtins.o riscv-c.o riscv-sr.o riscv-shorten-memrefs.o riscv-selftests.o riscv-string.o"
 -	extra_objs="${extra_objs} riscv-v.o riscv-vsetvl.o riscv-vector-costs.o riscv-avlprop.o"
-+	extra_objs="${extra_objs} riscv-v.o riscv-vsetvl.o riscv-vector-costs.o riscv-avlprop.o riscv-vect-permconst.o"
- 	extra_objs="${extra_objs} riscv-vector-builtins.o riscv-vector-builtins-shapes.o riscv-vector-builtins-bases.o"
++	extra_objs="${extra_objs} riscv-v.o riscv-vsetvl.o riscv-vector-costs.o riscv-avlprop.o riscv-vect-permconst.o""
+ 	extra_objs="${extra_objs} riscv-vector-builtins.o riscv-vector-builtins-shapes.o riscv-vector-builtins-bases.o sifive-vector-builtins-bases.o"
  	extra_objs="${extra_objs} thead.o riscv-target-attr.o"
  	d_target_objs="riscv-d.o"
 diff --git a/gcc/config/riscv/riscv-passes.def b/gcc/config/riscv/riscv-passes.def
@@ -39,10 +40,10 @@ index 32b79a78f0b..045ce59ad7d 100644
  INSERT_PASS_BEFORE (pass_fast_rtl_dce, 1, pass_vsetvl);
 +INSERT_PASS_AFTER (pass_cse2, 1, pass_vector_permconst);
 diff --git a/gcc/config/riscv/riscv-protos.h b/gcc/config/riscv/riscv-protos.h
-index 860db094e18..29687cfd453 100644
+index 99ee6ef1e0d..31e13ca2427 100644
 --- a/gcc/config/riscv/riscv-protos.h
 +++ b/gcc/config/riscv/riscv-protos.h
-@@ -196,6 +196,7 @@ extern bool riscv_hard_regno_rename_ok (unsigned, unsigned);
+@@ -199,6 +199,7 @@ extern bool riscv_hard_regno_rename_ok (unsigned, unsigned);
  rtl_opt_pass * make_pass_shorten_memrefs (gcc::context *ctxt);
  rtl_opt_pass * make_pass_avlprop (gcc::context *ctxt);
  rtl_opt_pass * make_pass_vsetvl (gcc::context *ctxt);
@@ -52,7 +53,7 @@ index 860db094e18..29687cfd453 100644
  extern bool riscv_expand_block_compare (rtx, rtx, rtx, rtx);
 diff --git a/gcc/config/riscv/riscv-vect-permconst.cc b/gcc/config/riscv/riscv-vect-permconst.cc
 new file mode 100644
-index 00000000000..f4ea2f525da
+index 00000000000..7d5b67c10b5
 --- /dev/null
 +++ b/gcc/config/riscv/riscv-vect-permconst.cc
 @@ -0,0 +1,299 @@
@@ -356,10 +357,10 @@ index 00000000000..f4ea2f525da
 +  return new vector_permconst (ctxt);
 +}
 diff --git a/gcc/config/riscv/t-riscv b/gcc/config/riscv/t-riscv
-index 38494320d8b..2a64c28fe49 100644
+index bc67d8719fa..8dfdb9af8a3 100644
 --- a/gcc/config/riscv/t-riscv
 +++ b/gcc/config/riscv/t-riscv
-@@ -86,6 +86,13 @@ riscv-avlprop.o: $(srcdir)/config/riscv/riscv-avlprop.cc \
+@@ -104,6 +104,13 @@ riscv-avlprop.o: $(srcdir)/config/riscv/riscv-avlprop.cc \
  	$(COMPILER) -c $(ALL_COMPILERFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) \
  		$(srcdir)/config/riscv/riscv-avlprop.cc
  
