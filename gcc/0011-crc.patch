@@ -13217,3 +13217,17 @@ index f8bb875cf9f..ce463629194 100644
  extern gimple_opt_pass *make_pass_vectorize (gcc::context *ctxt);
  extern gimple_opt_pass *make_pass_simduid_cleanup (gcc::context *ctxt);
  extern gimple_opt_pass *make_pass_slp_vectorize (gcc::context *ctxt);
+diff --cc gcc/testsuite/gcc.target/riscv/crc-builtin-zbc64.c
+index d99a78daaa9,c9509d56d01..00000000000
+--- a/gcc/testsuite/gcc.target/riscv/crc-builtin-zbc64.c
++++ b/gcc/testsuite/gcc.target/riscv/crc-builtin-zbc64.c
+@@@ -63,4 -63,4 +63,8 @@@ int32_t rev_crc32_data32 (
+    return __builtin_rev_crc32_data32 (0xffffffff, 0x123546ff, 0x4002123);
+  }
+  /* { dg-final { scan-assembler-times "clmul\t" 18 } } */
+ -/* { dg-final { scan-assembler-times "clmulh" 6 } } */
+++<<<<<<< HEAD
+ +/* { dg-final { scan-assembler-times "clmulh" 6 } } */
+++=======
+++/* { dg-final { scan-assembler-times "clmulh" 6 } } */
+++>>>>>>> 882e9d20135 (Patch #3 and patch #4 from Mariam (riscv support))
