@@ -13217,17 +13217,645 @@ index f8bb875cf9f..ce463629194 100644
  extern gimple_opt_pass *make_pass_vectorize (gcc::context *ctxt);
  extern gimple_opt_pass *make_pass_simduid_cleanup (gcc::context *ctxt);
  extern gimple_opt_pass *make_pass_slp_vectorize (gcc::context *ctxt);
-diff --cc gcc/testsuite/gcc.target/riscv/crc-builtin-zbc64.c
-index d99a78daaa9,c9509d56d01..00000000000
---- a/gcc/testsuite/gcc.target/riscv/crc-builtin-zbc64.c
-+++ b/gcc/testsuite/gcc.target/riscv/crc-builtin-zbc64.c
-@@@ -63,4 -63,4 +63,8 @@@ int32_t rev_crc32_data32 (
-    return __builtin_rev_crc32_data32 (0xffffffff, 0x123546ff, 0x4002123);
-  }
-  /* { dg-final { scan-assembler-times "clmul\t" 18 } } */
- -/* { dg-final { scan-assembler-times "clmulh" 6 } } */
-++<<<<<<< HEAD
- +/* { dg-final { scan-assembler-times "clmulh" 6 } } */
-++=======
-++/* { dg-final { scan-assembler-times "clmulh" 6 } } */
-++>>>>>>> 882e9d20135 (Patch #3 and patch #4 from Mariam (riscv support))
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-1-zbc.c b/gcc/testsuite/gcc.target/riscv/crc-1-zbc.c
+new file mode 100644
+index 00000000000..46ef0b27a81
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-1-zbc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbc } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish  -fdisable-tree-phiopt2 -fdisable-tree-phiopt3" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-1.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+\ No newline at end of file
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-1-zbkc.c b/gcc/testsuite/gcc.target/riscv/crc-1-zbkc.c
+new file mode 100644
+index 00000000000..ff7b0068de2
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-1-zbkc.c
+@@ -0,0 +1,10 @@
++/* { dg-do run { target riscv_zbkc } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish  -fdisable-tree-phiopt2 -fdisable-tree-phiopt3" } */
++
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-1.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+\ No newline at end of file
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-10-zbc.c b/gcc/testsuite/gcc.target/riscv/crc-10-zbc.c
+new file mode 100644
+index 00000000000..768080e618c
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-10-zbc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbc } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-10.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-10-zbkc.c b/gcc/testsuite/gcc.target/riscv/crc-10-zbkc.c
+new file mode 100644
+index 00000000000..1d9c07b2e2d
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-10-zbkc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbkc } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-10.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-12-zbc.c b/gcc/testsuite/gcc.target/riscv/crc-12-zbc.c
+new file mode 100644
+index 00000000000..3e3e43e90e4
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-12-zbc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbc } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish  -fdisable-tree-phiopt2 -fdisable-tree-phiopt3" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-12.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-12-zbkc.c b/gcc/testsuite/gcc.target/riscv/crc-12-zbkc.c
+new file mode 100644
+index 00000000000..a877274ebf1
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-12-zbkc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbkc } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish  -fdisable-tree-phiopt2 -fdisable-tree-phiopt3" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-12.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-13-zbc.c b/gcc/testsuite/gcc.target/riscv/crc-13-zbc.c
+new file mode 100644
+index 00000000000..3be593c6ae8
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-13-zbc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbc } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-13.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-13-zbkc.c b/gcc/testsuite/gcc.target/riscv/crc-13-zbkc.c
+new file mode 100644
+index 00000000000..f5011507bff
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-13-zbkc.c
+@@ -0,0 +1,10 @@
++/* { dg-do run { target riscv_zbkc } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish " } */
++
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-13.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-14-zbc.c b/gcc/testsuite/gcc.target/riscv/crc-14-zbc.c
+new file mode 100644
+index 00000000000..454a6161d8e
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-14-zbc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbc } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-14.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-14-zbkc.c b/gcc/testsuite/gcc.target/riscv/crc-14-zbkc.c
+new file mode 100644
+index 00000000000..d9af892457a
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-14-zbkc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbkc } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-14.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-17-zbc.c b/gcc/testsuite/gcc.target/riscv/crc-17-zbc.c
+new file mode 100644
+index 00000000000..5f601232bf9
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-17-zbc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbc } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-17.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-17-zbkc.c b/gcc/testsuite/gcc.target/riscv/crc-17-zbkc.c
+new file mode 100644
+index 00000000000..685fc35b9fd
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-17-zbkc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbkc } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-17.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-18-zbc.c b/gcc/testsuite/gcc.target/riscv/crc-18-zbc.c
+new file mode 100644
+index 00000000000..5de366d4742
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-18-zbc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbc } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-18.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-18-zbkc.c b/gcc/testsuite/gcc.target/riscv/crc-18-zbkc.c
+new file mode 100644
+index 00000000000..4842d5cae20
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-18-zbkc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbkc } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-18.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-21-rv64-zbc.c b/gcc/testsuite/gcc.target/riscv/crc-21-rv64-zbc.c
+new file mode 100644
+index 00000000000..c7725d36dfe
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-21-rv64-zbc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target { riscv64*-*-* && riscv_zbc } } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish  -march=rv64gc_zbc" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-21.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-21-rv64-zbkc.c b/gcc/testsuite/gcc.target/riscv/crc-21-rv64-zbkc.c
+new file mode 100644
+index 00000000000..6851c6a54cd
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-21-rv64-zbkc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target { riscv64*-*-* && riscv_zbc } } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish  -march=rv64gc_zbkc" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-21.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-22-zbc.c b/gcc/testsuite/gcc.target/riscv/crc-22-zbc.c
+new file mode 100644
+index 00000000000..d5b272aa853
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-22-zbc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbc } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-22.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-22-zbkb.c b/gcc/testsuite/gcc.target/riscv/crc-22-zbkb.c
+new file mode 100644
+index 00000000000..b5055d7983c
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-22-zbkb.c
+@@ -0,0 +1,8 @@
++/* { dg-do run { target riscv_zbkb } } */
++/* { dg-options "-fdump-tree-crc-details" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-Oz" "-Og" "-flto"} } */
++
++#include "../../gcc.dg/torture/crc-22.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-22-zbkc.c b/gcc/testsuite/gcc.target/riscv/crc-22-zbkc.c
+new file mode 100644
+index 00000000000..b866c9391e1
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-22-zbkc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbkc } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-22.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-23-zbc.c b/gcc/testsuite/gcc.target/riscv/crc-23-zbc.c
+new file mode 100644
+index 00000000000..8258fd6f070
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-23-zbc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbc } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-23.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-23-zbkc.c b/gcc/testsuite/gcc.target/riscv/crc-23-zbkc.c
+new file mode 100644
+index 00000000000..ab2a31d44ef
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-23-zbkc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbkc } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-23.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-4-zbc.c b/gcc/testsuite/gcc.target/riscv/crc-4-zbc.c
+new file mode 100644
+index 00000000000..f81f303ea37
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-4-zbc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbc } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-4.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-4-zbkb.c b/gcc/testsuite/gcc.target/riscv/crc-4-zbkb.c
+new file mode 100644
+index 00000000000..fadfffaab7b
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-4-zbkb.c
+@@ -0,0 +1,8 @@
++/* { dg-do run { target riscv_zbkb } } */
++/* { dg-options "-fdump-tree-crc-details" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-Oz" "-Og" "-flto"} } */
++
++#include "../../gcc.dg/torture/crc-4.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-4-zbkc.c b/gcc/testsuite/gcc.target/riscv/crc-4-zbkc.c
+new file mode 100644
+index 00000000000..337f70b9e24
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-4-zbkc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbkc } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-4.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-5-zbc.c b/gcc/testsuite/gcc.target/riscv/crc-5-zbc.c
+new file mode 100644
+index 00000000000..d82114d11fe
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-5-zbc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbc } } */
++/* { dg-options "-w -fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-5.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+\ No newline at end of file
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-5-zbkb.c b/gcc/testsuite/gcc.target/riscv/crc-5-zbkb.c
+new file mode 100644
+index 00000000000..c7441164557
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-5-zbkb.c
+@@ -0,0 +1,8 @@
++/* { dg-do run { target riscv_zbkb } } */
++/* { dg-options "-w -fdump-tree-crc-details" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-Oz" "-Og" "-flto"} } */
++
++#include "../../gcc.dg/torture/crc-5.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
+\ No newline at end of file
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-5-zbkc.c b/gcc/testsuite/gcc.target/riscv/crc-5-zbkc.c
+new file mode 100644
+index 00000000000..6ac165c00a2
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-5-zbkc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbkc } } */
++/* { dg-options "-w -fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-5.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+\ No newline at end of file
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-6-zbc.c b/gcc/testsuite/gcc.target/riscv/crc-6-zbc.c
+new file mode 100644
+index 00000000000..ac9271dc46d
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-6-zbc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbc } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-O3" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-6.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+\ No newline at end of file
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-6-zbkc.c b/gcc/testsuite/gcc.target/riscv/crc-6-zbkc.c
+new file mode 100644
+index 00000000000..8f5d7c376cb
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-6-zbkc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbkc } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-O3" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-6.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+\ No newline at end of file
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-7-zbc.c b/gcc/testsuite/gcc.target/riscv/crc-7-zbc.c
+new file mode 100644
+index 00000000000..7d406a72966
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-7-zbc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbc } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-7.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-7-zbkc.c b/gcc/testsuite/gcc.target/riscv/crc-7-zbkc.c
+new file mode 100644
+index 00000000000..70c78c3db77
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-7-zbkc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbkc } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-7.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-8-zbc.c b/gcc/testsuite/gcc.target/riscv/crc-8-zbc.c
+new file mode 100644
+index 00000000000..c660e9ce896
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-8-zbc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbc } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-8.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-8-zbkb.c b/gcc/testsuite/gcc.target/riscv/crc-8-zbkb.c
+new file mode 100644
+index 00000000000..52a771dc652
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-8-zbkb.c
+@@ -0,0 +1,8 @@
++/* { dg-do run { target riscv_zbkb } } */
++/* { dg-options "-fdump-tree-crc-details" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-Oz" "-Og" "-flto"} } */
++
++#include "../../gcc.dg/torture/crc-8.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-8-zbkc.c b/gcc/testsuite/gcc.target/riscv/crc-8-zbkc.c
+new file mode 100644
+index 00000000000..23553618248
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-8-zbkc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbkc } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-8.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-9-zbc.c b/gcc/testsuite/gcc.target/riscv/crc-9-zbc.c
+new file mode 100644
+index 00000000000..8e74af289a8
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-9-zbc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbc } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-O3" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-9.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-9-zbkc.c b/gcc/testsuite/gcc.target/riscv/crc-9-zbkc.c
+new file mode 100644
+index 00000000000..654edb06f6f
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-9-zbkc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbkc } } */
++/* { dg-options "-fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-O3" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-9.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-CCIT-data16-zbc.c b/gcc/testsuite/gcc.target/riscv/crc-CCIT-data16-zbc.c
+new file mode 100644
+index 00000000000..be15dea2bc8
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-CCIT-data16-zbc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbc } } */
++/* { dg-options "-w -fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-CCIT-data16.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+\ No newline at end of file
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-CCIT-data16-zbkc.c b/gcc/testsuite/gcc.target/riscv/crc-CCIT-data16-zbkc.c
+new file mode 100644
+index 00000000000..a8f76b5f73c
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-CCIT-data16-zbkc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbkc } } */
++/* { dg-options "-w -fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-CCIT-data16.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+\ No newline at end of file
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-CCIT-data8-zbc.c b/gcc/testsuite/gcc.target/riscv/crc-CCIT-data8-zbc.c
+new file mode 100644
+index 00000000000..da5e1f370e2
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-CCIT-data8-zbc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbc } } */
++/* { dg-options "-w -fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-CCIT-data8.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+\ No newline at end of file
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-CCIT-data8-zbkc.c b/gcc/testsuite/gcc.target/riscv/crc-CCIT-data8-zbkc.c
+new file mode 100644
+index 00000000000..3bdbb015aa8
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-CCIT-data8-zbkc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbkc } } */
++/* { dg-options "-w -fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-CCIT-data8.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+\ No newline at end of file
+* Unmerged path gcc/testsuite/gcc.target/riscv/crc-builtin-zbc64.c
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-coremark-16bitdata-zbc.c b/gcc/testsuite/gcc.target/riscv/crc-coremark-16bitdata-zbc.c
+new file mode 100644
+index 00000000000..307456da0ba
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-coremark-16bitdata-zbc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbc } } */
++/* { dg-options "-w -fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-coremark16-data16.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+\ No newline at end of file
+diff --git a/gcc/testsuite/gcc.target/riscv/crc-coremark-16bitdata-zbkc.c b/gcc/testsuite/gcc.target/riscv/crc-coremark-16bitdata-zbkc.c
+new file mode 100644
+index 00000000000..b31411e20ff
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/crc-coremark-16bitdata-zbkc.c
+@@ -0,0 +1,9 @@
++/* { dg-do run { target riscv_zbkc } } */
++/* { dg-options "-w -fdump-tree-crc -fdump-rtl-dfinish " } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++#include "../../gcc.dg/torture/crc-coremark16-data16.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
+\ No newline at end of file
