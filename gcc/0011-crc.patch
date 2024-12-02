@@ -1,0 +1,68 @@
+diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-1.c b/gcc/testsuite/gcc.dg/torture/crc-side-instr-1.c
+similarity index 100%
+rename from gcc/testsuite/gcc.dg/crc-side-instr-1.c
+rename to gcc/testsuite/gcc.dg/torture/crc-side-instr-1.c
+diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-10.c b/gcc/testsuite/gcc.dg/torture/crc-side-instr-10.c
+similarity index 100%
+rename from gcc/testsuite/gcc.dg/crc-side-instr-10.c
+rename to gcc/testsuite/gcc.dg/torture/crc-side-instr-10.c
+diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-11.c b/gcc/testsuite/gcc.dg/torture/crc-side-instr-11.c
+similarity index 100%
+rename from gcc/testsuite/gcc.dg/crc-side-instr-11.c
+rename to gcc/testsuite/gcc.dg/torture/crc-side-instr-11.c
+diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-12.c b/gcc/testsuite/gcc.dg/torture/crc-side-instr-12.c
+similarity index 100%
+rename from gcc/testsuite/gcc.dg/crc-side-instr-12.c
+rename to gcc/testsuite/gcc.dg/torture/crc-side-instr-12.c
+diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-13.c b/gcc/testsuite/gcc.dg/torture/crc-side-instr-13.c
+similarity index 100%
+rename from gcc/testsuite/gcc.dg/crc-side-instr-13.c
+rename to gcc/testsuite/gcc.dg/torture/crc-side-instr-13.c
+diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-14.c b/gcc/testsuite/gcc.dg/torture/crc-side-instr-14.c
+similarity index 100%
+rename from gcc/testsuite/gcc.dg/crc-side-instr-14.c
+rename to gcc/testsuite/gcc.dg/torture/crc-side-instr-14.c
+diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-15.c b/gcc/testsuite/gcc.dg/torture/crc-side-instr-15.c
+similarity index 100%
+rename from gcc/testsuite/gcc.dg/crc-side-instr-15.c
+rename to gcc/testsuite/gcc.dg/torture/crc-side-instr-15.c
+diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-16.c b/gcc/testsuite/gcc.dg/torture/crc-side-instr-16.c
+similarity index 100%
+rename from gcc/testsuite/gcc.dg/crc-side-instr-16.c
+rename to gcc/testsuite/gcc.dg/torture/crc-side-instr-16.c
+diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-17.c b/gcc/testsuite/gcc.dg/torture/crc-side-instr-17.c
+similarity index 100%
+rename from gcc/testsuite/gcc.dg/crc-side-instr-17.c
+rename to gcc/testsuite/gcc.dg/torture/crc-side-instr-17.c
+diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-2.c b/gcc/testsuite/gcc.dg/torture/crc-side-instr-2.c
+similarity index 100%
+rename from gcc/testsuite/gcc.dg/crc-side-instr-2.c
+rename to gcc/testsuite/gcc.dg/torture/crc-side-instr-2.c
+diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-3.c b/gcc/testsuite/gcc.dg/torture/crc-side-instr-3.c
+similarity index 100%
+rename from gcc/testsuite/gcc.dg/crc-side-instr-3.c
+rename to gcc/testsuite/gcc.dg/torture/crc-side-instr-3.c
+diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-4.c b/gcc/testsuite/gcc.dg/torture/crc-side-instr-4.c
+similarity index 100%
+rename from gcc/testsuite/gcc.dg/crc-side-instr-4.c
+rename to gcc/testsuite/gcc.dg/torture/crc-side-instr-4.c
+diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-5.c b/gcc/testsuite/gcc.dg/torture/crc-side-instr-5.c
+similarity index 100%
+rename from gcc/testsuite/gcc.dg/crc-side-instr-5.c
+rename to gcc/testsuite/gcc.dg/torture/crc-side-instr-5.c
+diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-6.c b/gcc/testsuite/gcc.dg/torture/crc-side-instr-6.c
+similarity index 100%
+rename from gcc/testsuite/gcc.dg/crc-side-instr-6.c
+rename to gcc/testsuite/gcc.dg/torture/crc-side-instr-6.c
+diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-7.c b/gcc/testsuite/gcc.dg/torture/crc-side-instr-7.c
+similarity index 100%
+rename from gcc/testsuite/gcc.dg/crc-side-instr-7.c
+rename to gcc/testsuite/gcc.dg/torture/crc-side-instr-7.c
+diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-8.c b/gcc/testsuite/gcc.dg/torture/crc-side-instr-8.c
+similarity index 100%
+rename from gcc/testsuite/gcc.dg/crc-side-instr-8.c
+rename to gcc/testsuite/gcc.dg/torture/crc-side-instr-8.c
+diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-9.c b/gcc/testsuite/gcc.dg/torture/crc-side-instr-9.c
+similarity index 100%
+rename from gcc/testsuite/gcc.dg/crc-side-instr-9.c
+rename to gcc/testsuite/gcc.dg/torture/crc-side-instr-9.c
