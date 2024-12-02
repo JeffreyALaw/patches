@@ -1,3 +1,23 @@
+diff --git a/gcc/testsuite/gcc.dg/crc-linux-1.c b/gcc/testsuite/gcc.dg/torture/crc-linux-1.c
+similarity index 100%
+rename from gcc/testsuite/gcc.dg/crc-linux-1.c
+rename to gcc/testsuite/gcc.dg/torture/crc-linux-1.c
+diff --git a/gcc/testsuite/gcc.dg/crc-linux-2.c b/gcc/testsuite/gcc.dg/torture/crc-linux-2.c
+similarity index 100%
+rename from gcc/testsuite/gcc.dg/crc-linux-2.c
+rename to gcc/testsuite/gcc.dg/torture/crc-linux-2.c
+diff --git a/gcc/testsuite/gcc.dg/crc-linux-4.c b/gcc/testsuite/gcc.dg/torture/crc-linux-4.c
+similarity index 100%
+rename from gcc/testsuite/gcc.dg/crc-linux-4.c
+rename to gcc/testsuite/gcc.dg/torture/crc-linux-4.c
+diff --git a/gcc/testsuite/gcc.dg/crc-linux-5.c b/gcc/testsuite/gcc.dg/torture/crc-linux-5.c
+similarity index 100%
+rename from gcc/testsuite/gcc.dg/crc-linux-5.c
+rename to gcc/testsuite/gcc.dg/torture/crc-linux-5.c
+diff --git a/gcc/testsuite/gcc.dg/crc-not-crc-15.c b/gcc/testsuite/gcc.dg/torture/crc-not-crc-15.c
+similarity index 100%
+rename from gcc/testsuite/gcc.dg/crc-not-crc-15.c
+rename to gcc/testsuite/gcc.dg/torture/crc-not-crc-15.c
 diff --git a/gcc/testsuite/gcc.dg/crc-side-instr-1.c b/gcc/testsuite/gcc.dg/torture/crc-side-instr-1.c
 similarity index 100%
 rename from gcc/testsuite/gcc.dg/crc-side-instr-1.c
