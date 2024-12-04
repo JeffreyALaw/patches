@@ -1,6 +1,6 @@
 # This file contains the job names that need fresh baselines.  In general it
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
-sh4-linux-gnu
 ppc64le-linux-gnu
 mips64el-linux-gnuabi64
+sh4-linux-gnu
