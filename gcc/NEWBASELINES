@@ -4,3 +4,5 @@
 ppc64le-linux-gnu
 mips64el-linux-gnuabi64
 sh4-linux-gnu
+riscv32-elf
+riscv64-elf
