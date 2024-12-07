@@ -681,107 +681,6 @@ index 00000000000..c68ee27c123
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 +/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
 \ No newline at end of file
-diff --git a/gcc/testsuite/gcc.target/riscv/crc-builtin-zbc32.c b/gcc/testsuite/gcc.target/riscv/crc-builtin-zbc32.c
-new file mode 100644
-index 00000000000..20d7d25f60e
---- /dev/null
-+++ b/gcc/testsuite/gcc.target/riscv/crc-builtin-zbc32.c
-@@ -0,0 +1,21 @@
-+/* { dg-do compile { target { riscv32*-*-* } } } */
-+/* { dg-options "-march=rv32gc_zbc" } */
-+
-+#include <stdint-gcc.h>
-+
-+int8_t crc8_data8 ()
-+{
-+  return __builtin_crc8_data8 (0x34, 'a', 0x12);
-+}
-+
-+int16_t crc16_data8 ()
-+{
-+  return __builtin_crc16_data8 (0x1234, 'a', 0x1021);
-+}
-+
-+int16_t crc16_data16 ()
-+{
-+  return __builtin_crc16_data16 (0x1234, 0x3214, 0x1021);
-+}
-+
-+/* { dg-final { scan-assembler-times "clmul\t" 6 } } */
-\ No newline at end of file
-diff --git a/gcc/testsuite/gcc.target/riscv/crc-builtin-zbc64.c b/gcc/testsuite/gcc.target/riscv/crc-builtin-zbc64.c
-new file mode 100644
-index 00000000000..c9509d56d01
---- /dev/null
-+++ b/gcc/testsuite/gcc.target/riscv/crc-builtin-zbc64.c
-@@ -0,0 +1,66 @@
-+/* { dg-do compile { target { riscv64*-*-* } } } */
-+/* { dg-options "-march=rv64gc_zbc" } */
-+
-+#include <stdint-gcc.h>
-+
-+int8_t crc8_data8 ()
-+{
-+  return __builtin_crc8_data8 (0x34, 'a', 0x12);
-+}
-+
-+int16_t crc16_data8 ()
-+{
-+  return __builtin_crc16_data8 (0x1234, 'a', 0x1021);
-+}
-+
-+int16_t crc16_data16 ()
-+{
-+  return __builtin_crc16_data16 (0x1234, 0x3214, 0x1021);
-+}
-+
-+int32_t crc32_data8 ()
-+{
-+  return __builtin_crc32_data8 (0xffffffff, 0x32, 0x4002123);
-+}
-+
-+int32_t crc32_data16 ()
-+{
-+  return __builtin_crc32_data16 (0xffffffff, 0x3232, 0x4002123);
-+}
-+
-+int32_t crc32_data32 ()
-+{
-+  return __builtin_crc32_data32 (0xffffffff, 0x123546ff, 0x4002123);
-+}
-+
-+int8_t rev_crc8_data8 ()
-+{
-+  return __builtin_rev_crc8_data8 (0x34, 'a', 0x12);
-+}
-+
-+int16_t rev_crc16_data8 ()
-+{
-+  return __builtin_rev_crc16_data8 (0x1234, 'a', 0x1021);
-+}
-+
-+int16_t rev_crc16_data16 ()
-+{
-+  return __builtin_rev_crc16_data16 (0x1234, 0x3214, 0x1021);
-+}
-+
-+int32_t rev_crc32_data8 ()
-+{
-+  return __builtin_rev_crc32_data8 (0xffffffff, 0x32, 0x4002123);
-+}
-+
-+int32_t rev_crc32_data16 ()
-+{
-+  return __builtin_rev_crc32_data16 (0xffffffff, 0x3232, 0x4002123);
-+}
-+
-+int32_t rev_crc32_data32 ()
-+{
-+  return __builtin_rev_crc32_data32 (0xffffffff, 0x123546ff, 0x4002123);
-+}
-+/* { dg-final { scan-assembler-times "clmul\t" 18 } } */
-+/* { dg-final { scan-assembler-times "clmulh" 6 } } */
-\ No newline at end of file
 diff --git a/gcc/testsuite/gcc.target/riscv/crc-coremark-16bitdata-zbc.c b/gcc/testsuite/gcc.target/riscv/crc-coremark-16bitdata-zbc.c
 new file mode 100644
 index 00000000000..20d1ad42813
@@ -818,30 +717,6 @@ index 00000000000..4da3e8b2543
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 +/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
 \ No newline at end of file
-diff --git a/gcc/timevar.def b/gcc/timevar.def
-index 115b2039253..13310032b8a 100644
---- a/gcc/timevar.def
-+++ b/gcc/timevar.def
-@@ -314,6 +314,7 @@ DEFTIMEVAR (TV_INITIALIZE_RTL        , "initialize rtl")
- DEFTIMEVAR (TV_GIMPLE_LADDRESS       , "address lowering")
- DEFTIMEVAR (TV_TREE_LOOP_IFCVT       , "tree loop if-conversion")
- DEFTIMEVAR (TV_WARN_ACCESS           , "access analysis")
-+DEFTIMEVAR (TV_GIMPLE_CRC_OPTIMIZATION, "crc optimization")
- DEFTIMEVAR (TV_EXT_DCE               , "ext dce")
- 
- /* Everything else in rest_of_compilation not included above.  */
-diff --git a/gcc/tree-pass.h b/gcc/tree-pass.h
-index a928cbe4557..7c778f600b5 100644
---- a/gcc/tree-pass.h
-+++ b/gcc/tree-pass.h
-@@ -388,6 +388,7 @@ extern gimple_opt_pass *make_pass_graphite_transforms (gcc::context *ctxt);
- extern gimple_opt_pass *make_pass_if_conversion (gcc::context *ctxt);
- extern gimple_opt_pass *make_pass_if_to_switch (gcc::context *ctxt);
- extern gimple_opt_pass *make_pass_loop_distribution (gcc::context *ctxt);
-+extern gimple_opt_pass *make_pass_crc_optimization (gcc::context *ctxt);
- extern gimple_opt_pass *make_pass_vectorize (gcc::context *ctxt);
- extern gimple_opt_pass *make_pass_simduid_cleanup (gcc::context *ctxt);
- extern gimple_opt_pass *make_pass_slp_vectorize (gcc::context *ctxt);
 diff --git a/gcc/testsuite/gcc.target/riscv/crc-1-zbc.c b/gcc/testsuite/gcc.target/riscv/crc-1-zbc.c
 index c16224d045a..46ef0b27a81 100644
 --- a/gcc/testsuite/gcc.target/riscv/crc-1-zbc.c
@@ -1507,12 +1382,3 @@ index d550f288a0f..215536ebf4f 100644
  # Return 1 if we can execute code when using dg-add-options riscv_zvbb
  
  proc check_effective_target_riscv_zvbb_ok { } {
-@@ -2207,7 +2311,7 @@ proc check_effective_target_riscv_v_misalign_ok { } {
- proc riscv_get_arch { } {
-     set gcc_march ""
-     # ??? do we neeed to add more extensions to the list below?
--    foreach ext { i e m a f d q c b v zicsr zifencei zfh zba zbb zbc zbs zvbb zvfh ztso zaamo zalrsc zabha zacas } {
-+    foreach ext { i e m a f d q c b v zicsr zifencei zfh zba zbb zbc zbkb zbkc zbs zvbb zvfh ztso zaamo zalrsc zabha zacas } {
- 	if { [check_no_compiler_messages  riscv_ext_$ext assembly [string map [list DEF __riscv_$ext] {
- 		#ifndef DEF
- 		#error "Not DEF"
