@@ -672,11 +672,10 @@ diff --git a/gcc/testsuite/lib/target-supports.exp b/gcc/testsuite/lib/target-su
 index f2edbef92da..3c855a15434 100644
 --- a/gcc/testsuite/lib/target-supports.exp
 +++ b/gcc/testsuite/lib/target-supports.exp
-@@ -2189,6 +2189,7 @@ proc check_effective_target_riscv_zvfh_ok { } {
+@@ -2189,6 +2189,6 @@ proc check_effective_target_riscv_zvfh_ok { } {
  # Return 1 if we can execute code when using dg-add-options riscv_zbc
  
  proc check_effective_target_riscv_zbc_ok { } {
-+    return 1
      # If the target already supports zbc without any added options,
      # we may assume we can execute just fine.
      if { [check_effective_target_riscv_zbc] } {
