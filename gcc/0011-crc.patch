@@ -669,17 +669,10 @@ index 00000000000..0d6acfbd982
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 +/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
 diff --git a/gcc/testsuite/lib/target-supports.exp b/gcc/testsuite/lib/target-supports.exp
-index f2edbef92da..3c855a15434 100644
+index f2edbef92da..074aae3ff92 100644
 --- a/gcc/testsuite/lib/target-supports.exp
 +++ b/gcc/testsuite/lib/target-supports.exp
-@@ -2189,6 +2189,6 @@ proc check_effective_target_riscv_zvfh_ok { } {
- # Return 1 if we can execute code when using dg-add-options riscv_zbc
- 
- proc check_effective_target_riscv_zbc_ok { } {
-     # If the target already supports zbc without any added options,
-     # we may assume we can execute just fine.
-     if { [check_effective_target_riscv_zbc] } {
-@@ -2210,6 +2211,101 @@ proc check_effective_target_riscv_zbc_ok { } {
+@@ -2210,6 +2210,101 @@ proc check_effective_target_riscv_zbc_ok { } {
      return 0
  }
  
