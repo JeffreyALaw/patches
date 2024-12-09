@@ -1,0 +1,948 @@
+diff --git a/gcc/config/aarch64/aarch64-protos.h b/gcc/config/aarch64/aarch64-protos.h
+index c6ce62190bc..ac8ffe355cb 100644
+--- a/gcc/config/aarch64/aarch64-protos.h
++++ b/gcc/config/aarch64/aarch64-protos.h
+@@ -1218,6 +1218,9 @@ extern void aarch64_adjust_reg_alloc_order ();
+ 
+ bool aarch64_optimize_mode_switching (aarch64_mode_entity);
+ void aarch64_restore_za (rtx);
++void aarch64_expand_crc_using_pmull (scalar_mode, scalar_mode, rtx *);
++void aarch64_expand_reversed_crc_using_pmull (scalar_mode, scalar_mode, rtx *);
++
+ 
+ extern bool aarch64_gcs_enabled ();
+ 
+diff --git a/gcc/config/aarch64/aarch64-simd.md b/gcc/config/aarch64/aarch64-simd.md
+index cfe95bd4c31..c5d776e2cf0 100644
+--- a/gcc/config/aarch64/aarch64-simd.md
++++ b/gcc/config/aarch64/aarch64-simd.md
+@@ -4357,7 +4357,7 @@ (define_insn "*aarch64_get_lane_zero_extend<GPI:mode><VDQQH:mode>"
+ ;; RTL uses GCC vector extension indices throughout so flip only for assembly.
+ ;; Extracting lane zero is split into a simple move when it is between SIMD
+ ;; registers or a store.
+-(define_insn_and_split "aarch64_get_lane<mode>"
++(define_insn_and_split "@aarch64_get_lane<mode>"
+   [(set (match_operand:<VEL> 0 "aarch64_simd_nonimmediate_operand" "=?r, w, Utv")
+ 	(vec_select:<VEL>
+ 	  (match_operand:VALL_F16 1 "register_operand" "w, w, w")
+diff --git a/gcc/config/aarch64/aarch64.cc b/gcc/config/aarch64/aarch64.cc
+index 91de13159cb..673feda5027 100644
+--- a/gcc/config/aarch64/aarch64.cc
++++ b/gcc/config/aarch64/aarch64.cc
+@@ -30944,6 +30944,137 @@ aarch64_retrieve_sysreg (const char *regname, bool write_p, bool is128op)
+   return sysreg->encoding;
+ }
+ 
++/* Generate assembly to calculate CRC
++   using carry-less multiplication instruction.
++   OPERANDS[1] is input CRC,
++   OPERANDS[2] is data (message),
++   OPERANDS[3] is the polynomial without the leading 1.  */
++
++void
++aarch64_expand_crc_using_pmull (scalar_mode crc_mode,
++				scalar_mode data_mode,
++				rtx *operands)
++{
++  /* Check and keep arguments.  */
++  gcc_assert (!CONST_INT_P (operands[0]));
++  gcc_assert (CONST_INT_P (operands[3]));
++  rtx crc = operands[1];
++  rtx data = operands[2];
++  rtx polynomial = operands[3];
++
++  unsigned HOST_WIDE_INT crc_size = GET_MODE_BITSIZE (crc_mode);
++  unsigned HOST_WIDE_INT data_size = GET_MODE_BITSIZE (data_mode);
++  gcc_assert (crc_size <= 32);
++  gcc_assert (data_size <= crc_size);
++
++  /* Calculate the quotient.  */
++  unsigned HOST_WIDE_INT
++      q = gf2n_poly_long_div_quotient (UINTVAL (polynomial), crc_size);
++  /* CRC calculation's main part.  */
++  if (crc_size > data_size)
++    crc = expand_shift (RSHIFT_EXPR, DImode, crc, crc_size - data_size,
++			NULL_RTX, 1);
++
++  rtx t0 = force_reg (DImode, gen_int_mode (q, DImode));
++  polynomial = simplify_gen_unary (ZERO_EXTEND, DImode, polynomial,
++				   GET_MODE (polynomial));
++  rtx t1 = force_reg (DImode, polynomial);
++
++  rtx a0 = expand_binop (DImode, xor_optab, crc, data, NULL_RTX, 1,
++			 OPTAB_WIDEN);
++
++  rtx pmull_res = gen_reg_rtx (TImode);
++  emit_insn (gen_aarch64_crypto_pmulldi (pmull_res, a0, t0));
++  a0 = gen_lowpart (DImode, pmull_res);
++
++  a0 = expand_shift (RSHIFT_EXPR, DImode, a0, crc_size, NULL_RTX, 1);
++
++  emit_insn (gen_aarch64_crypto_pmulldi (pmull_res, a0, t1));
++  a0 = gen_lowpart (DImode, pmull_res);
++
++  if (crc_size > data_size)
++    {
++      rtx crc_part = expand_shift (LSHIFT_EXPR, DImode, operands[1], data_size,
++				   NULL_RTX, 0);
++      a0 = expand_binop (DImode, xor_optab, a0, crc_part, NULL_RTX, 1,
++			 OPTAB_DIRECT);
++    }
++
++  aarch64_emit_move (operands[0], gen_lowpart (crc_mode, a0));
++}
++
++/* Generate assembly to calculate reversed CRC
++   using carry-less multiplication instruction.
++   OPERANDS[1] is input CRC,
++   OPERANDS[2] is data,
++   OPERANDS[3] is the polynomial without the leading 1.  */
++
++void
++aarch64_expand_reversed_crc_using_pmull (scalar_mode crc_mode,
++					 scalar_mode data_mode,
++					 rtx *operands)
++{
++  /* Check and keep arguments.  */
++  gcc_assert (!CONST_INT_P (operands[0]));
++  gcc_assert (CONST_INT_P (operands[3]));
++  rtx crc = operands[1];
++  rtx data = operands[2];
++  rtx polynomial = operands[3];
++
++  unsigned HOST_WIDE_INT crc_size = GET_MODE_BITSIZE (crc_mode);
++  unsigned HOST_WIDE_INT data_size = GET_MODE_BITSIZE (data_mode);
++  gcc_assert (crc_size <= 32);
++  gcc_assert (data_size <= crc_size);
++
++  /* Calculate the quotient.  */
++  unsigned HOST_WIDE_INT
++      q = gf2n_poly_long_div_quotient (UINTVAL (polynomial), crc_size);
++  /* Reflect the calculated quotient.  */
++  q = reflect_hwi (q, crc_size + 1);
++  rtx t0 = force_reg (DImode, gen_int_mode (q, DImode));
++
++  /* Reflect the polynomial.  */
++  unsigned HOST_WIDE_INT ref_polynomial = reflect_hwi (UINTVAL (polynomial),
++						       crc_size);
++  /* An unshifted multiplier would require the final result to be extracted
++     using a shift right by DATA_SIZE - 1 bits.  Shift the multiplier left
++     so that the shift right can be by CRC_SIZE bits instead.  */
++  ref_polynomial <<= crc_size - data_size + 1;
++  rtx t1 = force_reg (DImode, gen_int_mode (ref_polynomial, DImode));
++
++  /* CRC calculation's main part.  */
++  rtx a0 = expand_binop (DImode, xor_optab, crc, data, NULL_RTX, 1,
++			 OPTAB_WIDEN);
++
++  /* Perform carry-less multiplication and get low part.  */
++  rtx pmull_res = gen_reg_rtx (TImode);
++  emit_insn (gen_aarch64_crypto_pmulldi (pmull_res, a0, t0));
++  a0 = gen_lowpart (DImode, pmull_res);
++
++  a0 = expand_binop (DImode, and_optab, a0,
++		     gen_int_mode (GET_MODE_MASK (data_mode), DImode),
++		     NULL_RTX, 1, OPTAB_WIDEN);
++
++  /* Perform carry-less multiplication.  */
++  emit_insn (gen_aarch64_crypto_pmulldi (pmull_res, a0, t1));
++
++  /* Perform a shift right by CRC_SIZE as an extraction of lane 1.  */
++  machine_mode crc_vmode = aarch64_vq_mode (crc_mode).require ();
++  a0 = (crc_size > data_size ? gen_reg_rtx (crc_mode) : operands[0]);
++  emit_insn (gen_aarch64_get_lane (crc_vmode, a0,
++				   gen_lowpart (crc_vmode, pmull_res),
++				   aarch64_endian_lane_rtx (crc_vmode, 1)));
++
++  if (crc_size > data_size)
++    {
++      rtx crc_part = expand_shift (RSHIFT_EXPR, crc_mode, crc, data_size,
++				   NULL_RTX, 1);
++      a0 = expand_binop (crc_mode, xor_optab, a0, crc_part, operands[0], 1,
++			 OPTAB_WIDEN);
++      aarch64_emit_move (operands[0], a0);
++    }
++}
++
+ /* Target-specific selftests.  */
+ 
+ #if CHECKING_P
+diff --git a/gcc/config/aarch64/aarch64.md b/gcc/config/aarch64/aarch64.md
+index 711e9adc757..d04ef49b26f 100644
+--- a/gcc/config/aarch64/aarch64.md
++++ b/gcc/config/aarch64/aarch64.md
+@@ -4672,6 +4672,63 @@ (define_insn "aarch64_<crc_variant>"
+   [(set_attr "type" "crc")]
+ )
+ 
++;; Reversed CRC
++(define_expand "crc_rev<ALLI:mode><ALLX:mode>4"
++  [;; return value (calculated CRC)
++   (match_operand:ALLX 0 "register_operand" "=r")
++   ;; initial CRC
++   (match_operand:ALLX 1 "register_operand" "r")
++   ;; data
++   (match_operand:ALLI 2 "register_operand" "r")
++   ;; polynomial without leading 1
++   (match_operand:ALLX 3)]
++  ""
++  {
++    /* If the polynomial is the same as the polynomial of crc32c* instruction,
++       put that instruction.  crc32c uses iSCSI polynomial.  */
++    if (TARGET_CRC32 && INTVAL (operands[3]) == 0x1EDC6F41
++	&& <ALLX:MODE>mode == SImode)
++      emit_insn (gen_aarch64_crc32c<ALLI:crc_data_type> (operands[0],
++							 operands[1],
++							 operands[2]));
++    /* If the polynomial is the same as the polynomial of crc32* instruction,
++	put that instruction.  crc32 uses HDLC etc.  polynomial.  */
++    else if (TARGET_CRC32 && INTVAL (operands[3]) == 0x04C11DB7
++	     && <ALLX:MODE>mode == SImode)
++      emit_insn (gen_aarch64_crc32<ALLI:crc_data_type> (operands[0],
++							operands[1],
++							operands[2]));
++    else if (TARGET_AES && <ALLI:sizen> <= <ALLX:sizen>)
++      aarch64_expand_reversed_crc_using_pmull (<ALLX:MODE>mode,
++					       <ALLI:MODE>mode,
++					       operands);
++    else
++      /* Otherwise, generate table-based CRC.  */
++      expand_reversed_crc_table_based (operands[0], operands[1], operands[2],
++				       operands[3], <ALLI:MODE>mode,
++				       generate_reflecting_code_standard);
++    DONE;
++  }
++)
++
++;; Bit-forward CRC
++(define_expand "crc<ALLI:mode><ALLX:mode>4"
++  [;; return value (calculated CRC)
++   (match_operand:ALLX 0 "register_operand" "=r")
++   ;; initial CRC
++   (match_operand:ALLX 1 "register_operand" "r")
++   ;; data
++   (match_operand:ALLI 2 "register_operand" "r")
++   ;; polynomial without leading 1
++   (match_operand:ALLX 3)]
++  "TARGET_AES && <ALLI:sizen> <= <ALLX:sizen>"
++  {
++    aarch64_expand_crc_using_pmull (<ALLX:MODE>mode, <ALLI:MODE>mode,
++				    operands);
++    DONE;
++  }
++)
++
+ (define_insn "*csinc2<mode>_insn"
+   [(set (match_operand:GPI 0 "register_operand" "=r")
+         (plus:GPI (match_operand 2 "aarch64_comparison_operation" "")
+diff --git a/gcc/config/aarch64/iterators.md b/gcc/config/aarch64/iterators.md
+index 023893d35f3..86e909364b7 100644
+--- a/gcc/config/aarch64/iterators.md
++++ b/gcc/config/aarch64/iterators.md
+@@ -1346,6 +1346,10 @@ (define_mode_attr lconst2 [(SI "UsO") (DI "UsP")])
+ ;; Map a mode to a specific constraint character.
+ (define_mode_attr cmode [(QI "q") (HI "h") (SI "s") (DI "d")])
+ 
++;; Map a mode to a specific constraint character for calling
++;; appropriate version of crc.
++(define_mode_attr crc_data_type [(QI "b") (HI "h") (SI "w") (DI "x")])
++
+ ;; Map modes to Usg and Usj constraints for SISD right shifts
+ (define_mode_attr cmode_simd [(SI "g") (DI "j")])
+ 
+diff --git a/gcc/testsuite/gcc.target/aarch64/crc-1-pmul.c b/gcc/testsuite/gcc.target/aarch64/crc-1-pmul.c
+new file mode 100644
+index 00000000000..4043251dbd8
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/crc-1-pmul.c
+@@ -0,0 +1,8 @@
++/* { dg-do run } */
++/* { dg-options "-march=armv8-a+crypto -O2 -fdump-rtl-dfinish -fdump-tree-crc -fdisable-tree-phiopt2 -fdisable-tree-phiopt3" } */
++
++#include "../../gcc.dg/torture/crc-1.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "pmull" "dfinish"} } */
+\ No newline at end of file
+diff --git a/gcc/testsuite/gcc.target/aarch64/crc-10-pmul.c b/gcc/testsuite/gcc.target/aarch64/crc-10-pmul.c
+new file mode 100644
+index 00000000000..0078eebe35c
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/crc-10-pmul.c
+@@ -0,0 +1,8 @@
++/* { dg-do run } */
++/* { dg-options "-march=armv8-a+crypto -O2 -fdump-rtl-dfinish -fdump-tree-crc" } */
++
++#include "../../gcc.dg/torture/crc-10.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "pmull" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/crc-12-pmul.c b/gcc/testsuite/gcc.target/aarch64/crc-12-pmul.c
+new file mode 100644
+index 00000000000..16d901eeaef
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/crc-12-pmul.c
+@@ -0,0 +1,9 @@
++/* { dg-do run } */
++/* { dg-options "-march=armv8-a+crypto -O2 -fdump-rtl-dfinish -fdump-tree-crc -fdisable-tree-phiopt2 -fdisable-tree-phiopt3" } */
++/* { dg-skip-if "" { *-*-* } { "-flto"} } */
++
++#include "../../gcc.dg/torture/crc-12.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "pmull" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/crc-13-pmul.c b/gcc/testsuite/gcc.target/aarch64/crc-13-pmul.c
+new file mode 100644
+index 00000000000..bd8f32e6924
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/crc-13-pmul.c
+@@ -0,0 +1,8 @@
++/* { dg-do run } */
++/* { dg-options "-march=armv8-a+crypto -O2 -fdump-rtl-dfinish -fdump-tree-crc" } */
++
++#include "../../gcc.dg/torture/crc-13.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "pmull" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/crc-14-pmul.c b/gcc/testsuite/gcc.target/aarch64/crc-14-pmul.c
+new file mode 100644
+index 00000000000..d35c1110c89
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/crc-14-pmul.c
+@@ -0,0 +1,8 @@
++/* { dg-do run } */
++/* { dg-options "-march=armv8-a+crypto -O2 -fdump-rtl-dfinish -fdump-tree-crc" } */
++
++#include "../../gcc.dg/torture/crc-14.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "pmull" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/crc-17-pmul.c b/gcc/testsuite/gcc.target/aarch64/crc-17-pmul.c
+new file mode 100644
+index 00000000000..99b84c8dde0
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/crc-17-pmul.c
+@@ -0,0 +1,8 @@
++/* { dg-do run } */
++/* { dg-options "-march=armv8-a+crypto -O2 -fdump-rtl-dfinish -fdump-tree-crc" } */
++
++#include "../../gcc.dg/torture/crc-17.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "pmull" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/crc-18-pmul.c b/gcc/testsuite/gcc.target/aarch64/crc-18-pmul.c
+new file mode 100644
+index 00000000000..888c99a7dd7
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/crc-18-pmul.c
+@@ -0,0 +1,8 @@
++/* { dg-do run } */
++/* { dg-options "-march=armv8-a+crypto -O2 -fdump-rtl-dfinish -fdump-tree-crc" } */
++
++#include "../../gcc.dg/torture/crc-18.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "pmull" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/crc-21-pmul.c b/gcc/testsuite/gcc.target/aarch64/crc-21-pmul.c
+new file mode 100644
+index 00000000000..4b92deceaac
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/crc-21-pmul.c
+@@ -0,0 +1,8 @@
++/* { dg-do run } */
++/* { dg-options "-march=armv8-a+crypto -O2 -fdump-rtl-dfinish -fdump-tree-crc" } */
++
++#include "../../gcc.dg/torture/crc-21.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "pmull" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/crc-22-pmul.c b/gcc/testsuite/gcc.target/aarch64/crc-22-pmul.c
+new file mode 100644
+index 00000000000..b42b8525b24
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/crc-22-pmul.c
+@@ -0,0 +1,8 @@
++/* { dg-do run } */
++/* { dg-options "-march=armv8-a+crypto -O2 -fdump-rtl-dfinish -fdump-tree-crc" } */
++
++#include "../../gcc.dg/torture/crc-22.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "pmull" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/crc-23-pmul.c b/gcc/testsuite/gcc.target/aarch64/crc-23-pmul.c
+new file mode 100644
+index 00000000000..eb2efae0c41
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/crc-23-pmul.c
+@@ -0,0 +1,8 @@
++/* { dg-do run } */
++/* { dg-options "-march=armv8-a+crypto -O2 -fdump-rtl-dfinish -fdump-tree-crc" } */
++
++#include "../../gcc.dg/torture/crc-23.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "pmull" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/crc-4-pmul.c b/gcc/testsuite/gcc.target/aarch64/crc-4-pmul.c
+new file mode 100644
+index 00000000000..c7d50017fe8
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/crc-4-pmul.c
+@@ -0,0 +1,8 @@
++/* { dg-do run } */
++/* { dg-options "-march=armv8-a+crypto -O2 -fdump-rtl-dfinish -fdump-tree-crc" } */
++
++#include "../../gcc.dg/torture/crc-4.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "pmull" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/crc-5-pmul.c b/gcc/testsuite/gcc.target/aarch64/crc-5-pmul.c
+new file mode 100644
+index 00000000000..2a4b87cc5d6
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/crc-5-pmul.c
+@@ -0,0 +1,8 @@
++/* { dg-do run } */
++/* { dg-options "-march=armv8-a+crypto -O2 -w -fdump-rtl-dfinish -fdump-tree-crc" } */
++
++#include "../../gcc.dg/torture/crc-5.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "pmull" "dfinish"} } */
+\ No newline at end of file
+diff --git a/gcc/testsuite/gcc.target/aarch64/crc-6-pmul.c b/gcc/testsuite/gcc.target/aarch64/crc-6-pmul.c
+new file mode 100644
+index 00000000000..84604af525a
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/crc-6-pmul.c
+@@ -0,0 +1,8 @@
++/* { dg-do run } */
++/* { dg-options "-march=armv8-a+crypto -O2 -fdump-rtl-dfinish -fdump-tree-crc" } */
++
++#include "../../gcc.dg/torture/crc-6.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "pmull" "dfinish"} } */
+\ No newline at end of file
+diff --git a/gcc/testsuite/gcc.target/aarch64/crc-7-pmul.c b/gcc/testsuite/gcc.target/aarch64/crc-7-pmul.c
+new file mode 100644
+index 00000000000..e1263fca91d
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/crc-7-pmul.c
+@@ -0,0 +1,8 @@
++/* { dg-do run } */
++/* { dg-options "-march=armv8-a+crypto -O2 -fdump-rtl-dfinish -fdump-tree-crc" } */
++
++#include "../../gcc.dg/torture/crc-7.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "pmull" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/crc-8-pmul.c b/gcc/testsuite/gcc.target/aarch64/crc-8-pmul.c
+new file mode 100644
+index 00000000000..141b474578b
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/crc-8-pmul.c
+@@ -0,0 +1,8 @@
++/* { dg-do run } */
++/* { dg-options "-march=armv8-a+crypto -O2 -fdump-rtl-dfinish -fdump-tree-crc" } */
++
++#include "../../gcc.dg/torture/crc-8.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "pmull" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/crc-9-pmul.c b/gcc/testsuite/gcc.target/aarch64/crc-9-pmul.c
+new file mode 100644
+index 00000000000..2fdcd425a3b
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/crc-9-pmul.c
+@@ -0,0 +1,8 @@
++/* { dg-do run } */
++/* { dg-options "-march=armv8-a+crypto -O2 -fdump-rtl-dfinish -fdump-tree-crc" } */
++
++#include "../../gcc.dg/torture/crc-9.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "pmull" "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/crc-CCIT-data16-pmul.c b/gcc/testsuite/gcc.target/aarch64/crc-CCIT-data16-pmul.c
+new file mode 100644
+index 00000000000..21520474564
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/crc-CCIT-data16-pmul.c
+@@ -0,0 +1,9 @@
++/* { dg-do run } */
++/* { dg-options "-w -march=armv8-a+crypto -O2 -fdump-rtl-dfinish -fdump-tree-crc" } */
++/* { dg-skip-if "" { *-*-* } { "-flto"} } */
++
++#include "../../gcc.dg/torture/crc-CCIT-data16.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "pmull" "dfinish"} } */
+\ No newline at end of file
+diff --git a/gcc/testsuite/gcc.target/aarch64/crc-CCIT-data8-pmul.c b/gcc/testsuite/gcc.target/aarch64/crc-CCIT-data8-pmul.c
+new file mode 100644
+index 00000000000..3dcc92320f3
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/crc-CCIT-data8-pmul.c
+@@ -0,0 +1,9 @@
++/* { dg-do run } */
++/* { dg-options "-w -march=armv8-a+crypto -O2 -fdump-rtl-dfinish -fdump-tree-crc" } */
++/* { dg-skip-if "" { *-*-* } { "-flto" } } */
++
++#include "../../gcc.dg/torture/crc-CCIT-data8.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "pmull" "dfinish"} } */
+\ No newline at end of file
+diff --git a/gcc/testsuite/gcc.target/aarch64/crc-builtin-pmul64.c b/gcc/testsuite/gcc.target/aarch64/crc-builtin-pmul64.c
+new file mode 100644
+index 00000000000..d8bb1724a65
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/crc-builtin-pmul64.c
+@@ -0,0 +1,61 @@
++/* { dg-options "-march=armv8-a+crypto" } */
++
++#include <stdint-gcc.h>
++int8_t crc8_data8 ()
++{
++  return __builtin_crc8_data8 ('a', 0xff, 0x12);
++}
++int16_t crc16_data8 ()
++{
++  return __builtin_crc16_data8 (0x1234, 'a', 0x1021);
++}
++
++int16_t crc16_data16 ()
++{
++  return __builtin_crc16_data16 (0x1234, 0x3214, 0x1021);
++}
++
++int32_t crc32_data8 ()
++{
++  return __builtin_crc32_data8 (0xffffffff, 0x32, 0x4002123);
++}
++int32_t crc32_data16 ()
++{
++  return __builtin_crc32_data16 (0xffffffff, 0x3232, 0x4002123);
++}
++
++int32_t crc32_data32 ()
++{
++  return __builtin_crc32_data32 (0xffffffff, 0x123546ff, 0x4002123);
++}
++
++int8_t rev_crc8_data8 ()
++{
++  return __builtin_rev_crc8_data8 (0x34, 'a', 0x12);
++}
++
++int16_t rev_crc16_data8 ()
++{
++  return __builtin_rev_crc16_data8 (0x1234, 'a', 0x1021);
++}
++
++int16_t rev_crc16_data16 ()
++{
++  return __builtin_rev_crc16_data16 (0x1234, 0x3214, 0x1021);
++}
++
++int32_t rev_crc32_data8 ()
++{
++  return __builtin_rev_crc32_data8 (0xffffffff, 0x32, 0x4002123);
++}
++
++int32_t rev_crc32_data16 ()
++{
++  return __builtin_rev_crc32_data16 (0xffffffff, 0x3232, 0x4002123);
++}
++
++int32_t rev_crc32_data32 ()
++{
++  return __builtin_rev_crc32_data32 (0xffffffff, 0x123546ff, 0x4002123);
++} 
++/* { dg-final { scan-assembler-times "pmull" 24 } } */
+\ No newline at end of file
+diff --git a/gcc/testsuite/gcc.target/aarch64/crc-coremark-16bitdata-pmul.c b/gcc/testsuite/gcc.target/aarch64/crc-coremark-16bitdata-pmul.c
+new file mode 100644
+index 00000000000..e5196aaafef
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/crc-coremark-16bitdata-pmul.c
+@@ -0,0 +1,9 @@
++/* { dg-do run } */
++/* { dg-options "-w -march=armv8-a+crypto -O2 -fdump-rtl-dfinish -fdump-tree-crc" } */
++/* { dg-skip-if "" { *-*-* } { "-flto"} } */
++
++#include "../../gcc.dg/torture/crc-coremark16-data16.c"
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "pmull" "dfinish"} } */
+\ No newline at end of file
+diff --git a/gcc/testsuite/gcc.target/aarch64/crc-crc32-data16.c b/gcc/testsuite/gcc.target/aarch64/crc-crc32-data16.c
+new file mode 100644
+index 00000000000..e82cb04fcc3
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/crc-crc32-data16.c
+@@ -0,0 +1,53 @@
++/* { dg-do run } */
++/* { dg-options "-march=armv8-a+crc -O2 -fdump-rtl-dfinish -fdump-tree-crc" } */
++/* { dg-skip-if "" { *-*-* } { "-flto"} } */
++
++#include <stdint.h>
++#include <stdlib.h>
++
++__attribute__ ((noinline,optimize(0)))
++uint32_t _crc32_O0 (uint32_t crc, uint16_t data) {
++  int i;
++  crc = crc ^ data;
++
++  for (i = 0; i < 8; i++) {
++      if (crc & 1)
++	crc = (crc >> 1) ^ 0xEDB88320;
++      else
++	crc = (crc >> 1);
++    }
++
++  return crc;
++}
++
++uint32_t _crc32 (uint32_t crc, uint16_t data) {
++  int i;
++  crc = crc ^ data;
++
++  for (i = 0; i < 8; i++) {
++      if (crc & 1)
++	crc = (crc >> 1) ^ 0xEDB88320;
++      else
++	crc = (crc >> 1);
++    }
++
++  return crc;
++}
++
++int main ()
++{
++  uint32_t crc = 0x0D800D80;
++  for (uint16_t i = 0; i < 0xffff; i++)
++    {
++      uint32_t res1 = _crc32_O0 (crc, i);
++      uint32_t res2 = _crc32 (crc, i);
++      if (res1 != res2)
++	 abort ();
++      crc = res1;
++    }
++}
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "UNSPEC_CRC32" "dfinish"} } */
++/* { dg-final { scan-rtl-dump-times "pmull" 0 "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/crc-crc32-data32.c b/gcc/testsuite/gcc.target/aarch64/crc-crc32-data32.c
+new file mode 100644
+index 00000000000..a7564a7e28a
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/crc-crc32-data32.c
+@@ -0,0 +1,52 @@
++/* { dg-do run } */
++/* { dg-options "-march=armv8-a+crc -O2 -fdump-rtl-dfinish -fdump-tree-crc" } */
++/* { dg-skip-if "" { *-*-* } { "-flto"} } */
++
++#include <stdint.h>
++#include <stdlib.h>
++__attribute__ ((noinline,optimize(0)))
++uint32_t _crc32_O0 (uint32_t crc, uint32_t data) {
++  int i;
++  crc = crc ^ data;
++
++  for (i = 0; i < 32; i++) {
++      if (crc & 1)
++	crc = (crc >> 1) ^ 0xEDB88320;
++      else
++	crc = (crc >> 1);
++    }
++
++  return crc;
++}
++
++uint32_t _crc32 (uint32_t crc, uint32_t data) {
++  int i;
++  crc = crc ^ data;
++
++  for (i = 0; i < 32; i++) {
++      if (crc & 1)
++	crc = (crc >> 1) ^ 0xEDB88320;
++      else
++	crc = (crc >> 1);
++    }
++
++  return crc;
++}
++
++int main ()
++{
++  uint32_t crc = 0x0D800D80;
++  for (uint8_t i = 0; i < 0xff; i++)
++    {
++      uint32_t res1 = _crc32_O0 (crc, i);
++      uint32_t res2 = _crc32 (crc, i);
++      if (res1 != res2)
++	 abort ();
++      crc = res1;
++    }
++}
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "UNSPEC_CRC32" "dfinish"} } */
++/* { dg-final { scan-rtl-dump-times "pmull" 0 "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/crc-crc32-data8.c b/gcc/testsuite/gcc.target/aarch64/crc-crc32-data8.c
+new file mode 100644
+index 00000000000..c88cafadedc
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/crc-crc32-data8.c
+@@ -0,0 +1,53 @@
++/* { dg-do run } */
++/* { dg-options "-march=armv8-a+crc -O2 -fdump-rtl-dfinish -fdump-tree-crc" } */
++/* { dg-skip-if "" { *-*-* } { "-flto"} } */
++
++#include <stdint.h>
++#include <stdlib.h>
++
++__attribute__ ((noinline,optimize(0)))
++uint32_t _crc32_O0 (uint32_t crc, uint8_t data) {
++  int i;
++  crc = crc ^ data;
++
++  for (i = 0; i < 8; i++) {
++      if (crc & 1)
++	crc = (crc >> 1) ^ 0xEDB88320;
++      else
++	crc = (crc >> 1);
++    }
++
++  return crc;
++}
++
++uint32_t _crc32 (uint32_t crc, uint8_t data) {
++  int i;
++  crc = crc ^ data;
++
++  for (i = 0; i < 8; i++) {
++      if (crc & 1)
++	crc = (crc >> 1) ^ 0xEDB88320;
++      else
++	crc = (crc >> 1);
++    }
++
++  return crc;
++}
++
++int main ()
++{
++  uint32_t crc = 0x0D800D80;
++  for (uint8_t i = 0; i < 0xff; i++)
++    {
++      uint32_t res1 = _crc32_O0 (crc, i);
++      uint32_t res2 = _crc32 (crc, i);
++      if (res1 != res2)
++	 abort ();
++      crc = res1;
++    }
++}
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "UNSPEC_CRC32" "dfinish"} } */
++/* { dg-final { scan-rtl-dump-times "pmull" 0 "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/crc-crc32c-data16.c b/gcc/testsuite/gcc.target/aarch64/crc-crc32c-data16.c
+new file mode 100644
+index 00000000000..d82e6252603
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/crc-crc32c-data16.c
+@@ -0,0 +1,53 @@
++/* { dg-do run } */
++/* { dg-options "-march=armv8-a+crc -O2 -fdump-rtl-dfinish -fdump-tree-crc" } */
++/* { dg-skip-if "" { *-*-* } { "-flto"} } */
++
++#include <stdint.h>
++#include <stdlib.h>
++
++__attribute__ ((noinline,optimize(0)))
++uint32_t _crc32_O0 (uint32_t crc, uint16_t data) {
++  int i;
++  crc = crc ^ data;
++
++  for (i = 0; i < 8; i++) {
++      if (crc & 1)
++	crc = (crc >> 1) ^ 0x82F63B78;
++      else
++	crc = (crc >> 1);
++    }
++
++  return crc;
++}
++
++uint32_t _crc32 (uint32_t crc, uint16_t data) {
++  int i;
++  crc = crc ^ data;
++
++  for (i = 0; i < 8; i++) {
++      if (crc & 1)
++	crc = (crc >> 1) ^ 0x82F63B78;
++      else
++	crc = (crc >> 1);
++    }
++
++  return crc;
++}
++
++int main ()
++{
++  uint32_t crc = 0x0D800D80;
++  for (uint16_t i = 0; i < 0xffff; i++)
++    {
++      uint32_t res1 = _crc32_O0 (crc, i);
++      uint32_t res2 = _crc32 (crc, i);
++      if (res1 != res2)
++	 abort ();
++      crc = res1;
++    }
++}
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "UNSPEC_CRC32C" "dfinish"} } */
++/* { dg-final { scan-rtl-dump-times "pmull" 0 "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/crc-crc32c-data32.c b/gcc/testsuite/gcc.target/aarch64/crc-crc32c-data32.c
+new file mode 100644
+index 00000000000..7acb6fc239c
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/crc-crc32c-data32.c
+@@ -0,0 +1,52 @@
++/* { dg-do run } */
++/* { dg-options "-march=armv8-a+crc -O2 -fdump-rtl-dfinish -fdump-tree-crc" } */
++/* { dg-skip-if "" { *-*-* } { "-flto"} } */
++
++#include <stdint.h>
++#include <stdlib.h>
++__attribute__ ((noinline,optimize(0)))
++uint32_t _crc32_O0 (uint32_t crc, uint32_t data) {
++  int i;
++  crc = crc ^ data;
++
++  for (i = 0; i < 32; i++) {
++      if (crc & 1)
++	crc = (crc >> 1) ^ 0x82F63B78;
++      else
++	crc = (crc >> 1);
++    }
++
++  return crc;
++}
++
++uint32_t _crc32 (uint32_t crc, uint32_t data) {
++  int i;
++  crc = crc ^ data;
++
++  for (i = 0; i < 32; i++) {
++      if (crc & 1)
++	crc = (crc >> 1) ^ 0x82F63B78;
++      else
++	crc = (crc >> 1);
++    }
++
++  return crc;
++}
++
++int main ()
++{
++  uint32_t crc = 0x0D800D80;
++  for (uint8_t i = 0; i < 0xff; i++)
++    {
++      uint32_t res1 = _crc32_O0 (crc, i);
++      uint32_t res2 = _crc32 (crc, i);
++      if (res1 != res2)
++	 abort ();
++      crc = res1;
++    }
++}
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "UNSPEC_CRC32C" "dfinish"} } */
++/* { dg-final { scan-rtl-dump-times "pmull" 0 "dfinish"} } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/crc-crc32c-data8.c b/gcc/testsuite/gcc.target/aarch64/crc-crc32c-data8.c
+new file mode 100644
+index 00000000000..e8a8901e453
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/crc-crc32c-data8.c
+@@ -0,0 +1,53 @@
++/* { dg-do run } */
++/* { dg-options "-march=armv8-a+crc -O2 -fdump-rtl-dfinish -fdump-tree-crc" } */
++/* { dg-skip-if "" { *-*-* } { "-flto"} } */
++
++#include <stdint.h>
++#include <stdlib.h>
++
++__attribute__ ((noinline,optimize(0)))
++uint32_t _crc32_O0 (uint32_t crc, uint8_t data) {
++  int i;
++  crc = crc ^ data;
++
++  for (i = 0; i < 8; i++) {
++      if (crc & 1)
++	crc = (crc >> 1) ^ 0x82F63B78;
++      else
++	crc = (crc >> 1);
++    }
++
++  return crc;
++}
++
++uint32_t _crc32 (uint32_t crc, uint8_t data) {
++  int i;
++  crc = crc ^ data;
++
++  for (i = 0; i < 8; i++) {
++      if (crc & 1)
++	crc = (crc >> 1) ^ 0x82F63B78;
++      else
++	crc = (crc >> 1);
++    }
++
++  return crc;
++}
++
++int main ()
++{
++  uint32_t crc = 0x0D800D80;
++  for (uint8_t i = 0; i < 0xff; i++)
++    {
++      uint32_t res1 = _crc32_O0 (crc, i);
++      uint32_t res2 = _crc32 (crc, i);
++      if (res1 != res2)
++	 abort ();
++      crc = res1;
++    }
++}
++
++/* { dg-final { scan-tree-dump "calculates CRC!" "crc"} } */
++/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
++/* { dg-final { scan-rtl-dump "UNSPEC_CRC32C" "dfinish"} } */
++/* { dg-final { scan-rtl-dump-times "pmull" 0 "dfinish"} } */
