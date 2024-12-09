@@ -1,12 +1,12 @@
 diff --git a/gcc/testsuite/gcc.target/riscv/crc-1-zbc.c b/gcc/testsuite/gcc.target/riscv/crc-1-zbc.c
 new file mode 100644
-index 00000000000..7873a58bf71
+index 00000000000..aaeaa0dc6ad
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/crc-1-zbc.c
 @@ -0,0 +1,10 @@
 +/* { dg-do run { target riscv_zbc_ok } } */
-+/* { dg-options "-march=rv64gcb_zbc -fdump-tree-crc -fdump-rtl-dfinish  -fdisable-tree-phiopt2 -fdisable-tree-phiopt3" { target { rv64 } } } */
-+/* { dg-options "-march=rv32gcb_zbc -fdump-tree-crc -fdump-rtl-dfinish  -fdisable-tree-phiopt2 -fdisable-tree-phiopt3" { target { rv32 } } } */
++/* { dg-options "-march=rv64gc_zbc -fdump-tree-crc -fdump-rtl-dfinish  -fdisable-tree-phiopt2 -fdisable-tree-phiopt3" { target { rv64 } } } */
++/* { dg-options "-march=rv32gc_zbc -fdump-tree-crc -fdump-rtl-dfinish  -fdisable-tree-phiopt2 -fdisable-tree-phiopt3" { target { rv32 } } } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
 +
 +#include "../../gcc.dg/torture/crc-1.c"
@@ -669,108 +669,33 @@ index 00000000000..0d6acfbd982
 +/* { dg-final { scan-tree-dump-times "Couldn't generate faster CRC code." 0 "crc"} } */
 +/* { dg-final { scan-rtl-dump "clmul" "dfinish"} } */
 diff --git a/gcc/testsuite/lib/target-supports.exp b/gcc/testsuite/lib/target-supports.exp
-index f2edbef92da..074aae3ff92 100644
+index f2edbef92da..ed2a597804a 100644
 --- a/gcc/testsuite/lib/target-supports.exp
 +++ b/gcc/testsuite/lib/target-supports.exp
-@@ -2210,6 +2210,101 @@ proc check_effective_target_riscv_zbc_ok { } {
-     return 0
- }
+@@ -2197,7 +2197,7 @@ proc check_effective_target_riscv_zbc_ok { } {
  
-+# Return 1 if we can execute code when using dg-add-options riscv_zbkb
-+
-+proc check_effective_target_riscv_zbkb_ok { } {
-+    # If the target already supports zbkb without any added options,
-+    # we may assume we can execute just fine.
-+    if { [check_effective_target_riscv_zbkb] } {
-+	return 1
-+    }
-+
-+    # check if we can execute zbkb insns with the given hardware or
-+    # simulator
-+    set gcc_march [riscv_get_arch]
-+    if { [check_runtime ${gcc_march}_zbkb_exec {
-+	int main()
-+	{
-+	    asm ("brev8 a0,a0");
-+	    return 0;
-+	} } "-march=${gcc_march}"] } {
-+	    return 1
-+	}
-+    return 0
-+}
-+
-+# Return 1 if we can execute code when using dg-add-options riscv_zbkc
-+
-+proc check_effective_target_riscv_zbkc_ok { } {
-+    # If the target already supports zbkc without any added options,
-+    # we may assume we can execute just fine.
-+    if { [check_effective_target_riscv_zbkc] } {
-+	return 1
-+    }
-+
-+    # check if we can execute zbkc insns with the given hardware or
-+    # simulator
-+    set gcc_march [riscv_get_arch]
-+    if { [check_runtime ${gcc_march}_zbkc_exec {
-+	int main()
-+	{
-+	    asm ("clmul a0,a0,a1");
-+	    asm ("clmulh a0,a0,a1");
-+	    return 0;
-+	} } "-march=${gcc_march}"] } {
-+	    return 1
-+	}
-+    return 0
-+}
-+
-+# Return 1 if we can execute code when using dg-add-options riscv_zbkb
-+
-+proc check_effective_target_riscv_zbkb_ok { } {
-+    # If the target already supports zbkb without any added options,
-+    # we may assume we can execute just fine.
-+    if { [check_effective_target_riscv_zbkb] } {
-+	return 1
-+    }
-+
-+    # check if we can execute zbkb insns with the given hardware or
-+    # simulator
-+    set gcc_march [riscv_get_arch]
-+    if { [check_runtime ${gcc_march}_zbkb_exec {
-+	int main()
-+	{
-+	    asm ("brev8 a0,a0");
-+	    return 0;
-+	} } "-march=${gcc_march}"] } {
-+	    return 1
-+	}
-+    return 0
-+}
-+
-+# Return 1 if we can execute code when using dg-add-options riscv_zbkc
-+
-+proc check_effective_target_riscv_zbkc_ok { } {
-+    # If the target already supports zbkc without any added options,
-+    # we may assume we can execute just fine.
-+    if { [check_effective_target_riscv_zbkc] } {
-+	return 1
-+    }
-+
-+    # check if we can execute zbkc insns with the given hardware or
-+    # simulator
-+    set gcc_march [riscv_get_arch]
-+    if { [check_runtime ${gcc_march}_zbkc_exec {
-+	int main()
-+	{
-+	    asm ("clmul a0,a0,a1");
-+	    asm ("clmulh a0,a0,a1");
-+	    return 0;
-+	} } "-march=${gcc_march}"] } {
-+	    return 1
-+	}
-+    return 0
-+}
-+
-+
- # Return 1 if we can execute code when using dg-add-options riscv_zbkb
+     # check if we can execute zbc insns with the given hardware or
+     # simulator
+-    set gcc_march [riscv_get_arch]
++    set gcc_march [regsub {[[:alnum:]]*} [riscv_get_arch] &zbc]
+     if { [check_runtime ${gcc_march}_zbc_exec {
+ 	int main()
+ 	{
+@@ -2221,7 +2221,7 @@ proc check_effective_target_riscv_zbkb_ok { } {
  
- proc check_effective_target_riscv_zbkb_ok { } {
+     # check if we can execute zbkb insns with the given hardware or
+     # simulator
+-    set gcc_march [riscv_get_arch]
++    set gcc_march [regsub {[[:alnum:]]*} [riscv_get_arch] &zbkb]
+     if { [check_runtime ${gcc_march}_zbkb_exec {
+ 	int main()
+ 	{
+@@ -2244,7 +2244,7 @@ proc check_effective_target_riscv_zbkc_ok { } {
+ 
+     # check if we can execute zbkc insns with the given hardware or
+     # simulator
+-    set gcc_march [riscv_get_arch]
++    set gcc_march [regsub {[[:alnum:]]*} [riscv_get_arch] &zbkc]
+     if { [check_runtime ${gcc_march}_zbkc_exec {
+ 	int main()
+ 	{
