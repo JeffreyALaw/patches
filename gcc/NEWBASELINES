@@ -3,12 +3,5 @@
 # reset.  
 mips64el-linux-gnuabi64
 sh4-linux-gnu
-v850-elf
-moxie-elf
-xstormy16-elf
-sh3eb-liux-gnu
-visium-elf
-sh3-linux-gnu
-riscv32-elf
-or1k-linux-gnu
-rl78-elf
+v850e-elf
+sh3eb-linux-gnu
