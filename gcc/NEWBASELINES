@@ -16,3 +16,4 @@ microblaze-linux
 mn10300-elf
 nds32be-elf
 nds32le-elf
+loongarch64-linux-gnu
