@@ -2,18 +2,5 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 sh4-linux-gnu
-arc-elf
-avr-elf
-bfin-elf
-c6x-elf
-cris-elf
-csky-linux-gnu
-ft32-elf
-iq2000-elf
-m32r-elf
-mcore-elf
-microblaze-linux
-mn10300-elf
-nds32be-elf
-nds32le-elf
-loongarch64-linux-gnu
+m68k-linux-gnu
+hppa-linux-gnu
