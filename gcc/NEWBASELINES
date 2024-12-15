@@ -4,3 +4,4 @@
 sh4-linux-gnu
 riscv64-linux-gnu
 mips64el-linux-gnuabi64
+aarch64-linux-gnu
