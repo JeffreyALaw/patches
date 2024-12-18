@@ -36,3 +36,22 @@ index 4f1f9defc80..1374868eddf 100644
  }
  
  
+diff --git a/gcc/testsuite/gcc.target/riscv/pr118084.c b/gcc/testsuite/gcc.target/riscv/pr118084.c
+new file mode 100644
+index 00000000000..2ffa1d76c9b
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr118084.c
+@@ -0,0 +1,13 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -march=rv32izk -mabi=ilp32 -Os" } */
++unsigned a;
++int main() {
++  int b = 8;
++  for (; b; b--)
++    if (a & 1)
++      a = a >> 1 ^ 30196000;
++    else
++      a >>= 1;
++}
++
++
