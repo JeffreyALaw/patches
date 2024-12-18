@@ -16,7 +16,7 @@ if [ "$BRANCH" == "" ]; then
   BRANCH=master
 fi
 
-patches/jobs/setupsources.sh $TARGET $BRANCH binutils-gdb gcc glibc linux
+patches/jobs/setupsources.sh $TARGET $BRANCH binutils-gdb gcc glibc linux > $LOGFILE 2>&1
 
 rm -rf obj
 mkdir -p obj/{binutils-gdb,gcc,glibc,linux}
