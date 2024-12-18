@@ -6,3 +6,4 @@ riscv64-linux-gnu
 mips64el-linux-gnuabi64
 aarch64-linux-gnu
 s390x-linux-gnu
+riscv32-elf
