@@ -2,8 +2,6 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 sh4-linux-gnu
-riscv64-linux-gnu
-mips64el-linux-gnuabi64
 aarch64-linux-gnu
-s390x-linux-gnu
+hppa-linux-gnu
 riscv32-elf
