@@ -1,3 +1,12 @@
+
+	PR middle-end/118084
+gcc/
+	* config/riscv/riscv.cc (generate_reflecting_code_using_brev): Handle
+	sub-word sized objects correctly.
+
+gcc/testsuite/
+	* gcc.target/;riscv/;pr118084.c: New test.
+
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
 index 4f1f9defc80..1374868eddf 100644
 --- a/gcc/config/riscv/riscv.cc
