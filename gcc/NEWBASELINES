@@ -4,4 +4,3 @@
 sh4-linux-gnu
 aarch64-linux-gnu
 hppa-linux-gnu
-riscv32-elf
