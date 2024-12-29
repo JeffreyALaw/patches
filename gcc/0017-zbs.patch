@@ -23,10 +23,10 @@ index 23dc47eaaef..8f9b456dd82 100644
    [(set (match_operand:DI 0 "register_operand")
 diff --git a/gcc/testsuite/gcc.target/riscv/pr116715.c b/gcc/testsuite/gcc.target/riscv/pr116715.c
 new file mode 100644
-index 00000000000..9b3c317a157
+index 00000000000..7607134d628
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/pr116715.c
-@@ -0,0 +1,14 @@
+@@ -0,0 +1,16 @@
 +/* { dg-do run { target { riscv64*-*-* } } } */
 +/* { dg-options "-march=rv64gc_zbs" } */
 +int a, b;
@@ -39,5 +39,7 @@ index 00000000000..9b3c317a157
 +  d |= b = f;
 +  long h = d;
 +  a = h >> 40;
-+  __builtin_printf("%lX\n", a);
++  if (a != -1)
++    __builtin_abort ();
++  __builtin_exit (0);
 +}
