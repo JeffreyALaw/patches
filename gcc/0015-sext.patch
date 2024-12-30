@@ -63,7 +63,8 @@ index 00000000000..dbade3d5149
 +int sextb32(int x) { return (x << 24) >> 24; }
 +int sexth32(int x) { return (x << 16) >> 16; }
 +
-+/* { dg-final { scan-assembler-times "sext\t" 2 } } */
++/* { dg-final { scan-assembler-times "sext.b\t" 1 } } */
++/* { dg-final { scan-assembler-times "sext.h\t" 2 } } */
 +/* { dg-final { scan-assembler-not "slli\t" } } */
 +/* { dg-final { scan-assembler-not "srai\t" } } */
 +
