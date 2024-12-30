@@ -1,5 +1,5 @@
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 1374868eddf..2e7bd2b4778 100644
+index 1374868eddf..08754be529e 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
 @@ -7009,62 +7009,77 @@ riscv_print_operand (FILE *file, rtx op, int letter)
@@ -17,7 +17,7 @@ index 1374868eddf..2e7bd2b4778 100644
 -	fputs (".rl", file);
 +    case 'A':
 +      if (!CONST_INT_P (op))
-+	output_operand_lossage ("invalid operand for '%%%c'", code);
++	output_operand_lossage ("invalid operand for '%%%c'", letter);
 +      else
 +	{
 +	  const enum memmodel model = memmodel_base (INTVAL (op));
@@ -43,7 +43,7 @@ index 1374868eddf..2e7bd2b4778 100644
 -	fputs (".aq", file);
 +    case 'I':
 +      if (!CONST_INT_P (op))
-+	output_operand_lossage ("invalid operand for '%%%c'", code);
++	output_operand_lossage ("invalid operand for '%%%c'", letter);
 +      else
 +	{
 +	  const enum memmodel model = memmodel_base (INTVAL (op));
@@ -69,7 +69,7 @@ index 1374868eddf..2e7bd2b4778 100644
 -	fputs (".rl", file);
 +    case 'J':
 +      if (!CONST_INT_P (op))
-+	output_operand_lossage ("invalid operand for '%%%c'", code);
++	output_operand_lossage ("invalid operand for '%%%c'", letter);
 +      else
 +	{
 +	  const enum memmodel model = memmodel_base (INTVAL (op));
@@ -100,7 +100,7 @@ index 1374868eddf..2e7bd2b4778 100644
 -	    break;
 -	  }
 +      if (!CONST_INT_P (op))
-+	output_operand_lossage ("invalid operand for '%%%c'", code);
++	output_operand_lossage ("invalid operand for '%%%c'", letter);
 +      else
 +	{
 +	  const char *ntl_hint = NULL;
@@ -137,7 +137,7 @@ index 1374868eddf..2e7bd2b4778 100644
 -	break;
 -      }
 +      if (!CONST_INT_P (op))
-+	output_operand_lossage ("invalid operand for '%%%c'", code);
++	output_operand_lossage ("invalid operand for '%%%c'", letter);
 +      else
 +	{
 +	  rtx newop = GEN_INT (ctz_hwi (INTVAL (op)));
@@ -151,7 +151,7 @@ index 1374868eddf..2e7bd2b4778 100644
 -	break;
 -      }
 +      if (!CONST_INT_P (op))
-+	output_operand_lossage ("invalid operand for '%%%c'", code);
++	output_operand_lossage ("invalid operand for '%%%c'", letter);
 +      else
 +	{
 +	  rtx newop = GEN_INT (ctz_hwi (~INTVAL (op)));
@@ -166,7 +166,7 @@ index 1374868eddf..2e7bd2b4778 100644
 -	break;
 -      }
 +      if (!CONST_INT_P (op))
-+	output_operand_lossage ("invalid operand for '%%%c'", code);
++	output_operand_lossage ("invalid operand for '%%%c'", letter);
 +      else
 +	{
 +	  int ival = INTVAL (op) + 1;
@@ -183,7 +183,7 @@ index 1374868eddf..2e7bd2b4778 100644
 -	break;
 -      }
 +      if (!CONST_INT_P (op))
-+	output_operand_lossage ("invalid operand for '%%%c'", code);
++	output_operand_lossage ("invalid operand for '%%%c'", letter);
 +      else
 +	{
 +	  unsigned int imm = (UINTVAL (op) & 63);
@@ -195,14 +195,24 @@ index 1374868eddf..2e7bd2b4778 100644
      case 'N':
        {
  	if (!REG_P(op))
+@@ -7119,7 +7146,7 @@ riscv_print_operand (FILE *file, rtx op, int letter)
+ 	else if (IN_RANGE (regno, V_REG_FIRST, V_REG_LAST))
+ 	  offset = V_REG_FIRST;
+ 	else
+-	  output_operand_lossage ("invalid register number for 'N' modifie");
++	  output_operand_lossage ("invalid register number for 'N' modifier");
+ 
+ 	asm_fprintf (file, "%u", (regno - offset));
+ 	break;
 diff --git a/gcc/testsuite/gcc.target/riscv/pr106544.c b/gcc/testsuite/gcc.target/riscv/pr106544.c
 new file mode 100644
-index 00000000000..9b78f5b5cf2
+index 00000000000..6e449ee0c6b
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/pr106544.c
-@@ -0,0 +1,5 @@
+@@ -0,0 +1,6 @@
 +/* { dg-do compile } */
++/* { dg-skip-if "" { *-*-* } { "-flto"} } */
 +void f(int a)
 +{
-+  asm("#%A0" : : "r"(a));
++  __asm("#%A0" : : "r"(a)); /* { dg-error "invalid 'asm': invalid operand" } */
 +}
