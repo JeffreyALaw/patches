@@ -1,0 +1,71 @@
+diff --git a/gcc/fwprop.cc b/gcc/fwprop.cc
+index 9b8fba59216..c844d870a87 100644
+--- a/gcc/fwprop.cc
++++ b/gcc/fwprop.cc
+@@ -242,6 +242,24 @@ fwprop_propagation::check_mem (int old_num_changes, rtx mem)
+   return true;
+ }
+ 
++/* Return TRUE if X is a shift, FALSE otherwise.  */
++
++static bool
++any_shift_p (rtx x)
++{
++  enum rtx_code code = GET_CODE (x);
++  return code == ASHIFTRT || code == LSHIFTRT || code == ASHIFT;
++}
++
++/* Return TRUE if X is an extension, FALSE otherwise.  */
++
++static bool
++any_extension_p (rtx x)
++{
++  enum rtx_code code = GET_CODE (x);
++  return code == SIGN_EXTEND || code == ZERO_EXTEND;
++}
++
+ /* OLDX has been simplified to NEWX.  Describe the change in terms of
+    result_flags.  */
+ 
+@@ -288,6 +306,22 @@ fwprop_propagation::classify_result (rtx old_rtx, rtx new_rtx)
+       && !MEM_VOLATILE_P (new_rtx))
+     return PROFITABLE;
+ 
++  /* If we had nested extensions that simplified to a single extension of
++     the same underlying object, then consider it profitable.  */
++  if (any_extension_p (old_rtx)
++      && any_extension_p (XEXP (old_rtx, 0))
++      && any_extension_p (new_rtx)
++      && rtx_equal_p (XEXP (XEXP (old_rtx, 0), 0), XEXP (new_rtx, 0)))
++    return PROFITABLE;
++
++  /* If we had nested shifts that simplify to a single extension of the
++     same underlying object, then consider it profitable.  */
++  if (any_shift_p (old_rtx)
++      && any_shift_p (XEXP (old_rtx, 0))
++      && any_extension_p (new_rtx)
++      && rtx_equal_p (XEXP (XEXP (old_rtx, 0), 0), XEXP (new_rtx, 0)))
++    return PROFITABLE;
++
+   return 0;
+ }
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/pr109592.c b/gcc/testsuite/gcc.target/riscv/pr109592.c
+new file mode 100644
+index 00000000000..dbade3d5149
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr109592.c
+@@ -0,0 +1,13 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc_zbb -mabi=lp64d" { target { riscv64*-*-* } } } */
++/* { dg-options "-march=rv32gc_zbb -mabi=ilp32" { target { riscv32*-*-* } } } */
++
++int sextb32(int x) { return (x << 24) >> 24; }
++int sexth32(int x) { return (x << 16) >> 16; }
++
++/* { dg-final { scan-assembler-times "sext\t" 2 } } */
++/* { dg-final { scan-assembler-not "slli\t" } } */
++/* { dg-final { scan-assembler-not "srai\t" } } */
++
++
++
