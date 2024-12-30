@@ -1,3 +1,15 @@
+	PR target/106544
+gcc/
+
+	* config/riscv/riscv.cc (riscv_print_operand): Issue an error for
+	invalid operands rather than invalidly accessing INTVAL of an
+	object that is not a CONST_INT.  Fix one error string for 'N'.
+	
+
+gcc/testsuite
+	* gcc.target/riscv/pr106544.c: New test.
+
+
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
 index 1374868eddf..08754be529e 100644
 --- a/gcc/config/riscv/riscv.cc
