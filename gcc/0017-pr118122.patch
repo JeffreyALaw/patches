@@ -1,3 +1,12 @@
+	PR target/118122
+gcc/
+	* config/risc/riscv.md (lui_constraint<X:mode>_and_to_or): Use
+	X iterator rather than ANYI consistently.  Fix formatting.
+
+gcc/testsuite
+
+	* gcc.target/riscv/pr118122.c: New test.
+
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
 index 6c6155ceeb8..f7cc34f3896 100644
 --- a/gcc/config/riscv/riscv.md
