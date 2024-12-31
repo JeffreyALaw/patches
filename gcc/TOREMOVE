@@ -23,9 +23,12 @@ gcc/testsuite/g++.dg/modules/xtreme-header-5_a.H
 gcc/testsuite/gcc.dg/pie-static-1.c
 gcc/testsuite/gcc.dg/pie-static-2.c
 gcc/testsuite/gcc.dg/special/gcsec-1.c
-# This ping-pongs on mips native
-gcc/testsuite/gcc.dg/plugin/poly-int-03_plugin.c
+# This ping-pongs on mips and hppa native
 gcc/testsuite/gcc.dg/plugin/poly-int-02_plugin.c
+gcc/testsuite/gcc.dg/plugin/poly-int-03_plugin.c
+gcc/testsuite/gcc.dg/plugin/poly-int-04_plugin.c
+gcc/testsuite/gcc.dg/plugin/poly-int-05_plugin.c
+gcc/testsuite/gcc.dg/plugin/poly-int-07_plugin.c
 # Per H-P's comments which xfailed this test, it is flakey
 gcc/testsuite/gcc.dg/pr84877.c
 # Flakey, across the board?
