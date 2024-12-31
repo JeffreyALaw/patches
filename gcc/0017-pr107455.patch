@@ -1,5 +1,5 @@
 diff --git a/gcc/postreload.cc b/gcc/postreload.cc
-index a220001ef16..cc3f4da85a6 100644
+index a220001ef16..01f79898a4a 100644
 --- a/gcc/postreload.cc
 +++ b/gcc/postreload.cc
 @@ -33,6 +33,7 @@ along with GCC; see the file COPYING3.  If not see
@@ -10,7 +10,7 @@ index a220001ef16..cc3f4da85a6 100644
  #include "cfgrtl.h"
  #include "cfgbuild.h"
  #include "cfgcleanup.h"
-@@ -221,13 +222,114 @@ reload_cse_regs_1 (void)
+@@ -221,13 +222,116 @@ reload_cse_regs_1 (void)
    init_alias_analysis ();
  
    FOR_EACH_BB_FN (bb, cfun)
@@ -89,7 +89,9 @@ index a220001ef16..cc3f4da85a6 100644
 +		     by the conditional branch itself.  Do this for every
 +		     conditional jump participating in creation of the
 +		     equivalence.  */
-+		  if (GET_MODE_CLASS (GET_MODE (dest)) != MODE_INT
++		  if (!REG_P (dest)
++		      || !(REG_P (src) || CONST_INT_P (src))
++		      || GET_MODE_CLASS (GET_MODE (dest)) != MODE_INT
 +		      || reg_set_p (dest, condjump)
 +		      || reg_set_p (src, condjump))
 +		    break;
