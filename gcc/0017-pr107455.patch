@@ -1,5 +1,5 @@
 diff --git a/gcc/postreload.cc b/gcc/postreload.cc
-index a220001ef16..eb62dbd79bf 100644
+index a220001ef16..67cf0dacd29 100644
 --- a/gcc/postreload.cc
 +++ b/gcc/postreload.cc
 @@ -33,6 +33,7 @@ along with GCC; see the file COPYING3.  If not see
@@ -10,7 +10,7 @@ index a220001ef16..eb62dbd79bf 100644
  #include "cfgrtl.h"
  #include "cfgbuild.h"
  #include "cfgcleanup.h"
-@@ -221,13 +222,112 @@ reload_cse_regs_1 (void)
+@@ -221,13 +222,114 @@ reload_cse_regs_1 (void)
    init_alias_analysis ();
  
    FOR_EACH_BB_FN (bb, cfun)
@@ -56,8 +56,10 @@ index a220001ef16..eb62dbd79bf 100644
 +		  && any_condjump_p (condjump)
 +		  && onlyjump_p (condjump))
 +		{
-+		  /* Extract the condition.  */
-+		  rtx pat = PATTERN (condjump);
++		  /* Extract the condition.  We can use single_set to extract
++		     the assignment to the PC rather than digging around the
++		     pattern manually.  */
++		  rtx pat = single_set (condjump);
 +		  rtx i_t_e = SET_SRC (pat);
 +		  gcc_assert (GET_CODE (i_t_e) == IF_THEN_ELSE);
 +		  rtx cond = XEXP (i_t_e, 0);
@@ -129,101 +131,3 @@ index a220001ef16..eb62dbd79bf 100644
  
    /* Clean up.  */
    end_alias_analysis ();
-diff --git a/gcc/testsuite/gcc.target/riscv/pr107455-1.c b/gcc/testsuite/gcc.target/riscv/pr107455-1.c
-new file mode 100644
-index 00000000000..59616b89176
---- /dev/null
-+++ b/gcc/testsuite/gcc.target/riscv/pr107455-1.c
-@@ -0,0 +1,46 @@
-+/* { dg-do compile } */
-+/* { dg-additional-options "-dp" } */
-+/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-O2" "-O3" "-Og" } } */
-+
-+
-+typedef struct dllist
-+{
-+  int i;
-+  struct dllist *ptr_to_next;
-+  struct dllist *ptr_to_previous;
-+} dllist;
-+
-+int sglib_dllist_len(dllist *list) {
-+    int res;
-+    dllist *_dl_;
-+    int _r1_, _r2_;
-+    if (list== ((void *)0)) {
-+        res = 0;
-+    } else { 
-+        dllist *_ce_;
-+        dllist *_ne_;
-+        _r1_ = 0;
-+        _ce_ = list;
-+        while (_ce_!= ((void *)0)) {
-+            _ne_ = _ce_->ptr_to_previous;
-+            _r1_++;
-+            _ce_ = _ne_;
-+        }
-+        _dl_ = list->ptr_to_next;
-+        _r2_ = 0;
-+        _ce_ = _dl_;
-+        while (_ce_!= (void *)0) {
-+            _ne_ = _ce_->ptr_to_next;
-+            _r2_++;
-+            _ce_ = _ne_;
-+        }
-+        res = _r1_ + _r2_;
-+    }
-+    return res;
-+}
-+
-+
-+/* There was an unnecessary assignment to the return value until
-+   recently.  Scan for that in the resulting output.  */
-+/* { dg-final { scan-assembler-times "li\\ta0,0" 1 } } */
-+
-diff --git a/gcc/testsuite/gcc.target/riscv/pr107455-2.c b/gcc/testsuite/gcc.target/riscv/pr107455-2.c
-new file mode 100644
-index 00000000000..91106bb5d80
---- /dev/null
-+++ b/gcc/testsuite/gcc.target/riscv/pr107455-2.c
-@@ -0,0 +1,40 @@
-+/* { dg-do compile } */
-+/* { dg-options "-O2 -dp" } */
-+/* This was extracted from coremark.  */
-+
-+
-+typedef signed short ee_s16;
-+typedef struct list_data_s
-+{
-+    ee_s16 data16;
-+    ee_s16 idx;
-+} list_data;
-+
-+typedef struct list_head_s
-+{
-+    struct list_head_s *next;
-+    struct list_data_s *info;
-+} list_head;
-+
-+
-+list_head *
-+core_list_find(list_head *list, list_data *info)
-+{
-+    if (info->idx >= 0)
-+    {
-+        while (list && (list->info->idx != info->idx))
-+            list = list->next;
-+        return list;
-+    }
-+    else
-+    {
-+        while (list && ((list->info->data16 & 0xff) != info->data16))
-+            list = list->next;
-+        return list;
-+    }
-+}
-+
-+/* There was an unnecessary assignment to the return value until
-+   recently.  Scan for that in the resulting output.  */
-+/* { dg-final { scan-assembler-not "li\\ta0,0" } } */
-+
