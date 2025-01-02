@@ -1,3 +1,12 @@
+	PR rtl-optimization/107455
+gcc/
+	* postreload.cc (reload_cse_regs_1): Take advantage of conditional
+	equivalences.
+
+gcc/testsuite
+	* gcc.target/riscv/pr107455-1.c: New test.
+	* gcc.target/riscv/pr107455-2.c: New test.
+
 diff --git a/gcc/postreload.cc b/gcc/postreload.cc
 index a220001ef16..01f79898a4a 100644
 --- a/gcc/postreload.cc
