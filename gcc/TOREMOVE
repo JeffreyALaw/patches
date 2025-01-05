@@ -84,3 +84,6 @@ gcc/testsuite/c-c++-common/Wcast-align.c
 
 # Temporary for now
 gcc/testsuite/gcc.dg/tree-ssa/pr111456-1.c
+
+# Bouncing on some native-emulated targets
+gcc/testsuite/g++.dg/warn/Wsequence-point-5.C
