@@ -1,0 +1,357 @@
+
+
+Match *-picolibc-* and select picolibc as the default C library, plus
+continuing to use the newlib-based logic for other configuration
+items.
+
+Add custom spec file fragments for use with picolibc:
+
+ * '--oslib='. Allows targets to insert an OS library after the C
+   library in the LIB_PATH spec file fragment. This library maps a few
+   POSIX APIs used by picolibc to underlying system capabilities.
+
+ * '--crt0='. Allows targets to use an alternate crt0 in place of the
+   usual one as provided by Picolibc.
+
+ * '--printf='. Allows targets to customize the version of printf linked
+   from the C library.
+
+Signed-off-by: Keith Packard <keithp@keithp.com>
+---
+ gcc/config.gcc               | 23 +++++++++++++++-
+ gcc/config/picolibc-spec.h   | 53 ++++++++++++++++++++++++++++++++++++
+ gcc/config/picolibc.opt      | 40 +++++++++++++++++++++++++++
+ gcc/config/picolibc.opt.urls |  2 ++
+ 4 files changed, 117 insertions(+), 1 deletion(-)
+ create mode 100644 gcc/config/picolibc-spec.h
+ create mode 100644 gcc/config/picolibc.opt
+ create mode 100644 gcc/config/picolibc.opt.urls
+
+diff --git a/gcc/config.gcc b/gcc/config.gcc
+index 262b38cf0e3..f57897b0298 100644
+--- a/gcc/config.gcc
++++ b/gcc/config.gcc
+@@ -695,7 +695,7 @@ case ${target} in
+ esac
+ 
+ # Common C libraries.
+-tm_defines="$tm_defines LIBC_GLIBC=1 LIBC_UCLIBC=2 LIBC_BIONIC=3 LIBC_MUSL=4"
++tm_defines="$tm_defines LIBC_GLIBC=1 LIBC_UCLIBC=2 LIBC_BIONIC=3 LIBC_MUSL=4 LIBC_PICOLIBC=5"
+ 
+ # 32-bit x86 processors supported by --with-arch=.  Each processor
+ # MUST be separated by exactly one space.
+@@ -1163,6 +1163,10 @@ case ${target} in
+       ;;
+   esac
+   ;;
++*-picolibc-*)
++  tm_defines="$tm_defines DEFAULT_LIBC=LIBC_PICOLIBC"
++  ;;
++
+ *-*-elf|arc*-*-elf*)
+   # Assume that newlib is being used and so __cxa_atexit is provided.
+   default_use_cxa_atexit=yes
+@@ -6162,3 +6166,20 @@ i[34567]86-*-* | x86_64-*-*)
+ 	fi
+ 	;;
+ esac
++
++
++# Targets for picolibc should include picolibc-spec.h to allow
++# use of picolibc-specific compiler flags
++case ${target} in
++*picolibc*)
++    # __cxa_atexit is provided.
++    default_use_cxa_atexit=yes
++    use_gcc_stdint=wrap
++    tm_file="${tm_file} picolibc-spec.h"
++    extra_options="${extra_options} picolibc.opt"
++    case "${with_newlib}-${with_headers}" in
++	no-no) use_gcc_stdint=provide ;;
++	*) ;;
++    esac
++    ;;
++esac
+diff --git a/gcc/config/picolibc-spec.h b/gcc/config/picolibc-spec.h
+new file mode 100644
+index 00000000000..e9ef59932f2
+--- /dev/null
++++ b/gcc/config/picolibc-spec.h
+@@ -0,0 +1,53 @@
++/* Configuration common to all targets running Picolibc.
++   Copyright (C) 2023 Free Software Foundation, Inc.
++
++   This file is part of GCC.
++
++   GCC is free software; you can redistribute it and/or modify it
++   under the terms of the GNU General Public License as published
++   by the Free Software Foundation; either version 3, or (at your
++   option) any later version.
++
++   GCC is distributed in the hope that it will be useful, but WITHOUT
++   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
++   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
++   License for more details.
++
++   Under Section 7 of GPL version 3, you are granted additional
++   permissions described in the GCC Runtime Library Exception, version
++   3.1, as published by the Free Software Foundation.
++
++   You should have received a copy of the GNU General Public License and
++   a copy of the GCC Runtime Library Exception along with this program;
++   see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#define PICOLIBC_LD "picolibc.ld"
++
++/* Default to local-exec TLS model.  */
++#undef OS_CC1_SPEC
++#define OS_CC1_SPEC " %{!ftls-model=*:-ftls-model=local-exec}"
++
++/* Pass along a preprocessor definition when --printf is specified */
++#undef CPP_SPEC
++#define CPP_SPEC \
++  "%{-printf=*: -D_PICOLIBC_PRINTF='%*'}"
++
++/* Add picolibc.ld if it exists. Define vfprintf and vfscanf if --printf is set */
++#undef LINK_SPEC
++#define LINK_SPEC \
++  "%:if-exists-then-else(%:find-file(" PICOLIBC_LD ") %{!T:-T%:find-file(" PICOLIBC_LD ")})"	\
++  " %{-printf=*:--defsym=vfprintf=__%*_vfprintf --defsym=vfscanf=__%*_vfscanf}" \
++
++/*
++ * Place the C library, libgcc and any oslib in a link group to resolve
++ * interdependencies
++ */
++#undef  LIB_SPEC
++#define LIB_SPEC "--start-group -lc %{-oslib=*:-l%*} %(libgcc) --end-group"
++
++/* Select alternate crt0 version if --crt0 is specified */
++#undef  STARTFILE_SPEC
++#define STARTFILE_SPEC "%{-crt0=*:crt0-%*%O%s; :crt0%O%s}"
++
++#define EH_TABLES_CAN_BE_READ_ONLY 1
+diff --git a/gcc/config/picolibc.opt b/gcc/config/picolibc.opt
+new file mode 100644
+index 00000000000..9e342e9153c
+--- /dev/null
++++ b/gcc/config/picolibc.opt
+@@ -0,0 +1,40 @@
++; Processor-independent options for picolibc.
++;
++; Copyright (C) 2022 Free Software Foundation, Inc.
++;
++; This file is part of GCC.
++;
++; GCC is free software; you can redistribute it and/or modify it under
++; the terms of the GNU General Public License as published by the Free
++; Software Foundation; either version 3, or (at your option) any later
++; version.
++;
++; GCC is distributed in the hope that it will be useful, but WITHOUT ANY
++; WARRANTY; without even the implied warranty of MERCHANTABILITY or
++; FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++; for more details.
++;
++; You should have received a copy of the GNU General Public License
++; along with GCC; see the file COPYING3.  If not see
++; <http://www.gnu.org/licenses/>.
++
++-oslib
++Driver Separate Alias(-oslib=)
++
++-oslib=
++Driver Joined
++Specify an OS support library to load after libc.
++
++-crt0
++Driver Separate Alias(-crt0=)
++
++-crt0=
++Driver Joined
++Specify an alternate startup file.
++
++-printf
++Driver Separate Alias(-printf=)
++
++-printf=
++Driver Joined
++Specify the printf version linked from libc.
+diff --git a/gcc/config/picolibc.opt.urls b/gcc/config/picolibc.opt.urls
+new file mode 100644
+index 00000000000..b3a57d15a39
+--- /dev/null
++++ b/gcc/config/picolibc.opt.urls
+@@ -0,0 +1,2 @@
++; Autogenerated by regenerate-opt-urls.py from gcc/config/picolibc.opt and generated HTML
++
+-- 
+2.45.2
+
+
+
+
+The default C library is normally computed based on the target
+triplet. However, for embedded systems, it can be useful to leave the
+triplet alone while changing which C library is used by default. Other
+C libraries may still be available on the system so the compiler and
+can be used by specifying suitable include and library paths at build
+time.
+
+If an unknown --with-default-libc= value is provided, emit an error
+and stop.
+
+Signed-off-by: Keith Packard <keithp@keithp.com>
+---
+ gcc/config.gcc   | 63 +++++++++++++++++++++++++++++++++++++++---------
+ gcc/configure.ac |  4 +++
+ 2 files changed, 56 insertions(+), 11 deletions(-)
+
+diff --git a/gcc/config.gcc b/gcc/config.gcc
+index f57897b0298..76fca94c409 100644
+--- a/gcc/config.gcc
++++ b/gcc/config.gcc
+@@ -697,6 +697,8 @@ esac
+ # Common C libraries.
+ tm_defines="$tm_defines LIBC_GLIBC=1 LIBC_UCLIBC=2 LIBC_BIONIC=3 LIBC_MUSL=4 LIBC_PICOLIBC=5"
+ 
++default_libc=""
++
+ # 32-bit x86 processors supported by --with-arch=.  Each processor
+ # MUST be separated by exactly one space.
+ x86_archs="athlon athlon-4 athlon-fx athlon-mp athlon-tbird \
+@@ -913,16 +915,16 @@ case ${target} in
+   esac
+   case $target in
+     *-*-*android*)
+-      tm_defines="$tm_defines DEFAULT_LIBC=LIBC_BIONIC"
++      default_libc=LIBC_BIONIC
+       ;;
+     *-*-*uclibc* | *-*-uclinuxfdpiceabi)
+-      tm_defines="$tm_defines DEFAULT_LIBC=LIBC_UCLIBC"
++      default_libc=LIBC_UCLIBC
+       ;;
+     *-*-*musl*)
+-      tm_defines="$tm_defines DEFAULT_LIBC=LIBC_MUSL"
++      default_libc=LIBC_MUSL
+       ;;
+     *)
+-      tm_defines="$tm_defines DEFAULT_LIBC=LIBC_GLIBC"
++      default_libc=LIBC_GLIBC
+       ;;
+   esac
+   # Assume that glibc or uClibc or Bionic are being used and so __cxa_atexit
+@@ -1037,7 +1039,8 @@ case ${target} in
+   case ${enable_threads} in
+     "" | yes | posix) thread_file='posix' ;;
+   esac
+-  tm_defines="$tm_defines DEFAULT_LIBC=LIBC_UCLIBC SINGLE_LIBC"
++  tm_defines="$tm_defines SINGLE_LIBC"
++  default_libc=LIBC_UCLIBC
+   ;;
+ *-*-rdos*)
+   use_gcc_stdint=wrap
+@@ -1164,7 +1167,7 @@ case ${target} in
+   esac
+   ;;
+ *-picolibc-*)
+-  tm_defines="$tm_defines DEFAULT_LIBC=LIBC_PICOLIBC"
++  default_libc=LIBC_PICOLIBC
+   ;;
+ 
+ *-*-elf|arc*-*-elf*)
+@@ -1752,13 +1755,13 @@ csky-*-*)
+ 
+ 		case ${target} in
+ 		    csky-*-linux-gnu*)
+-			tm_defines="$tm_defines DEFAULT_LIBC=LIBC_GLIBC"
++			default_libc=LIBC_GLIBC
+ 			# Force .init_array support.  The configure script cannot always
+ 			# automatically detect that GAS supports it, yet we require it.
+ 			gcc_cv_initfini_array=yes
+ 			;;
+ 		    csky-*-linux-uclibc*)
+-			tm_defines="$tm_defines DEFAULT_LIBC=LIBC_UCLIBC"
++			default_libc=LIBC_UCLIBC
+ 			default_use_cxa_atexit=no
+ 			;;
+ 		    *)
+@@ -3149,7 +3152,7 @@ powerpc*-wrs-vxworks7r*)
+ 	tmake_file="${tmake_file} t-linux rs6000/t-linux64 rs6000/t-fprules rs6000/t-ppccomm"
+ 	tmake_file="${tmake_file} rs6000/t-vxworks"
+ 
+-	tm_defines="$tm_defines DEFAULT_LIBC=LIBC_GLIBC"
++	default_libc=LIBC_GLIBC
+ 	extra_objs="$extra_objs linux.o rs6000-linux.o"
+ 	;;
+ powerpc-wrs-vxworks*)
+@@ -6168,10 +6171,48 @@ i[34567]86-*-* | x86_64-*-*)
+ esac
+ 
+ 
++case "${with_default_libc}" in
++glibc)
++    default_libc=LIBC_GLIBC
++    ;;
++uclibc)
++    default_libc=LIBC_UCLIBC
++    ;;
++bionic)
++    default_libc=LIBC_BIONIC
++    ;;
++musl)
++    default_libc=LIBC_MUSL
++    ;;
++newlib)
++    # Newlib configurations don't set the DEFAULT_LIBC variable, so
++    # avoid changing those by allowing --with-default-libc=newlib but
++    # not actually setting the DEFAULT_LIBC variable.
++    default_libc=
++    ;;
++picolibc)
++    default_libc=LIBC_PICOLIBC
++    ;;
++"")
++    ;;
++*)
++    echo "Unknown libc in --with-default-libc=$with_default_libc" 1>&2
++    exit 1
++    ;;
++esac
++
++case "$default_libc" in
++"")
++    ;;
++*)
++    tm_defines="$tm_defines DEFAULT_LIBC=$default_libc"
++    ;;
++esac
++
+ # Targets for picolibc should include picolibc-spec.h to allow
+ # use of picolibc-specific compiler flags
+-case ${target} in
+-*picolibc*)
++case "$default_libc" in
++LIBC_PICOLIBC)
+     # __cxa_atexit is provided.
+     default_use_cxa_atexit=yes
+     use_gcc_stdint=wrap
+diff --git a/gcc/configure.ac b/gcc/configure.ac
+index 5a178e056ef..b8ae10d66fc 100644
+--- a/gcc/configure.ac
++++ b/gcc/configure.ac
+@@ -2559,6 +2559,10 @@ if { { test x$host != x$target && test "x$with_sysroot" = x ; } ||
+ fi
+ AC_SUBST(inhibit_libc)
+ 
++AC_ARG_WITH(default-libc,
++	[AS_HELP_STRING([--with-default-libc],
++			[Use specified default C library])])
++
+ # When building gcc with a cross-compiler, we need to adjust things so
+ # that the generator programs are still built with the native compiler.
+ # Also, we cannot run fixincludes.
+-- 
+2.45.2
+
+
