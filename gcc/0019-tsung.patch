@@ -1,0 +1,109 @@
+
+
+Add an extra test case that we do not create a vector store but a scalar store.
+
+Thanks,
+Jim
+
+Robin Dapp <rdapp.gcc@gmail.com> 於 2024年12月31日 週二 下午6:22寫道：
+>
+>> Thanks, the expr.cc change looks good to me.  I'd like sign-off from a
+>> RISC-V maintainer on the testsuite changes before pushing to trunk though.
+>
+> The test change is OK but I'd prefer an extra test case.  As the PR is not
+> really related and the patch impacts vector code gen a separate test seems
+> warranted.  In particular we'd want to check that we do not create a vector
+> store but a scalar store rather than just checking the number of vsetvls
+> which might be affected by other things as well.
+>
+> --
+> Regards
+>  Robin
+>
+
+0001-Prefer-scalar_int_mode-if-the-size-of-QI-vector-is-e.patch
+
+From c762a648635bb5b1393e40211bd72801b0e071c2 Mon Sep 17 00:00:00 2001
+From: Jim Tsung-Chun Lin <jim@andestech.com>
+Date: Mon, 30 Dec 2024 15:32:12 +0800
+Subject: [PATCH] Prefer scalar_int_mode if the size of QI vector is equal to
+ UNITS_PER_WORD.
+
+Don't use the QI vector if its size is equal to UNITS_PER_WORD for
+better code generation.
+
+Before patch:
+
+vsetivli        zero,4,e8,mf4,ta,ma
+vmv.v.i v1,0
+addi    a4,sp,12
+vse8.v  v1,0(a4)
+
+After patch:
+
+sw      zero,12(sp)
+---
+ gcc/expr.cc                                    |  3 ++-
+ .../gcc.target/riscv/rvv/autovec/pr113469.c    |  1 -
+ .../gcc.target/riscv/rvv/base/movqi-1.c        | 18 ++++++++++++++++++
+ 3 files changed, 20 insertions(+), 2 deletions(-)
+ create mode 100644 gcc/testsuite/gcc.target/riscv/rvv/base/movqi-1.c
+
+diff --git a/gcc/expr.cc b/gcc/expr.cc
+index babf00f34dc..422e2b2ebc9 100644
+--- a/gcc/expr.cc
++++ b/gcc/expr.cc
+@@ -1062,12 +1062,13 @@ widest_fixed_size_mode_for_size (unsigned int size, by_pieces_operation op)
+   gcc_checking_assert (size > 1);
+ 
+   /* Use QI vector only if size is wider than a WORD.  */
+-  if (can_use_qi_vectors (op) && size > UNITS_PER_WORD)
++  if (can_use_qi_vectors (op))
+     {
+       machine_mode mode;
+       fixed_size_mode candidate;
+       FOR_EACH_MODE_IN_CLASS (mode, MODE_VECTOR_INT)
+ 	if (is_a<fixed_size_mode> (mode, &candidate)
++	    && GET_MODE_SIZE (candidate) > UNITS_PER_WORD
+ 	    && GET_MODE_INNER (candidate) == QImode)
+ 	  {
+ 	    if (GET_MODE_SIZE (candidate) >= size)
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/pr113469.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/pr113469.c
+index 52e2580c53e..6549ae61c67 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/pr113469.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/pr113469.c
+@@ -51,5 +51,4 @@ void p(int buf, __builtin_va_list ab, int q) {
+  } while (k);
+ }
+ 
+-/* { dg-final { scan-assembler-times {vsetivli\tzero,\s*4,\s*e8,\s*mf4,\s*t[au],\s*m[au]} 1 } } */
+ /* { dg-final { scan-assembler-times {vsetivli\tzero,\s*8,\s*e8,\s*mf2,\s*t[au],\s*m[au]} 1 } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/base/movqi-1.c b/gcc/testsuite/gcc.target/riscv/rvv/base/movqi-1.c
+new file mode 100644
+index 00000000000..bc461035e5b
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/rvv/base/movqi-1.c
+@@ -0,0 +1,18 @@
++/* Test that we do not use QI vector to initilize the memory if the
++ * size of QI vector isn't larger than UNITS_PER_WORD */
++/* { dg-do compile } */
++/* { dg-options "-march=rv32gcv -mabi=ilp32 -O3" } */
++
++struct s {
++  int a;
++  int b : 1;
++};
++
++void q(struct s*);
++
++void g() {
++  struct s r = { 15, 0 };
++  q(&r);
++}
++
++/* { dg-final { scan-assembler-times {sw\tzero,12\(sp\)} 1 } } */
+-- 
+2.34.1
+
+
+
