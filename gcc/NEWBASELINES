@@ -2,4 +2,7 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 sh4-linux-gnu
-riscv32-elf
+iq2000-elf
+h8300-elf
+m32r-elf
+moxie-elf
