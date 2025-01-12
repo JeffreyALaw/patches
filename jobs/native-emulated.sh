@@ -24,6 +24,7 @@ export PREFIX=`pwd`/installed
 PATH=`pwd`/installed/bin:/home/law/bin:$PATH
 
 echo Building binutils
+date
 pushd obj/binutils-gdb
 ../../binutils-gdb/configure --enable-warn-rwx-segments=no --enable-warn-execstack=no --disable-werror --prefix=$PREFIX ${TARGET} >> $LOGFILE 2>&1
 make -j $NPROC -l $NPROC all-gas all-binutils all-ld  >> $LOGFILE 2>&1
@@ -45,6 +46,7 @@ fi
 #fi
 
 echo Building GCC
+date
 pushd obj/gcc
 ../../gcc/configure --prefix=$PREFIX --disable-analyzer --prefix=$PREFIX --enable-languages=c,c++,fortran,lto $ENABLE_MULTIARCH --disable-multilib --disable-libsanitizer $DISABLE_BOOTSTRAP ${TARGET} >> $LOGFILE 2>&1
 #make -j $NPROC -l $NPROC >> $LOGFILE 2>&1
@@ -69,6 +71,7 @@ case ${TARGET} in
 esac
 
 echo Building glibc
+date
 pushd obj/glibc
 ../../glibc/configure --disable-werror --prefix=$PREFIX --enable-add-ons ${TARGET} >> $LOGFILE 2>&1
 make -j $NPROC -l $NPROC >> $LOGFILE 2>&1
@@ -80,8 +83,12 @@ popd
 #popd
 
 # As is the GCC testsuite on native targets
+echo Testing GCC
+date
 pushd obj/gcc/gcc
 make -k -j $NPROC -l $NPROC check >& check.log || true 
 popd
 
+echo DONE
+date
 patches/jobs/validate-results.sh $TARGET
