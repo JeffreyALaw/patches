@@ -1,14 +1,5 @@
-	PR rtl-optimization/107455
-gcc/
-	* postreload.cc (reload_cse_regs_1): Take advantage of conditional
-	equivalences.
-
-gcc/testsuite
-	* gcc.target/riscv/pr107455-1.c: New test.
-	* gcc.target/riscv/pr107455-2.c: New test.
-
 diff --git a/gcc/postreload.cc b/gcc/postreload.cc
-index a220001ef16..01f79898a4a 100644
+index 05c2e0e2644..11c883feaaf 100644
 --- a/gcc/postreload.cc
 +++ b/gcc/postreload.cc
 @@ -33,6 +33,7 @@ along with GCC; see the file COPYING3.  If not see
@@ -19,7 +10,7 @@ index a220001ef16..01f79898a4a 100644
  #include "cfgrtl.h"
  #include "cfgbuild.h"
  #include "cfgcleanup.h"
-@@ -221,13 +222,116 @@ reload_cse_regs_1 (void)
+@@ -221,13 +222,107 @@ reload_cse_regs_1 (void)
    init_alias_analysis ();
  
    FOR_EACH_BB_FN (bb, cfun)
@@ -47,34 +38,27 @@ index a220001ef16..01f79898a4a 100644
 +	     all have the same implicit set.  */
 +	  FOR_EACH_EDGE (e, ei, bb->preds)
 +	    {
-+	      /* If the predecessor does not end in a conditional
-+		 jump, then it does not have an implicit set.  */
-+	      if (e->src == ENTRY_BLOCK_PTR_FOR_FN (cfun)
-+		  || !block_ends_with_condjump_p (e->src))
++	      /* Skip the entry/exit block.  */
++	      if (e->src == ENTRY_BLOCK_PTR_FOR_FN (cfun))
 +		break;
 +
-+	      /* We know the predecessor ends with a conditional
-+		 jump.  Now dig into the actal form of the jump
-+		 to potentially extract an implicit set.  */
++	      /* Verify this block ends with a suitable condjump  */
 +	      rtx_insn *condjump = BB_END (e->src);
-+	      if (!condjump
-+		  || ! any_condjump_p (condjump)
-+		  || ! onlyjump_p (condjump))
++	      if (!condjump || ! any_condjump_p (condjump))
 +		break;
 +
 +	      /* This predecessor ends with a possible equivalence
 +		 producing conditional branch.  Extract the condition
 +		 and try to use it to create an equivalence.  */
-+	      rtx pat = single_set (condjump);
++	      rtx pat = pc_set (condjump);
 +	      rtx i_t_e = SET_SRC (pat);
 +	      gcc_assert (GET_CODE (i_t_e) == IF_THEN_ELSE);
 +	      rtx cond = XEXP (i_t_e, 0);
-+	      if ((GET_CODE (cond) == EQ
-+		   && GET_CODE (XEXP (i_t_e, 1)) == LABEL_REF
-+		   && XEXP (XEXP (i_t_e, 1), 0) == BB_HEAD (bb))
-+		  || (GET_CODE (cond) == NE
-+		      && XEXP (i_t_e, 2) == pc_rtx
-+		      && e->src->next_bb == bb))
++
++	      if (((e->flags & EDGE_FALLTHRU) != 0)
++		  == ((XEXP (i_t_e, 1) == pc_rtx)
++		      ? GET_CODE (cond) == EQ
++		      : GET_CODE (cond) == NE))
 +		{
 +		  /* If this is the first time through record
 +		     the source and destination.  */
@@ -85,9 +69,7 @@ index a220001ef16..01f79898a4a 100644
 +		    }
 +		  /* If this is not the first time through, then
 +		     verify the source and destination match.  */
-+		  else if (REG_P (dest)
-+			   && REG_P (src)
-+			   && rtx_equal_p (dest, XEXP (cond, 0))
++		  else if (rtx_equal_p (dest, XEXP (cond, 0))
 +			   && rtx_equal_p (src, XEXP (cond, 1)))
 +		    ;
 +		  else
