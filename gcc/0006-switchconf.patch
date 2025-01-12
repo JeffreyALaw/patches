@@ -1,0 +1,26 @@
+This speeds up buids dramatically on the tester, particularly the
+native emulated builds which are improved by ~50%.
+
+commit 033db34f0286e29198c6236512cc504a4294d77a
+Author: Jeff Law <jlaw@ventanamicro.com>
+Date:   Wed Jan 8 08:08:40 2025 -0700
+
+    Revert "tree-switch-conversion: don't apply switch size limit on jump tables"
+    
+    This reverts commit 668cad04b16fc044142474232ac072fcc5f94433.
+
+diff --git a/gcc/tree-switch-conversion.cc b/gcc/tree-switch-conversion.cc
+index 39a8a893edd..432970597c9 100644
+--- a/gcc/tree-switch-conversion.cc
++++ b/gcc/tree-switch-conversion.cc
+@@ -1643,6 +1643,10 @@ jump_table_cluster::find_jump_tables (vec<cluster *> &clusters)
+ 
+   unsigned l = clusters.length ();
+ 
++  /* Note: l + 1 is the number of cases of the switch.  */
++  if (l + 1 > (unsigned) param_switch_lower_slow_alg_max_cases)
++    return clusters.copy ();
++
+   auto_vec<min_cluster_item> min;
+   min.reserve (l + 1);
+ 
