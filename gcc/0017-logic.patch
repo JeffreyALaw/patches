@@ -1,0 +1,73 @@
+
+
+Correct logic on 64-bit host:
+        ...
+        bseti   a5,zero,38
+        bseti   a5,a5,63
+        addi    a5,a5,-1
+        and     a4,a4,a5
+	...
+
+Wrong logic on 32-bit host:
+	...
+        li      a5,64
+        bseti   a5,a5,31
+        addi    a5,a5,-1
+        and     a4,a4,a5
+	...
+
+gcc/ChangeLog:
+
+	* config/riscv/riscv.cc (riscv_build_integer_1): Change
+	1UL/1ULL to HOST_WIDE_INT_1U.
+
+gcc/testsuite/ChangeLog:
+
+	* gcc.target/riscv/zbs-bug.c: New test.
+---
+ gcc/config/riscv/riscv.cc                |  4 ++--
+ gcc/testsuite/gcc.target/riscv/zbs-bug.c | 15 +++++++++++++++
+ 2 files changed, 17 insertions(+), 2 deletions(-)
+ create mode 100644 gcc/testsuite/gcc.target/riscv/zbs-bug.c
+
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index 65e09842fde8..3b5712429e46 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -1112,10 +1112,10 @@ riscv_build_integer_1 (struct riscv_integer_op codes[RISCV_MAX_INTEGER_OPS],
+ 	{
+ 	  HOST_WIDE_INT bit = ctz_hwi (value);
+ 	  alt_codes[i].code = (i == 0 ? UNKNOWN : IOR);
+-	  alt_codes[i].value = 1UL << bit;
++	  alt_codes[i].value = HOST_WIDE_INT_1U << bit;
+ 	  alt_codes[i].use_uw = false;
+ 	  alt_codes[i].save_temporary = false;
+-	  value &= ~(1ULL << bit);
++	  value &= ~(HOST_WIDE_INT_1U << bit);
+ 	  i++;
+ 	}
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/zbs-bug.c b/gcc/testsuite/gcc.target/riscv/zbs-bug.c
+new file mode 100644
+index 000000000000..10dde5801334
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/zbs-bug.c
+@@ -0,0 +1,15 @@
++/* { dg-do compile { target { rv64 } } } */
++/* { dg-skip-if "" { *-*-* } { "-O1" "-O2" "-O3" "-Og" "-Os" "-Oz" } } */
++/* { dg-options "-march=rv64gc_zbb_zbs -mabi=lp64d -O0" } */
++
++struct a {
++  unsigned : 29;
++  signed : 6;
++  signed b : 25;
++};
++
++void c() {
++  struct a d = {808};
++}
++
++/* { dg-final { scan-assembler-not "bseti.*31" } }*/
+-- 
+2.25.1
+
