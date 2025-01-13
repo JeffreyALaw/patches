@@ -1,0 +1,129 @@
+PatchworkGNU Compiler Collection
+ Patches
+ Bundles
+ About this project
+6 JeffreyALaw 
+[2/2] RISC-V: Remove zba check in bitwise and ashift reassociation [PR 115921]
+Message ID	20250112144949.109479-3-xry111@xry111.site
+State	New
+Delegated to:	Jeff Law
+Headers	show
+Series	RISC-V bitwise-ashift reassoc improvements [PR 115921] | expand
+Patch Properties
+Change state:	
+New
+Delegate to:	
+JeffreyALaw
+Archived:	
+Bundling
+Create bundle:	
+ 
+Checks
+Context	Check	Description
+rivoscibot/toolchain-ci-rivos-apply-patch	success	Patch applied
+rivoscibot/toolchain-ci-rivos-lint	success	Lint passed
+linaro-tcwg-bot/tcwg_gcc_build--master-arm	success	Build passed
+rivoscibot/toolchain-ci-rivos-build--newlib-rv64gcv-lp64d-multilib	success	Build passed
+rivoscibot/toolchain-ci-rivos-build--linux-rv64gcv-lp64d-multilib	success	Build passed
+rivoscibot/toolchain-ci-rivos-build--linux-rv64gc_zba_zbb_zbc_zbs-lp64d-multilib	success	Build passed
+linaro-tcwg-bot/tcwg_gcc_check--master-arm	success	Test passed
+linaro-tcwg-bot/tcwg_gcc_build--master-aarch64	success	Build passed
+rivoscibot/toolchain-ci-rivos-test	success	Testing passed
+linaro-tcwg-bot/tcwg_gcc_check--master-aarch64	success	Test passed
+Commit Message
+Xi Ruoyao
+Jan. 12, 2025, 2:49 p.m. UTC
+  The test case
+
+    long
+    test (long x, long y)
+    {
+      return ((x | 0x1ff) << 3) + y;
+    }
+
+is now compiled (-O2 -march=rv64g_zba) to
+
+    li      a4,4096
+    slliw   a5,a0,3
+    addi    a4,a4,-8
+    or      a5,a5,a4
+    addw    a0,a5,a1
+    ret
+
+Despite this check was originally intended to use zba better, now
+removing it actually enables the use of zba for this test case (thanks
+to late combine):
+
+    ori    a5,a0,511
+    sh3add  a0,a5,a1
+    ret
+
+Obviously, bitmanip.md does not cover
+(any_or (ashift (reg) (imm123)) imm) at all, and even for and it just
+seems more natural splitting to (ashift (and (reg) (imm')) (imm123))
+first, then let late combine to combine the outer ashift and the plus.
+
+I've not found any test case regressed by the removal.
+And "make check-gcc RUNTESTFLAGS=riscv.exp='zba-*.c'" also reports no
+failure.
+
+gcc/ChangeLog:
+
+	PR target/115921
+	* config/riscv/riscv.md (<optab>_shift_reverse): Remove
+	check for TARGET_ZBA.
+
+gcc/testsuite/ChangeLog:
+
+	PR target/115921
+	* gcc.target/riscv/zba-shNadd-08.c: New test.
+---
+ gcc/config/riscv/riscv.md                      | 7 +------
+ gcc/testsuite/gcc.target/riscv/zba-shNadd-08.c | 9 +++++++++
+ 2 files changed, 10 insertions(+), 6 deletions(-)
+ create mode 100644 gcc/testsuite/gcc.target/riscv/zba-shNadd-08.c
+  
+Patch
+diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
+index 0a76ed63f0d..fd98e0a481e 100644
+--- a/gcc/config/riscv/riscv.md
++++ b/gcc/config/riscv/riscv.md
+@@ -2969,9 +2969,7 @@  (define_insn_and_split "*<optab>si3_extend_mask"
+ ;; for IOR/XOR.  It probably doesn't matter for AND.
+ ;;
+ ;; We also don't want to do this if the immediate already fits in a simm12
+-;; field, or it is a single bit operand and zbs is available, or when we
+-;; might be able to generate a shift-add sequence via the splitter in
+-;; bitmanip.md for masks that are a run of consecutive ones.
++;; field, or it is a single bit operand and zbs is available.
+ (define_insn_and_split "<optab>_shift_reverse<X:mode>"
+   [(set (match_operand:X 0 "register_operand" "=r")
+     (any_bitwise:X (ashift:X (match_operand:X 1 "register_operand" "r")
+@@ -2980,9 +2978,6 @@  (define_insn_and_split "<optab>_shift_reverse<X:mode>"
+   "(!SMALL_OPERAND (INTVAL (operands[3]))
+     && SMALL_OPERAND (INTVAL (operands[3]) >> INTVAL (operands[2]))
+     && (!TARGET_ZBS || popcount_hwi (INTVAL (operands[3])) > 1)
+-    && (!(TARGET_64BIT && TARGET_ZBA)
+-	|| !consecutive_bits_operand (operands[3], VOIDmode)
+-	|| !imm123_operand (operands[2], VOIDmode))
+     && (INTVAL (operands[3]) & ((1ULL << INTVAL (operands[2])) - 1)) == 0)"
+   "#"
+   "&& 1"
+diff --git a/gcc/testsuite/gcc.target/riscv/zba-shNadd-08.c b/gcc/testsuite/gcc.target/riscv/zba-shNadd-08.c
+new file mode 100644
+index 00000000000..50c9c4cf78b
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/zba-shNadd-08.c
+@@ -0,0 +1,9 @@ 
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc_zba -mabi=lp64 -O2" } */
++/* { dg-final { scan-assembler "sh3add" } } */
++
++long
++test (long x, long y)
++{
++  return ((x | 0x1ff) << 3) + y;
++}
+
+  
+patchwork patch tracking system | version v3.1.1.post23-gd11ea11 | about patchwork
