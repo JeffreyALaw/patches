@@ -1,0 +1,74 @@
+*** simplify-rtx.cc.SAVE	2025-01-14 10:28:21.547754587 -0700
+--- simplify-rtx.cc	2025-01-14 11:16:40.782995333 -0700
+*************** simplify_context::simplify_binary_operat
+*** 4530,4540 ****
+  	  if (SUBREG_P (xop0)
+  	      && GET_MODE (SUBREG_REG (xop0)) == mode
+  	      && GET_CODE (SUBREG_REG (xop0)) == ASHIFT
+! 	      && CONST_INT_P (xop1))
+  	    {
+  	      rtx yop0 = XEXP (SUBREG_REG (xop0), 0);
+  	      rtx yop1 = XEXP (SUBREG_REG (xop0), 1);
+! 	      if (CONST_INT_P (yop1))
+  		{
+  		  auto bias = (GET_MODE_BITSIZE (int_mode)
+  			       - GET_MODE_BITSIZE (inner_mode));
+--- 4530,4542 ----
+  	  if (SUBREG_P (xop0)
+  	      && GET_MODE (SUBREG_REG (xop0)) == mode
+  	      && GET_CODE (SUBREG_REG (xop0)) == ASHIFT
+! 	      && CONST_INT_P (xop1)
+! 	      && UINTVAL (xop1) < GET_MODE_PRECISION (inner_mode))
+  	    {
+  	      rtx yop0 = XEXP (SUBREG_REG (xop0), 0);
+  	      rtx yop1 = XEXP (SUBREG_REG (xop0), 1);
+! 	      if (CONST_INT_P (yop1)
+! 		  && UINTVAL (yop1) < GET_MODE_PRECISION (inner_mode))
+  		{
+  		  auto bias = (GET_MODE_BITSIZE (int_mode)
+  			       - GET_MODE_BITSIZE (inner_mode));
+diff --git a/gcc/testsuite/gcc.target/riscv/pr109592.c b/gcc/testsuite/gcc.target/riscv/pr109592.c
+new file mode 100644
+index 00000000000..2b388c4f7a1
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr109592.c
+@@ -0,0 +1,9 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc_zbb -mabi=lp64d" } */
++
++int sextb32(int x) { return (x << 24) >> 24; }
++
++/* { dg-final { scan-assembler-times {sext.b} 1 } } */
++/* { dg-final { scan-assembler-not {slli} } } */
++/* { dg-final { scan-assembler-not {srai} } } */
++
+diff --git a/gcc/testsuite/gcc.target/riscv/sign-extend-rshift.c b/gcc/testsuite/gcc.target/riscv/sign-extend-rshift.c
+index 86f40375722..bcb015efe03 100644
+--- a/gcc/testsuite/gcc.target/riscv/sign-extend-rshift.c
++++ b/gcc/testsuite/gcc.target/riscv/sign-extend-rshift.c
+@@ -84,7 +84,7 @@ SLONG_EXT_SSHORT_RSHIFT_N_SLONG(63)
+ 
+ #if __riscv_xlen == 64
+ // Below "slli ((32+16)-N); srai (32+16)" for rv64
+-//    or "slli (16-N); sraiw 16" for rv64
++//    or "slli (16-N); srai 16" for rv64
+ SINT_EXT_SSHORT_RSHIFT_N_SINT(1)
+ SINT_EXT_SSHORT_RSHIFT_N_SINT(7)
+ SINT_EXT_SSHORT_RSHIFT_N_SINT(8)
+@@ -104,7 +104,7 @@ SINT_EXT_SSHORT_RSHIFT_N_SINT(31)
+ 
+ // Below "slli (16-N); srai 16" for rv32
+ // Below "slli ((32+16)-N); srai (32+16)" for rv64
+-//    or "slli (16-N); sraiw 16" for rv64
++//    or "slli (16-N); srai 16" for rv64
+ SINT_EXT_SSHORT_RSHIFT_N_SLONG(9)
+ SINT_EXT_SSHORT_RSHIFT_N_SLONG(15)
+ 
+@@ -119,5 +119,5 @@ SLONG_EXT_SSHORT_RSHIFT_N_SINT(15)
+ /* { dg-final { scan-assembler-times "srai\t" 26 { target { rv32 } } } } */
+ 
+ /* { dg-final { scan-assembler-times "slli\t" 44 { target { rv64 } } } } */
+-/* { dg-final { scan-assembler-times "srai\t" 51 { target { rv64 } } } } */
+-/* { dg-final { scan-assembler-times "sraiw\t" 10 { target { rv64 } } } } */
++/* { dg-final { scan-assembler-times "srai\t" 58 { target { rv64 } } } } */
++/* { dg-final { scan-assembler-times "sraiw\t" 3 { target { rv64 } } } } */
