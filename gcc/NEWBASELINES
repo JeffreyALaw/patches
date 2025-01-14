@@ -3,3 +3,4 @@
 # reset.  
 sh4-linux-gnu
 s390x-linux-gnu
+v850e-elf
