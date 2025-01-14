@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -x
 
 # Ensure that we fail if any command fails
 set -e
@@ -19,7 +19,10 @@ if [ -f obj/gcc/gcc/testsuite/gcc/gcc.sum ]; then
 fi
 
 
+echo TARGET is ${TARGET}
+cat patches/gcc/NEWBASELINES
 newbase=`grep ${TARGET} patches/gcc/NEWBASELINES || true`
+echo $newbase
 if [ -f old-testresults/gcc.sum.gz ]; then
   rm -f old-testresults/*.sum
   gunzip old-testresults/*.sum.gz
