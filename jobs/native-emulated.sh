@@ -49,10 +49,8 @@ echo Building GCC
 date
 pushd obj/gcc
 ../../gcc/configure --prefix=$PREFIX --disable-analyzer --prefix=$PREFIX --enable-languages=c,c++,fortran,lto $ENABLE_MULTIARCH --disable-multilib --disable-libsanitizer $DISABLE_BOOTSTRAP ${TARGET} >> $LOGFILE 2>&1
-#make -j $NPROC -l $NPROC >> $LOGFILE 2>&1
-#make install >> $LOGFILE 2>&1
-make -j $NPROC -l $NPROC >> $LOGFILE
-make install >> $LOGFILE
+make -j $NPROC -l $NPROC >> $LOGFILE 2>&1
+make install >> $LOGFILE 2>&1
 popd
 
 case ${TARGET} in
