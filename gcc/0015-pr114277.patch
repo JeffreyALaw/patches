@@ -1,53 +1,31 @@
 diff --git a/gcc/expr.cc b/gcc/expr.cc
-index a310b2d9131..435ee9d2650 100644
+index a310b2d9131..ac65fcb4269 100644
 --- a/gcc/expr.cc
 +++ b/gcc/expr.cc
-@@ -10327,6 +10327,7 @@ expand_expr_real_2 (const_sepops ops, rtx target, machine_mode tmode,
+@@ -10327,7 +10327,7 @@ expand_expr_real_2 (const_sepops ops, rtx target, machine_mode tmode,
  
        expand_operands (treeop0, treeop1, subtarget, &op0, &op1, EXPAND_NORMAL);
  
-+  zero_one_mult:
-       /* Expand X*Y as X&-Y when Y must be zero or one.  */
+-      /* Expand X*Y as X&-Y when Y must be zero or one.  */
++      /* Expand X*Y as a conditional move or X&-Y when Y must be zero or one.  */
        if (SCALAR_INT_MODE_P (mode))
  	{
-@@ -11038,6 +11039,18 @@ expand_expr_real_2 (const_sepops ops, rtx target, machine_mode tmode,
- 	if (temp)
- 	  return temp;
- 
-+	if (!can_conditionally_move_p (mode))
-+	  {
-+	    /* Fallback to the multiplication that got simplified on gimple.  */
-+	    op2 = expand_normal (treeop2);
-+	    if (op2 == const0_rtx)
-+	      {
-+		op0 = expand_normal (treeop0);
-+		op1 = expand_normal (treeop1);
-+		goto zero_one_mult;
-+	      }
-+	  }
+ 	  bool gimple_zero_one_valued_p (tree, tree (*)(tree));
+@@ -10349,6 +10349,14 @@ expand_expr_real_2 (const_sepops ops, rtx target, machine_mode tmode,
+ 					  &algorithm, &variant, cost)
+ 		  : cost < mul_cost (speed, mode))
+ 		{
++		  /* First try to expand using a conditional move.  */
++		  if (bit0_p)
++		    temp = expand_cond_expr_using_cmove (treeop0, treeop1, integer_zero_node);
++		  else
++		    temp = expand_cond_expr_using_cmove (treeop1, treeop0, integer_zero_node);
++		  if (temp)
++		    return temp;
 +
- 	/* If we are not to produce a result, we have no target.  Otherwise,
- 	   if a target was specified use it; it will not be used as an
- 	   intermediate target unless it is safe.  If no target, use a
-diff --git a/gcc/match.pd b/gcc/match.pd
-index 17193087498..a217e52a8b9 100644
---- a/gcc/match.pd
-+++ b/gcc/match.pd
-@@ -11263,3 +11263,14 @@ and,
-       }
-       (if (full_perm_p)
- 	(vec_perm (op@3 @0 @1) @3 @2))))))
-+
-+#if GIMPLE
-+ /* Multiplication by a zero_one_valued_p operand can be simplified to a
-+    conditional move. 
-+
-+    Note we don't want to go this on generic since @1 might hav side effects
-+    that we must preserve.  */
-+ (simplify
-+  (mult:c (convert? zero_one_valued_p@0) @1)
-+  (cond  @0 (convert @1) {build_zero_cst (TREE_TYPE (@1)); }))
-+#endif
+ 		  temp = bit0_p ? expand_and (mode, negate_rtx (mode, op0),
+ 					      op1, target)
+ 				: expand_and (mode, op0,
 diff --git a/gcc/testsuite/gcc.target/i386/pr114277.c b/gcc/testsuite/gcc.target/i386/pr114277.c
 new file mode 100644
 index 00000000000..f74caf2d9f5
