@@ -1,0 +1,20 @@
+diff --git a/gcc/config/riscv/predicates.md b/gcc/config/riscv/predicates.md
+index 1f67d30be9d..f26bafcc688 100644
+--- a/gcc/config/riscv/predicates.md
++++ b/gcc/config/riscv/predicates.md
+@@ -423,11 +423,11 @@ (define_predicate "imm123_operand"
+ (define_predicate "consecutive_bits_operand"
+   (match_code "const_int")
+ {
+-	unsigned HOST_WIDE_INT val = UINTVAL (op);
+-	if (exact_log2 ((val >> ctz_hwi (val)) + 1) < 0)
+-	        return false;
++  unsigned HOST_WIDE_INT val = UINTVAL (op);
++  if (exact_log2 ((val >> ctz_hwi (val)) + 1) <= 0)
++    return false;
+ 
+-	return true;
++  return true;
+ })
+ 
+ (define_predicate "const_two_s12"
