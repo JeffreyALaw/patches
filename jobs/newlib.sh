@@ -176,11 +176,11 @@ case "${TARGET}" in
     ;;
   riscv32*-*)
     RUNGCCTESTS=yes
-    TESTARGS="--target_board=unix/-march=rv32gcv"
+    TESTARGS="--target_board=unix/{-march=rv32gcv/-mtune=xiangshan-nanhu}"
     ;;
   riscv64*-*)
     RUNGCCTESTS=yes
-    TESTARGS="--target_board=unix/{-march=rv64gc,-march=rv64gc_zba_zbb_zbs_zicond}"
+    TESTARGS="--target_board=unix/{-march=rv64gc/-mtune=xiangshan-nanhu,-march=rv64gc_zba_zbb_zbs_zicond/-mtune=xiangshan-nanhu}"
     ;;
   rl78*-*)
     RUNGCCTESTS=yes
