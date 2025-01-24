@@ -4,3 +4,4 @@
 sh4-linux-gnu
 loongarch64-linux-gnu
 rx-elf
+riscv64-linux-gnu
