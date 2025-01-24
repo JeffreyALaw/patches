@@ -1,0 +1,51 @@
+diff --git a/gcc/config/nds32/nds32-fp-as-gp.c b/gcc/config/nds32/nds32-fp-as-gp.c
+index 278df99bc74..b245b1b1cd3 100644
+--- a/gcc/config/nds32/nds32-fp-as-gp.cc
++++ b/gcc/config/nds32/nds32-fp-as-gp.cc
+@@ -101,6 +101,10 @@ nds32_get_symbol_count (void)
+ static bool
+ nds32_fp_as_gp_check_available (void)
+ {
++  /* I'm getting occasional failures from the linker with
++     this opt.  Disable for now.  */
++  return false;
++
+   basic_block bb;
+   basic_block exit_bb;
+   edge_iterator ei;
+This is a hack and should never be upstreamed
+There's either a length accounting problem or alignment accounting problem
+that shows up building newlib.
+diff --git a/gcc/config/bfin/bfin.md b/gcc/config/bfin/bfin.md
+index c6b174dc3bd..983a95a4c38 100644
+--- a/gcc/config/bfin/bfin.md
++++ b/gcc/config/bfin/bfin.md
+@@ -384,7 +384,7 @@ (define_attr "length" ""
+          (eq_attr "type" "brcc")
+ 	 (cond [(and
+ 	            (le (minus (match_dup 3) (pc)) (const_int 1020))
+-	            (ge (minus (match_dup 3) (pc)) (const_int -1024)))
++	            (ge (minus (match_dup 3) (pc)) (const_int -952)))
+ 		  (const_int 2)
+ 		(and
+ 	            (le (minus (match_dup 3) (pc)) (const_int 4092))
+diff --git a/gcc/config/rx/rx.cc b/gcc/config/rx/rx.cc
+index 0754e286552..a2cffa0e0af 100644
+--- a/gcc/config/rx/rx.cc
++++ b/gcc/config/rx/rx.cc
+@@ -2791,6 +2791,7 @@ rx_override_options_after_change (void)
+ 
+       first_time = FALSE;
+     }
++#if 0
+   else
+     {
+       /* Alert the user if they are changing the optimization options
+@@ -2799,6 +2800,7 @@ rx_override_options_after_change (void)
+ 	  && !flag_finite_math_only)
+ 	warning (0, "RX FPU instructions do not support NaNs and infinities");
+     }
++#endif
+ }
+ 
+ static void
