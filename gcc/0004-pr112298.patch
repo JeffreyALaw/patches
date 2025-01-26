@@ -1,0 +1,235 @@
+diff --git a/gcc/config/h8300/bitfield.md b/gcc/config/h8300/bitfield.md
+index 0d28c750a6a..09869697090 100644
+--- a/gcc/config/h8300/bitfield.md
++++ b/gcc/config/h8300/bitfield.md
+@@ -288,7 +288,7 @@ (define_insn ""
+ 
+ (define_insn_and_split "bfld"
+   [(set (match_operand:QI 0 "register_operand" "=r")
+-	(zero_extract:QI (match_operand:QI 1 "bit_memory_operand" "WU")
++	(zero_extract:QI (match_operand:QI 1 "bit_memory_operand" "rWU")
+ 			 (match_operand:QI 2 "immediate_operand" "n")
+ 			 (match_operand:QI 3 "immediate_operand" "n")))]
+   "TARGET_H8300SX && INTVAL (operands[2]) + INTVAL (operands[3]) <= 8"
+@@ -300,7 +300,7 @@ (define_insn_and_split "bfld"
+ 
+ (define_insn "bfld_clobber_flags"
+   [(set (match_operand:QI 0 "register_operand" "=r")
+-	(zero_extract:QI (match_operand:QI 1 "bit_memory_operand" "WU")
++	(zero_extract:QI (match_operand:QI 1 "bit_memory_operand" "rWU")
+ 			 (match_operand:QI 2 "immediate_operand" "n")
+ 			 (match_operand:QI 3 "immediate_operand" "n")))
+    (clobber (reg:CC CC_REG))]
+@@ -313,7 +313,7 @@ (define_insn "bfld_clobber_flags"
+   [(set_attr "length_table" "bitfield")])
+ 
+ (define_insn_and_split "bfst"
+-  [(set (zero_extract:QI (match_operand:QI 0 "bit_memory_operand" "+WU")
++  [(set (zero_extract:QI (match_operand:QI 0 "bit_memory_operand" "+rWU")
+ 			 (match_operand:QI 2 "immediate_operand" "n")
+ 			 (match_operand:QI 3 "immediate_operand" "n"))
+ 	(match_operand:QI 1 "register_operand" "r"))]
+@@ -325,7 +325,7 @@ (define_insn_and_split "bfst"
+ 	      (clobber (reg:CC CC_REG))])])
+ 
+ (define_insn "bfst_clobber_flags"
+-  [(set (zero_extract:QI (match_operand:QI 0 "bit_memory_operand" "+WU")
++  [(set (zero_extract:QI (match_operand:QI 0 "bit_memory_operand" "+rWU")
+ 			 (match_operand:QI 2 "immediate_operand" "n")
+ 			 (match_operand:QI 3 "immediate_operand" "n"))
+ 	(match_operand:QI 1 "register_operand" "r"))
+@@ -345,7 +345,7 @@ (define_insn "bfst_clobber_flags"
+ ;;  "mulu.w	#0,%T0\;b%k1	.Lh8BR%=\;inc.w	#1,%T0\\n.Lh8BR%=:")
+ 
+ ;;(define_insn_and_split "*cmpstz"
+-;;  [(set (zero_extract:QI (match_operand:QI 0 "bit_memory_operand" "+WU,WU")
++;;  [(set (zero_extract:QI (match_operand:QI 0 "bit_memory_operand" "+rWU,rWU")
+ ;;			 (const_int 1)
+ ;;			 (match_operand:QI 1 "immediate_operand" "n,n"))
+ ;;	(match_operator:QI 2 "eqne_operator"
+@@ -366,7 +366,7 @@ (define_insn "bfst_clobber_flags"
+ ;;  })
+ 
+ ;;(define_insn "*bstz"
+-;;  [(set (zero_extract:QI (match_operand:QI 0 "bit_memory_operand" "+WU")
++;;  [(set (zero_extract:QI (match_operand:QI 0 "bit_memory_operand" "+rWU")
+ ;;			 (const_int 1)
+ ;;			 (match_operand:QI 1 "immediate_operand" "n"))
+ ;;	(eq:QI (cc0) (const_int 0)))]
+@@ -375,7 +375,7 @@ (define_insn "bfst_clobber_flags"
+ ;;  [(set_attr "length_table" "unary")])
+ 
+ ;;(define_insn "*bistz"
+-;;  [(set (zero_extract:QI (match_operand:QI 0 "bit_memory_operand" "+WU")
++;;  [(set (zero_extract:QI (match_operand:QI 0 "bit_memory_operand" "+rWU")
+ ;;			 (const_int 1)
+ ;;			 (match_operand:QI 1 "immediate_operand" "n"))
+ ;;	(ne:QI (cc0) (const_int 0)))]
+@@ -384,7 +384,7 @@ (define_insn "bfst_clobber_flags"
+ ;;  [(set_attr "length_table" "unary")])
+ 
+ ;;(define_insn_and_split "*cmpcondbset"
+-;;  [(set (match_operand:QI 0 "nonimmediate_operand" "=WU,WU")
++;;  [(set (match_operand:QI 0 "nonimmediate_operand" "=rWU,rWU")
+ ;;	(if_then_else:QI (match_operator 1 "eqne_operator"
+ ;;			  [(match_operand 2 "h8300_dst_operand" "r,rQ")
+ ;;			   (match_operand 3 "h8300_src_operand" "I,rQi")])
+@@ -404,7 +404,7 @@ (define_insn "bfst_clobber_flags"
+ ;;  })
+ 
+ ;;(define_insn "*condbset"
+-;;  [(set (match_operand:QI 0 "bit_memory_operand" "=WU")
++;;  [(set (match_operand:QI 0 "bit_memory_operand" "=rWU")
+ ;;	(if_then_else:QI (match_operator:QI 2 "eqne_operator"
+ ;;			  [(cc0) (const_int 0)])
+ ;;			 (ior:QI (match_operand:QI 3 "bit_memory_operand" "0")
+@@ -415,7 +415,7 @@ (define_insn "bfst_clobber_flags"
+ ;;  [(set_attr "length_table" "logicb")])
+ 
+ ;;(define_insn_and_split "*cmpcondbclr"
+-;;  [(set (match_operand:QI 0 "nonimmediate_operand" "=WU,WU")
++;;  [(set (match_operand:QI 0 "nonimmediate_operand" "=rWU,rWU")
+ ;;	(if_then_else:QI (match_operator 1 "eqne_operator"
+ ;;			  [(match_operand 2 "h8300_dst_operand" "r,rQ")
+ ;;			   (match_operand 3 "h8300_src_operand" "I,rQi")])
+@@ -435,7 +435,7 @@ (define_insn "bfst_clobber_flags"
+ ;;  })
+ 
+ ;;(define_insn "*condbclr"
+-;;  [(set (match_operand:QI 0 "bit_memory_operand" "=WU")
++;;  [(set (match_operand:QI 0 "bit_memory_operand" "=rWU")
+ ;;	(if_then_else:QI (match_operator:QI 2 "eqne_operator"
+ ;;			  [(cc0) (const_int 0)])
+ ;;			 (and:QI (match_operand:QI 3 "bit_memory_operand" "0")
+@@ -446,7 +446,7 @@ (define_insn "bfst_clobber_flags"
+ ;;  [(set_attr "length_table" "logicb")])
+ 
+ ;;(define_insn_and_split "*cmpcondbsetreg"
+-;;  [(set (match_operand:QI 0 "nonimmediate_operand" "=WU,WU")
++;;  [(set (match_operand:QI 0 "nonimmediate_operand" "=rWU,rWU")
+ ;;	(if_then_else:QI (match_operator 1 "eqne_operator"
+ ;;			  [(match_operand 2 "h8300_dst_operand" "r,rQ")
+ ;;			   (match_operand 3 "h8300_src_operand" "I,rQi")])
+@@ -469,7 +469,7 @@ (define_insn "bfst_clobber_flags"
+ ;;  })
+ 
+ ;;(define_insn "*condbsetreg"
+-;;  [(set (match_operand:QI 0 "bit_memory_operand" "=WU")
++;;  [(set (match_operand:QI 0 "bit_memory_operand" "=rWU")
+ ;;	(if_then_else:QI (match_operator:QI 2 "eqne_operator"
+ ;;			  [(cc0) (const_int 0)])
+ ;;			 (ior:QI (match_operand:QI 3 "bit_memory_operand" "0")
+@@ -481,7 +481,7 @@ (define_insn "bfst_clobber_flags"
+ ;;  [(set_attr "length_table" "logicb")])
+ 
+ ;;(define_insn_and_split "*cmpcondbclrreg"
+-;;  [(set (match_operand:QI 0 "nonimmediate_operand" "=WU,WU")
++;;  [(set (match_operand:QI 0 "nonimmediate_operand" "=rWU,rWU")
+ ;;	(if_then_else:QI (match_operator 1 "eqne_operator"
+ ;;			  [(match_operand 2 "h8300_dst_operand" "r,rQ")
+ ;;			   (match_operand 3 "h8300_src_operand" "I,rQi")])
+@@ -504,7 +504,7 @@ (define_insn "bfst_clobber_flags"
+ ;;  })
+ 
+ ;;(define_insn "*condbclrreg"
+-;;  [(set (match_operand:QI 0 "bit_memory_operand" "=WU")
++;;  [(set (match_operand:QI 0 "bit_memory_operand" "=rWU")
+ ;;	(if_then_else:QI (match_operator:QI 2 "eqne_operator"
+ ;;			  [(cc0) (const_int 0)])
+ ;;			 (and:QI (match_operand:QI 3 "bit_memory_operand" "0")
+diff --git a/gcc/config/h8300/constraints.md b/gcc/config/h8300/constraints.md
+index 65579267359..e823a793e57 100644
+--- a/gcc/config/h8300/constraints.md
++++ b/gcc/config/h8300/constraints.md
+@@ -170,11 +170,7 @@ (define_constraint "T"
+ 
+ (define_constraint "U"
+   "An operand valid for a bset destination."
+-  (ior (and (match_code "reg")
+-	    (match_test "(reload_in_progress || reload_completed)
+-			 ? REG_OK_FOR_BASE_STRICT_P (op)
+-			 : REG_OK_FOR_BASE_P (op)"))
+-       (and (match_code "mem")
++  (ior (and (match_code "mem")
+ 	    (match_code "reg" "0")
+ 	    (match_test "(reload_in_progress || reload_completed)
+ 			 ? REG_OK_FOR_BASE_STRICT_P (XEXP (op, 0))
+diff --git a/gcc/config/h8300/jumpcall.md b/gcc/config/h8300/jumpcall.md
+index b59639992a3..a9cb38decfd 100644
+--- a/gcc/config/h8300/jumpcall.md
++++ b/gcc/config/h8300/jumpcall.md
+@@ -97,7 +97,7 @@ (define_insn "*branch_1_false"
+ ;; rather than using a function call.  I think that would fix this problem.
+ (define_insn "*brabc"
+   [(set (pc)
+-	(if_then_else (eq (zero_extract (match_operand:QI 1 "bit_memory_operand" "WU")
++	(if_then_else (eq (zero_extract (match_operand:QI 1 "bit_memory_operand" "rWU")
+ 					(const_int 1)
+ 					(match_operand:QI 2 "immediate_operand" "n"))
+ 			  (const_int 0))
+@@ -121,7 +121,7 @@ (define_insn "*brabc"
+ 
+ (define_insn "*brabs"
+   [(set (pc)
+-	(if_then_else (ne (zero_extract (match_operand:QI 1 "bit_memory_operand" "WU")
++	(if_then_else (ne (zero_extract (match_operand:QI 1 "bit_memory_operand" "rWU")
+ 					(const_int 1)
+ 					(match_operand:QI 2 "immediate_operand" "n"))
+ 			  (const_int 0))
+diff --git a/gcc/config/h8300/logical.md b/gcc/config/h8300/logical.md
+index 5df0922ef4e..1865e39fc64 100644
+--- a/gcc/config/h8300/logical.md
++++ b/gcc/config/h8300/logical.md
+@@ -32,8 +32,8 @@ (define_expand "<code><mode>3"
+ ;; ----------------------------------------------------------------------
+ 
+ (define_insn_and_split "*andqi3_2"
+-  [(set (match_operand:QI 0 "bit_operand" "=U,rQ,r")
+-	(and:QI (match_operand:QI 1 "bit_operand" "%0,0,WU")
++  [(set (match_operand:QI 0 "bit_operand" "=rU,rQ,r")
++	(and:QI (match_operand:QI 1 "bit_operand" "%0,0,rWU")
+ 		(match_operand:QI 2 "h8300_src_operand" "Y0,rQi,IP1>X")))]
+   "TARGET_H8300SX"
+   "#"
+@@ -42,8 +42,8 @@ (define_insn_and_split "*andqi3_2"
+ 	      (clobber (reg:CC CC_REG))])])
+ 
+ (define_insn "*andqi3_2_clobber_flags"
+-  [(set (match_operand:QI 0 "bit_operand" "=U,rQ,r")
+-	(and:QI (match_operand:QI 1 "bit_operand" "%0,0,WU")
++  [(set (match_operand:QI 0 "bit_operand" "=rU,rQ,r")
++	(and:QI (match_operand:QI 1 "bit_operand" "%0,0,rWU")
+ 		(match_operand:QI 2 "h8300_src_operand" "Y0,rQi,IP1>X")))
+    (clobber (reg:CC CC_REG))]
+   "TARGET_H8300SX"
+@@ -55,7 +55,7 @@ (define_insn "*andqi3_2_clobber_flags"
+    (set_attr "length_table" "*,logicb,*")])
+ 
+ (define_insn_and_split "andqi3_1"
+-  [(set (match_operand:QI 0 "bit_operand" "=U,r")
++  [(set (match_operand:QI 0 "bit_operand" "=rU,r")
+ 	(and:QI (match_operand:QI 1 "bit_operand" "%0,0")
+ 		(match_operand:QI 2 "h8300_src_operand" "Y0,rn")))]
+   "register_operand (operands[0], QImode)
+@@ -156,7 +156,7 @@ (define_insn "*andorsi3_shift_8_clobber_flags"
+ ;; ----------------------------------------------------------------------
+ 
+ (define_insn_and_split "<code>qi3_1"
+-  [(set (match_operand:QI 0 "bit_operand" "=U,rQ")
++  [(set (match_operand:QI 0 "bit_operand" "=rU,rQ")
+ 	(ors:QI (match_operand:QI 1 "bit_operand" "%0,0")
+ 		(match_operand:QI 2 "h8300_src_operand" "Y2,rQi")))]
+   "TARGET_H8300SX || register_operand (operands[0], QImode)
+diff --git a/gcc/config/h8300/testcompare.md b/gcc/config/h8300/testcompare.md
+index efa66d274c7..694c9e60d4e 100644
+--- a/gcc/config/h8300/testcompare.md
++++ b/gcc/config/h8300/testcompare.md
+@@ -4,7 +4,7 @@
+ 
+ ;; (define_insn_and_split "*tst_extzv_1_n"
+ ;;   [(set (cc0)
+-;; 	(compare (zero_extract:SI (match_operand:QI 0 "general_operand_src" "r,U,mn>")
++;; 	(compare (zero_extract:SI (match_operand:QI 0 "general_operand_src" "r,rU,mn>")
+ ;; 				  (const_int 1)
+ ;; 				  (match_operand 1 "const_int_operand" "n,n,n"))
+ ;; 		 (const_int 0)))
