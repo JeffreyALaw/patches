@@ -9,3 +9,14 @@ index e5dc98e7541..99e83d8e5aa 100644
  
  typedef unsigned long int uint64_t;
  
+diff --git a/gcc/testsuite/gcc.dg/tree-ssa/fold-xor-or.c b/gcc/testsuite/gcc.dg/tree-ssa/fold-xor-or.c
+index c55cfbcc84c..51b7373af0d 100644
+--- a/gcc/testsuite/gcc.dg/tree-ssa/fold-xor-or.c
++++ b/gcc/testsuite/gcc.dg/tree-ssa/fold-xor-or.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-O3 -fdump-tree-optimized" } */
++/* { dg-options "-O3 -fdump-tree-optimized --param logical-op-non-short-circuit=1" } */
+ 
+ typedef unsigned long int uint64_t;
+ 
