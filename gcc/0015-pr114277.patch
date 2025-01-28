@@ -27,10 +27,10 @@ index a310b2d9131..ac65fcb4269 100644
  					      op1, target)
  				: expand_and (mode, op0,
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index dd50fe4eddf..574d545838e 100644
+index dd50fe4eddf..23be99c653e 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
-@@ -5265,14 +5270,14 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
+@@ -5265,13 +5265,16 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
        machine_mode mode0 = GET_MODE (op0);
        machine_mode mode1 = GET_MODE (op1);
  
@@ -44,12 +44,14 @@ index dd50fe4eddf..574d545838e 100644
  	  || (INTEGRAL_MODE_P (mode1) && mode1 != word_mode))
 -	return false;
 +	riscv_extend_comparands (code, &op0, &op1);
++
++      if (op0 != XEXP (op, 0))
++	op0 = force_reg (word_mode, op0);
++      if (op1 != XEXP (op, 1))
++	op1 = force_reg (word_mode, op1);
  
-+      op0 = force_reg (word_mode, op0);
-+      op1 = force_reg (word_mode, op1);
        /* In the fallback generic case use MODE rather than WORD_MODE for
  	 the output of the SCC instruction, to match the mode of the NEG
- 	 operation below.  The output of SCC is 0 or 1 boolean, so it is
 diff --git a/gcc/testsuite/gcc.target/i386/pr114277.c b/gcc/testsuite/gcc.target/i386/pr114277.c
 new file mode 100644
 index 00000000000..f74caf2d9f5
