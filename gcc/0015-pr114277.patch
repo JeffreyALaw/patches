@@ -45,8 +45,8 @@ index dd50fe4eddf..574d545838e 100644
 -	return false;
 +	riscv_extend_comparands (code, &op0, &op1);
  
-+      op0 = force_reg (mode, op0);
-+      op1 = force_reg (mode, op1);
++      op0 = force_reg (word_mode, op0);
++      op1 = force_reg (word_mode, op1);
        /* In the fallback generic case use MODE rather than WORD_MODE for
  	 the output of the SCC instruction, to match the mode of the NEG
  	 operation below.  The output of SCC is 0 or 1 boolean, so it is
