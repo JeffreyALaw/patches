@@ -27,7 +27,7 @@ index a310b2d9131..ac65fcb4269 100644
  					      op1, target)
  				: expand_and (mode, op0,
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index dd50fe4eddf..d110b7d7c65 100644
+index 439cc12f93d..89e27727e86 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
 @@ -5250,13 +5250,18 @@ riscv_expand_conditional_branch (rtx label, rtx_code code, rtx op0, rtx op1)
@@ -71,7 +71,29 @@ index dd50fe4eddf..d110b7d7c65 100644
        /* In the fallback generic case use MODE rather than WORD_MODE for
  	 the output of the SCC instruction, to match the mode of the NEG
  	 operation below.  The output of SCC is 0 or 1 boolean, so it is
-@@ -5332,6 +5337,7 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
+@@ -5318,6 +5323,21 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
+       else if (!TARGET_ZICOND_LIKE && !TARGET_SFB_ALU && !TARGET_XTHEADCONDMOV)
+ 	riscv_expand_int_scc (tmp, code, op0, op1, &invert);
+ 
++      /* Precondition the true/false arms of the IF_THEN_ELSE by sign extending
++	 any sub-word operand to WORD_MODE.  */
++      if (GET_MODE (cons) != VOIDmode && GET_MODE (cons) != word_mode)
++	{
++	  rtx new_rtx = gen_reg_rtx (word_mode);
++	  convert_move (new_rtx, cons, 0);
++	  cons = new_rtx;
++	}
++      if (GET_MODE (alt) != VOIDmode && GET_MODE (alt) != word_mode)
++	{
++	  rtx new_rtx = gen_reg_rtx (word_mode);
++	  convert_move (new_rtx, alt, 0);
++	  alt = new_rtx;
++	}
++
+       if (TARGET_SFB_ALU || TARGET_XTHEADCONDMOV)
+ 	{
+ 	  riscv_emit_int_compare (&code, &op0, &op1, !TARGET_SFB_ALU);
+@@ -5332,6 +5352,7 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
  	  alt = force_reg (mode, alt);
  	  emit_insn (gen_rtx_SET (dest, gen_rtx_IF_THEN_ELSE (mode, cond,
  							      cons, alt)));
@@ -79,7 +101,7 @@ index dd50fe4eddf..d110b7d7c65 100644
  	  return true;
  	}
        else if (!TARGET_ZICOND_LIKE)
-@@ -5349,7 +5355,7 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
+@@ -5349,7 +5370,7 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
  	  riscv_emit_unary (NOT, reg3, reg1);
  	  riscv_emit_binary (AND, reg4, reg3, alt);
  	  riscv_emit_binary (IOR, dest, reg2, reg4);
@@ -88,7 +110,7 @@ index dd50fe4eddf..d110b7d7c65 100644
  	}
        /* 0, reg or 0, imm */
        else if (cons == CONST0_RTX (mode)
-@@ -5362,7 +5368,7 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
+@@ -5362,7 +5383,7 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
  	  emit_insn (gen_rtx_SET (dest,
  				  gen_rtx_IF_THEN_ELSE (mode, cond,
  							cons, alt)));
@@ -97,7 +119,7 @@ index dd50fe4eddf..d110b7d7c65 100644
  	}
        /* imm, imm */
        else if (CONST_INT_P (cons) && cons != CONST0_RTX (mode)
-@@ -5382,7 +5388,7 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
+@@ -5382,7 +5403,7 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
  	  if (!SMALL_OPERAND (INTVAL (cons)))
  	    cons = force_reg (mode, cons);
  	  riscv_emit_binary (PLUS, dest, dest, cons);
@@ -106,7 +128,7 @@ index dd50fe4eddf..d110b7d7c65 100644
  	}
        /* imm, reg  */
        else if (CONST_INT_P (cons) && cons != CONST0_RTX (mode) && REG_P (alt))
-@@ -5395,7 +5401,7 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
+@@ -5395,7 +5416,7 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
  	      emit_insn (gen_rtx_SET (dest,
  				      gen_rtx_IF_THEN_ELSE (mode, cond,
  							    cons, alt)));
@@ -115,7 +137,7 @@ index dd50fe4eddf..d110b7d7c65 100644
  	    }
  
  	  riscv_emit_int_compare (&code, &op0, &op1, true);
-@@ -5418,19 +5424,27 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
+@@ -5418,19 +5439,27 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
  							CONST0_RTX (mode),
  							temp1)));
  	  riscv_emit_binary (PLUS, dest, dest, cons);
@@ -145,7 +167,7 @@ index dd50fe4eddf..d110b7d7c65 100644
  	}
        /* reg, imm  */
        else if (REG_P (cons) && CONST_INT_P (alt) && alt != CONST0_RTX (mode))
-@@ -5443,7 +5457,7 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
+@@ -5443,7 +5472,7 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
  	      emit_insn (gen_rtx_SET (dest,
  				      gen_rtx_IF_THEN_ELSE (mode, cond,
  							    cons, alt)));
@@ -154,7 +176,7 @@ index dd50fe4eddf..d110b7d7c65 100644
  	    }
  
  	  riscv_emit_int_compare (&code, &op0, &op1, true);
-@@ -5466,7 +5480,7 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
+@@ -5466,7 +5495,7 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
  							temp1,
  							CONST0_RTX (mode))));
  	  riscv_emit_binary (PLUS, dest, dest, alt);
@@ -163,7 +185,7 @@ index dd50fe4eddf..d110b7d7c65 100644
  	}
        /* reg, reg  */
        else if (REG_P (cons) && REG_P (alt))
-@@ -5480,7 +5494,7 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
+@@ -5480,7 +5509,7 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
  	      emit_insn (gen_rtx_SET (dest,
  				      gen_rtx_IF_THEN_ELSE (mode, cond,
  							    cons, alt)));
@@ -172,7 +194,7 @@ index dd50fe4eddf..d110b7d7c65 100644
  	    }
  
  	  rtx reg1 = gen_reg_rtx (mode);
-@@ -5498,11 +5512,21 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
+@@ -5498,11 +5527,21 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
  							CONST0_RTX (mode),
  							alt)));
  	  riscv_emit_binary (PLUS, dest, reg1, reg2);
