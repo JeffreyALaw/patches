@@ -4,3 +4,4 @@
 sh4-linux-gnu
 m68k-linux-gnu
 hppa-linux-gnu
+rl78-elf
