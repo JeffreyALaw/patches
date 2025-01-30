@@ -219,23 +219,6 @@ index 439cc12f93d..88a85932410 100644
  }
  
  /* Implement TARGET_FUNCTION_ARG_BOUNDARY.  Every parameter gets at
-diff --git a/gcc/testsuite/gcc.target/i386/pr114277.c b/gcc/testsuite/gcc.target/i386/pr114277.c
-new file mode 100644
-index 00000000000..f74caf2d9f5
---- /dev/null
-+++ b/gcc/testsuite/gcc.target/i386/pr114277.c
-@@ -0,0 +1,11 @@
-+/* { dg-do compile } */
-+/* { dg-options "-O2" } */
-+
-+int a,b;
-+void func(int x){
-+    a=x*(x||b);
-+}
-+
-+/* { dg-final { scan-assembler-not "or" } } */
-+/* { dg-final { scan-assembler-not "cmove" } } */
-+
 diff --git a/gcc/testsuite/gcc.target/riscv/pr111126.c b/gcc/testsuite/gcc.target/riscv/pr111126.c
 new file mode 100644
 index 00000000000..f305c31eb4d
