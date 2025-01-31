@@ -2,6 +2,4 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 sh4-linux-gnu
-m68k-linux-gnu
-hppa-linux-gnu
-rl78-elf
+mips64el-linux-gnuabi64
