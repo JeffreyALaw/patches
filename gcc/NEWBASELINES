@@ -3,3 +3,4 @@
 # reset.  
 sh4-linux-gnu
 mips64el-linux-gnuabi64
+avr-elf
