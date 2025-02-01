@@ -42,3 +42,7 @@ gcc/testsuite/gcc.target/riscv/rvv/autovec/widen/widen-complicate-6.c
 gcc/testsuite/gcc.target/riscv/rvv/autovec/widen/widen-complicate-7.c
 gcc/testsuite/gcc.target/riscv/rvv/autovec/widen/widen-complicate-8.c
 gcc/testsuite/gcc.target/riscv/rvv/autovec/widen/widen-complicate-9.c
+
+# Seems to be bouncing
+gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-evenodd-run.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slide-run.c
