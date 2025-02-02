@@ -1,0 +1,13 @@
+diff --git a/gcc/config/bfin/bfin.md b/gcc/config/bfin/bfin.md
+index 810bd52cadf..7b195162d8b 100644
+--- a/gcc/config/bfin/bfin.md
++++ b/gcc/config/bfin/bfin.md
+@@ -1443,7 +1443,7 @@ (define_insn "sminsi3"
+ (define_insn "abssi2"
+   [(set (match_operand:SI 0 "register_operand" "=d")
+ 	(abs:SI (match_operand:SI 1 "register_operand" "d")))]
+-  ""
++  "0"
+   "%0 = abs %1%!"
+   [(set_attr "type" "dsp32")])
+ 
