@@ -38,21 +38,3 @@ index 2e0b8e59099..3de27fdcea9 100644
      input_line_pointer++;
    saved_char = *input_line_pointer;
    *input_line_pointer = 0;
-@@ -4363,7 +4363,7 @@ nds32_flag (int ignore ATTRIBUTE_UNUSED)
- 
-   /* Skip whitespaces.  */
-   name = input_line_pointer;
--  while (*input_line_pointer && !is_whitespace (*input_line_pointer))
-+  while (*input_line_pointer && !ISSPACE (*input_line_pointer))
-     input_line_pointer++;
-   saved_char = *input_line_pointer;
-   *input_line_pointer = 0;
-@@ -4400,7 +4400,7 @@ ict_model (int ignore ATTRIBUTE_UNUSED)
- 
-   /* Skip whitespaces.  */
-   name = input_line_pointer;
--  while (*input_line_pointer && !is_whitespace (*input_line_pointer))
-+  while (*input_line_pointer && !ISSPACE (*input_line_pointer))
-     input_line_pointer++;
-   saved_char = *input_line_pointer;
-   *input_line_pointer = 0;
