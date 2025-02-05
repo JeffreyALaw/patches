@@ -11,15 +11,6 @@ diff --git a/gas/config/tc-nds32.c b/gas/config/tc-nds32.c
 index 2e0b8e59099..3de27fdcea9 100644
 --- a/gas/config/tc-nds32.c
 +++ b/gas/config/tc-nds32.c
-@@ -4093,7 +4093,7 @@ nds32_relax_relocs (int relax)
-     {"", "",};
- 
-   name = input_line_pointer;
--  while (*input_line_pointer && !is_whitespace (*input_line_pointer))
-+  while (*input_line_pointer && !ISSPACE (*input_line_pointer))
-     input_line_pointer++;
-   saved_char = *input_line_pointer;
-   *input_line_pointer = 0;
 @@ -4230,7 +4230,7 @@ nds32_relax_hint (int mode ATTRIBUTE_UNUSED)
    struct relax_hint_id *record_id;
  
