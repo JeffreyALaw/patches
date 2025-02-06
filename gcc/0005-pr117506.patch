@@ -38,8 +38,8 @@ easily.  Could somebody test it there?  Or do you want the
 	* gcc.dg/pr117506.c: New test.
 	* gcc.target/riscv/pr117506.c: New test.
 
---- gcc/loop-iv.cc.jj	2025-01-29 21:12:28.741974212 +0100
-+++ gcc/loop-iv.cc	2025-02-05 13:36:15.357827426 +0100
+--- a/gcc/loop-iv.cc.jj	2025-01-29 21:12:28.741974212 +0100
++++ b/gcc/loop-iv.cc	2025-02-05 13:36:15.357827426 +0100
 @@ -714,6 +714,7 @@ get_biv_step_1 (df_ref def, scalar_int_m
  	  if (!simple_reg_p (op0) || !CONSTANT_P (op1))
  	    return false;
@@ -48,8 +48,8 @@ easily.  Could somebody test it there?  Or do you want the
  	  prev_code = code;
  	  code = PLUS;
  	}
---- gcc/testsuite/gcc.dg/pr117506.c.jj	2025-02-05 13:34:08.522619613 +0100
-+++ gcc/testsuite/gcc.dg/pr117506.c	2025-02-05 13:25:01.990342131 +0100
+--- a/gcc/testsuite/gcc.dg/pr117506.c.jj	2025-02-05 13:34:08.522619613 +0100
++++ b/gcc/testsuite/gcc.dg/pr117506.c	2025-02-05 13:25:01.990342131 +0100
 @@ -0,0 +1,18 @@
 +/* PR rtl-optimization/117506 */
 +/* { dg-do compile } */
@@ -69,8 +69,8 @@ easily.  Could somebody test it there?  Or do you want the
 +      b = b < 0 ? b : 0;
 +    }
 +}
---- gcc/testsuite/gcc.target/riscv/pr117506.c.jj	2025-02-05 13:34:24.594392519 +0100
-+++ gcc/testsuite/gcc.target/riscv/pr117506.c	2025-02-05 13:35:19.221620634 +0100
+--- a/gcc/testsuite/gcc.target/riscv/pr117506.c.jj	2025-02-05 13:34:24.594392519 +0100
++++ b/gcc/testsuite/gcc.target/riscv/pr117506.c	2025-02-05 13:35:19.221620634 +0100
 @@ -0,0 +1,5 @@
 +/* PR rtl-optimization/117506 */
 +/* { dg-do compile } */
