@@ -1,15 +1,72 @@
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 819e1538741..da43a43f17b 100644
+index 819e1538741..6e14126e3a4 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
-@@ -3564,7 +3564,9 @@ riscv_legitimize_move (machine_mode mode, rtx dest, rtx src)
-        (set (reg:DI target) (subreg:DI (reg:V8QI reg) 0))
-      Since RVV mode and scalar mode are in different REG_CLASS,
-      we need to explicitly move data from V_REGS to GR_REGS by scalar move.  */
--  if (SUBREG_P (src) && riscv_v_ext_mode_p (GET_MODE (SUBREG_REG (src))))
-+  if (GET_MODE_CLASS (mode) == MODE_INT
-+      && SUBREG_P (src)
-+      && riscv_v_ext_mode_p (GET_MODE (SUBREG_REG (src))))
-     {
-       machine_mode vmode = GET_MODE (SUBREG_REG (src));
-       unsigned int mode_size = GET_MODE_SIZE (mode).to_constant ();
+@@ -3587,6 +3587,9 @@ riscv_legitimize_move (machine_mode mode, rtx dest, rtx src)
+ 	  nunits = nunits * 2;
+ 	}
+ 
++      /* This test can fail if (for example) we want a HF and Z[v]fh is
++	 not enabled.  In that case we just want to let the standard
++	 expansion path run.  */
+       if (riscv_vector::get_vector_mode (smode, nunits).exists (&vmode))
+ 	{
+ 	  rtx v = gen_lowpart (vmode, SUBREG_REG (src));
+@@ -3636,12 +3639,10 @@ riscv_legitimize_move (machine_mode mode, rtx dest, rtx src)
+ 	    emit_move_insn (dest, gen_lowpart (GET_MODE (dest), int_reg));
+ 	  else
+ 	    emit_move_insn (dest, int_reg);
++	  return true;
+ 	}
+-      else
+-	gcc_unreachable ();
+-
+-      return true;
+     }
++
+   /* Expand
+        (set (reg:QI target) (mem:QI (address)))
+      to
+diff --git a/gcc/testsuite/gcc.target/riscv/pr118146-1.c b/gcc/testsuite/gcc.target/riscv/pr118146-1.c
+new file mode 100644
+index 00000000000..f3a7c4d96d8
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr118146-1.c
+@@ -0,0 +1,14 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gcv -mabi=lp64d  -O" { target { rv64 } } } */
++/* { dg-options "-march=rv32gcv -mabi=ilp32d -O" { target { rv32 } } } */
++
++
++
++typedef __attribute__((__vector_size__(sizeof(_Float16)))) short V;
++_Float16 f;
++
++void
++foo(V v)
++{
++  f -= *(_Float16 *)&v;
++}
+diff --git a/gcc/testsuite/gcc.target/riscv/pr118146-2.c b/gcc/testsuite/gcc.target/riscv/pr118146-2.c
+new file mode 100644
+index 00000000000..e7a5f39fa86
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr118146-2.c
+@@ -0,0 +1,17 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gcv -mabi=lp64d -std=gnu23 -O2" { target { rv64 } } } */
++/* { dg-options "-march=rv32gcv -mabi=ilp32d -std=gnu23 -O2" { target { rv32 } } } */
++
++long print_halffloat_j;
++int *print_halffloat_block;
++void ftoastr(float);
++enum { BFLOATING_POINTvoid } print_halffloat() {
++  union {
++    _Float16 x;
++    char b[]
++  } u;
++  print_halffloat_j = 0;
++  for (; print_halffloat_j < sizeof(_Float16); print_halffloat_j++)
++    u.b[print_halffloat_j] = print_halffloat_block[print_halffloat_j];
++  ftoastr(u.x);
++}
