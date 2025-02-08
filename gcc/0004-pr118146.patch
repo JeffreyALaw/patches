@@ -1,0 +1,15 @@
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index 819e1538741..da43a43f17b 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -3564,7 +3564,9 @@ riscv_legitimize_move (machine_mode mode, rtx dest, rtx src)
+        (set (reg:DI target) (subreg:DI (reg:V8QI reg) 0))
+      Since RVV mode and scalar mode are in different REG_CLASS,
+      we need to explicitly move data from V_REGS to GR_REGS by scalar move.  */
+-  if (SUBREG_P (src) && riscv_v_ext_mode_p (GET_MODE (SUBREG_REG (src))))
++  if (GET_MODE_CLASS (mode) == MODE_INT
++      && SUBREG_P (src)
++      && riscv_v_ext_mode_p (GET_MODE (SUBREG_REG (src))))
+     {
+       machine_mode vmode = GET_MODE (SUBREG_REG (src));
+       unsigned int mode_size = GET_MODE_SIZE (mode).to_constant ();
