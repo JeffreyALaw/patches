@@ -63,7 +63,7 @@ index 00000000000..e7a5f39fa86
 +enum { BFLOATING_POINTvoid } print_halffloat() {
 +  union {
 +    _Float16 x;
-+    char b[]
++    char b[];
 +  } u;
 +  print_halffloat_j = 0;
 +  for (; print_halffloat_j < sizeof(_Float16); print_halffloat_j++)
