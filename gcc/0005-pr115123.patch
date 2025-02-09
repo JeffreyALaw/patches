@@ -1,3 +1,17 @@
+	PR target/115123
+gcc/testsuite
+	* gcc.target/riscv/rvv/base/pr114352-3.c: Adjust expected output.
+	* gcc.target/riscv/rvv/vsetvl/avl_multiple-7.c: Likewise.
+	* gcc.target/riscv/rvv/vsetvl/avl_multiple-8.c: Likewise.
+	* gcc.target/riscv/rvv/vsetvl/avl_single-66.c: Likewise.
+	* gcc.target/riscv/rvv/vsetvl/avl_single-82.c: Likewise.
+	* gcc.target/riscv/rvv/vsetvl/avl_single-83.c: Likewise.
+	* gcc.target/riscv/rvv/vsetvl/avl_single-86.c: Likewise.
+	* gcc.target/riscv/rvv/vsetvl/avl_single-88.c: Likewise.
+	* gcc.target/riscv/rvv/vsetvl/avl_single-90.c: Likewise.
+	* gcc.target/riscv/rvv/vsetvl/avl_single-91.c: Likewise.
+	* gcc.target/riscv/rvv/vsetvl/avl_single-92.c: Likewise.
+
 diff --git a/gcc/testsuite/gcc.target/riscv/rvv/base/pr114352-3.c b/gcc/testsuite/gcc.target/riscv/rvv/base/pr114352-3.c
 index a764afbbbc1..9bfa39c5268 100644
 --- a/gcc/testsuite/gcc.target/riscv/rvv/base/pr114352-3.c
