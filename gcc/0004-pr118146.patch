@@ -1,3 +1,12 @@
+	PR target/118146
+gcc/
+	* config/riscv/riscv.cc (riscv_legitimize_move): Handle subreg
+	of vector source better to avoid ICE.
+
+gcc/testsuite
+	* gcc.target/riscv/pr118146-1.c: New test.
+	* gcc.target/riscv/pr118146-2.c: New test.
+
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
 index 819e1538741..6e14126e3a4 100644
 --- a/gcc/config/riscv/riscv.cc
