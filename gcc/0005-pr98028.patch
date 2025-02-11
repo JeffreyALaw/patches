@@ -1,0 +1,38 @@
+diff --git a/gcc/vr-values.cc b/gcc/vr-values.cc
+index ed590138fe8..29568e27c38 100644
+--- a/gcc/vr-values.cc
++++ b/gcc/vr-values.cc
+@@ -85,6 +85,33 @@ check_for_binary_op_overflow (range_query *query,
+ 			      enum tree_code subcode, tree type,
+ 			      tree op0, tree op1, bool *ovf, gimple *s = NULL)
+ {
++  /* For MINUS_EXPR, we may know based the relationship
++     (if any) between op0 and op1.  */
++  if (subcode == MINUS_EXPR)
++    {
++      relation_kind rel = query->relation().query (s, op0, op1);
++
++      /* If the operands are equal, then the result will be zero
++	 and there is never an overflow.  */
++      if (rel == VREL_EQ)
++	return true;
++
++      /* If op0 and op1 are unsigned types, we still have a chance.  */
++      if (TYPE_UNSIGNED (TREE_TYPE (op0)) && TYPE_UNSIGNED (TREE_TYPE (op1)))
++	{
++	  /* op0 > op1 or op0 >= op1 never overflows.  */
++	  if (rel == VREL_GT || rel == VREL_GE)
++	    return true;
++
++	  /* And op0 < op1 always overflows.  */
++	  if (rel == VREL_LT)
++	    {
++	      *ovf = true;
++	      return true;
++	    }
++	}
++    }
++	
+   int_range_max vr0, vr1;
+   if (!query->range_of_expr (vr0, op0, s) || vr0.undefined_p ())
+     vr0.set_varying (TREE_TYPE (op0));
