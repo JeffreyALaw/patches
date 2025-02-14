@@ -7,8 +7,8 @@
 +  relation_kind rel = VREL_VARYING;
 +  /* For subtraction see if relations could simplify it.  */
 +  if (s
-+      && code == MINUS_EXPR
-+      && types_compatible_p (TREE_TYPE (op0), TREE_TYPE (op1))
++      && subcode == MINUS_EXPR
++      && types_compatible_p (TREE_TYPE (op0), TREE_TYPE (op1)))
 +    {
 +      rel = query->relation().query (s, op0, op1);
 +      /* The result of the infinite precision subtraction of
