@@ -18,4 +18,6 @@ gcc/testsuite/gcc.dg/pow-sqrt-3.c
 gcc/testsuite/gcc.dg/pow-sqrt-2.c
 gcc/testsuite/gcc.dg/crc-crc32.c
 gcc/testsuite/gcc.dg/torture/crc-crc32.c
-gcc/testsuite/gcc.dg/compat/struct-by-value-22.c
+gcc/testsuite/gcc.dg/compat/struct-by-value-22_main.c
+gcc/testsuite/gcc.dg/compat/struct-by-value-22_x.c
+gcc/testsuite/gcc.dg/compat/struct-by-value-22_y.c
