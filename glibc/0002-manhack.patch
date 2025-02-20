@@ -1,0 +1,24 @@
+commit 8d57bc6d399a2a444174ec7734b4fceef73560c4
+Author: Jeff Law <jeffreyalaw@gmail.com>
+Date:   Wed Feb 19 20:06:22 2025 -0700
+
+    Revert "manual: Document setlogmask as MT-safe."
+    
+    This reverts commit ad9c4c536115ba38be3e63592a632709ec8209b4.
+
+diff --git a/manual/syslog.texi b/manual/syslog.texi
+index 90a6487c02..02f84d6e6f 100644
+--- a/manual/syslog.texi
++++ b/manual/syslog.texi
+@@ -498,7 +498,10 @@ The symbols referred to in this section are declared in the file
+ 
+ @deftypefun int setlogmask (int @var{mask})
+ @standards{BSD, syslog.h}
+-@safety{@prelim{}@mtsafe{}@asunsafe{}@acsafe{}}
++@safety{@prelim{}@mtunsafe{@mtasurace{:LogMask}}@asunsafe{}@acsafe{}}
++@c Read and modify are not guarded by syslog_lock, so concurrent changes
++@c or even uses are undefined.  This should use an atomic swap instead,
++@c at least for modifications.
+ 
+ @code{setlogmask} sets a mask (the ``logmask'') that determines which
+ future @code{syslog} calls shall be ignored.  If a program has not
