@@ -93,3 +93,16 @@ index f7e508b87..10e298b95 100644
  /*
   * putnum -- print a 32 bit number in hex
   */
+diff --git a/libgloss/frv/putnum.c b/libgloss/frv/putnum.c
+index b2b2c4435..a07315e13 100644
+--- a/libgloss/frv/putnum.c
++++ b/libgloss/frv/putnum.c
+@@ -14,8 +14,6 @@
+  */
+ #include "glue.h"
+ 
+-extern void print (char *ptr);
+-
+ /*
+  * putnum -- print a 32 bit number in hex
+  */
