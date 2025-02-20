@@ -80,3 +80,16 @@ index 9af5b4d4c..0f7e89453 100644
  /*
   * putnum -- print a 32 bit number in hex
   */
+diff --git a/libgloss/mcore/putnum.c b/libgloss/mcore/putnum.c
+index f7e508b87..10e298b95 100644
+--- a/libgloss/mcore/putnum.c
++++ b/libgloss/mcore/putnum.c
+@@ -14,8 +14,6 @@
+  */
+ #include "glue.h"
+ 
+-extern void print (char *ptr);
+-
+ /*
+  * putnum -- print a 32 bit number in hex
+  */
