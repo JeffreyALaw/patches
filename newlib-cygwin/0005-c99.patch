@@ -174,14 +174,6 @@ diff --git a/libgloss/xstormy16/eva_app.c b/libgloss/xstormy16/eva_app.c
 index f6069fc7c..41a669620 100644
 --- a/libgloss/xstormy16/eva_app.c
 +++ b/libgloss/xstormy16/eva_app.c
-@@ -13,6 +13,7 @@
-  * they apply.
-  */
- #include "glue.h"
-+#include <string.h>
- 
- typedef void (*write_proc_t)(char *buf, int nbytes);
- typedef int  (*read_proc_t)(char *buf, int nbytes);
 @@ -26,7 +27,7 @@ typedef int  (*read_proc_t)(char *buf, int nbytes);
   * print -- do a raw print of a string
   */ 
