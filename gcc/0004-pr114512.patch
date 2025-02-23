@@ -1,0 +1,190 @@
+diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
+index 684e5d2ae8b..adb25945da5 100644
+--- a/gcc/config/riscv/bitmanip.md
++++ b/gcc/config/riscv/bitmanip.md
+@@ -906,6 +906,70 @@ (define_insn "*bext<mode>"
+   "bext\t%0,%1,%2"
+   [(set_attr "type" "bitmanip")])
+ 
++;; We do not define SHIFT_COUNT_TRUNCATED, so we have to have variants
++;; that mask/extend the count if we want to eliminate those ops
++;;
++;; We could (in theory) use GPR for the various modes, but I haven't
++;; seen those cases appear in practice.  Without a testcase I've
++;; elected to keep the modes X which is easy to reason about.
++(define_insn "*bext<mode>_mask_pos"
++  [(set (match_operand:X 0 "register_operand" "=r")
++	(zero_extract:X (match_operand:X 1 "register_operand" "r")
++			(const_int 1)
++			(and:X
++			  (match_operand:X 2 "register_operand" "r")
++			  (match_operand 3 "const_int_operand"))))]
++  "(TARGET_ZBS
++    && INTVAL (operands[3]) + 1 == GET_MODE_BITSIZE (<MODE>mode))"
++  "bext\t%0,%1,%2"
++  [(set_attr "type" "bitmanip")])
++
++;; This variant has shown up in testing.  Basically the same as the
++;; prior one, but with an explicit extension of the count.  It's
++;; probably specific in practice to rv64
++(define_insn "*bextdi_ze_pos"
++  [(set (match_operand:DI 0 "register_operand" "=r")
++	(zero_extract:DI (match_operand:DI 1 "register_operand" "r")
++			 (const_int 1)
++			 (zero_extend:DI
++			  (and:SI
++			    (match_operand:SI 2 "register_operand" "r")
++			    (match_operand 3 "const_int_operand")))))]
++  "(TARGET_64BIT
++    && TARGET_ZBS
++    && INTVAL (operands[3]) == 63)"
++  "bext\t%0,%1,%2"
++  [(set_attr "type" "bitmanip")])
++
++;; One more way to express a single bit extraction.  In this case we
++;; were shifting the bit left into the sign bit, then shifting right
++;; into the low bit.
++(define_insn ""
++  [(set (match_operand:GPR 0 "register_operand" "=r")
++	(lshiftrt:GPR (ashift:GPR (match_operand:GPR 1 "register_operand" "r")
++				  (match_operand:QI 2 "arith_operand" "r"))
++		      (match_operand 3 "const_int_operand" "i")))]
++  "(TARGET_ZBS
++    && INTVAL (operands[3]) + 1 == GET_MODE_BITSIZE (<MODE>mode))"
++  "bext\t%0,%1,%2"
++  [(set_attr "type" "bitmanip")])
++
++;; This has shown up in testing.  In particular we end up with an
++;; immediate input.  We can load that into a register and target
++;; one of the above bext patterns.
++(define_split 
++  [(set (match_operand:X 0 "register_operand")
++	(and:X (lshiftrt:X (match_operand 1 "immediate_operand")
++			   (match_operand:QI 2 "register_operand"))
++	       (const_int 1)))
++   (clobber (match_operand:X 3 "register_operand"))]
++  ""
++  [(set (match_dup 3) (match_dup 1))
++   (set (match_dup 0) (zero_extract:X (match_dup 3)
++				      (const_int 1)
++				      (zero_extend:X (match_dup 2))))])
++  
++  
+ ;; This is a bext followed by a seqz.  Normally this would be a 3->2 split
+ ;; But the and-not pattern with a constant operand is a define_insn_and_split,
+ ;; so this looks like a 2->2 split, which combine rejects.  So implement it
+diff --git a/gcc/testsuite/gcc.target/riscv/pr114512.c b/gcc/testsuite/gcc.target/riscv/pr114512.c
+new file mode 100644
+index 00000000000..4ba6352c8a9
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr114512.c
+@@ -0,0 +1,109 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gcb -mabi=lp64d" { target { rv64 } } } */
++/* { dg-options "-march=rv32gcb -mabi=ilp32" { target { rv32 } } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" "-Os" "-Oz" } } */
++
++/* We need to adjust the constant so this works for rv32 and rv64.  */
++#if __riscv_xlen == 32
++#define ONE 1U
++#define MASK 0x1f
++typedef unsigned int utype;
++#else
++#define ONE 1ULL
++#define MASK 0x3f
++typedef unsigned long utype;
++#endif
++
++
++bool my_isxdigit_1(unsigned char ch) {
++  utype mask1 = 0x03FF007E;
++  if (!((mask1 >> (ch & MASK)) & 1))
++    return false;
++
++  return true;
++}
++
++bool my_isxdigit_1a(unsigned char ch) {
++  utype mask2 = 0x58;
++  if (!((mask2 >> (ch >> 4)) & 1))
++    return false;
++
++  return true;
++}
++
++bool my_isxdigit_2(unsigned char ch) {
++  utype mask1 = 0x03FF007E;
++  if (!(mask1 & (ONE << (ch & MASK))))
++    return false;
++
++  return true;
++}
++
++bool my_isxdigit_2a(unsigned char ch) {
++  utype mask2 = 0x58;
++  if (!(mask2 & (ONE << (ch >> 4))))
++    return false;
++
++  return true;
++}
++
++bool my_isxdigit_3(unsigned char ch) {
++  utype mask1 = 0x7E00FFC0;
++  if (!((mask1 << (MASK - (ch & MASK))) >> MASK))
++    return false;
++
++  return true;
++}
++
++bool my_isxdigit_3a(unsigned char ch) {
++  utype mask2 =  0x7E00FFC0;
++  if (!((mask2 << (MASK - ((ch >> 4) & MASK))) >> MASK))
++    return false;
++
++  return true;
++}
++
++bool my_isxdigit_1_parm(unsigned char ch, utype mask1) {
++  if (!((mask1 >> (ch & MASK)) & 1))
++    return false;
++
++  return true;
++}
++
++bool my_isxdigit_1a_parm(unsigned char ch, utype mask2) {
++  if (!((mask2 >> (ch >> 4)) & 1))
++    return false;
++
++  return true;
++}
++
++bool my_isxdigit_2_parm(unsigned char ch, utype mask1) {
++  if (!(mask1 & (ONE << (ch & MASK))))
++    return false;
++
++  return true;
++}
++
++bool my_isxdigit_2a_parm(unsigned char ch, utype mask2) {
++  if (!(mask2 & (ONE << (ch >> 4))))
++    return false;
++
++  return true;
++}
++
++bool my_isxdigit_3_parm(unsigned char ch, utype mask1) {
++  if (!((mask1 << (MASK - (ch & MASK))) >> MASK))
++    return false;
++
++  return true;
++}
++
++bool my_isxdigit_3a_parm(unsigned char ch, utype mask2) {
++  if (!((mask2 << (MASK - ((ch >> 4) & MASK))) >> MASK))
++    return false;
++
++  return true;
++}
++
++/* Each test should generate a single bext.  */
++/* { dg-final { scan-assembler-times "bext\t" 12 } } */
