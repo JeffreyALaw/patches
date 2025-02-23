@@ -2,8 +2,6 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 sh4-linux-gnu
-fr30-elf
-ft32-elf
 nds32le-elf
 nds32be-elf
 xstormy16-elf
@@ -14,3 +12,5 @@ arc-elf
 lm32-elf
 visium-elf
 csky-linux-gnu
+sh3-linux-gnu
+sh3eb-linux-gnu
