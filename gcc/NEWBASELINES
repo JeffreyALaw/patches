@@ -2,10 +2,7 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 sh4-linux-gnu
-nds32le-elf
 nds32be-elf
-xstormy16-elf
-c6x-elf
 m32r-elf
 or1k-linux-gnu
 arc-elf
@@ -14,3 +11,17 @@ visium-elf
 csky-linux-gnu
 sh3-linux-gnu
 sh3eb-linux-gnu
+riscv64-elf
+rx-elf
+riscv32-elf
+msp430-elf
+v850e-elf
+rl78-elf
+pru-elf
+moxie-elf
+mcore-elf
+mn10300-elf
+i2000-elf
+frv-elf
+bfin-elf
+avr-elf
