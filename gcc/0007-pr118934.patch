@@ -1,0 +1,57 @@
+diff --git a/gcc/config/riscv/corev.md b/gcc/config/riscv/corev.md
+index e44fdc1129d..d1c3aaa973e 100644
+--- a/gcc/config/riscv/corev.md
++++ b/gcc/config/riscv/corev.md
+@@ -2627,7 +2627,7 @@ (define_insn "*cv_branch<mode>"
+   "TARGET_XCVBI"
+ {
+   if (get_attr_length (insn) == 12)
+-    return "cv.b%n1\t%2,%z3,1f; jump\t%l0,ra; 1:";
++    return "cv.b%u1\t%2,%z3,1f; jump\t%l0,ra; 1:";
+ 
+   return "cv.b%C1imm\t%2,%3,%0";
+ }
+@@ -2645,7 +2645,7 @@ (define_insn "*branch<mode>"
+   "TARGET_XCVBI"
+ {
+   if (get_attr_length (insn) == 12)
+-    return "b%n1\t%2,%z3,1f; jump\t%l0,ra; 1:";
++    return "b%u1\t%2,%z3,1f; jump\t%l0,ra; 1:";
+ 
+   return "b%C1\t%2,%z3,%l0";
+ }
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index 89aa25d5da9..38f3ae7cd84 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -6868,7 +6868,7 @@ riscv_asm_output_opcode (FILE *asm_out_file, const char *p)
+ 	  any outermost HIGH.
+    'R'	Print the low-part relocation associated with OP.
+    'C'	Print the integer branch condition for comparison OP.
+-   'n'	Print the inverse of the integer branch condition for comparison OP.
++   'r'	Print the inverse of the integer branch condition for comparison OP.
+    'A'	Print the atomic operation suffix for memory model OP.
+    'I'	Print the LR suffix for memory model OP.
+    'J'	Print the SC suffix for memory model OP.
+@@ -7027,7 +7027,7 @@ riscv_print_operand (FILE *file, rtx op, int letter)
+       fputs (GET_RTX_NAME (code), file);
+       break;
+ 
+-    case 'n':
++    case 'r':
+       /* The RTL names match the instruction names. */
+       fputs (GET_RTX_NAME (reverse_condition (code)), file);
+       break;
+diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
+index f7070766783..95951605fb4 100644
+--- a/gcc/config/riscv/riscv.md
++++ b/gcc/config/riscv/riscv.md
+@@ -3252,7 +3252,7 @@ (define_insn "*branch<mode>"
+   "!TARGET_XCVBI"
+ {
+   if (get_attr_length (insn) == 12)
+-    return "b%n1\t%2,%z3,1f; jump\t%l0,ra; 1:";
++    return "b%r1\t%2,%z3,1f; jump\t%l0,ra; 1:";
+ 
+   return "b%C1\t%2,%z3,%l0";
+ }
