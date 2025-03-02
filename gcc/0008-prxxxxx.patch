@@ -29,7 +29,7 @@ index f7070766783..7f4bf92bcb4 100644
    [(set_attr "type" "arith")])
  
  (define_insn_and_split ""
-@@ -4700,13 +4712,25 @@ (define_insn_and_split ""
+@@ -4700,13 +4712,26 @@ (define_insn_and_split ""
    "(TARGET_64BIT && riscv_const_insns (operands[3], false) == 1)"
    "#"
    "&& reload_completed"
@@ -52,7 +52,8 @@ index f7070766783..7f4bf92bcb4 100644
 +     else
 +       operands[6] = operands[3];
 +
-+     x = gen_rtx_PLUS (DImode, operands[5], operands[6]);
++     x = gen_rtx_PLUS (SImode, operands[5], operands[6]);
++     x = gen_rtx_SIGN_EXTEND (DImode, x);
 +     emit_insn (gen_rtx_SET (operands[0], x));
 +     DONE;
     }"
