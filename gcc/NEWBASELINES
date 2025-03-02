@@ -4,3 +4,4 @@
 sh4-linux-gnu
 ppc64le-linux-gnu
 s390x-linux-gnu
+mips64el-linux-gnuabi64
