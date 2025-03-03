@@ -1,0 +1,22 @@
+diff --git a/gcc/testsuite/gcc.target/riscv/core_list_init.c b/gcc/testsuite/gcc.target/riscv/core_list_init.c
+index 2f36dae85aa..be341fa6b45 100644
+--- a/gcc/testsuite/gcc.target/riscv/core_list_init.c
++++ b/gcc/testsuite/gcc.target/riscv/core_list_init.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-O1 -fdump-rtl-ext_dce" } */
++/* { dg-options "-O2 -fdump-rtl-ext_dce" } */
+ /* { dg-final { scan-rtl-dump {Successfully transformed} "ext_dce" } } */
+ 
+ unsigned short
+diff --git a/gcc/testsuite/gcc.target/riscv/pr111384.c b/gcc/testsuite/gcc.target/riscv/pr111384.c
+index a4e77d4aeb6..7bf36a40361 100644
+--- a/gcc/testsuite/gcc.target/riscv/pr111384.c
++++ b/gcc/testsuite/gcc.target/riscv/pr111384.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-O1 -fdump-rtl-ext_dce" } */
++/* { dg-options "-O2 -fdump-rtl-ext_dce" } */
+ /* { dg-final { scan-rtl-dump {Successfully transformed} "ext_dce" } } */
+ 
+ void
