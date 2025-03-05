@@ -49,3 +49,20 @@ index 0754e286552..a2cffa0e0af 100644
  }
  
  static void
+diff --git a/gcc/config/msp430/constraints.md b/gcc/config/msp430/constraints.md
+index 9dd28b106fb..a09d936c545 100644
+--- a/gcc/config/msp430/constraints.md
++++ b/gcc/config/msp430/constraints.md
+@@ -29,10 +29,11 @@ (define_constraint "K"
+   (and (match_code "const_int")
+        (match_test "IN_RANGE (ival, 1, 19)")))
+ 
++;; The +1 to narrow the range slightly due to gas bug
+ (define_constraint "L"
+   "Integer constant -1^20..1^19."
+   (and (match_code "const_int")
+-       (match_test "IN_RANGE (ival, HOST_WIDE_INT_M1U << 20, 1 << 19)")))
++       (match_test "IN_RANGE (ival, -(1 << 19) + 1, 1 << 19)")))
+ 
+ ;; Valid shift amount for RRUM, RRAM, RLAM, RRCM.
+ (define_constraint "M"
