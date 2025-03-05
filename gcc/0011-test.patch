@@ -5,7 +5,7 @@ index 2f36dae85aa..be341fa6b45 100644
 @@ -1,5 +1,5 @@
  /* { dg-do compile } */
 -/* { dg-options "-O1 -fdump-rtl-ext_dce" } */
-+/* { dg-options "-O2 -fdump-rtl-ext_dce" } */
++/* { dg-options "-fext-dce -fdump-rtl-ext_dce" } */
  /* { dg-final { scan-rtl-dump {Successfully transformed} "ext_dce" } } */
  
  unsigned short
@@ -16,7 +16,7 @@ index a4e77d4aeb6..7bf36a40361 100644
 @@ -1,5 +1,5 @@
  /* { dg-do compile } */
 -/* { dg-options "-O1 -fdump-rtl-ext_dce" } */
-+/* { dg-options "-O2 -fdump-rtl-ext_dce" } */
++/* { dg-options "-fext-dce -fdump-rtl-ext_dce" } */
  /* { dg-final { scan-rtl-dump {Successfully transformed} "ext_dce" } } */
  
  void
