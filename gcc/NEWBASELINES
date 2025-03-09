@@ -3,3 +3,5 @@
 # reset.  
 sh4-linux-gnu
 rl78-elf
+msp430-elf
+mcore-elf
