@@ -1,0 +1,45 @@
+diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
+index 559740ed3fc..cbeae8cde91 100644
+--- a/gcc/ext-dce.cc
++++ b/gcc/ext-dce.cc
+@@ -649,11 +649,27 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj,
+ 	     That is not necessary if the SET_DEST is a REG.  We can just bump the
+ 	     iterator to the next element to skip handling the SET_DEST.
+ 
+-	     We can probably do this for ZERO_EXTRACT, STRICT_LOW_PART and SUBREG
+-	     destinations as well.  But I want to rewrite all this code and keep
+-	     this fix conservative given we're deep into the gcc-15 release cycle.  */
++	     This also works for paradoxical subregs and limited forms of normal
++	     subregs.  */
+ 	  if (REG_P (dst))
+-	    iter.next ();
++	    {
++	      /* Over the SET.  */
++	      iter.next ();
++	      /* Over the REG.  */
++	      iter.next ();
++ 	    }
++
++	  if (SUBREG_P (dst)
++	      && paradoxical_subreg_p (dst)
++	      && REG_P (SUBREG_REG (dst)))
++	    {
++	      /* Over the SET.  */
++	      iter.next ();
++	      /* Over the SUBREG.  */
++	      iter.next ();
++	      /* Over the REG.  */
++	      iter.next ();
++	    }
+ 
+ 	  /* ?!? How much of this should mirror SET handling, potentially
+ 	     being shared?   */
+@@ -859,6 +879,8 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj,
+ 		iter.skip_subrtxes ();
+ 	    }
+ 	}
++      else if (GET_CODE (x) == CLOBBER && REG_P (XEXP (x, 0)))
++	iter.skip_subrtxes ();
+       /* If we are reading the low part of a SUBREG, then we can
+ 	 refine liveness of the input register, otherwise let the
+ 	 iterator continue into SUBREG_REG.  */
