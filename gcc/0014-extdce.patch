@@ -1,60 +1,22 @@
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
-index 559740ed3fc..4da4eed7379 100644
+index 559740ed3fc..78116617ad4 100644
 --- a/gcc/ext-dce.cc
 +++ b/gcc/ext-dce.cc
-@@ -646,14 +646,22 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj,
- 	  /* If we break the main loop below, then we will continue processing
- 	     sub-components of this RTX, including the SET_DEST.
+@@ -856,7 +856,16 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj,
  
--	     That is not necessary if the SET_DEST is a REG.  We can just bump the
--	     iterator to the next element to skip handling the SET_DEST.
--
--	     We can probably do this for ZERO_EXTRACT, STRICT_LOW_PART and SUBREG
--	     destinations as well.  But I want to rewrite all this code and keep
--	     this fix conservative given we're deep into the gcc-15 release cycle.  */
-+	     That is not necessary if the SET_DEST is a REG.  We can just bump
-+	     the iterator.  We want the iterator to point at the underlying
-+	     REG so that the next iteration would (at worst) walk into the
-+	     SET_SRC.  */
- 	  if (REG_P (dst))
--	    iter.next ();
-+	      iter.next ();
-+
-+	  if (SUBREG_P (dst)
-+	      && paradoxical_subreg_p (dst)
-+	      && REG_P (SUBREG_REG (dst)))
-+	    {
-+	      /* Over the SET.  */
-+	      iter.next ();
-+	      /* Over the SUBREG.  */
-+	      iter.next ();
-+	    }
- 
- 	  /* ?!? How much of this should mirror SET handling, potentially
- 	     being shared?   */
-@@ -854,11 +866,22 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj,
- 		  y = XEXP (src, 1), src = pc_rtx;
- 		}
- 
--	      /* These are leaf nodes, no need to iterate down into them.  */
-+	      /* If we exited the loop on a REG or CONSTANT, then we have fully
-+		 processed both the SET_DEST and SET_SRC.  Furthermore, the iterator
-+		 is currently pointing at the REG in the SET_DEST.
-+
-+		 To skip processing the SET_SRC we need to bump the iterator to
-+		 the SET_SRC, then instruct the iterator to skip sub-rtxs.  */
+ 	      /* These are leaf nodes, no need to iterate down into them.  */
  	      if (REG_P (y) || CONSTANT_P (y))
 -		iter.skip_subrtxes ();
 +		{
-+		  gcc_assert (REG_P (*iter));
-+		  iter.next ();
++		  /* ITER's state is a bit unclear at this point.  It might point
++		     to SET or SET_DEST.  Either way we want to advanvce it so that
++		     it points to the SET_SRC, then instruction iteration to ignore
++		     subrtxs.  */
++		  while (*iter != SET_SRC (x))
++		    iter.next ();
++
 +		  iter.skip_subrtxes ();
 +		}
  	    }
  	}
-+      else if (GET_CODE (x) == CLOBBER && REG_P (XEXP (x, 0)))
-+	iter.skip_subrtxes ();
        /* If we are reading the low part of a SUBREG, then we can
- 	 refine liveness of the input register, otherwise let the
- 	 iterator continue into SUBREG_REG.  */
-
