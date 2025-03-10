@@ -1,8 +1,16 @@
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
-index 559740ed3fc..78116617ad4 100644
+index 559740ed3fc..37b800c0dc8 100644
 --- a/gcc/ext-dce.cc
 +++ b/gcc/ext-dce.cc
-@@ -856,7 +856,16 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj,
+@@ -637,6 +637,7 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj,
+ 	{
+ 	  const_rtx dst = SET_DEST (x);
+ 	  rtx src = SET_SRC (x);
++	  const_rtx orig_src = src;
+ 	  const_rtx y;
+ 	  unsigned HOST_WIDE_INT bit = 0;
+ 
+@@ -856,7 +857,16 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj,
  
  	      /* These are leaf nodes, no need to iterate down into them.  */
  	      if (REG_P (y) || CONSTANT_P (y))
@@ -12,7 +20,7 @@ index 559740ed3fc..78116617ad4 100644
 +		     to SET or SET_DEST.  Either way we want to advanvce it so that
 +		     it points to the SET_SRC, then instruction iteration to ignore
 +		     subrtxs.  */
-+		  while (*iter != SET_SRC (x))
++		  while (*iter != orig_src)
 +		    iter.next ();
 +
 +		  iter.skip_subrtxes ();
