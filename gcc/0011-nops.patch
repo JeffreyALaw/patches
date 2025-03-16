@@ -1,0 +1,52 @@
+diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
+index 6b944c24f3a..cb1b90e1488 100644
+--- a/gcc/config/riscv/bitmanip.md
++++ b/gcc/config/riscv/bitmanip.md
+@@ -1130,7 +1130,7 @@ (define_insn_and_split "*<or_optab>i<mode>_extrabit"
+   [(set (match_operand:X 0 "register_operand" "=r")
+ 	(any_or:X (match_operand:X 1 "register_operand" "r")
+ 	          (match_operand:X 2 "uimm_extra_bit_or_twobits" "i")))]
+-  "TARGET_ZBS"
++  "TARGET_ZBS && !single_bit_mask_operand (operands[2], VOIDmode)"
+   "#"
+   "&& reload_completed"
+   [(set (match_dup 0) (<or_optab>:X (match_dup 1) (match_dup 3)))
+@@ -1149,7 +1149,7 @@ (define_insn_and_split "*andi<mode>_extrabit"
+   [(set (match_operand:X 0 "register_operand" "=r")
+ 	(and:X (match_operand:X 1 "register_operand" "r")
+ 	       (match_operand:X 2 "not_uimm_extra_bit_or_nottwobits" "i")))]
+-  "TARGET_ZBS"
++  "TARGET_ZBS && !not_single_bit_mask_operand (operands[2], VOIDmode)"
+   "#"
+   "&& reload_completed"
+   [(set (match_dup 0) (and:X (match_dup 1) (match_dup 3)))
+diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
+index 940aaaec20d..86b7ac65c35 100644
+--- a/gcc/config/riscv/riscv.md
++++ b/gcc/config/riscv/riscv.md
+@@ -3338,7 +3338,7 @@ (define_insn_and_split "*branch<ANYI:mode>_shiftedarith_<optab>_shifted"
+   "#"
+   "&& reload_completed"
+   [(set (match_dup 4) (ashiftrt:X (match_dup 1) (match_dup 7)))
+-   (set (match_dup 4) (and:X (match_dup 4) (match_dup 8)))
++   (set (match_dup 4) (match_dup 10))
+    (set (match_dup 5) (match_dup 9))
+    (set (pc) (if_then_else (any_eq (match_dup 4) (match_dup 5))
+ 			   (label_ref (match_dup 0)) (pc)))]
+@@ -3350,6 +3350,16 @@ (define_insn_and_split "*branch<ANYI:mode>_shiftedarith_<optab>_shifted"
+   operands[7] = GEN_INT (trailing_shift);
+   operands[8] = GEN_INT (mask1 >> trailing_shift);
+   operands[9] = GEN_INT (mask2 >> trailing_shift);
++
++  /* This splits after reload, so there's little chance to clean things
++     up.  Rather than emit a ton of RTL here, we can just make a new
++     operand for that RHS and use it.  For the case where the AND would
++     have been redundant, we can make it a NOP move, which does get
++     cleaned up.  */
++  if (operands[8] == CONSTM1_RTX (word_mode))
++    operands[10] = operands[4];
++  else
++    operands[10] = gen_rtx_AND (word_mode, operands[4], operands[8]);
+ }
+ [(set_attr "type" "branch")])
+ 
