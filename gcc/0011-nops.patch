@@ -1,8 +1,8 @@
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index 940aaaec20d..86b7ac65c35 100644
+index 84bce409bc7..26a247c2b96 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
-@@ -3338,7 +3338,7 @@ (define_insn_and_split "*branch<ANYI:mode>_shiftedarith_<optab>_shifted"
+@@ -3198,7 +3198,7 @@ (define_insn_and_split "*branch<ANYI:mode>_shiftedarith_<optab>_shifted"
    "#"
    "&& reload_completed"
    [(set (match_dup 4) (ashiftrt:X (match_dup 1) (match_dup 7)))
@@ -11,7 +11,7 @@ index 940aaaec20d..86b7ac65c35 100644
     (set (match_dup 5) (match_dup 9))
     (set (pc) (if_then_else (any_eq (match_dup 4) (match_dup 5))
  			   (label_ref (match_dup 0)) (pc)))]
-@@ -3350,6 +3350,16 @@ (define_insn_and_split "*branch<ANYI:mode>_shiftedarith_<optab>_shifted"
+@@ -3210,6 +3210,16 @@ (define_insn_and_split "*branch<ANYI:mode>_shiftedarith_<optab>_shifted"
    operands[7] = GEN_INT (trailing_shift);
    operands[8] = GEN_INT (mask1 >> trailing_shift);
    operands[9] = GEN_INT (mask2 >> trailing_shift);
@@ -28,3 +28,34 @@ index 940aaaec20d..86b7ac65c35 100644
  }
  [(set_attr "type" "branch")])
  
+diff --git a/gcc/testsuite/gcc.target/riscv/redundant-andi-2.c b/gcc/testsuite/gcc.target/riscv/redundant-andi-2.c
+new file mode 100644
+index 00000000000..ff0789d7d0a
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/redundant-andi-2.c
+@@ -0,0 +1,25 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gcb -mabi=lp64" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" } } */
++
++void frob (void);
++typedef struct av AV;
++typedef unsigned int U32;
++struct av
++{
++  void *dummy;
++  U32 sv_refcnt;
++  U32 sv_flags;
++};
++void
++Perl_save_ary (AV *const oav)
++{
++  AV *av;
++  unsigned int x1 = oav->sv_flags;
++  unsigned int x2 = x1 & 3221225472;
++  if (x2 == 2147483648)
++    frob ();
++}
++
++/* { dg-final { scan-assembler-not "andi\t" } } */
++
