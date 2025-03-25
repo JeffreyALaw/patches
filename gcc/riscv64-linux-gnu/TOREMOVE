@@ -41,3 +41,6 @@ gcc/testsuite/gcc.target/riscv/rvv/autovec/widen/widen-complicate-7.c
 gcc/testsuite/gcc.target/riscv/rvv/autovec/widen/widen-complicate-8.c
 gcc/testsuite/gcc.target/riscv/rvv/autovec/widen/widen-complicate-9.c
 
+# Takes ~5m on an unloaded BPI F3 and will timeout sometimes when
+# under load.
+gcc/testsuite/gcc.target/riscv/rvv/autovec/vls/consecutive-3.c
