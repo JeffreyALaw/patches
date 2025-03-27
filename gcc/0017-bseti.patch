@@ -86,7 +86,7 @@ index 2bedd878a04..c9b275fc56f 100644
  /* Routines implemented in riscv-c.cc.  */
  void riscv_cpu_cpp_builtins (cpp_reader *);
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 38f3ae7cd84..db0740aef0b 100644
+index 38f3ae7cd84..9d9bbbb1f43 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
 @@ -14035,6 +14035,110 @@ bool need_shadow_stack_push_pop_p ()
@@ -107,7 +107,7 @@ index 38f3ae7cd84..db0740aef0b 100644
 +{
 +  /* Trivial cases that don't need synthesis.  */
 +  if (SMALL_OPERAND (INTVAL (operands[2]))
-+      || single_bit_mask_operand (operands[2], word_mode))
++      || (TARGET_ZBS && single_bit_mask_operand (operands[2], word_mode)))
 +    return false;
 +
 +  /* Reasonable estimate of our budget.  Constant synthesis
@@ -149,7 +149,7 @@ index 38f3ae7cd84..db0740aef0b 100644
 +  while (ival && budget >= 0)
 +    {
 +      HOST_WIDE_INT tmpval = HOST_WIDE_INT_UC (1) << ctz_hwi (ival);
-+      if (!TARGET_ZBS || !single_bit_mask_operand (tmpval))
++      if (!TARGET_ZBS || !SINGLE_BIT_MASK_OPERAND (tmpval))
 +	{
 +	  budget = -1;
 +	  break;
