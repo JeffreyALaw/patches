@@ -86,10 +86,10 @@ index 2bedd878a04..c9b275fc56f 100644
  /* Routines implemented in riscv-c.cc.  */
  void riscv_cpu_cpp_builtins (cpp_reader *);
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 38f3ae7cd84..9d9bbbb1f43 100644
+index 38f3ae7cd84..bf796dde204 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
-@@ -14035,6 +14035,110 @@ bool need_shadow_stack_push_pop_p ()
+@@ -14035,6 +14035,101 @@ bool need_shadow_stack_push_pop_p ()
    return is_zicfiss_p () && riscv_save_return_addr_reg_p ();
  }
  
@@ -125,17 +125,8 @@ index 38f3ae7cd84..9d9bbbb1f43 100644
 +  int budget = riscv_const_insns (operands[2], true);
 +  HOST_WIDE_INT ival = INTVAL (operands[2]);
 +
-+  /* If the sign bit for simm12 is off, then we can potentially
-+     use [x]ori to handle the low 11 bits.  If the sign bit is on,
-+     then [x]ori isn't safe unless all the upper bits were also
-+     on, in which case it's a simm12 operand and handled earlier.
-+
-+     Note that this could be relaxed for xori since we can flip a
-+     bit back to its original state with a binvi.  So if we wanted
-+     an XOR with a constant like 0x7ffffffffffffffe, we could use
-+     xori+binv where both flip that high bit.  */
 +  /* First use x[or]i to handle the low 11 bits.  */
-+  if ((ival & 0x800) == 0 && (ival & 0x7ff) != 0)
++  if ((ival & 0x7ff) != 0)
 +    {
 +      ival &= ~0x7ff;
 +      budget--;
@@ -154,7 +145,7 @@ index 38f3ae7cd84..9d9bbbb1f43 100644
 +	  budget = -1;
 +	  break;
 +	}
-+      ival &= tmpval;
++      ival &= ~tmpval;
 +      budget--;
 +    }
 +
@@ -174,7 +165,7 @@ index 38f3ae7cd84..9d9bbbb1f43 100644
 +
 +  /* Emit the [x]ori insn that ges the low 11 bits into
 +     the proper state.  */
-+  if ((ival & 0x800) == 0 && (ival & 0x7ff) != 0)
++  if ((ival & 0x7ff) != 0)
 +    {
 +      rtx x = GEN_INT (ival & 0x7ff);
 +      x = gen_rtx_fmt_ee (code, word_mode, input, x);
@@ -201,7 +192,7 @@ index 38f3ae7cd84..9d9bbbb1f43 100644
  #undef TARGET_ASM_ALIGNED_HI_OP
  #define TARGET_ASM_ALIGNED_HI_OP "\t.half\t"
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index 26a247c2b96..4ec77d1e2c4 100644
+index 26a247c2b96..6b94bd29888 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
 @@ -1752,8 +1752,14 @@ (define_insn "*and<mode>3"
@@ -221,8 +212,12 @@ index 26a247c2b96..4ec77d1e2c4 100644
  
  (define_insn "*<optab><mode>3"
    [(set (match_operand:X                0 "register_operand" "=r,r")
-@@ -2471,6 +2477,7 @@ (define_insn_and_split "*mvconst_internal"
-   "!ira_in_progress
+@@ -2468,9 +2474,10 @@ (define_split
+ (define_insn_and_split "*mvconst_internal"
+   [(set (match_operand:GPR 0 "register_operand" "=r")
+         (match_operand:GPR 1 "splittable_const_int_operand" "i"))]
+-  "!ira_in_progress
++  "!ira_in_progress && 0
     && !(p2m1_shift_operand (operands[1], <MODE>mode)
  	|| high_mask_shift_operand (operands[1], <MODE>mode)
 +	|| popcount_hwi (INTVAL (operands[1])) < 4
