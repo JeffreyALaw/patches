@@ -86,10 +86,10 @@ index 2bedd878a04..c9b275fc56f 100644
  /* Routines implemented in riscv-c.cc.  */
  void riscv_cpu_cpp_builtins (cpp_reader *);
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 38f3ae7cd84..91205f80ac9 100644
+index 38f3ae7cd84..db0740aef0b 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
-@@ -14035,6 +14035,103 @@ bool need_shadow_stack_push_pop_p ()
+@@ -14035,6 +14035,110 @@ bool need_shadow_stack_push_pop_p ()
    return is_zicfiss_p () && riscv_save_return_addr_reg_p ();
  }
  
@@ -146,10 +146,17 @@ index 38f3ae7cd84..91205f80ac9 100644
 +     one bit at a time the budget must be at least as large
 +     as the number of bits left for this to be profitable.  */
 +  gcc_assert (ival);
-+  if (TARGET_ZBS && budget >= popcount_hwi (ival))
-+    budget -= popcount_hwi (ival);
-+  else
-+    budget = -1;
++  while (ival && budget >= 0)
++    {
++      HOST_WIDE_INT tmpval = HOST_WIDE_INT_UC (1) << ctz_hwi (ival);
++      if (!TARGET_ZBS || !single_bit_mask_operand (tmpval))
++	{
++	  budget = -1;
++	  break;
++	}
++      ival &= tmpval;
++      budget--;
++    }
 +
 +  /* If we ran out of budget, then load the constant into a fresh
 +     pseudo and emit the reg-reg version.  */
