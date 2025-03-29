@@ -242,7 +242,7 @@ index 38f3ae7cd84..24cd7fd7a40 100644
 +
 +  /* Similar, but with only high bits set.  */
 +  if (high_mask_shift_operand (operands[2], word_mode)
-+      || p2m1_shift_operand (GEN_INT (~INTVAL (operands[2])), word_mode)
++      || p2m1_shift_operand (GEN_INT (~INTVAL (operands[2])), word_mode))
 +    {
 +      int count = ctz_hwi (INTVAL (operands[2]));
 +      rtx x = gen_rtx_LSHIFTRT (GET_MODE (operands[0]),
