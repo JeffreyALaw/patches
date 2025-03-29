@@ -16,6 +16,7 @@ mkdir -p ${TARGET}-obj/binutils
 mkdir -p ${TARGET}-obj/gcc
 
 PATH=/usr/lib/ccache:$PATH
+ccache -M 100G
 
 # We only need the binutils-gdb and gcc trees
 echo Setting up sources
