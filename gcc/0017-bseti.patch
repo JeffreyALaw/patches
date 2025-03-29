@@ -1,8 +1,8 @@
 diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
-index b29c127bcb8..3e88b01d0cd 100644
+index b29c127bcb8..4a9a6130d0c 100644
 --- a/gcc/config/riscv/bitmanip.md
 +++ b/gcc/config/riscv/bitmanip.md
-@@ -1011,26 +1011,6 @@ (define_split
+@@ -1011,45 +1011,6 @@ (define_split
    [(set (match_dup 0) (zero_extract:GPR (match_dup 1) (const_int 1) (match_dup 2)))
     (set (match_dup 0) (plus:GPR (match_dup 0) (const_int -1)))])
  
@@ -26,9 +26,28 @@ index b29c127bcb8..3e88b01d0cd 100644
 -}
 -[(set_attr "type" "bitmanip")])
 -
- ;; Same to use blcri + andi and blcri + bclri
- (define_insn_and_split "*andi<mode>_extrabit"
-   [(set (match_operand:X 0 "register_operand" "=r")
+-;; Same to use blcri + andi and blcri + bclri
+-(define_insn_and_split "*andi<mode>_extrabit"
+-  [(set (match_operand:X 0 "register_operand" "=r")
+-	(and:X (match_operand:X 1 "register_operand" "r")
+-	       (match_operand:X 2 "not_uimm_extra_bit_or_nottwobits" "i")))]
+-  "TARGET_ZBS && !not_single_bit_mask_operand (operands[2], VOIDmode)"
+-  "#"
+-  "&& reload_completed"
+-  [(set (match_dup 0) (and:X (match_dup 1) (match_dup 3)))
+-   (set (match_dup 0) (and:X (match_dup 0) (match_dup 4)))]
+-{
+-  unsigned HOST_WIDE_INT bits = UINTVAL (operands[2]);
+-  unsigned HOST_WIDE_INT topbit = HOST_WIDE_INT_1U << floor_log2 (~bits);
+-
+-  operands[3] = GEN_INT (bits | topbit);
+-  operands[4] = GEN_INT (~topbit);
+-}
+-[(set_attr "type" "bitmanip")])
+-
+ ;; If we have the ZBA extension, then we can clear the upper half of a 64
+ ;; bit object with a zext.w.  So if we have AND where the constant would
+ ;; require synthesis of two or more instructions, but 32->64 sign extension
 diff --git a/gcc/config/riscv/iterators.md b/gcc/config/riscv/iterators.md
 index 214c20ba7b8..b01c46cf5cf 100644
 --- a/gcc/config/riscv/iterators.md
@@ -87,7 +106,7 @@ index 2bedd878a04..b438dc1f958 100644
  /* Routines implemented in riscv-c.cc.  */
  void riscv_cpu_cpp_builtins (cpp_reader *);
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 38f3ae7cd84..eb68076f540 100644
+index 38f3ae7cd84..960388daab5 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
 @@ -14035,6 +14035,312 @@ bool need_shadow_stack_push_pop_p ()
@@ -248,10 +267,10 @@ index 38f3ae7cd84..eb68076f540 100644
 +      emit_insn (gen_rtx_SET (operands[0], x));
 +
 +      /* Now emit the ANDI.  */
-+      count = INTVAL (operands[2]);
-+      count >>= ctz_hwi (count);
++      unsigned HOST_WIDE_INT mask = INTVAL (operands[2]);
++      mask >>= ctz_hwi (mask);
 +      x = gen_rtx_AND (GET_MODE (operands[0]), operands[0],
-+				 GEN_INT (count));
++				 GEN_INT (mask));
 +      emit_insn (gen_rtx_SET (operands[0], x));
 + 
 +      /* Shift left to move bits into position.  */
@@ -468,25 +487,3 @@ index 26a247c2b96..cc77508b9c2 100644
  	|| exact_log2 (INTVAL (operands[1])) >= 0)"
    "#"
    "&& 1"
-diff --git a/gcc/testsuite/gcc.target/riscv/zbs-bseti-03.c b/gcc/testsuite/gcc.target/riscv/zbs-bseti-03.c
-new file mode 100644
-index 00000000000..86c6568abdf
---- /dev/null
-+++ b/gcc/testsuite/gcc.target/riscv/zbs-bseti-03.c
-@@ -0,0 +1,16 @@
-+/* { dg-do compile {target { rv64 } } } */
-+/* { dg-options "-march=rv64gc_zbs -mabi=lp64" } */
-+/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
-+
-+unsigned long foo_ior (unsigned long x) { return x | 0x8000100000000001; }
-+unsigned long foo_xor (unsigned long x) { return x ^ 0x8000100000000001; }
-+
-+/* { dg-final { scan-assembler-times "ori\t" 2 } } */
-+/* { dg-final { scan-assembler-times "bseti\t" 2 } } */
-+/* { dg-final { scan-assembler-times "binvi\t" 2 } } */
-+/* { dg-final { scan-assembler-not "li\t" } } */
-+/* { dg-final { scan-assembler-not "slli\t" } } */
-+/* { dg-final { scan-assembler-not "addi\t" } } */
-+/* { dg-final { scan-assembler-not "or\t" } } */
-+/* { dg-final { scan-assembler-not "xor\t" } } */
-+
