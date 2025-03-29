@@ -106,10 +106,10 @@ index 2bedd878a04..b438dc1f958 100644
  /* Routines implemented in riscv-c.cc.  */
  void riscv_cpu_cpp_builtins (cpp_reader *);
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 38f3ae7cd84..b889143ab83 100644
+index 38f3ae7cd84..58276afec95 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
-@@ -14035,6 +14035,316 @@ bool need_shadow_stack_push_pop_p ()
+@@ -14035,6 +14035,315 @@ bool need_shadow_stack_push_pop_p ()
    return is_zicfiss_p () && riscv_save_return_addr_reg_p ();
  }
  
@@ -242,9 +242,8 @@ index 38f3ae7cd84..b889143ab83 100644
 +
 +  /* Similar, but with only high bits set.  */
 +  unsigned HOST_WIDE_INT t = INTVAL (operands[2]);
-+  t >>= ctz_hwi (t);
-+  if (consecutive_bits_operand (GEN_INT (t), word_mode)
-+      && popcount_hwi (t) > 3)
++  t = ~t;
++  if (exact_log2 (t + 1) >= 0 && popcount_hwi (t) > 3)
 +    {
 +      int count = ctz_hwi (INTVAL (operands[2]));
 +      rtx tmp = gen_reg_rtx (word_mode);
