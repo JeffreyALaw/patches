@@ -15,6 +15,8 @@ mkdir -p ${TARGET}-installed
 mkdir -p ${TARGET}-obj/binutils
 mkdir -p ${TARGET}-obj/gcc
 
+PATH=/usr/lib/ccache:$PATH
+
 # We only need the binutils-gdb and gcc trees
 echo Setting up sources
 patches/jobs/setupsources.sh $TARGET master binutils-gdb gcc > $LOGFILE 2>&1
