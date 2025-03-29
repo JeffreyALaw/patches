@@ -106,10 +106,10 @@ index 2bedd878a04..b438dc1f958 100644
  /* Routines implemented in riscv-c.cc.  */
  void riscv_cpu_cpp_builtins (cpp_reader *);
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 38f3ae7cd84..cf34097012c 100644
+index 38f3ae7cd84..fa2c4fbfaa7 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
-@@ -14035,6 +14035,313 @@ bool need_shadow_stack_push_pop_p ()
+@@ -14035,6 +14035,316 @@ bool need_shadow_stack_push_pop_p ()
    return is_zicfiss_p () && riscv_save_return_addr_reg_p ();
  }
  
@@ -241,15 +241,18 @@ index 38f3ae7cd84..cf34097012c 100644
 +    }
 +
 +  /* Similar, but with only high bits set.  */
-+  if (high_mask_shift_operand (operands[2], word_mode)
-+      || p2m1_shift_operand (GEN_INT (~INTVAL (operands[2])), word_mode))
++  unsigned HOST_WIDE_INT t = INTVAL (operands[2]);
++  t >>= ctz_hwi (t);
++  if (consecutive_bits_operand (GEN_INT (t), word_mode)
++      && popcount_hwi (t) > 3)
 +    {
 +      int count = ctz_hwi (INTVAL (operands[2]));
++      rtx tmp = gen_reg_rtx (word_mode);
 +      rtx x = gen_rtx_LSHIFTRT (GET_MODE (operands[0]),
 +				operands[1], GEN_INT (count));
-+      emit_insn (gen_rtx_SET (operands[0], x));
++      emit_insn (gen_rtx_SET (tmp, x));
 +      x = gen_rtx_ASHIFT (GET_MODE (operands[0]),
-+			  operands[0], GEN_INT (count));
++			  tmp, GEN_INT (count));
 +      emit_insn (gen_rtx_SET (operands[0], x));
 +      return true;
 +    }
@@ -283,12 +286,12 @@ index 38f3ae7cd84..cf34097012c 100644
 +      return true;
 +    }
 +
++
 +  /* If there are all zeros, except for a run of 1s
 +     somewhere in the middle of the constant, then
 +     this is at worst 3 shifts.  */
 +  t = INTVAL (operands[2]);
-+  t >>= ctz_hwi (t);
-+  if (p2m1_shift_operand (GEN_INT (t), word_mode)
++  if (consecutive_bits_operand (GEN_INT (t), word_mode)
 +      && popcount_hwi (t) > 3)
 +    {
 +      /* Shift right to clear the low order bits.  */
