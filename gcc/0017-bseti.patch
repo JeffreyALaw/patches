@@ -106,7 +106,7 @@ index 2bedd878a04..b438dc1f958 100644
  /* Routines implemented in riscv-c.cc.  */
  void riscv_cpu_cpp_builtins (cpp_reader *);
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 38f3ae7cd84..fa2c4fbfaa7 100644
+index 38f3ae7cd84..b889143ab83 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
 @@ -14035,6 +14035,316 @@ bool need_shadow_stack_push_pop_p ()
@@ -260,7 +260,7 @@ index 38f3ae7cd84..fa2c4fbfaa7 100644
 +  /* If we shift right to eliminate the trailing zeros and
 +     the result is a SMALL_OPERAND, then it's a shift right,
 +     andi and shift left.  */
-+  unsigned HOST_WIDE_INT t = INTVAL (operands[2]);
++  t = INTVAL (operands[2]);
 +  t >>= ctz_hwi (t);
 +  if (SMALL_OPERAND (t))
 +    {
@@ -427,10 +427,20 @@ index 38f3ae7cd84..fa2c4fbfaa7 100644
  #undef TARGET_ASM_ALIGNED_HI_OP
  #define TARGET_ASM_ALIGNED_HI_OP "\t.half\t"
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index 26a247c2b96..cc77508b9c2 100644
+index 26a247c2b96..1c428a38427 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
-@@ -1709,26 +1709,13 @@ (define_insn "smax<mode>3"
+@@ -885,8 +885,7 @@ (define_insn_and_split "*lui_constraint<X:mode>_and_to_or"
+ 	== (-INTVAL (operands[3])))
+     && riscv_const_insns (operands[3], false)
+     && (riscv_const_insns (GEN_INT (~INTVAL (operands[2])
+-				    | -INTVAL (operands[3])), false)
+-	<= riscv_const_insns (operands[3], false)))"
++				    | -INTVAL (operands[3])), false) == 1))"
+   "#"
+   "&& reload_completed"
+   [(set (match_dup 4) (match_dup 5))
+@@ -1709,26 +1708,13 @@ (define_insn "smax<mode>3"
  (define_expand "and<mode>3"
    [(set (match_operand:X                0 "register_operand")
          (and:X (match_operand:X 1 "register_operand")
@@ -462,7 +472,7 @@ index 26a247c2b96..cc77508b9c2 100644
  })
  
  (define_insn "*and<mode>3"
-@@ -1752,8 +1739,14 @@ (define_insn "*and<mode>3"
+@@ -1752,8 +1738,14 @@ (define_insn "*and<mode>3"
  (define_expand "<optab><mode>3"
    [(set (match_operand:X 0 "register_operand")
  	(any_or:X (match_operand:X 1 "register_operand" "")
@@ -479,7 +489,7 @@ index 26a247c2b96..cc77508b9c2 100644
  
  (define_insn "*<optab><mode>3"
    [(set (match_operand:X                0 "register_operand" "=r,r")
-@@ -2468,9 +2461,10 @@ (define_split
+@@ -2468,9 +2460,10 @@ (define_split
  (define_insn_and_split "*mvconst_internal"
    [(set (match_operand:GPR 0 "register_operand" "=r")
          (match_operand:GPR 1 "splittable_const_int_operand" "i"))]
