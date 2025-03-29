@@ -13,6 +13,10 @@ LOGFILE=`pwd`/log
 NPROC=`nproc --all`
 PATH=~/bin/:$PATH
 
+PATH=/usr/lib/ccache:$PATH
+ccache -M 100G
+
+
 export GENERATION=2
 echo $GENERATION
 
