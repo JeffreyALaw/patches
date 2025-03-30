@@ -463,7 +463,7 @@ index 38f3ae7cd84..6f6fc4a0bb9 100644
  #undef TARGET_ASM_ALIGNED_HI_OP
  #define TARGET_ASM_ALIGNED_HI_OP "\t.half\t"
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index 26a247c2b96..ea6953ed459 100644
+index 26a247c2b96..a57459d23ed 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
 @@ -885,8 +885,7 @@ (define_insn_and_split "*lui_constraint<X:mode>_and_to_or"
@@ -576,7 +576,7 @@ index 26a247c2b96..ea6953ed459 100644
 +     rtx x = gen_rtx_PLUS (DImode, operands[1], operands[2]);
 +     emit_insn (gen_rtx_SET (operands[0], x));
 +
-+     x = gen_rtx_ASHIFT (DImode, x, operands[3]);
++     x = gen_rtx_ASHIFT (DImode, operands[0], operands[3]);
 +     emit_insn (gen_rtx_SET (operands[0], x));
 +
 +     /* If the constant fits in a simm12, use it directly as we do not
@@ -612,7 +612,7 @@ index 26a247c2b96..ea6953ed459 100644
 +     rtx x = gen_rtx_PLUS (SImode, operands[1], operands[2]);
 +     emit_insn (gen_rtx_SET (operands[7], x));
 +
-+     x = gen_rtx_ASHIFT (DImode, x, operands[3]);
++     x = gen_rtx_ASHIFT (DImode, operands[0], operands[3]);
 +     emit_insn (gen_rtx_SET (operands[0], x));
 +
 +     /* If the constant fits in a simm12, use it directly as we do not
