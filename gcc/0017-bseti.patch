@@ -717,3 +717,16 @@ index ee316a67f87..0045f7fbbb1 100644
 +/* { dg-final { scan-assembler-times "(andi|slli)\t" 1 } } */
  /* { dg-final { scan-assembler-times "srli\t" 1 } } */
  
+diff --git a/gcc/testsuite/gcc.target/riscv/xtheadcondmov-indirect.c b/gcc/testsuite/gcc.target/riscv/xtheadcondmov-indirect.c
+index dc574e9f11a..9b5c9690d5f 100644
+--- a/gcc/testsuite/gcc.target/riscv/xtheadcondmov-indirect.c
++++ b/gcc/testsuite/gcc.target/riscv/xtheadcondmov-indirect.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile { target { ! riscv_abi_e } } } */
+-/* { dg-options "-march=rv32gc_xtheadcondmov" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gc_xtheadcondmov" { target { rv64 } } } */
++/* { dg-options "-march=rv32gc_xtheadcondmov -mbranch-cost=4" { target { rv32 } } } */
++/* { dg-options "-march=rv64gc_xtheadcondmov -mbranch-cost=4" { target { rv64 } } } */
+ /* { dg-skip-if "" { *-*-* } {"-O0" "-Os" "-Og" "-Oz" "-flto" } } */
+ 
+ /* addi aX, aX, -1000
