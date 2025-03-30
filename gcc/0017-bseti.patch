@@ -106,10 +106,28 @@ index 2bedd878a04..b438dc1f958 100644
  /* Routines implemented in riscv-c.cc.  */
  void riscv_cpu_cpp_builtins (cpp_reader *);
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 38f3ae7cd84..ad8d0b5108d 100644
+index 38f3ae7cd84..5260fdc8da1 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
-@@ -14035,6 +14035,315 @@ bool need_shadow_stack_push_pop_p ()
+@@ -1814,7 +1814,7 @@ riscv_legitimate_constant_p (machine_mode mode ATTRIBUTE_UNUSED, rtx x)
+ {
+   /* With the post-reload usage, it seems best to just pass in FALSE
+      rather than pass ALLOW_NEW_PSEUDOS through the call chain.  */
+-  return riscv_const_insns (x, false) > 0;
++  return riscv_const_insns (x, can_create_pseudo_p ()) > 0;
+ }
+ 
+ /* Implement TARGET_CANNOT_FORCE_CONST_MEM.
+@@ -2388,7 +2388,7 @@ riscv_const_insns (rtx x, bool allow_new_pseudos)
+       {
+ 	int cost = riscv_integer_cost (INTVAL (x), allow_new_pseudos);
+ 	/* Force complicated constants to memory.  */
+-	return cost < 4 ? cost : 0;
++	return cost <= 5 ? cost : 0;
+       }
+ 
+     case CONST_DOUBLE:
+@@ -14035,6 +14035,334 @@ bool need_shadow_stack_push_pop_p ()
    return is_zicfiss_p () && riscv_save_return_addr_reg_p ();
  }
  
@@ -241,20 +259,39 @@ index 38f3ae7cd84..ad8d0b5108d 100644
 +    }
 +
 +  /* Similar, but with only high bits set.  */
-+  unsigned HOST_WIDE_INT t = INTVAL (operands[2]);
-+  t = ~t;
++  unsigned HOST_WIDE_INT t = ~INTVAL (operands[2]);
 +  if (exact_log2 (t + 1) >= 0)
 +    {
 +      int count = ctz_hwi (INTVAL (operands[2]));
-+      rtx tmp = gen_reg_rtx (word_mode);
 +      rtx x = gen_rtx_LSHIFTRT (GET_MODE (operands[0]),
 +				operands[1], GEN_INT (count));
-+      emit_insn (gen_rtx_SET (tmp, x));
++      emit_insn (gen_rtx_SET (operands[0], x));
 +      x = gen_rtx_ASHIFT (GET_MODE (operands[0]),
-+			  tmp, GEN_INT (count));
++			  operands[0], GEN_INT (count));
 +      emit_insn (gen_rtx_SET (operands[0], x));
 +      return true;
 +    }
++
++  /* We can use andi+bclr.  That's cheaper than the three
++     shift sequence.  */
++  t = ~INTVAL (operands[2]);
++  t &= ~0x7ff;
++  if (popcount_hwi (t) == 1)
++    {
++      t = (~INTVAL (operands[2])) & 0x7ff;
++      t += 1;
++      t = -t;
++      rtx x = gen_rtx_AND (GET_MODE (operands[1]),
++			   operands[1], GEN_INT (t));
++      emit_insn (gen_rtx_SET (operands[0], x));
++      t = ~INTVAL (operands[2]);
++      t &= ~0x7ff;
++      x = gen_rtx_AND (GET_MODE (operands[0]),
++		        operands[0], GEN_INT (~t));
++      emit_insn (gen_rtx_SET (operands[0], x));
++      return true;
++    }
++  
 +
 +  /* If we shift right to eliminate the trailing zeros and
 +     the result is a SMALL_OPERAND, then it's a shift right,
