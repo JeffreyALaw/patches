@@ -106,7 +106,7 @@ index 2bedd878a04..b438dc1f958 100644
  /* Routines implemented in riscv-c.cc.  */
  void riscv_cpu_cpp_builtins (cpp_reader *);
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 38f3ae7cd84..58276afec95 100644
+index 38f3ae7cd84..ad8d0b5108d 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
 @@ -14035,6 +14035,315 @@ bool need_shadow_stack_push_pop_p ()
@@ -243,7 +243,7 @@ index 38f3ae7cd84..58276afec95 100644
 +  /* Similar, but with only high bits set.  */
 +  unsigned HOST_WIDE_INT t = INTVAL (operands[2]);
 +  t = ~t;
-+  if (exact_log2 (t + 1) >= 0 && popcount_hwi (t) > 3)
++  if (exact_log2 (t + 1) >= 0)
 +    {
 +      int count = ctz_hwi (INTVAL (operands[2]));
 +      rtx tmp = gen_reg_rtx (word_mode);
@@ -261,7 +261,7 @@ index 38f3ae7cd84..58276afec95 100644
 +     andi and shift left.  */
 +  t = INTVAL (operands[2]);
 +  t >>= ctz_hwi (t);
-+  if (SMALL_OPERAND (t))
++  if (SMALL_OPERAND (t) && popcount_hwi (t) > 2)
 +    {
 +      /* Shift right to clear the low order bits.  */
 +      int count = ctz_hwi (INTVAL (operands[2]));
