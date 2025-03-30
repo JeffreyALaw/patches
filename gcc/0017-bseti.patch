@@ -106,7 +106,7 @@ index 2bedd878a04..b438dc1f958 100644
  /* Routines implemented in riscv-c.cc.  */
  void riscv_cpu_cpp_builtins (cpp_reader *);
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 38f3ae7cd84..5260fdc8da1 100644
+index 38f3ae7cd84..6f6fc4a0bb9 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
 @@ -1814,7 +1814,7 @@ riscv_legitimate_constant_p (machine_mode mode ATTRIBUTE_UNUSED, rtx x)
@@ -276,7 +276,7 @@ index 38f3ae7cd84..5260fdc8da1 100644
 +     shift sequence.  */
 +  t = ~INTVAL (operands[2]);
 +  t &= ~0x7ff;
-+  if (popcount_hwi (t) == 1)
++  if (TARGET_ZBS && popcount_hwi (t) == 1)
 +    {
 +      t = (~INTVAL (operands[2])) & 0x7ff;
 +      t += 1;
