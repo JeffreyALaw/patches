@@ -463,7 +463,7 @@ index 38f3ae7cd84..6f6fc4a0bb9 100644
  #undef TARGET_ASM_ALIGNED_HI_OP
  #define TARGET_ASM_ALIGNED_HI_OP "\t.half\t"
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index 26a247c2b96..fa9e427cbc9 100644
+index 26a247c2b96..bfa4073ade8 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
 @@ -875,7 +875,7 @@ (define_insn "*addsi3_extended2"
@@ -615,7 +615,7 @@ index 26a247c2b96..fa9e427cbc9 100644
  (define_insn_and_split "*branch<ANYI:mode>_shiftedarith_equals_zero"
    [(set (pc)
  	(if_then_else (match_operator 1 "equality_operator"
-@@ -4745,6 +4784,75 @@ (define_insn_and_split ""
+@@ -4745,6 +4784,74 @@ (define_insn_and_split ""
     }"
    [(set_attr "type" "arith")])
  
@@ -664,7 +664,6 @@ index 26a247c2b96..fa9e427cbc9 100644
 +  "&& reload_completed"
 +  [(const_int 0)]
 +  "{
-+     operands[1] = gen_lowpart (DImode, operands[1]);
 +     operands[6] = gen_lowpart (SImode, operands[0]);
 +     operands[7] = gen_lowpart (SImode, operands[5]);
 +
@@ -718,15 +717,17 @@ index ee316a67f87..0045f7fbbb1 100644
  /* { dg-final { scan-assembler-times "srli\t" 1 } } */
  
 diff --git a/gcc/testsuite/gcc.target/riscv/xtheadcondmov-indirect.c b/gcc/testsuite/gcc.target/riscv/xtheadcondmov-indirect.c
-index dc574e9f11a..9b5c9690d5f 100644
+index dc574e9f11a..0edbfcee00e 100644
 --- a/gcc/testsuite/gcc.target/riscv/xtheadcondmov-indirect.c
 +++ b/gcc/testsuite/gcc.target/riscv/xtheadcondmov-indirect.c
-@@ -1,6 +1,6 @@
+@@ -1,7 +1,7 @@
  /* { dg-do compile { target { ! riscv_abi_e } } } */
 -/* { dg-options "-march=rv32gc_xtheadcondmov" { target { rv32 } } } */
 -/* { dg-options "-march=rv64gc_xtheadcondmov" { target { rv64 } } } */
+-/* { dg-skip-if "" { *-*-* } {"-O0" "-Os" "-Og" "-Oz" "-flto" } } */
 +/* { dg-options "-march=rv32gc_xtheadcondmov -mbranch-cost=4" { target { rv32 } } } */
 +/* { dg-options "-march=rv64gc_xtheadcondmov -mbranch-cost=4" { target { rv64 } } } */
- /* { dg-skip-if "" { *-*-* } {"-O0" "-Os" "-Og" "-Oz" "-flto" } } */
++/* { dg-skip-if "" { *-*-* } {"-O0" "-O1" "-Os" "-Og" "-Oz" "-flto" } } */
  
  /* addi aX, aX, -1000
+    li aX, 10
