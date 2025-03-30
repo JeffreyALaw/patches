@@ -463,20 +463,79 @@ index 38f3ae7cd84..6f6fc4a0bb9 100644
  #undef TARGET_ASM_ALIGNED_HI_OP
  #define TARGET_ASM_ALIGNED_HI_OP "\t.half\t"
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index 26a247c2b96..a57459d23ed 100644
+index 26a247c2b96..fa9e427cbc9 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
-@@ -885,8 +885,7 @@ (define_insn_and_split "*lui_constraint<X:mode>_and_to_or"
+@@ -875,7 +875,7 @@ (define_insn "*addsi3_extended2"
+ ;; Where C1 is not a LUI operand, but ~C1 is a LUI operand
+ 
+ (define_insn_and_split "*lui_constraint<X:mode>_and_to_or"
+-	[(set (match_operand:X 0 "register_operand" "=r")
++  [(set (match_operand:X 0 "register_operand" "=r")
+ 	(plus:X (and:X (match_operand:X 1 "register_operand" "r")
+ 		       (match_operand 2 "const_int_operand"))
+ 		(match_operand 3 "const_int_operand")))
+@@ -885,20 +885,53 @@ (define_insn_and_split "*lui_constraint<X:mode>_and_to_or"
  	== (-INTVAL (operands[3])))
      && riscv_const_insns (operands[3], false)
      && (riscv_const_insns (GEN_INT (~INTVAL (operands[2])
 -				    | -INTVAL (operands[3])), false)
 -	<= riscv_const_insns (operands[3], false)))"
-+				    | -INTVAL (operands[3])), false) == 1))"
++				    | -INTVAL (operands[3])), false)))"
    "#"
    "&& reload_completed"
-   [(set (match_dup 4) (match_dup 5))
-@@ -1709,26 +1708,13 @@ (define_insn "smax<mode>3"
+-  [(set (match_dup 4) (match_dup 5))
+-   (set (match_dup 0) (ior:X (match_dup 1) (match_dup 4)))
+-   (set (match_dup 4) (match_dup 6))
+-   (set (match_dup 0) (minus:X (match_dup 0) (match_dup 4)))]
++  [(const_int 0)]
+   {
+     operands[5] = GEN_INT (~INTVAL (operands[2]));
+     operands[6] = GEN_INT ((~INTVAL (operands[2])) | (-INTVAL (operands[3])));
++
++    riscv_emit_move (operands[4], operands[5]);
++
++    rtx x = gen_rtx_IOR (word_mode, operands[1], operands[4]);
++    emit_insn (gen_rtx_SET (operands[0], x));
++
++    riscv_emit_move (operands[4], operands[6]);
++    x = gen_rtx_MINUS (word_mode, operands[0], operands[4]);
++    emit_insn (gen_rtx_SET (operands[0], x));
++  }
++  [(set_attr "type" "arith")])
++
++;; This is a bridge to the prior pattern.  The expectation is that
++;; it rarely gets used expect to make it possible to generate the
++;; pattern.  It works by hiding the cost of the constant synthesis
++;; for the addend.  That in turn allows pulling in more instructions
++;; and find the constant argument to the logical AND. 
++(define_insn_and_split "*lui_constraint<X:mode>_and_to_or_bridge"
++  [(set (match_operand:X 0 "register_operand" "=r")
++	(plus:X (and:X (match_operand:X 1 "register_operand" "r")
++		       (match_operand:X 2 "register_operand" "r"))
++		(match_operand 3 "const_int_operand")))
++   (clobber (match_scratch:X 4 "=&r"))]
++  "riscv_const_insns (operands[3], false)"
++  "#"
++  "&& reload_completed"
++  [(const_int 0)]
++  {
++    riscv_emit_move (operands[4], operands[3]);
++
++    rtx x = gen_rtx_AND (word_mode, operands[1], operands[2]);
++    emit_move_insn (operands[0], x);
++
++    x = gen_rtx_PLUS (word_mode, operands[0], operands[4]);
++    emit_move_insn (operands[0], x);
++    DONE;
+   }
+   [(set_attr "type" "arith")])
+ 
++
+ ;;
+ ;;  ....................
+ ;;
+@@ -1709,26 +1742,13 @@ (define_insn "smax<mode>3"
  (define_expand "and<mode>3"
    [(set (match_operand:X                0 "register_operand")
          (and:X (match_operand:X 1 "register_operand")
@@ -508,7 +567,7 @@ index 26a247c2b96..a57459d23ed 100644
  })
  
  (define_insn "*and<mode>3"
-@@ -1752,8 +1738,14 @@ (define_insn "*and<mode>3"
+@@ -1752,8 +1772,14 @@ (define_insn "*and<mode>3"
  (define_expand "<optab><mode>3"
    [(set (match_operand:X 0 "register_operand")
  	(any_or:X (match_operand:X 1 "register_operand" "")
@@ -525,7 +584,7 @@ index 26a247c2b96..a57459d23ed 100644
  
  (define_insn "*<optab><mode>3"
    [(set (match_operand:X                0 "register_operand" "=r,r")
-@@ -2468,9 +2460,10 @@ (define_split
+@@ -2468,9 +2494,10 @@ (define_split
  (define_insn_and_split "*mvconst_internal"
    [(set (match_operand:GPR 0 "register_operand" "=r")
          (match_operand:GPR 1 "splittable_const_int_operand" "i"))]
@@ -537,7 +596,7 @@ index 26a247c2b96..a57459d23ed 100644
  	|| exact_log2 (INTVAL (operands[1])) >= 0)"
    "#"
    "&& 1"
-@@ -3156,6 +3149,18 @@ (define_insn_and_split "zero_extendsidi2_shifted"
+@@ -3156,6 +3183,18 @@ (define_insn_and_split "zero_extendsidi2_shifted"
  
  ;; Conditional branches
  
@@ -556,7 +615,7 @@ index 26a247c2b96..a57459d23ed 100644
  (define_insn_and_split "*branch<ANYI:mode>_shiftedarith_equals_zero"
    [(set (pc)
  	(if_then_else (match_operator 1 "equality_operator"
-@@ -4745,6 +4750,75 @@ (define_insn_and_split ""
+@@ -4745,6 +4784,75 @@ (define_insn_and_split ""
     }"
    [(set_attr "type" "arith")])
  
