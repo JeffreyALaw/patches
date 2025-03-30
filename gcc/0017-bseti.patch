@@ -463,7 +463,7 @@ index 38f3ae7cd84..6f6fc4a0bb9 100644
  #undef TARGET_ASM_ALIGNED_HI_OP
  #define TARGET_ASM_ALIGNED_HI_OP "\t.half\t"
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index 26a247c2b96..17821f586cb 100644
+index 26a247c2b96..ea6953ed459 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
 @@ -885,8 +885,7 @@ (define_insn_and_split "*lui_constraint<X:mode>_and_to_or"
@@ -556,6 +556,82 @@ index 26a247c2b96..17821f586cb 100644
  (define_insn_and_split "*branch<ANYI:mode>_shiftedarith_equals_zero"
    [(set (pc)
  	(if_then_else (match_operator 1 "equality_operator"
+@@ -4745,6 +4750,75 @@ (define_insn_and_split ""
+    }"
+   [(set_attr "type" "arith")])
+ 
++(define_insn_and_split ""
++  [(set (match_operand:DI 0 "register_operand" "=r")
++	(plus:DI (ashift:DI (plus:DI
++			      (match_operand:DI 1 "register_operand" "r")
++			      (match_operand:DI 2 "register_operand" "r"))
++			    (match_operand 3 "const_int_operand" "n"))
++		 (match_operand 4 "const_int_operand" "n")))
++   (clobber (match_scratch:DI 5 "=&r"))]
++  "(TARGET_64BIT && riscv_const_insns (operands[4], false) == 1)"
++  "#"
++  "&& reload_completed"
++  [(const_int 0)]
++  "{
++     rtx x = gen_rtx_PLUS (DImode, operands[1], operands[2]);
++     emit_insn (gen_rtx_SET (operands[0], x));
++
++     x = gen_rtx_ASHIFT (DImode, x, operands[3]);
++     emit_insn (gen_rtx_SET (operands[0], x));
++
++     /* If the constant fits in a simm12, use it directly as we do not
++	get another good chance to optimize things again.  */
++     if (!SMALL_OPERAND (INTVAL (operands[4])))
++       emit_move_insn (operands[5], operands[4]);
++     else
++       operands[5] = operands[4];
++
++     x = gen_rtx_PLUS (DImode, operands[0], operands[5]);
++     emit_insn (gen_rtx_SET (operands[0], x));
++     DONE;
++   }"
++  [(set_attr "type" "arith")])
++
++(define_insn_and_split ""
++  [(set (match_operand:DI 0 "register_operand" "=r")
++	(sign_extend:DI (plus:SI (ashift:SI
++				   (plus:SI (match_operand:SI 1 "register_operand" "r")
++					    (match_operand:SI 2 "register_operand" "r"))
++				   (match_operand 3 "const_int_operand" "n"))
++				 (match_operand 4 "const_int_operand" "n"))))
++   (clobber (match_scratch:DI 5 "=&r"))]
++  "(TARGET_64BIT && riscv_const_insns (operands[4], false) == 1)"
++  "#"
++  "&& reload_completed"
++  [(const_int 0)]
++  "{
++     operands[1] = gen_lowpart (DImode, operands[1]);
++     operands[6] = gen_lowpart (SImode, operands[0]);
++     operands[7] = gen_lowpart (SImode, operands[5]);
++
++     rtx x = gen_rtx_PLUS (SImode, operands[1], operands[2]);
++     emit_insn (gen_rtx_SET (operands[7], x));
++
++     x = gen_rtx_ASHIFT (DImode, x, operands[3]);
++     emit_insn (gen_rtx_SET (operands[0], x));
++
++     /* If the constant fits in a simm12, use it directly as we do not
++	get another good chance to optimize things again.  */
++     if (!SMALL_OPERAND (INTVAL (operands[4])))
++       emit_move_insn (operands[5], operands[4]);
++     else
++       operands[7] = operands[4];
++
++     x = gen_rtx_PLUS (SImode, operands[6], operands[7]);
++     x = gen_rtx_SIGN_EXTEND (DImode, x);
++     emit_insn (gen_rtx_SET (operands[0], x));
++     DONE;
++   }"
++  [(set_attr "type" "arith")])
++
+ ;; Shadow stack
+ 
+ (define_insn "@sspush<mode>"
 diff --git a/gcc/testsuite/gcc.target/riscv/branch-1.c b/gcc/testsuite/gcc.target/riscv/branch-1.c
 index 52fc1271c5b..8e80536b068 100644
 --- a/gcc/testsuite/gcc.target/riscv/branch-1.c
