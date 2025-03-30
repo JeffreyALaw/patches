@@ -463,7 +463,7 @@ index 38f3ae7cd84..6f6fc4a0bb9 100644
  #undef TARGET_ASM_ALIGNED_HI_OP
  #define TARGET_ASM_ALIGNED_HI_OP "\t.half\t"
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index 26a247c2b96..1c428a38427 100644
+index 26a247c2b96..17821f586cb 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
 @@ -885,8 +885,7 @@ (define_insn_and_split "*lui_constraint<X:mode>_and_to_or"
@@ -537,3 +537,22 @@ index 26a247c2b96..1c428a38427 100644
  	|| exact_log2 (INTVAL (operands[1])) >= 0)"
    "#"
    "&& 1"
+@@ -3156,6 +3149,18 @@ (define_insn_and_split "zero_extendsidi2_shifted"
+ 
+ ;; Conditional branches
+ 
++(define_split
++  [(set (pc)
++	(if_then_else (any_eq (match_operand:X 1 "register_operand")
++			      (match_operand:X 2 "const_arith_operand"))
++	 (label_ref (match_operand 0 ""))
++	 (pc)))
++   (clobber (match_operand:GPR 3 "register_operand"))]
++  ""
++  [(set (match_dup 3) (match_dup 2))
++   (set (pc) (if_then_else (any_eq (match_dup 1) (match_dup 3))
++			   (label_ref (match_dup 0)) (pc)))])
++
+ (define_insn_and_split "*branch<ANYI:mode>_shiftedarith_equals_zero"
+   [(set (pc)
+ 	(if_then_else (match_operator 1 "equality_operator"
