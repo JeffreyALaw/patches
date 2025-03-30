@@ -556,3 +556,29 @@ index 26a247c2b96..17821f586cb 100644
  (define_insn_and_split "*branch<ANYI:mode>_shiftedarith_equals_zero"
    [(set (pc)
  	(if_then_else (match_operator 1 "equality_operator"
+diff --git a/gcc/testsuite/gcc.target/riscv/branch-1.c b/gcc/testsuite/gcc.target/riscv/branch-1.c
+index 52fc1271c5b..8e80536b068 100644
+--- a/gcc/testsuite/gcc.target/riscv/branch-1.c
++++ b/gcc/testsuite/gcc.target/riscv/branch-1.c
+@@ -41,8 +41,7 @@ void f6(long long a)
+ }
+ 
+ /* { dg-final { scan-assembler-times "slli\t" 2 } } */
+-/* { dg-final { scan-assembler-times "srai\t" 2 } } */
+-/* { dg-final { scan-assembler-times "srli\t" 3 } } */
++/* { dg-final { scan-assembler-times "sr.i\t" 5 } } */
+ /* { dg-final { scan-assembler-times "andi\t" 3 } } */
+ /* { dg-final { scan-assembler-times "\tli\t" 3 } } */
+ /* { dg-final { scan-assembler-not "addi\t" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/pr107786-2.c b/gcc/testsuite/gcc.target/riscv/pr107786-2.c
+index ee316a67f87..0045f7fbbb1 100644
+--- a/gcc/testsuite/gcc.target/riscv/pr107786-2.c
++++ b/gcc/testsuite/gcc.target/riscv/pr107786-2.c
+@@ -12,6 +12,6 @@ int main() {
+   }
+ }
+ 
+-/* { dg-final { scan-assembler-times "andi\t" 1 } } */
++/* { dg-final { scan-assembler-times "(andi|slli)\t" 1 } } */
+ /* { dg-final { scan-assembler-times "srli\t" 1 } } */
+ 
