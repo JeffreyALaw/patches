@@ -1,0 +1,150 @@
+
+
+Hi Jeff and Kito,
+
+On 3/27/25 9:58 AM, Eric Salem wrote:
+> I don't think either of these are supposed to be in the sys directory.
+> However, Christian pointed out:
+>
+> https://sourceware.org/pipermail/libc-alpha/2017-June/081918.html
+>
+> mentions __libc_detect_null() shouldn't be present in a public header. So
+> what I'm going to do is move both sys/string.h and sys/xlenint.h one
+> directory above, update the includes for the various C and assembly files,
+> and send a v2 patch.
+>
+> Jeff, if you don't mind, could you test the patch once it's ready? Just
+> want to ensure it doesn't break any of your builds.
+>
+> Thanks,
+>
+> Eric
+
+I made the aforementioned changes. I moved both xlenint.h and string.h
+(also renamed the latter to avoid any confusion) to one directory above.
+Now the __libc_* functions defined in that file are no longer being included
+in a public header.
+
+Could you please test your build systems again with the patch below? If it
+works, I'll send this one as v2.
+
+Thanks,
+
+Eric
+
+diff --git a/newlib/libc/machine/riscv/sys/string.h b/newlib/libc/machine/riscv/rv_string.h
+similarity index 97%
+rename from newlib/libc/machine/riscv/sys/string.h
+rename to newlib/libc/machine/riscv/rv_string.h
+index b65635cb6cb6..362f66a024bf 100644
+--- a/newlib/libc/machine/riscv/sys/string.h
++++ b/newlib/libc/machine/riscv/rv_string.h
+@@ -9,11 +9,11 @@
+    http://www.opensource.org/licenses.
+ */
+ 
+-#ifndef _SYS_STRING_H
+-#define _SYS_STRING_H
++#ifndef _RV_STRING_H
++#define _RV_STRING_H
+ 
+ #include <stdbool.h>
+-#include "asm.h"
++#include "xlenint.h"
+ 
+ #if __riscv_zbb
+   #include <riscv_bitmanip.h>
+@@ -121,4 +121,4 @@ static __inline char *__libc_strcpy(char *dst, const char *src, bool ret_start)
+ }
+ 
+ 
+-#endif
++#endif /* _RV_STRING_H */
+diff --git a/newlib/libc/machine/riscv/stpcpy.c b/newlib/libc/machine/riscv/stpcpy.c
+index 9243457b25a2..14c32221179b 100644
+--- a/newlib/libc/machine/riscv/stpcpy.c
++++ b/newlib/libc/machine/riscv/stpcpy.c
+@@ -1,5 +1,5 @@
+-#include <string.h>
+ #include <stdbool.h>
++#include "rv_string.h"
+ 
+ char *stpcpy(char *dst, const char *src)
+ {
+diff --git a/newlib/libc/machine/riscv/strcpy.c b/newlib/libc/machine/riscv/strcpy.c
+index f770493fbc2d..a05ec1c0f8e7 100644
+--- a/newlib/libc/machine/riscv/strcpy.c
++++ b/newlib/libc/machine/riscv/strcpy.c
+@@ -9,8 +9,8 @@
+    http://www.opensource.org/licenses.
+ */
+ 
+-#include <string.h>
+ #include <stdbool.h>
++#include "rv_string.h"
+ 
+ char *strcpy(char *dst, const char *src)
+ {
+diff --git a/newlib/libc/machine/riscv/strlen.c b/newlib/libc/machine/riscv/strlen.c
+index 7e5d41617eac..9bfd2a136753 100644
+--- a/newlib/libc/machine/riscv/strlen.c
++++ b/newlib/libc/machine/riscv/strlen.c
+@@ -11,7 +11,7 @@
+ 
+ #include <string.h>
+ #include <stdint.h>
+-#include "sys/asm.h"
++#include "rv_string.h"
+ 
+ size_t strlen(const char *str)
+ {
+diff --git a/newlib/libc/machine/riscv/sys/asm.h b/newlib/libc/machine/riscv/sys/asm.h
+index 0a354b220517..8c8aeb3ae775 100644
+--- a/newlib/libc/machine/riscv/sys/asm.h
++++ b/newlib/libc/machine/riscv/sys/asm.h
+@@ -12,8 +12,6 @@
+ #ifndef _SYS_ASM_H
+ #define _SYS_ASM_H
+ 
+-#include <stdint.h>
+-
+ /*
+  * Macros to handle different pointer/register sizes for 32/64-bit code
+  */
+@@ -22,13 +20,11 @@
+ # define SZREG	8
+ # define REG_S sd
+ # define REG_L ld
+-typedef uint64_t uintxlen_t;
+ #elif __riscv_xlen == 32
+ # define PTRLOG 2
+ # define SZREG	4
+ # define REG_S sw
+ # define REG_L lw
+-typedef uint32_t uintxlen_t;
+ #else
+ # error __riscv_xlen must equal 32 or 64
+ #endif
+diff --git a/newlib/libc/machine/riscv/xlenint.h b/newlib/libc/machine/riscv/xlenint.h
+new file mode 100644
+index 000000000000..86363a80655f
+--- /dev/null
++++ b/newlib/libc/machine/riscv/xlenint.h
+@@ -0,0 +1,14 @@
++#ifndef _XLENINT_H
++#define _XLENINT_H
++
++#include <stdint.h>
++
++#if __riscv_xlen == 64
++typedef uint64_t uintxlen_t;
++#elif __riscv_xlen == 32
++typedef uint32_t uintxlen_t;
++#else
++# error __riscv_xlen must equal 32 or 64
++#endif
++
++#endif /* _XLENINT_H */
+
+
+
