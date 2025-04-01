@@ -4,3 +4,6 @@
 sh4-linux-gnu
 sh3eb-linux-gnu
 sh3-linux-gnu
+or1k-liux-gnu
+microblaze-linux-gnu
+csky-linux-gnu
