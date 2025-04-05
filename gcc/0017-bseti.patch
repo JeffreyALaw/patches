@@ -1,8 +1,8 @@
 diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
-index b29c127bcb8..4a9a6130d0c 100644
+index 5ed5e18cb36..de5795bc1f5 100644
 --- a/gcc/config/riscv/bitmanip.md
 +++ b/gcc/config/riscv/bitmanip.md
-@@ -1011,45 +1011,6 @@ (define_split
+@@ -1013,45 +1013,6 @@ (define_split
    [(set (match_dup 0) (zero_extract:GPR (match_dup 1) (const_int 1) (match_dup 2)))
     (set (match_dup 0) (plus:GPR (match_dup 0) (const_int -1)))])
  
@@ -106,7 +106,7 @@ index 2bedd878a04..b438dc1f958 100644
  /* Routines implemented in riscv-c.cc.  */
  void riscv_cpu_cpp_builtins (cpp_reader *);
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 38f3ae7cd84..6f6fc4a0bb9 100644
+index 38f3ae7cd84..171a1242285 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
 @@ -1814,7 +1814,7 @@ riscv_legitimate_constant_p (machine_mode mode ATTRIBUTE_UNUSED, rtx x)
@@ -337,13 +337,13 @@ index 38f3ae7cd84..6f6fc4a0bb9 100644
 +      emit_insn (gen_rtx_SET (operands[0], x));
 +
 +      /* Shift right to clear the high order bits.  */
-+      count += clz_hwi (INTVAL (operands[2]));
++      count += clz_hwi (INTVAL (operands[2])) % BITS_PER_WORD;
 +      x = gen_rtx_ASHIFT (GET_MODE (operands[0]),
 +			  operands[0], GEN_INT (count));
 +      emit_insn (gen_rtx_SET (operands[0], x));
 +
 +      /* And shift back right to put the bits into position.  */
-+      count = clz_hwi (INTVAL (operands[2]));
++      count = clz_hwi (INTVAL (operands[2])) % BITS_PER_WORD;
 +      x = gen_rtx_LSHIFTRT (GET_MODE (operands[0]),
 +			    operands[0], GEN_INT (count));
 +      emit_insn (gen_rtx_SET (operands[0], x));
