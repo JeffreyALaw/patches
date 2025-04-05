@@ -1,0 +1,733 @@
+diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
+index b29c127bcb8..4a9a6130d0c 100644
+--- a/gcc/config/riscv/bitmanip.md
++++ b/gcc/config/riscv/bitmanip.md
+@@ -1011,45 +1011,6 @@ (define_split
+   [(set (match_dup 0) (zero_extract:GPR (match_dup 1) (const_int 1) (match_dup 2)))
+    (set (match_dup 0) (plus:GPR (match_dup 0) (const_int -1)))])
+ 
+-;; Catch those cases where we can use a bseti/binvi + ori/xori or
+-;; bseti/binvi + bseti/binvi instead of a lui + addi + or/xor sequence.
+-(define_insn_and_split "*<or_optab>i<mode>_extrabit"
+-  [(set (match_operand:X 0 "register_operand" "=r")
+-	(any_or:X (match_operand:X 1 "register_operand" "r")
+-	          (match_operand:X 2 "uimm_extra_bit_or_twobits" "i")))]
+-  "TARGET_ZBS && !single_bit_mask_operand (operands[2], VOIDmode)"
+-  "#"
+-  "&& reload_completed"
+-  [(set (match_dup 0) (<or_optab>:X (match_dup 1) (match_dup 3)))
+-   (set (match_dup 0) (<or_optab>:X (match_dup 0) (match_dup 4)))]
+-{
+-  unsigned HOST_WIDE_INT bits = UINTVAL (operands[2]);
+-  unsigned HOST_WIDE_INT topbit = HOST_WIDE_INT_1U << floor_log2 (bits);
+-
+-  operands[3] = GEN_INT (bits &~ topbit);
+-  operands[4] = GEN_INT (topbit);
+-}
+-[(set_attr "type" "bitmanip")])
+-
+-;; Same to use blcri + andi and blcri + bclri
+-(define_insn_and_split "*andi<mode>_extrabit"
+-  [(set (match_operand:X 0 "register_operand" "=r")
+-	(and:X (match_operand:X 1 "register_operand" "r")
+-	       (match_operand:X 2 "not_uimm_extra_bit_or_nottwobits" "i")))]
+-  "TARGET_ZBS && !not_single_bit_mask_operand (operands[2], VOIDmode)"
+-  "#"
+-  "&& reload_completed"
+-  [(set (match_dup 0) (and:X (match_dup 1) (match_dup 3)))
+-   (set (match_dup 0) (and:X (match_dup 0) (match_dup 4)))]
+-{
+-  unsigned HOST_WIDE_INT bits = UINTVAL (operands[2]);
+-  unsigned HOST_WIDE_INT topbit = HOST_WIDE_INT_1U << floor_log2 (~bits);
+-
+-  operands[3] = GEN_INT (bits | topbit);
+-  operands[4] = GEN_INT (~topbit);
+-}
+-[(set_attr "type" "bitmanip")])
+-
+ ;; If we have the ZBA extension, then we can clear the upper half of a 64
+ ;; bit object with a zext.w.  So if we have AND where the constant would
+ ;; require synthesis of two or more instructions, but 32->64 sign extension
+diff --git a/gcc/config/riscv/iterators.md b/gcc/config/riscv/iterators.md
+index 214c20ba7b8..b01c46cf5cf 100644
+--- a/gcc/config/riscv/iterators.md
++++ b/gcc/config/riscv/iterators.md
+@@ -320,6 +320,11 @@ (define_code_attr optab [(ashift "ashl")
+ 			 (fix "fix_trunc")
+ 			 (unsigned_fix "fixuns_trunc")])
+ 
++;; Similarly, but returns the appropriate rtx_code enum.
++;; Fill in more as needed.
++(define_code_attr OPTAB [(ior "IOR")
++			 (xor "XOR")])
++
+ (define_code_attr bit_optab [(ior "bset")
+ 			     (xor "binv")])
+ 
+diff --git a/gcc/config/riscv/predicates.md b/gcc/config/riscv/predicates.md
+index f26bafcc688..b32ac58b153 100644
+--- a/gcc/config/riscv/predicates.md
++++ b/gcc/config/riscv/predicates.md
+@@ -27,6 +27,10 @@ (define_predicate "arith_operand"
+   (ior (match_operand 0 "const_arith_operand")
+        (match_operand 0 "register_operand")))
+ 
++(define_predicate "reg_or_const_int_operand"
++  (ior (match_operand 0 "const_int_operand")
++       (match_operand 0 "register_operand")))
++
+ (define_predicate "lui_operand"
+   (and (match_code "const_int")
+        (match_test "LUI_OPERAND (INTVAL (op))")))
+@@ -655,11 +659,6 @@ (define_predicate "uimm_extra_bit_operand"
+   (and (match_code "const_int")
+        (match_test "UIMM_EXTRA_BIT_OPERAND (UINTVAL (op))")))
+ 
+-(define_predicate "uimm_extra_bit_or_twobits"
+-  (and (match_code "const_int")
+-       (ior (match_operand 0 "uimm_extra_bit_operand")
+-	    (match_operand 0 "const_twobits_not_arith_operand"))))
+-
+ ;; A CONST_INT operand that fits into the negative half of a
+ ;; signed-immediate after a single cleared top bit has been
+ ;; set: i.e., a bitwise-negated uimm_extra_bit_operand
+diff --git a/gcc/config/riscv/riscv-protos.h b/gcc/config/riscv/riscv-protos.h
+index 2bedd878a04..b438dc1f958 100644
+--- a/gcc/config/riscv/riscv-protos.h
++++ b/gcc/config/riscv/riscv-protos.h
+@@ -179,6 +179,9 @@ extern bool riscv_vector_float_type_p (const_tree type);
+ extern void generate_reflecting_code_using_brev (rtx *);
+ extern void expand_crc_using_clmul (scalar_mode, scalar_mode, rtx *);
+ extern void expand_reversed_crc_using_clmul (scalar_mode, scalar_mode, rtx *);
++extern bool synthesize_ior_xor (rtx_code, rtx [3]);
++extern bool synthesize_and (rtx [3]);
++
+ 
+ /* Routines implemented in riscv-c.cc.  */
+ void riscv_cpu_cpp_builtins (cpp_reader *);
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index 38f3ae7cd84..6f6fc4a0bb9 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -1814,7 +1814,7 @@ riscv_legitimate_constant_p (machine_mode mode ATTRIBUTE_UNUSED, rtx x)
+ {
+   /* With the post-reload usage, it seems best to just pass in FALSE
+      rather than pass ALLOW_NEW_PSEUDOS through the call chain.  */
+-  return riscv_const_insns (x, false) > 0;
++  return riscv_const_insns (x, can_create_pseudo_p ()) > 0;
+ }
+ 
+ /* Implement TARGET_CANNOT_FORCE_CONST_MEM.
+@@ -2388,7 +2388,7 @@ riscv_const_insns (rtx x, bool allow_new_pseudos)
+       {
+ 	int cost = riscv_integer_cost (INTVAL (x), allow_new_pseudos);
+ 	/* Force complicated constants to memory.  */
+-	return cost < 4 ? cost : 0;
++	return cost <= 5 ? cost : 0;
+       }
+ 
+     case CONST_DOUBLE:
+@@ -14035,6 +14035,334 @@ bool need_shadow_stack_push_pop_p ()
+   return is_zicfiss_p () && riscv_save_return_addr_reg_p ();
+ }
+ 
++/* Synthesize an operands[1] [X]OR operands[2] putting the
++   result into operands[0].  CODE indicates if it is XOR or
++   IOR.
++
++   operands[2] is always a CONST_INT and we can always fallback
++   to forcing operands[2] into new pseudo register.
++
++   Return TRUE if all the necessary code was emited, FALSE
++   otherwise.  */
++bool
++synthesize_ior_xor (rtx_code code, rtx operands[3])
++{
++  /* Trivial cases that don't need synthesis.  */
++  if (SMALL_OPERAND (INTVAL (operands[2]))
++      || (TARGET_ZBS && single_bit_mask_operand (operands[2], word_mode)))
++    return false;
++
++  /* Reasonable estimate of our budget.  Constant synthesis
++     costing dosn't take fusion into account, though such
++     cases will typically exploit some fusion.
++
++     So while we could consider adding 1 to account for the
++     logical operation.  We probably should be subtracting 1
++     from the budget to account for some degree of fusion.
++
++     The net is we use the riscv_const_insns result as-is. 
++
++     This also doesn't account for the double complement trick
++     we use in some cases with nor/xnor.  */
++  int budget = riscv_const_insns (operands[2], true);
++  HOST_WIDE_INT ival = INTVAL (operands[2]);
++
++  /* First use x[or]i to handle the low 11 bits.  */
++  if ((ival & 0x7ff) != 0)
++    {
++      ival &= ~0x7ff;
++      budget--;
++    }
++   
++  /* We hopefully have just one or two bits left to set properly,
++     which we can do with bset/binv.   Since we can only flip
++     one bit at a time the budget must be at least as large
++     as the number of bits left for this to be profitable.  */
++  gcc_assert (ival);
++  while (ival && budget >= 0)
++    {
++      HOST_WIDE_INT tmpval = HOST_WIDE_INT_UC (1) << ctz_hwi (ival);
++      if (!TARGET_ZBS || !SINGLE_BIT_MASK_OPERAND (tmpval))
++	{
++	  budget = -1;
++	  break;
++	}
++      ival &= ~tmpval;
++      budget--;
++    }
++
++  /* If we ran out of budget, then load the constant into a fresh
++     pseudo and emit the reg-reg version.  */
++  if (budget < 0)
++    {
++      rtx x = force_reg (word_mode, operands[2]);
++      x = gen_rtx_fmt_ee (code, word_mode, operands[1], x);
++      emit_insn (gen_rtx_SET (operands[0], x));
++      return true;
++    }
++
++  /* Synthesis is better than loading the constant.  */
++  ival = INTVAL (operands[2]);
++  rtx input = operands[1];
++
++  /* Emit the [x]ori insn that ges the low 11 bits into
++     the proper state.  */
++  if ((ival & 0x7ff) != 0)
++    {
++      rtx x = GEN_INT (ival & 0x7ff);
++      x = gen_rtx_fmt_ee (code, word_mode, input, x);
++      emit_insn (gen_rtx_SET (operands[0], x));
++      input = operands[0];
++      ival &= ~0x7ff;
++    }
++
++  /* Now emit bseti/binvi instructions to adjust the
++     remaining bits.  */
++  while (ival)
++    {
++      HOST_WIDE_INT tmpval = HOST_WIDE_INT_UC (1) << ctz_hwi (ival);
++      rtx x = GEN_INT (tmpval);
++      x = gen_rtx_fmt_ee (code, word_mode, input, x);
++      emit_insn (gen_rtx_SET (operands[0], x));
++      input = operands[0];
++      ival &= ~tmpval;
++    }
++  return true;
++}
++
++/* Synthesize an operands[1] [X]OR operands[2] putting the
++   result into operands[0].  CODE indicates if it is XOR or
++   IOR.
++
++   operands[2] is always a CONST_INT and we can always fallback
++   to forcing operands[2] into new pseudo register.
++
++   Return TRUE if all the necessary code was emited, FALSE
++   otherwise.  */
++bool
++synthesize_and (rtx operands[3])
++{
++  /* Trivial cases that don't need synthesis.  */
++  if (SMALL_OPERAND (INTVAL (operands[2]))
++      || (TARGET_ZBS && not_single_bit_mask_operand (operands[2], word_mode)))
++    return false;
++
++  /* If the constant is 2^N-1 for N 12..XLEN, then this is
++     just two shifts.  */
++  if (p2m1_shift_operand (operands[2], word_mode))
++    {
++      int count = (GET_MODE_BITSIZE (GET_MODE (operands[1])).to_constant ()
++		   - exact_log2 (INTVAL (operands[2]) + 1));
++      rtx x = gen_rtx_ASHIFT (GET_MODE (operands[1]),
++			      operands[1], GEN_INT (count));
++      emit_insn (gen_rtx_SET (operands[0], x));
++      x = gen_rtx_LSHIFTRT (GET_MODE (operands[0]),
++			    operands[0], GEN_INT (count));
++      emit_insn (gen_rtx_SET (operands[0], x));
++      return true;
++    }
++
++  /* Similar, but with only high bits set.  */
++  unsigned HOST_WIDE_INT t = ~INTVAL (operands[2]);
++  if (exact_log2 (t + 1) >= 0)
++    {
++      int count = ctz_hwi (INTVAL (operands[2]));
++      rtx x = gen_rtx_LSHIFTRT (GET_MODE (operands[0]),
++				operands[1], GEN_INT (count));
++      emit_insn (gen_rtx_SET (operands[0], x));
++      x = gen_rtx_ASHIFT (GET_MODE (operands[0]),
++			  operands[0], GEN_INT (count));
++      emit_insn (gen_rtx_SET (operands[0], x));
++      return true;
++    }
++
++  /* We can use andi+bclr.  That's cheaper than the three
++     shift sequence.  */
++  t = ~INTVAL (operands[2]);
++  t &= ~0x7ff;
++  if (TARGET_ZBS && popcount_hwi (t) == 1)
++    {
++      t = (~INTVAL (operands[2])) & 0x7ff;
++      t += 1;
++      t = -t;
++      rtx x = gen_rtx_AND (GET_MODE (operands[1]),
++			   operands[1], GEN_INT (t));
++      emit_insn (gen_rtx_SET (operands[0], x));
++      t = ~INTVAL (operands[2]);
++      t &= ~0x7ff;
++      x = gen_rtx_AND (GET_MODE (operands[0]),
++		        operands[0], GEN_INT (~t));
++      emit_insn (gen_rtx_SET (operands[0], x));
++      return true;
++    }
++  
++
++  /* If we shift right to eliminate the trailing zeros and
++     the result is a SMALL_OPERAND, then it's a shift right,
++     andi and shift left.  */
++  t = INTVAL (operands[2]);
++  t >>= ctz_hwi (t);
++  if (SMALL_OPERAND (t) && popcount_hwi (t) > 2)
++    {
++      /* Shift right to clear the low order bits.  */
++      int count = ctz_hwi (INTVAL (operands[2]));
++      rtx x = gen_rtx_LSHIFTRT (GET_MODE (operands[1]),
++				operands[1], GEN_INT (count));
++      emit_insn (gen_rtx_SET (operands[0], x));
++
++      /* Now emit the ANDI.  */
++      unsigned HOST_WIDE_INT mask = INTVAL (operands[2]);
++      mask >>= ctz_hwi (mask);
++      x = gen_rtx_AND (GET_MODE (operands[0]), operands[0],
++				 GEN_INT (mask));
++      emit_insn (gen_rtx_SET (operands[0], x));
++ 
++      /* Shift left to move bits into position.  */
++      count = INTVAL (operands[2]);
++      count = ctz_hwi (count);
++      x = gen_rtx_ASHIFT (GET_MODE (operands[0]),
++			  operands[0], GEN_INT (count));
++      emit_insn (gen_rtx_SET (operands[0], x));
++      return true;
++    }
++
++
++  /* If there are all zeros, except for a run of 1s
++     somewhere in the middle of the constant, then
++     this is at worst 3 shifts.  */
++  t = INTVAL (operands[2]);
++  if (consecutive_bits_operand (GEN_INT (t), word_mode)
++      && popcount_hwi (t) > 3)
++    {
++      /* Shift right to clear the low order bits.  */
++      int count = ctz_hwi (INTVAL (operands[2]));
++      rtx x = gen_rtx_LSHIFTRT (GET_MODE (operands[1]),
++				operands[1], GEN_INT (count));
++      emit_insn (gen_rtx_SET (operands[0], x));
++
++      /* Shift right to clear the high order bits.  */
++      count += clz_hwi (INTVAL (operands[2]));
++      x = gen_rtx_ASHIFT (GET_MODE (operands[0]),
++			  operands[0], GEN_INT (count));
++      emit_insn (gen_rtx_SET (operands[0], x));
++
++      /* And shift back right to put the bits into position.  */
++      count = clz_hwi (INTVAL (operands[2]));
++      x = gen_rtx_LSHIFTRT (GET_MODE (operands[0]),
++			    operands[0], GEN_INT (count));
++      emit_insn (gen_rtx_SET (operands[0], x));
++      return true;
++    }
++    
++  /* We have several primitives that can be used to clear
++     bits.  ANDI, BCLR, ZEXT are obvious.  But we can also
++     use shifts.
++
++     We'll start by inverting the constant.  Meaning every 1 in
++     the constant is a bit we need to clear.  */
++
++  /* Reasonable estimate of our budget.  Constant synthesis
++     costing dosn't take fusion into account, though such
++     cases will typically exploit some fusion.
++
++     So while we could consider adding 1 to account for the
++     logical operation.  We probably should be subtracting 1
++     from the budget to account for some degree of fusion.
++
++     The net is we use the riscv_const_insns result as-is. 
++
++     This also doesn't account for the double complement trick
++     we use in some cases with nor/xnor.  */
++  int budget = riscv_const_insns (operands[2], true);
++  HOST_WIDE_INT ival = ~INTVAL (operands[2]);
++
++  /* First use zero extension to wipe bits.  */
++  bool zexth = false;
++  if ((ival & ~HOST_WIDE_INT_UC (0xffff)) == ~HOST_WIDE_INT_UC (0xffff))
++    {
++      zexth = true;
++      ival &= HOST_WIDE_INT_UC (0xffff);
++      budget--;
++    }
++
++  bool zextw = false;
++  if ((ival & ~HOST_WIDE_INT_UC (0xffffffff)) == ~HOST_WIDE_INT_UC (0xffffffff))
++    {
++      zextw = true;
++      ival &= HOST_WIDE_INT_UC (0xffffffff);
++      budget--;
++    }
++
++  bool andi = false;
++  if ((ival & ~HOST_WIDE_INT_UC (0x7ff)) == ~HOST_WIDE_INT_UC (0x7ff))
++    {
++      andi = true;
++      ival &= HOST_WIDE_INT_UC (0x7ff);
++      budget--;
++    }
++
++  bool bclri = false;
++  if (TARGET_ZBS && budget > popcount_hwi (ival))
++    {
++      bclri = true;
++      budget -= popcount_hwi (ival);
++      ival = 0;
++    }
++  else
++    budget = -1;
++
++  /* If we blew the budget, then synthesize the constant.  */
++  if (budget < 0)
++    {
++      rtx x = force_reg (word_mode, operands[2]);
++      x = gen_rtx_AND (word_mode, operands[1], x);
++      emit_insn (gen_rtx_SET (operands[0], x));
++      return true;
++    }
++
++  /* We didn't blow the budget, generate code.  */
++  rtx x;
++  ival = ~INTVAL (operands[2]);
++  rtx input = operands[1];
++
++  if (zexth)
++    {
++      x = gen_lowpart (HImode, input);
++      x = gen_rtx_ZERO_EXTEND (word_mode, x);
++      emit_insn (gen_rtx_SET (operands[0], x));
++      ival &= HOST_WIDE_INT_UC (0xffff);
++      input = operands[0];
++    }
++
++  if (zextw)
++    {
++      x = gen_lowpart (SImode, input);
++      x = gen_rtx_ZERO_EXTEND (word_mode, x);
++      emit_insn (gen_rtx_SET (operands[0], x));
++      ival &= HOST_WIDE_INT_UC (0xffffffff);
++      input = operands[0];
++    }
++
++  if (andi)
++    {
++      x = gen_rtx_AND (word_mode, input, GEN_INT (ival & 0x7ff));
++      emit_insn (gen_rtx_SET (operands[0], x));
++      ival &= HOST_WIDE_INT_UC (0x7fff);
++      input = operands[0];
++    }
++
++  while (ival)
++    {
++      x = GEN_INT (~(HOST_WIDE_INT_UC (1) << ctz_hwi (ival)));
++      x = gen_rtx_AND (word_mode, input, x);
++      emit_insn (gen_rtx_SET (operands[0], x));
++      ival &= ~(HOST_WIDE_INT_UC (1) << ctz_hwi (ival));
++      input = operands[0];
++    }
++
++  return true;
++}
++
+ /* Initialize the GCC target structure.  */
+ #undef TARGET_ASM_ALIGNED_HI_OP
+ #define TARGET_ASM_ALIGNED_HI_OP "\t.half\t"
+diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
+index 26a247c2b96..bfa4073ade8 100644
+--- a/gcc/config/riscv/riscv.md
++++ b/gcc/config/riscv/riscv.md
+@@ -875,7 +875,7 @@ (define_insn "*addsi3_extended2"
+ ;; Where C1 is not a LUI operand, but ~C1 is a LUI operand
+ 
+ (define_insn_and_split "*lui_constraint<X:mode>_and_to_or"
+-	[(set (match_operand:X 0 "register_operand" "=r")
++  [(set (match_operand:X 0 "register_operand" "=r")
+ 	(plus:X (and:X (match_operand:X 1 "register_operand" "r")
+ 		       (match_operand 2 "const_int_operand"))
+ 		(match_operand 3 "const_int_operand")))
+@@ -885,20 +885,53 @@ (define_insn_and_split "*lui_constraint<X:mode>_and_to_or"
+ 	== (-INTVAL (operands[3])))
+     && riscv_const_insns (operands[3], false)
+     && (riscv_const_insns (GEN_INT (~INTVAL (operands[2])
+-				    | -INTVAL (operands[3])), false)
+-	<= riscv_const_insns (operands[3], false)))"
++				    | -INTVAL (operands[3])), false)))"
+   "#"
+   "&& reload_completed"
+-  [(set (match_dup 4) (match_dup 5))
+-   (set (match_dup 0) (ior:X (match_dup 1) (match_dup 4)))
+-   (set (match_dup 4) (match_dup 6))
+-   (set (match_dup 0) (minus:X (match_dup 0) (match_dup 4)))]
++  [(const_int 0)]
+   {
+     operands[5] = GEN_INT (~INTVAL (operands[2]));
+     operands[6] = GEN_INT ((~INTVAL (operands[2])) | (-INTVAL (operands[3])));
++
++    riscv_emit_move (operands[4], operands[5]);
++
++    rtx x = gen_rtx_IOR (word_mode, operands[1], operands[4]);
++    emit_insn (gen_rtx_SET (operands[0], x));
++
++    riscv_emit_move (operands[4], operands[6]);
++    x = gen_rtx_MINUS (word_mode, operands[0], operands[4]);
++    emit_insn (gen_rtx_SET (operands[0], x));
++  }
++  [(set_attr "type" "arith")])
++
++;; This is a bridge to the prior pattern.  The expectation is that
++;; it rarely gets used expect to make it possible to generate the
++;; pattern.  It works by hiding the cost of the constant synthesis
++;; for the addend.  That in turn allows pulling in more instructions
++;; and find the constant argument to the logical AND. 
++(define_insn_and_split "*lui_constraint<X:mode>_and_to_or_bridge"
++  [(set (match_operand:X 0 "register_operand" "=r")
++	(plus:X (and:X (match_operand:X 1 "register_operand" "r")
++		       (match_operand:X 2 "register_operand" "r"))
++		(match_operand 3 "const_int_operand")))
++   (clobber (match_scratch:X 4 "=&r"))]
++  "riscv_const_insns (operands[3], false)"
++  "#"
++  "&& reload_completed"
++  [(const_int 0)]
++  {
++    riscv_emit_move (operands[4], operands[3]);
++
++    rtx x = gen_rtx_AND (word_mode, operands[1], operands[2]);
++    emit_move_insn (operands[0], x);
++
++    x = gen_rtx_PLUS (word_mode, operands[0], operands[4]);
++    emit_move_insn (operands[0], x);
++    DONE;
+   }
+   [(set_attr "type" "arith")])
+ 
++
+ ;;
+ ;;  ....................
+ ;;
+@@ -1709,26 +1742,13 @@ (define_insn "smax<mode>3"
+ (define_expand "and<mode>3"
+   [(set (match_operand:X                0 "register_operand")
+         (and:X (match_operand:X 1 "register_operand")
+-	       (match_operand:X 2 "arith_or_mode_mask_or_zbs_operand")))]
++	       (match_operand:X 2 "reg_or_const_int_operand")))]
+   ""
+ {
+-  /* If the second operand is a mode mask, emit an extension
+-     insn instead.  */
+-  if (CONST_INT_P (operands[2]))
+-    {
+-      enum machine_mode tmode = VOIDmode;
+-      if (UINTVAL (operands[2]) == GET_MODE_MASK (HImode))
+-	tmode = HImode;
+-      else if (UINTVAL (operands[2]) == GET_MODE_MASK (SImode))
+-	tmode = SImode;
+-
+-      if (tmode != VOIDmode)
+-	{
+-	  rtx tmp = gen_lowpart (tmode, operands[1]);
+-	  emit_insn (gen_extend_insn (operands[0], tmp, <MODE>mode, tmode, 1));
+-	  DONE;
+-	}
+-    }
++  /* We can always synthesize an IOR/XOR with a constant opearnd
++     by loading the constant into a reg.  But sometimes we can do better.  */
++  if (CONST_INT_P (operands[2]) && synthesize_and (operands))
++    DONE;
+ })
+ 
+ (define_insn "*and<mode>3"
+@@ -1752,8 +1772,14 @@ (define_insn "*and<mode>3"
+ (define_expand "<optab><mode>3"
+   [(set (match_operand:X 0 "register_operand")
+ 	(any_or:X (match_operand:X 1 "register_operand" "")
+-		   (match_operand:X 2 "arith_or_zbs_operand" "")))]
+-  "")
++		  (match_operand:X 2 "reg_or_const_int_operand" "")))]
++  ""
++{
++  /* We can always synthesize an IOR/XOR with a constant opearnd
++     by loading the constant into a reg.  But sometimes we can do better.  */
++  if (CONST_INT_P (operands[2]) && synthesize_ior_xor (<OPTAB>, operands))
++    DONE;
++})
+ 
+ (define_insn "*<optab><mode>3"
+   [(set (match_operand:X                0 "register_operand" "=r,r")
+@@ -2468,9 +2494,10 @@ (define_split
+ (define_insn_and_split "*mvconst_internal"
+   [(set (match_operand:GPR 0 "register_operand" "=r")
+         (match_operand:GPR 1 "splittable_const_int_operand" "i"))]
+-  "!ira_in_progress
++  "!ira_in_progress && 0
+    && !(p2m1_shift_operand (operands[1], <MODE>mode)
+ 	|| high_mask_shift_operand (operands[1], <MODE>mode)
++	|| popcount_hwi (INTVAL (operands[1])) < 4
+ 	|| exact_log2 (INTVAL (operands[1])) >= 0)"
+   "#"
+   "&& 1"
+@@ -3156,6 +3183,18 @@ (define_insn_and_split "zero_extendsidi2_shifted"
+ 
+ ;; Conditional branches
+ 
++(define_split
++  [(set (pc)
++	(if_then_else (any_eq (match_operand:X 1 "register_operand")
++			      (match_operand:X 2 "const_arith_operand"))
++	 (label_ref (match_operand 0 ""))
++	 (pc)))
++   (clobber (match_operand:GPR 3 "register_operand"))]
++  ""
++  [(set (match_dup 3) (match_dup 2))
++   (set (pc) (if_then_else (any_eq (match_dup 1) (match_dup 3))
++			   (label_ref (match_dup 0)) (pc)))])
++
+ (define_insn_and_split "*branch<ANYI:mode>_shiftedarith_equals_zero"
+   [(set (pc)
+ 	(if_then_else (match_operator 1 "equality_operator"
+@@ -4745,6 +4784,74 @@ (define_insn_and_split ""
+    }"
+   [(set_attr "type" "arith")])
+ 
++(define_insn_and_split ""
++  [(set (match_operand:DI 0 "register_operand" "=r")
++	(plus:DI (ashift:DI (plus:DI
++			      (match_operand:DI 1 "register_operand" "r")
++			      (match_operand:DI 2 "register_operand" "r"))
++			    (match_operand 3 "const_int_operand" "n"))
++		 (match_operand 4 "const_int_operand" "n")))
++   (clobber (match_scratch:DI 5 "=&r"))]
++  "(TARGET_64BIT && riscv_const_insns (operands[4], false) == 1)"
++  "#"
++  "&& reload_completed"
++  [(const_int 0)]
++  "{
++     rtx x = gen_rtx_PLUS (DImode, operands[1], operands[2]);
++     emit_insn (gen_rtx_SET (operands[0], x));
++
++     x = gen_rtx_ASHIFT (DImode, operands[0], operands[3]);
++     emit_insn (gen_rtx_SET (operands[0], x));
++
++     /* If the constant fits in a simm12, use it directly as we do not
++	get another good chance to optimize things again.  */
++     if (!SMALL_OPERAND (INTVAL (operands[4])))
++       emit_move_insn (operands[5], operands[4]);
++     else
++       operands[5] = operands[4];
++
++     x = gen_rtx_PLUS (DImode, operands[0], operands[5]);
++     emit_insn (gen_rtx_SET (operands[0], x));
++     DONE;
++   }"
++  [(set_attr "type" "arith")])
++
++(define_insn_and_split ""
++  [(set (match_operand:DI 0 "register_operand" "=r")
++	(sign_extend:DI (plus:SI (ashift:SI
++				   (plus:SI (match_operand:SI 1 "register_operand" "r")
++					    (match_operand:SI 2 "register_operand" "r"))
++				   (match_operand 3 "const_int_operand" "n"))
++				 (match_operand 4 "const_int_operand" "n"))))
++   (clobber (match_scratch:DI 5 "=&r"))]
++  "(TARGET_64BIT && riscv_const_insns (operands[4], false) == 1)"
++  "#"
++  "&& reload_completed"
++  [(const_int 0)]
++  "{
++     operands[6] = gen_lowpart (SImode, operands[0]);
++     operands[7] = gen_lowpart (SImode, operands[5]);
++
++     rtx x = gen_rtx_PLUS (SImode, operands[1], operands[2]);
++     emit_insn (gen_rtx_SET (operands[7], x));
++
++     x = gen_rtx_ASHIFT (DImode, operands[0], operands[3]);
++     emit_insn (gen_rtx_SET (operands[0], x));
++
++     /* If the constant fits in a simm12, use it directly as we do not
++	get another good chance to optimize things again.  */
++     if (!SMALL_OPERAND (INTVAL (operands[4])))
++       emit_move_insn (operands[5], operands[4]);
++     else
++       operands[7] = operands[4];
++
++     x = gen_rtx_PLUS (SImode, operands[6], operands[7]);
++     x = gen_rtx_SIGN_EXTEND (DImode, x);
++     emit_insn (gen_rtx_SET (operands[0], x));
++     DONE;
++   }"
++  [(set_attr "type" "arith")])
++
+ ;; Shadow stack
+ 
+ (define_insn "@sspush<mode>"
+diff --git a/gcc/testsuite/gcc.target/riscv/branch-1.c b/gcc/testsuite/gcc.target/riscv/branch-1.c
+index 52fc1271c5b..8e80536b068 100644
+--- a/gcc/testsuite/gcc.target/riscv/branch-1.c
++++ b/gcc/testsuite/gcc.target/riscv/branch-1.c
+@@ -41,8 +41,7 @@ void f6(long long a)
+ }
+ 
+ /* { dg-final { scan-assembler-times "slli\t" 2 } } */
+-/* { dg-final { scan-assembler-times "srai\t" 2 } } */
+-/* { dg-final { scan-assembler-times "srli\t" 3 } } */
++/* { dg-final { scan-assembler-times "sr.i\t" 5 } } */
+ /* { dg-final { scan-assembler-times "andi\t" 3 } } */
+ /* { dg-final { scan-assembler-times "\tli\t" 3 } } */
+ /* { dg-final { scan-assembler-not "addi\t" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/pr107786-2.c b/gcc/testsuite/gcc.target/riscv/pr107786-2.c
+index ee316a67f87..0045f7fbbb1 100644
+--- a/gcc/testsuite/gcc.target/riscv/pr107786-2.c
++++ b/gcc/testsuite/gcc.target/riscv/pr107786-2.c
+@@ -12,6 +12,6 @@ int main() {
+   }
+ }
+ 
+-/* { dg-final { scan-assembler-times "andi\t" 1 } } */
++/* { dg-final { scan-assembler-times "(andi|slli)\t" 1 } } */
+ /* { dg-final { scan-assembler-times "srli\t" 1 } } */
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/xtheadcondmov-indirect.c b/gcc/testsuite/gcc.target/riscv/xtheadcondmov-indirect.c
+index dc574e9f11a..0edbfcee00e 100644
+--- a/gcc/testsuite/gcc.target/riscv/xtheadcondmov-indirect.c
++++ b/gcc/testsuite/gcc.target/riscv/xtheadcondmov-indirect.c
+@@ -1,7 +1,7 @@
+ /* { dg-do compile { target { ! riscv_abi_e } } } */
+-/* { dg-options "-march=rv32gc_xtheadcondmov" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gc_xtheadcondmov" { target { rv64 } } } */
+-/* { dg-skip-if "" { *-*-* } {"-O0" "-Os" "-Og" "-Oz" "-flto" } } */
++/* { dg-options "-march=rv32gc_xtheadcondmov -mbranch-cost=4" { target { rv32 } } } */
++/* { dg-options "-march=rv64gc_xtheadcondmov -mbranch-cost=4" { target { rv64 } } } */
++/* { dg-skip-if "" { *-*-* } {"-O0" "-O1" "-Os" "-Og" "-Oz" "-flto" } } */
+ 
+ /* addi aX, aX, -1000
+    li aX, 10
