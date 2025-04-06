@@ -1,8 +1,8 @@
 diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
-index 5ed5e18cb36..de5795bc1f5 100644
+index 5ed5e18cb36..8c8b937a5ac 100644
 --- a/gcc/config/riscv/bitmanip.md
 +++ b/gcc/config/riscv/bitmanip.md
-@@ -1013,45 +1013,6 @@ (define_split
+@@ -1013,15 +1013,11 @@ (define_split
    [(set (match_dup 0) (zero_extract:GPR (match_dup 1) (const_int 1) (match_dup 2)))
     (set (match_dup 0) (plus:GPR (match_dup 0) (const_int -1)))])
  
@@ -12,17 +12,20 @@ index 5ed5e18cb36..de5795bc1f5 100644
 -  [(set (match_operand:X 0 "register_operand" "=r")
 -	(any_or:X (match_operand:X 1 "register_operand" "r")
 -	          (match_operand:X 2 "uimm_extra_bit_or_twobits" "i")))]
--  "TARGET_ZBS && !single_bit_mask_operand (operands[2], VOIDmode)"
++(define_split
++  [(set (match_operand:X 0 "register_operand")
++	(any_or:X (match_operand:X 1 "register_operand")
++		  (match_operand:X 2 "uimm_extra_bit_or_twobits")))]
+   "TARGET_ZBS && !single_bit_mask_operand (operands[2], VOIDmode)"
 -  "#"
 -  "&& reload_completed"
--  [(set (match_dup 0) (<or_optab>:X (match_dup 1) (match_dup 3)))
--   (set (match_dup 0) (<or_optab>:X (match_dup 0) (match_dup 4)))]
--{
--  unsigned HOST_WIDE_INT bits = UINTVAL (operands[2]);
--  unsigned HOST_WIDE_INT topbit = HOST_WIDE_INT_1U << floor_log2 (bits);
--
--  operands[3] = GEN_INT (bits &~ topbit);
--  operands[4] = GEN_INT (topbit);
+   [(set (match_dup 0) (<or_optab>:X (match_dup 1) (match_dup 3)))
+    (set (match_dup 0) (<or_optab>:X (match_dup 0) (match_dup 4)))]
+ {
+@@ -1030,27 +1026,7 @@ (define_insn_and_split "*<or_optab>i<mode>_extrabit"
+ 
+   operands[3] = GEN_INT (bits &~ topbit);
+   operands[4] = GEN_INT (topbit);
 -}
 -[(set_attr "type" "bitmanip")])
 -
@@ -44,10 +47,10 @@ index 5ed5e18cb36..de5795bc1f5 100644
 -  operands[4] = GEN_INT (~topbit);
 -}
 -[(set_attr "type" "bitmanip")])
--
++})
+ 
  ;; If we have the ZBA extension, then we can clear the upper half of a 64
  ;; bit object with a zext.w.  So if we have AND where the constant would
- ;; require synthesis of two or more instructions, but 32->64 sign extension
 diff --git a/gcc/config/riscv/iterators.md b/gcc/config/riscv/iterators.md
 index 214c20ba7b8..b01c46cf5cf 100644
 --- a/gcc/config/riscv/iterators.md
@@ -65,7 +68,7 @@ index 214c20ba7b8..b01c46cf5cf 100644
  			     (xor "binv")])
  
 diff --git a/gcc/config/riscv/predicates.md b/gcc/config/riscv/predicates.md
-index f26bafcc688..b32ac58b153 100644
+index f26bafcc688..98d7b5a5646 100644
 --- a/gcc/config/riscv/predicates.md
 +++ b/gcc/config/riscv/predicates.md
 @@ -27,6 +27,10 @@ (define_predicate "arith_operand"
@@ -91,6 +94,16 @@ index f26bafcc688..b32ac58b153 100644
  ;; A CONST_INT operand that fits into the negative half of a
  ;; signed-immediate after a single cleared top bit has been
  ;; set: i.e., a bitwise-negated uimm_extra_bit_operand
+@@ -685,3 +684,9 @@ (define_predicate "x1x5_operand"
+   (and (match_operand 0 "register_operand")
+        (match_test "REGNO (op) == RETURN_ADDR_REGNUM
+ 		    || REGNO (op) == T0_REGNUM")))
++
++(define_predicate "uimm_extra_bit_or_twobits"
++  (and (match_code "const_int")
++       (ior (match_operand 0 "uimm_extra_bit_operand")
++           (match_operand 0 "const_twobits_not_arith_operand"))))
++
 diff --git a/gcc/config/riscv/riscv-protos.h b/gcc/config/riscv/riscv-protos.h
 index 2bedd878a04..b438dc1f958 100644
 --- a/gcc/config/riscv/riscv-protos.h
@@ -106,7 +119,7 @@ index 2bedd878a04..b438dc1f958 100644
  /* Routines implemented in riscv-c.cc.  */
  void riscv_cpu_cpp_builtins (cpp_reader *);
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 38f3ae7cd84..171a1242285 100644
+index 38f3ae7cd84..c0bce027c0a 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
 @@ -1814,7 +1814,7 @@ riscv_legitimate_constant_p (machine_mode mode ATTRIBUTE_UNUSED, rtx x)
@@ -301,7 +314,7 @@ index 38f3ae7cd84..171a1242285 100644
 +  if (SMALL_OPERAND (t) && popcount_hwi (t) > 2)
 +    {
 +      /* Shift right to clear the low order bits.  */
-+      int count = ctz_hwi (INTVAL (operands[2]));
++      unsigned HOST_WIDE_INT count = ctz_hwi (INTVAL (operands[2]));
 +      rtx x = gen_rtx_LSHIFTRT (GET_MODE (operands[1]),
 +				operands[1], GEN_INT (count));
 +      emit_insn (gen_rtx_SET (operands[0], x));
