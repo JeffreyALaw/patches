@@ -5,3 +5,4 @@ sh4-linux-gnu
 sh4eb-linux-gnu
 sh3-linux-gnu
 sh3eb-linux-gnu
+cris-elf
