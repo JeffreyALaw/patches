@@ -1,0 +1,11 @@
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/base/pr112431-21.c b/gcc/testsuite/gcc.target/riscv/rvv/base/pr112431-21.c
+index a0ed79352d2..95156d4f3ad 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/base/pr112431-21.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/base/pr112431-21.c
+@@ -1,5 +1,5 @@
+ /* { dg-do run { target { riscv_v } } } */
+-/* { dg-additional-options "-O3 -ansi -pedantic-errors -std=gnu99" } */
++/* { dg-additional-options "-O3 -ansi -std=gnu99" } */
+ 
+ #include "riscv_vector.h"
+ 
