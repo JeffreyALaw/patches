@@ -3,12 +3,4 @@
 # reset.  
 sh4-linux-gnu
 ppc64le-linux-gnu
-h8300-elf
-nds32be-elf
-riscv64-elf
-riscv32-elf
-rl78-elf
-sh3eb-linux-gnu
-v850e-elf
-visium-elf
-xstormy16-elf
+aarch64-linux-gnu
