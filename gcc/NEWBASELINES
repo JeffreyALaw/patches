@@ -3,18 +3,17 @@
 # reset.  
 sh4-linux-gnu
 riscv64-linux-gnu
-c6x-elf
 h8300-elf
 mcore-elf
-microblaze-linux
 mn10300-elf
 nds32be-elf
-nds32le-elf
 pru-elf
 riscv64-elf
-risdv32-elf
+riscv32-elf
 rl78-elf
 rx-elf
 sh3-linux-gnu
 sh3eb-linux-gnu
 v850e-elf
+visium-elf
+xstormy16-elf
