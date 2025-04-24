@@ -2,17 +2,12 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 sh4-linux-gnu
-riscv64-linux-gnu
+ppc64le-linux-gnu
 h8300-elf
-mcore-elf
-mn10300-elf
 nds32be-elf
-pru-elf
 riscv64-elf
 riscv32-elf
 rl78-elf
-rx-elf
-sh3-linux-gnu
 sh3eb-linux-gnu
 v850e-elf
 visium-elf
