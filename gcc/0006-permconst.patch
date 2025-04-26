@@ -36,7 +36,7 @@ index 2bedd878a04..2e889903eb3 100644
  extern bool riscv_expand_block_compare (rtx, rtx, rtx, rtx);
 diff --git a/gcc/config/riscv/riscv-vect-permconst.cc b/gcc/config/riscv/riscv-vect-permconst.cc
 new file mode 100644
-index 00000000000..7d5b67c10b5
+index 00000000000..d2de17d2323
 --- /dev/null
 +++ b/gcc/config/riscv/riscv-vect-permconst.cc
 @@ -0,0 +1,299 @@
@@ -219,7 +219,7 @@ index 00000000000..7d5b67c10b5
 +	continue;
 +
 +      /* A load from the constant pool should have a REG_EQUAL
-+	 note with the vector constant in the note.  */
++	 note with the vector contant in the note.  */
 +      rtx note = find_reg_equal_equiv_note (insn);
 +      if (!note
 +	  || REG_NOTE_KIND (note) != REG_EQUAL
@@ -280,8 +280,8 @@ index 00000000000..7d5b67c10b5
 +
 +	     If the difference in biases fits in the immediate range for
 +	     vadd.vi, then we may optimize.  */
-+	  bias = bias - (*slot)->bias;
-+	  if (IN_RANGE (bias, -16, 15))
++	  HOST_WIDE_INT adjustment = bias - (*slot)->bias;
++	  if (IN_RANGE (adjustment, -16, 15))
 +	    {
 +	      /* We also need to make sure the destination register was not
 +		 modified.  I've chosen to test for that at optimization time
@@ -293,7 +293,7 @@ index 00000000000..7d5b67c10b5
 +		  /* Instead of loading from the constant pool, adjust the
 +		     output of the earlier insn into our destination.  */
 +		  rtx x = gen_const_vec_duplicate (GET_MODE (copy),
-+						   GEN_INT (bias));
++						   GEN_INT (adjustment));
 +		  rtx plus = gen_rtx_PLUS (GET_MODE (copy), (*slot)->dest, x);
 +		  rtx set = gen_rtx_SET (dest, plus);
 +		  emit_insn_after (set, insn);
