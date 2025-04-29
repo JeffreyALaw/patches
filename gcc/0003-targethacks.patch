@@ -66,3 +66,16 @@ index 9dd28b106fb..a09d936c545 100644
  
  ;; Valid shift amount for RRUM, RRAM, RLAM, RRCM.
  (define_constraint "M"
+diff --git a/gcc/config/mcore/mcore.cc b/gcc/config/mcore/mcore.cc
+index cd5f2c52649..bdc1b40a153 100644
+--- a/gcc/config/mcore/mcore.cc
++++ b/gcc/config/mcore/mcore.cc
+@@ -202,7 +202,7 @@ TARGET_GNU_ATTRIBUTES (mcore_attribute_table,
+ #define TARGET_MACHINE_DEPENDENT_REORG	mcore_reorg
+ 
+ #undef  TARGET_PROMOTE_FUNCTION_MODE
+-#define TARGET_PROMOTE_FUNCTION_MODE	default_promote_function_mode_always_promote
++#define TARGET_PROMOTE_FUNCTION_MODE	default_promote_function_mode
+ #undef  TARGET_PROMOTE_PROTOTYPES
+ #define TARGET_PROMOTE_PROTOTYPES	hook_bool_const_tree_true
+ 
