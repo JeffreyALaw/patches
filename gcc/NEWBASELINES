@@ -4,3 +4,4 @@
 sh4-linux-gnu
 hppa-linux-gnu
 m68k-linux-gnu
+s390x-linux-gnu
