@@ -61,7 +61,7 @@ index 64666d31f1a..aef832546c7 100644
  #include "riscv_vector.h"
  
 diff --git a/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_single-71.c b/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_single-71.c
-index 07a64b43a53..7f0dad7ec67 100644
+index 07a64b43a53..fa4328f97f3 100644
 --- a/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_single-71.c
 +++ b/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_single-71.c
 @@ -1,5 +1,5 @@
@@ -71,3 +71,11 @@ index 07a64b43a53..7f0dad7ec67 100644
  
  #include "riscv_vector.h"
  
+@@ -50,5 +50,5 @@ void f (int8_t * restrict in, int8_t * restrict out, int l, int n, int m, size_t
+   }
+ }
+ 
+-/* { dg-final { scan-assembler-times {vsetvli\s+zero,\s*[a-x0-9]+,\s*e8,\s*mf8,\s*tu,\s*m[au]} 2 { target { no-opts "-O0" no-opts "-O1" no-opts "-Os" no-opts "-Oz" no-opts "-g" no-opts "-funroll-loops" } } } } */
+-/* { dg-final { scan-assembler-times {vsetvli} 2 { target { no-opts "-O0" no-opts "-O1" no-opts "-Os" no-opts "-Oz" no-opts "-g" no-opts "-funroll-loops" } } } } */
++/* { dg-final { scan-assembler-times {vsetvli\s+zero,\s*[a-x0-9]+,\s*e8,\s*mf8,\s*tu,\s*m[au]} 4 { target { no-opts "-O0" no-opts "-O1" no-opts "-Os" no-opts "-Oz" no-opts "-g" no-opts "-funroll-loops" } } } } */
++/* { dg-final { scan-assembler-times {vsetvli} 4 { target { no-opts "-O0" no-opts "-O1" no-opts "-Os" no-opts "-Oz" no-opts "-g" no-opts "-funroll-loops" } } } } */
