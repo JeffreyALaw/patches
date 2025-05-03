@@ -1,0 +1,73 @@
+diff --git a/gcc/config/riscv/riscv-vector-costs.cc b/gcc/config/riscv/riscv-vector-costs.cc
+index 167375ca751..51f7eca5a61 100644
+--- a/gcc/config/riscv/riscv-vector-costs.cc
++++ b/gcc/config/riscv/riscv-vector-costs.cc
+@@ -35,6 +35,7 @@ along with GCC; see the file COPYING3.  If not see
+ #include "cfgloop.h"
+ #include "fold-const.h"
+ #include "tm_p.h"
++#include "dominance.h"
+ #include "tree-vectorizer.h"
+ #include "gimple-iterator.h"
+ #include "bitmap.h"
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_prop-2.c b/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_prop-2.c
+index 0379429a754..edb12a12664 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_prop-2.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_prop-2.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mrvv-vector-bits=scalable -march=rv64gc_zve32f -mabi=lp64d -O3 -mrvv-vector-bits=zvl" } */
++/* { dg-options "-mrvv-vector-bits=scalable -march=rv64gc_zve32f -mabi=lp64d -O3 -mrvv-vector-bits=zvl -fno-thread-jumps" } */
+ 
+ int d0, sj, v0, rp, zi;
+ 
+@@ -38,4 +38,4 @@ ka:
+   goto ka;
+ }
+ 
+-/* { dg-final { scan-assembler-times {vsetivli\tzero,\s*1} 2 } } */
++/* { dg-final { scan-assembler-times {vsetivli\tzero,\s*1} 1 } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_single-56.c b/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_single-56.c
+index 5db1a402be6..3d3c5d6e9fb 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_single-56.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_single-56.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mrvv-vector-bits=scalable -march=rv32gcv -mabi=ilp32 -fno-schedule-insns -fno-schedule-insns2" } */
++/* { dg-options "-mrvv-vector-bits=scalable -march=rv32gcv -mabi=ilp32 -fno-schedule-insns -fno-schedule-insns2 -fno-thread-jumps" } */
+ 
+ #include "riscv_vector.h"
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_single-67.c b/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_single-67.c
+index 3f22fc870d9..013d32c55a8 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_single-67.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_single-67.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mrvv-vector-bits=scalable -march=rv32gcv -mabi=ilp32 -fno-tree-vectorize -fno-schedule-insns -fno-schedule-insns2" } */
++/* { dg-options "-mrvv-vector-bits=scalable -march=rv32gcv -mabi=ilp32 -fno-tree-vectorize -fno-schedule-insns -fno-schedule-insns2 -fno-thread-jumps" } */
+ 
+ #include "riscv_vector.h"
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_single-68.c b/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_single-68.c
+index 64666d31f1a..aef832546c7 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_single-68.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_single-68.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mrvv-vector-bits=scalable -march=rv32gcv -mabi=ilp32 -fno-tree-vectorize -fno-schedule-insns -fno-schedule-insns2" } */
++/* { dg-options "-mrvv-vector-bits=scalable -march=rv32gcv -mabi=ilp32 -fno-tree-vectorize -fno-schedule-insns -fno-schedule-insns2 -fno-thread-jumps" } */
+ 
+ #include "riscv_vector.h"
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_single-71.c b/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_single-71.c
+index 07a64b43a53..7f0dad7ec67 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_single-71.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_single-71.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mrvv-vector-bits=scalable -march=rv32gcv -mabi=ilp32 -fno-tree-vectorize -fno-schedule-insns -fno-schedule-insns2" } */
++/* { dg-options "-mrvv-vector-bits=scalable -march=rv32gcv -mabi=ilp32 -fno-tree-vectorize -fno-schedule-insns -fno-schedule-insns2 -fno-thread-jumps" } */
+ 
+ #include "riscv_vector.h"
+ 
