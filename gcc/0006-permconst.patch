@@ -36,10 +36,10 @@ index 2bedd878a04..2e889903eb3 100644
  extern bool riscv_expand_block_compare (rtx, rtx, rtx, rtx);
 diff --git a/gcc/config/riscv/riscv-vect-permconst.cc b/gcc/config/riscv/riscv-vect-permconst.cc
 new file mode 100644
-index 00000000000..d2de17d2323
+index 00000000000..feecc7ed6da
 --- /dev/null
 +++ b/gcc/config/riscv/riscv-vect-permconst.cc
-@@ -0,0 +1,299 @@
+@@ -0,0 +1,300 @@
 +/* Copyright (C) 2024 Free Software Foundation, Inc.
 +
 +This file is part of GCC.
@@ -296,9 +296,10 @@ index 00000000000..d2de17d2323
 +						   GEN_INT (adjustment));
 +		  rtx plus = gen_rtx_PLUS (GET_MODE (copy), (*slot)->dest, x);
 +		  rtx set = gen_rtx_SET (dest, plus);
-+		  emit_insn_after (set, insn);
++		  rtx_insn *new_insn = emit_insn_after (set, insn);
 +		  /* XXX Should we copy over the REG_EQUAL note first?  */
 +		  delete_insn (insn);
++		  insn = new_insn;
 +		}
 +	    }
 +
