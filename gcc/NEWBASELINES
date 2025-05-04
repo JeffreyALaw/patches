@@ -2,3 +2,6 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 sh4-linux-gnu
+moxie-elf
+nds32le-elf
+or1k-linux-gnu
