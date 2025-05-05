@@ -2,5 +2,18 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 sh4-linux-gnu
-riscv32-elf
-riscv64-elf
+fr30-elf
+visium-elf
+v850e-elf
+nds32be-elf
+lm32-elf
+mcore-elf
+msp430-elf
+m32r-elf
+csky-linux-gnu
+bfin-elf
+frv-elf
+ft32-elf
+cris-elf
+c6x-elf
+arc-elf
