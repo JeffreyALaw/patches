@@ -2,5 +2,6 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 sh4-linux-gnu
+sh4eb-linux-gnu
 h8300-elf
 alpha-linux-gnu
