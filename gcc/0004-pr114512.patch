@@ -1,3 +1,13 @@
+	PR middle-end/114512
+gcc/
+	* config/riscv/bitmanip.md (bext* patterns): New patterns for
+	bext recognition plus splitter for extracting variable bit from
+	a constant.
+	* config/riscv/predicates.md (bitpos_mask_operand): New predicate.
+
+gcc/testsuite/
+	* gcc.target/riscv/pr114512.c: New test.
+	
 diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
 index 20d03dc8792..ca03dcaecf8 100644
 --- a/gcc/config/riscv/bitmanip.md

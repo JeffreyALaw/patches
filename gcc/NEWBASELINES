@@ -3,3 +3,4 @@
 # reset.  
 sh4-linux-gnu
 h8300-elf
+alpha-linux-gnu
