@@ -1,26 +1,8 @@
-commit 010f22e87500fea1db15b31132516ae2881f9a4e
-Author: Shreya Munnangi <smunnangi1@ventanamicro.com>
-Date:   Sat Apr 5 10:33:30 2025 -0600
-
-    Improve generation of bext
-    
-    This patch attempts to optimize two additional forms of what is
-    ultimately a bext instruction.
-    
-    First if we shift the input value right into the LSB, then mask with 0x1.
-    
-    Second if we shift the input value left into the sign bit, then shift
-    right by 31/63 (rv32/rv64).
-    
-    There's one "bridge" pattern to help when the input value is a constant.
-    
-    (cherry picked from commit bdeb11e6b0dce499544c0c084e2792c28c311729)
-
 diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
-index 96b49901815..b6fca3c0daa 100644
+index 20d03dc8792..ca03dcaecf8 100644
 --- a/gcc/config/riscv/bitmanip.md
 +++ b/gcc/config/riscv/bitmanip.md
-@@ -1397,3 +1397,76 @@ (define_split
+@@ -1302,3 +1302,76 @@ (define_split
      }
    DONE;
  })
@@ -98,13 +80,13 @@ index 96b49901815..b6fca3c0daa 100644
 +                                     (const_int 1)
 +                                     (zero_extend:X (match_dup 2))))])
 diff --git a/gcc/config/riscv/predicates.md b/gcc/config/riscv/predicates.md
-index 85d9a1261f3..09073de5943 100644
+index f26bafcc688..c9a638cd103 100644
 --- a/gcc/config/riscv/predicates.md
 +++ b/gcc/config/riscv/predicates.md
-@@ -730,3 +730,7 @@ (define_predicate "addi_operand"
-        (match_operand 0 "const_arith_2simm12_operand")
-        (and (match_operand 0 "const_arith_shifted123_operand")
- 	    (match_test "TARGET_ZBA"))))
+@@ -685,3 +685,7 @@ (define_predicate "x1x5_operand"
+   (and (match_operand 0 "register_operand")
+        (match_test "REGNO (op) == RETURN_ADDR_REGNUM
+ 		    || REGNO (op) == T0_REGNUM")))
 +
 +(define_predicate "bitpos_mask_operand"
 +  (and (match_code "const_int")
