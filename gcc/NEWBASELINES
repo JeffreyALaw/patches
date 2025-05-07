@@ -4,3 +4,4 @@
 sh4-linux-gnu
 hppa-linux-gnu
 aarch64-linux-gnu
+m68k-linux-gnu
