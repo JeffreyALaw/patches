@@ -3,6 +3,5 @@
 # reset.  
 sh4-linux-gnu
 hppa-linux-gnu
-aarch64-linux-gnu
 m68k-linux-gnu
-mn10300-elf
+loongarch64-linux-gnu
