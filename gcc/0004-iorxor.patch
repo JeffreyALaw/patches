@@ -251,11 +251,11 @@ index 3ee88db24fa..aac5b7cd0d4 100644
 +     the proper state.  */
 +  if ((ival & HOST_WIDE_INT_UC (0x7ff)) != 0)
 +    {
-+      rtx x = GEN_INT (ival & HOS_WIDE_INT_UC (0x7ff));
++      rtx x = GEN_INT (ival & HOST_WIDE_INT_UC (0x7ff));
 +      x = gen_rtx_fmt_ee (code, word_mode, input, x);
 +      emit_insn (gen_rtx_SET (operands[0], x));
 +      input = operands[0];
-+      ival &= ~HOS_WIDE_INT_UC (0x7ff);
++      ival &= ~HOST_WIDE_INT_UC (0x7ff);
 +    }
 +
 +  /* We figure out a single bit as a constant and
