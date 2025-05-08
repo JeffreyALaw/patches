@@ -1,0 +1,357 @@
+diff --git a/gcc/config/riscv/iterators.md b/gcc/config/riscv/iterators.md
+index 214c20ba7b8..584b345f02c 100644
+--- a/gcc/config/riscv/iterators.md
++++ b/gcc/config/riscv/iterators.md
+@@ -262,6 +262,9 @@ (define_code_iterator fix_ops [fix unsigned_fix])
+ 
+ (define_code_attr fix_uns [(fix "fix") (unsigned_fix "fixuns")])
+ 
++(define_code_attr OPTAB [(ior "IOR")
++                         (xor "XOR")])
++
+ 
+ ;; -------------------------------------------------------------------
+ ;; Code Attributes
+diff --git a/gcc/config/riscv/predicates.md b/gcc/config/riscv/predicates.md
+index c9a638cd103..23690792b32 100644
+--- a/gcc/config/riscv/predicates.md
++++ b/gcc/config/riscv/predicates.md
+@@ -380,14 +380,6 @@ (define_predicate "single_bit_mask_operand"
+   (and (match_code "const_int")
+        (match_test "SINGLE_BIT_MASK_OPERAND (UINTVAL (op))")))
+ 
+-;; Register, small constant or single bit constant for use in
+-;; bseti/binvi.
+-(define_predicate "arith_or_zbs_operand"
+-  (ior (match_operand 0 "const_arith_operand")
+-       (match_operand 0 "register_operand")
+-       (and (match_test "TARGET_ZBS")
+-	    (match_operand 0 "single_bit_mask_operand"))))
+-
+ (define_predicate "not_single_bit_mask_operand"
+   (and (match_code "const_int")
+        (match_test "SINGLE_BIT_MASK_OPERAND (~UINTVAL (op))")))
+@@ -689,3 +681,7 @@ (define_predicate "x1x5_operand"
+ (define_predicate "bitpos_mask_operand"
+   (and (match_code "const_int")
+        (match_test "TARGET_64BIT ? INTVAL (op) == 63 : INTVAL (op) == 31")))
++
++(define_predicate "reg_or_const_int_operand"
++  (ior (match_operand 0 "const_int_operand")
++       (match_operand 0 "register_operand")))
+diff --git a/gcc/config/riscv/riscv-protos.h b/gcc/config/riscv/riscv-protos.h
+index b0d5bbb8570..271a9a3228d 100644
+--- a/gcc/config/riscv/riscv-protos.h
++++ b/gcc/config/riscv/riscv-protos.h
+@@ -140,6 +140,7 @@ extern void riscv_expand_sssub (rtx, rtx, rtx);
+ extern void riscv_expand_ustrunc (rtx, rtx);
+ extern void riscv_expand_sstrunc (rtx, rtx);
+ extern int riscv_register_move_cost (machine_mode, reg_class_t, reg_class_t);
++extern bool synthesize_ior_xor (rtx_code, rtx [3]);
+ 
+ #ifdef RTX_CODE
+ extern void riscv_expand_int_scc (rtx, enum rtx_code, rtx, rtx, bool *invert_ptr = 0);
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index 3ee88db24fa..aac5b7cd0d4 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -14140,6 +14140,205 @@ bool need_shadow_stack_push_pop_p ()
+   return is_zicfiss_p () && riscv_save_return_addr_reg_p ();
+ }
+ 
++/* Synthesize OPERANDS[0] = OPERANDS[1] CODE OPERANDS[2].
++
++    OPERANDS[0] and OPERANDS[1] will be a REG and may be the same
++    REG.
++
++    OPERANDS[2] is a CONST_INT.
++
++    CODE is IOR or XOR.
++
++    Return TRUE if the operation was fully synthesized and the caller
++    need not generate additional code.  Return FALSE if the operation
++    was not synthesized and the caller is responsible for emitting the
++    proper sequence.  */
++
++bool
++synthesize_ior_xor (rtx_code code, rtx operands[3])
++{
++  /* Trivial cases that don't need synthesis.  */
++  if (SMALL_OPERAND (INTVAL (operands[2]))
++     || ((TARGET_ZBS || TARGET_XTHEADBS || TARGET_ZBKB)
++	 && single_bit_mask_operand (operands[2], word_mode)))
++    return false;
++
++  /* The number of instructions to synthesize the constant is a good
++     estimate of the budget.  That does not account for out of order
++     execution an fusion in the constant synthesis those would naturally
++     decrease the budget.  It also does not account for the IOR/XOR at
++     the end of the sequence which would increase the budget.  */
++  int budget = (TARGET_ZBS ? riscv_const_insns (operands[2], true) : -1);
++  int original_budget = budget;
++
++  /* Bits we need to set in operands[0].  As we synthesize the operation,
++     we clear bits in IVAL.  Once IVAL is zero, then synthesis of the
++     operation is complete.  */
++  unsigned HOST_WIDE_INT ival = INTVAL (operands[2]);
++  
++  /* Check if we want to use [x]ori. Then get the remaining bits
++     and decrease the budget by one. */
++  if ((ival & 0x7ff) != 0)
++    {
++      ival &= ~0x7ff;
++      budget--;
++    }
++
++  /* Check for bseti cases. For each remaining bit in ival,
++     decrease the budget by one. */
++  while (ival)
++    {
++      HOST_WIDE_INT tmpval = HOST_WIDE_INT_UC (1) << ctz_hwi (ival);
++      ival &= ~tmpval;
++      budget--;
++    }
++
++  /* If we're flipping all but a small number of bits we can pre-flip
++     the outliers, then flip all the bits, which would restore those
++     bits that were pre-flipped. */
++  if ((TARGET_ZBS || TARGET_XTHEADBB || TARGET_ZBKB)
++      && budget < 0
++      && code == XOR
++      && popcount_hwi (~INTVAL (operands[2])) < original_budget)
++    {
++      /* Pre-flipping bits we want to preserve.  */
++      rtx input = operands[1];
++      ival = ~INTVAL (operands[2]);
++      while (ival)
++	{
++	  HOST_WIDE_INT tmpval = HOST_WIDE_INT_UC (1) << ctz_hwi (ival);
++	  rtx x = GEN_INT (tmpval);
++	  x = gen_rtx_XOR (word_mode, input, x);
++	  emit_insn (gen_rtx_SET (operands[0], x));
++	  input = operands[0];
++	  ival &= ~tmpval;
++	}
++
++      /* Now flip all the bits, which restores the bits we were
++	 preserving.  */
++      rtx x = gen_rtx_NOT (word_mode, input);
++      emit_insn (gen_rtx_SET (operands[0], x));
++      return true;
++    }
++
++  /* One more approach we can try.  If our budget is 3+ instructions,
++     then we can try to rotate the source so that the bits we want to
++     set are in the low 11 bits.  We then use x[or]i to set those low
++     bits, then rotate things back into their proper place.  */
++  if ((TARGET_ZBB || TARGET_XTHEADBB || TARGET_ZBKB)
++      && budget < 0
++      && popcount_hwi (INTVAL (operands[2])) <= 11
++      && riscv_const_insns (operands[2], true) >= 3)
++    {
++      ival = INTVAL (operands[2]);
++      /* First see if the constant trivially fits into 11 bits in the LSB.  */
++      int lsb = ctz_hwi (ival);
++      int msb = BITS_PER_WORD - 1 - clz_hwi (ival);
++      if (msb - lsb + 1 <= 11)
++	{
++	  /* Rotate the source right by LSB bits.  */
++	  rtx x = GEN_INT (lsb);
++	  x = gen_rtx_ROTATERT (word_mode, operands[1], x);
++	  emit_insn (gen_rtx_SET (operands[0], x));
++
++	  /* Shift the constant right by LSB bits.  */
++	  x = GEN_INT (ival >> lsb);
++
++	  /* Perform the IOR/XOR operation.  */
++	  x = gen_rtx_fmt_ee (code, word_mode, operands[0], x);
++	  emit_insn (gen_rtx_SET (operands[0], x));
++
++	  /* And rotate left to put everything back in place, we don't
++	     have rotate left by a constant, so use rotate right by
++	     an adjusted constant.  */
++	  x = GEN_INT (BITS_PER_WORD - lsb);
++	  x = gen_rtx_ROTATERT (word_mode, operands[1], x);
++	  emit_insn (gen_rtx_SET (operands[0], x));
++	  return true;
++	}
++
++      /* Maybe the bits are split between the high and low parts
++	 of the constant.  A bit more complex, but still manageable.
++
++	 Conceptually we want to rotate left the constant by the number
++	 of leading zeros after masking off all but the low 11 bits.  */
++      int rotcount = clz_hwi (ival & 0x7ff) - (BITS_PER_WORD - 11);
++
++      /* Rotate the constant left by MSB bits.  */
++      ival = (ival << rotcount) | (ival >> (BITS_PER_WORD - rotcount));
++
++      /* Now we can do the same tests as before. */
++      lsb = ctz_hwi (ival);
++      msb = BITS_PER_WORD - clz_hwi (ival);
++      if ((INTVAL (operands[2]) & HOST_WIDE_INT_UC (0x7ff)) != 0
++	  && msb - lsb + 1 <= 11)
++	{
++	  /* Rotate the source left by ROTCOUNT bits, we don't have
++	     rotate left by a constant, so use rotate right by an
++	     adjusted constant.  */
++	  rtx x = GEN_INT (BITS_PER_WORD - rotcount);
++	  x = gen_rtx_ROTATERT (word_mode, operands[1], x);
++	  emit_insn (gen_rtx_SET (operands[0], x));
++
++	  /* We've already rotated the constant.  So perform the IOR/XOR
++	     operation.  */
++	  x = GEN_INT (ival);
++	  x = gen_rtx_fmt_ee (code, word_mode, operands[0], x);
++	  emit_insn (gen_rtx_SET (operands[0], x));
++
++	  /* And rotate right to put everything into its proper place.  */
++	  x = GEN_INT (rotcount);
++	  x = gen_rtx_ROTATERT (word_mode, operands[0], x);
++	  emit_insn (gen_rtx_SET (operands[0], x));
++	  return true;
++	}
++    }
++
++  /* If after accounting for bseti the remaining budget has 
++     gone to less than zero, it forces the value into a
++     register and performs the IOR operation.  It returns
++     TRUE to the caller so the caller knows code generation
++     is complete. */
++  if (budget < 0)
++    {
++      rtx x = force_reg (word_mode, operands[2]); 
++      x = gen_rtx_fmt_ee (code, word_mode, operands[1], x);
++      emit_insn (gen_rtx_SET (operands[0], x));
++      return true;
++    }
++
++  /* Synthesis is better than loading the constant.  */
++  ival = INTVAL (operands[2]);
++  rtx input = operands[1];
++
++  /* Emit the [x]ori insn that sets the low 11 bits into
++     the proper state.  */
++  if ((ival & 0x7ff) != 0)
++    {
++      rtx x = GEN_INT (ival & 0x7ff);
++      x = gen_rtx_fmt_ee (code, word_mode, input, x);
++      emit_insn (gen_rtx_SET (operands[0], x));
++      input = operands[0];
++      ival &= ~0x7ff;
++    }
++
++  /* We figure out a single bit as a constant and
++     generate a CONST_INT node for that.  Then we 
++     construct the IOR node, then the SET node and 
++     emit it.  An IOR with a suitable constant that is
++     a single bit will be implemented with a bseti. */
++  while (ival)
++    {
++      HOST_WIDE_INT tmpval = HOST_WIDE_INT_UC (1) << ctz_hwi (ival);
++      rtx x = GEN_INT (tmpval);
++      x = gen_rtx_fmt_ee (code, word_mode, input, x);
++      emit_insn (gen_rtx_SET (operands[0], x));
++      input = operands[0];
++      ival &= ~tmpval;
++    }
++  return true;
++}
++
+ /* Initialize the GCC target structure.  */
+ #undef TARGET_ASM_ALIGNED_HI_OP
+ #define TARGET_ASM_ALIGNED_HI_OP "\t.half\t"
+diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
+index 259997fef68..154b49d55c5 100644
+--- a/gcc/config/riscv/riscv.md
++++ b/gcc/config/riscv/riscv.md
+@@ -1767,8 +1767,15 @@ (define_insn "*and<mode>3"
+ (define_expand "<optab><mode>3"
+   [(set (match_operand:X 0 "register_operand")
+ 	(any_or:X (match_operand:X 1 "register_operand" "")
+-		   (match_operand:X 2 "arith_or_zbs_operand" "")))]
+-  "")
++		   (match_operand:X 2 "reg_or_const_int_operand" "")))]
++  ""
++
++{
++  /* If synthesis of the logical op is successful, then no further code
++     generation is necessary.  Else just generate code normally.  */
++  if (CONST_INT_P (operands[2]) && synthesize_ior_xor (<OPTAB>, operands))
++    DONE;
++})
+ 
+ (define_insn "*<optab><mode>3"
+   [(set (match_operand:X                0 "register_operand" "=r,r")
+diff --git a/gcc/testsuite/gcc.target/riscv/ior-synthesis-1.c b/gcc/testsuite/gcc.target/riscv/ior-synthesis-1.c
+new file mode 100644
+index 00000000000..04644cddbdb
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/ior-synthesis-1.c
+@@ -0,0 +1,8 @@
++/* { dg-do compile { target { rv64 } } } */
++/* { dg-options "-march=rv64gb -mabi=lp64d" } */
++
++unsigned long foo(unsigned long src) { return src | 0x8c00000000000001; }
++
++/* { dg-final { scan-assembler-times "\\srori\t" 2 } } */
++/* { dg-final { scan-assembler-times "\\sori\t" 1 } } */
++
+diff --git a/gcc/testsuite/gcc.target/riscv/ior-synthesis-2.c b/gcc/testsuite/gcc.target/riscv/ior-synthesis-2.c
+new file mode 100644
+index 00000000000..f28fe5e79b9
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/ior-synthesis-2.c
+@@ -0,0 +1,8 @@
++/* { dg-do compile { target { rv64 } } } */
++/* { dg-options "-march=rv64gb -mabi=lp64d" } */
++
++unsigned long foo(unsigned long src) { return src | 0x8800000000000007; }
++
++/* { dg-final { scan-assembler-times "\\sbseti\t" 2 } } */
++/* { dg-final { scan-assembler-times "\\sori\t" 1 } } */
++
+diff --git a/gcc/testsuite/gcc.target/riscv/xor-synthesis-1.c b/gcc/testsuite/gcc.target/riscv/xor-synthesis-1.c
+new file mode 100644
+index 00000000000..c630a79e471
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/xor-synthesis-1.c
+@@ -0,0 +1,8 @@
++/* { dg-do compile { target { rv64 } } } */
++/* { dg-options "-march=rv64gb -mabi=lp64d" } */
++
++unsigned long foo(unsigned long src) { return src ^ 0xffffffffefffffffUL; }
++
++/* { dg-final { scan-assembler-times "\\sbinvi\t" 1 } } */
++/* { dg-final { scan-assembler-times "\\snot\t" 1 } } */
++
+diff --git a/gcc/testsuite/gcc.target/riscv/xor-synthesis-2.c b/gcc/testsuite/gcc.target/riscv/xor-synthesis-2.c
+new file mode 100644
+index 00000000000..25457d26075
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/xor-synthesis-2.c
+@@ -0,0 +1,10 @@
++/* { dg-do compile { target { rv64 } } } */
++/* { dg-options "-march=rv64gb -mabi=lp64d" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++unsigned long foo(unsigned long src) { return src ^ 0x8800000000000007; }
++
++/* xfailed until we remove mvconst_internal.  */
++/* { dg-final { scan-assembler-times "\\sbinvi\t" 2 { xfail *-*-* } } } */
++/* { dg-final { scan-assembler-times "\\sxori\t" 1 { xfail *-*-* } } } */
++
+diff --git a/gcc/testsuite/gcc.target/riscv/xor-synthesis-3.c b/gcc/testsuite/gcc.target/riscv/xor-synthesis-3.c
+new file mode 100644
+index 00000000000..765904b4a49
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/xor-synthesis-3.c
+@@ -0,0 +1,8 @@
++/* { dg-do compile { target { rv64 } } } */
++/* { dg-options "-march=rv64gb -mabi=lp64d" } */
++
++unsigned long foo(unsigned long src) { return src ^ 0x8c00000000000001; }
++
++/* { dg-final { scan-assembler-times "\\srori\t" 2 } } */
++/* { dg-final { scan-assembler-times "\\sxori\t" 1 } } */
++
