@@ -1,3 +1,20 @@
+gcc/
+
+	* config/riscv/iterator.md (OPTAB): New iterator.
+	* config/riscv/predicates.md (arith_or_zbs_operand): Remove.
+	(reg_or_const_int_operand): New predicate.
+	* config/riscv/riscv-protos.h (synthesize_ior_xor): Prototype.
+	* config/riscv/riscv.cc (synthesize_ior_xor): New function.
+	* cofnig/riscv/riscv.md (ior/xor expander): Use synthesize_ior_xor.
+
+gcc/testsuite/
+
+	* gcc.target/riscv/ior-synthesis-1.c: New test.
+	* gcc.target/riscv/ior-synthesis-2.c: New test.
+	* gcc.target/riscv/xor-synthesis-1.c: New test.
+	* gcc.target/riscv/xor-synthesis-2.c: New test.
+	* gcc.target/riscv/xor-synthesis-3.c: New test.
+
 diff --git a/gcc/config/riscv/iterators.md b/gcc/config/riscv/iterators.md
 index 214c20ba7b8..584b345f02c 100644
 --- a/gcc/config/riscv/iterators.md
@@ -97,9 +114,9 @@ index 3ee88db24fa..aac5b7cd0d4 100644
 +  
 +  /* Check if we want to use [x]ori. Then get the remaining bits
 +     and decrease the budget by one. */
-+  if ((ival & 0x7ff) != 0)
++  if ((ival & HOST_WIDE_INT_UC (0x7ff)) != 0)
 +    {
-+      ival &= ~0x7ff;
++      ival &= ~HOST_WIDE_INT_UC (0x7ff);
 +      budget--;
 +    }
 +
@@ -115,7 +132,7 @@ index 3ee88db24fa..aac5b7cd0d4 100644
 +  /* If we're flipping all but a small number of bits we can pre-flip
 +     the outliers, then flip all the bits, which would restore those
 +     bits that were pre-flipped. */
-+  if ((TARGET_ZBS || TARGET_XTHEADBB || TARGET_ZBKB)
++  if ((TARGET_ZBS || TARGET_XTHEADBS || TARGET_ZBKB)
 +      && budget < 0
 +      && code == XOR
 +      && popcount_hwi (~INTVAL (operands[2])) < original_budget)
@@ -142,7 +159,7 @@ index 3ee88db24fa..aac5b7cd0d4 100644
 +
 +  /* One more approach we can try.  If our budget is 3+ instructions,
 +     then we can try to rotate the source so that the bits we want to
-+     set are in the low 11 bits.  We then use x[or]i to set those low
++     set are in the low 11 bits.  We then use [x]ori to set those low
 +     bits, then rotate things back into their proper place.  */
 +  if ((TARGET_ZBB || TARGET_XTHEADBB || TARGET_ZBKB)
 +      && budget < 0
@@ -232,13 +249,13 @@ index 3ee88db24fa..aac5b7cd0d4 100644
 +
 +  /* Emit the [x]ori insn that sets the low 11 bits into
 +     the proper state.  */
-+  if ((ival & 0x7ff) != 0)
++  if ((ival & HOST_WIDE_INT_UC (0x7ff)) != 0)
 +    {
-+      rtx x = GEN_INT (ival & 0x7ff);
++      rtx x = GEN_INT (ival & HOS_WIDE_INT_UC (0x7ff));
 +      x = gen_rtx_fmt_ee (code, word_mode, input, x);
 +      emit_insn (gen_rtx_SET (operands[0], x));
 +      input = operands[0];
-+      ival &= ~0x7ff;
++      ival &= ~HOS_WIDE_INT_UC (0x7ff);
 +    }
 +
 +  /* We figure out a single bit as a constant and
