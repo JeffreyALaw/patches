@@ -5,3 +5,4 @@ sh4-linux-gnu
 hppa-linux-gnu
 m68k-linux-gnu
 loongarch64-linux-gnu
+xstormy16-elf
