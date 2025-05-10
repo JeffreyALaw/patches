@@ -6,3 +6,6 @@ hppa-linux-gnu
 m68k-linux-gnu
 loongarch64-linux-gnu
 avr-elf
+sh3-linux-gnu
+sh3eb-linux-gnu
+sh4eb-linux-gnu
