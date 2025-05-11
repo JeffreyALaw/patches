@@ -79,3 +79,16 @@ index cd5f2c52649..bdc1b40a153 100644
  #undef  TARGET_PROMOTE_PROTOTYPES
  #define TARGET_PROMOTE_PROTOTYPES	hook_bool_const_tree_true
  
+diff --git a/gcc/config/iq2000/iq2000.cc b/gcc/config/iq2000/iq2000.cc
+index b69ee8f59b3..897c36c01ed 100644
+--- a/gcc/config/iq2000/iq2000.cc
++++ b/gcc/config/iq2000/iq2000.cc
+@@ -209,7 +209,7 @@ static HOST_WIDE_INT iq2000_starting_frame_offset (void);
+ #define TARGET_PRINT_OPERAND_PUNCT_VALID_P iq2000_print_operand_punct_valid_p
+ 
+ #undef  TARGET_PROMOTE_FUNCTION_MODE
+-#define TARGET_PROMOTE_FUNCTION_MODE	default_promote_function_mode_always_promote
++#define TARGET_PROMOTE_FUNCTION_MODE	default_promote_function_mode
+ #undef  TARGET_PROMOTE_PROTOTYPES
+ #define TARGET_PROMOTE_PROTOTYPES	hook_bool_const_tree_true
+ 
