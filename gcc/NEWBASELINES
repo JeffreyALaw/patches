@@ -5,4 +5,3 @@ sh4-linux-gnu
 hppa-linux-gnu
 m68k-linux-gnu
 loongarch64-linux-gnu
-sh4eb-linux-gnu
