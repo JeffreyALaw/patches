@@ -1,0 +1,56 @@
+
+
+During the GCC compilation, some warnings about temporary object dangling references emerged. They appeared in these code lines in riscv-common.cc:
+const riscv_ext_info_t &implied_ext_info, const riscv_ext_info_t &ext_info = get_riscv_ext_info (ext) and auto &ext_info = get_riscv_ext_info (search_ext).
+The issue arose because the local variable types were not used in a standardized way, causing their references to dangle once the function ended.
+To fix this, the patch converts the const char* type to std::string via forced type conversion, thereby eliminating the warnings.
+
+gcc/ChangeLog:
+
+	* common/config/riscv/riscv-common.cc (riscv_ext_info_t::apply_implied_ext): Type conversion.
+	(riscv_subset_list::handle_implied_ext): Ditto.
+	(riscv_minimal_hwprobe_feature_bits): Ditto.
+
+---
+ gcc/common/config/riscv/riscv-common.cc | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/gcc/common/config/riscv/riscv-common.cc b/gcc/common/config/riscv/riscv-common.cc
+index 53ca03910b38..c2e35dfe54d2 100644
+--- a/gcc/common/config/riscv/riscv-common.cc
++++ b/gcc/common/config/riscv/riscv-common.cc
+@@ -245,8 +245,9 @@ riscv_ext_info_t::apply_implied_ext (riscv_subset_list *subset_list) const
+       subset_list->add (implied_info.implied_ext, true);
+
+       /* Recursively add implied extension by implied_info->implied_ext.  */
++      std::string implied_ext_str = implied_info.implied_ext;
+       const riscv_ext_info_t &implied_ext_info
+-	= get_riscv_ext_info (implied_info.implied_ext);
++	= get_riscv_ext_info (implied_ext_str);
+       implied_ext_info.apply_implied_ext (subset_list);
+     }
+   return any_change;
+@@ -1089,7 +1090,8 @@ riscv_subset_list::parse_single_std_ext (const char *p, bool exact_single_p)
+ void
+ riscv_subset_list::handle_implied_ext (const char *ext)
+ {
+-  const riscv_ext_info_t &ext_info = get_riscv_ext_info (ext);
++  std::string ext_str = ext;
++  const riscv_ext_info_t &ext_info = get_riscv_ext_info (ext_str);
+   ext_info.apply_implied_ext (this);
+
+   /* For RISC-V ISA version 2.2 or earlier version, zicsr and zifence is
+@@ -1642,7 +1644,8 @@ riscv_minimal_hwprobe_feature_bits (const char *isa,
+ 	  search_q.pop ();
+
+ 	  /* Iterate through the implied extension table.  */
+-	  auto &ext_info = get_riscv_ext_info (search_ext);
++	  std::string search_ext_str = search_ext;
++	  auto &ext_info = get_riscv_ext_info (search_ext_str);
+ 	  for (const auto &implied_ext : ext_info.implied_exts ())
+ 	    {
+ 	      /* When the search extension matches the implied extension and
+--
+2.43.0
+
+
