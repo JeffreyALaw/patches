@@ -67,7 +67,7 @@ index c226c39f580..8aaf781f09d 100644
 -  [(set (match_dup 0) (and:DI (match_dup 1) (match_dup 2)))
 -   (set (match_dup 0) (zero_extend:DI (ashift:SI
 +  [(set (match_dup 3) (and:DI (match_dup 1) (match_dup 2)))
-+   (set (match_dup 0) (any_extend:DI (ashift:SI
++   (set (match_dup 0) (zero_extend:DI (ashift:SI
  				     (const_int 1)
 -				     (subreg:QI (match_dup 0) 0))))]
 +				     (subreg:QI (match_dup 3) 0))))]
