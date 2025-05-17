@@ -1,7 +1,13 @@
 diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
-index c226c39f580..8aaf781f09d 100644
+index c226c39f580..400fea30f91 100644
 --- a/gcc/config/riscv/bitmanip.md
 +++ b/gcc/config/riscv/bitmanip.md
+@@ -1,4 +1,4 @@
+-;; Machine description for RISC-V Bit Manipulation operations.
++;); Machine description for RISC-V Bit Manipulation operations.
+ ;; Copyright (C) 2021-2025 Free Software Foundation, Inc.
+ 
+ ;; This file is part of GCC.
 @@ -68,23 +68,25 @@ (define_split
    [(set (match_operand:DI 0 "register_operand")
  	(zero_extend:DI (plus:SI (ashift:SI (subreg:SI (match_operand:DI 1 "register_operand") 0)
@@ -52,29 +58,7 @@ index c226c39f580..8aaf781f09d 100644
  
  ;; ZBB extension.
  
-@@ -658,16 +661,17 @@ (define_insn_and_split ""
- 	 (ashift:SI (const_int 1)
- 		    (subreg:QI
- 		      (and:DI (match_operand:DI 1 "register_operand" "r")
--			      (match_operand 2 "const_int_operand")) 0))))]
-+			      (match_operand 2 "const_int_operand")) 0))))
-+   (clobber (match_operand:DI 3 "register_operand"))]
-   "TARGET_64BIT
-    && TARGET_ZBS
-    && (INTVAL (operands[2]) & 0x1f) != 0x1f"
-   "#"
-   "&& 1"
--  [(set (match_dup 0) (and:DI (match_dup 1) (match_dup 2)))
--   (set (match_dup 0) (zero_extend:DI (ashift:SI
-+  [(set (match_dup 3) (and:DI (match_dup 1) (match_dup 2)))
-+   (set (match_dup 0) (zero_extend:DI (ashift:SI
- 				     (const_int 1)
--				     (subreg:QI (match_dup 0) 0))))]
-+				     (subreg:QI (match_dup 3) 0))))]
-   { operands[2] = GEN_INT (INTVAL (operands[2]) & 0x1f); }
-   [(set_attr "type" "bitmanip")])
- 
-@@ -846,18 +850,19 @@ (define_insn "*bclri<mode>"
+@@ -846,18 +849,19 @@ (define_insn "*bclri<mode>"
  (define_insn_and_split "*bclri<mode>_nottwobits"
    [(set (match_operand:X 0 "register_operand" "=r")
  	(and:X (match_operand:X 1 "register_operand" "r")
@@ -101,7 +85,7 @@ index c226c39f580..8aaf781f09d 100644
  }
  [(set_attr "type" "bitmanip")])
  
-@@ -866,19 +871,20 @@ (define_insn_and_split "*bclri<mode>_nottwobits"
+@@ -866,19 +870,20 @@ (define_insn_and_split "*bclri<mode>_nottwobits"
  (define_insn_and_split "*bclridisi_nottwobits"
    [(set (match_operand:DI 0 "register_operand" "=r")
  	(and:DI (match_operand:DI 1 "register_operand" "r")
@@ -129,7 +113,7 @@ index c226c39f580..8aaf781f09d 100644
  }
  [(set_attr "type" "bitmanip")])
  
-@@ -1011,12 +1017,13 @@ (define_split
+@@ -1011,12 +1016,13 @@ (define_split
    [(set (match_operand:X 0 "register_operand")
  	(and:X (not:X (lshiftrt:X (match_operand:X 1 "register_operand")
  				  (match_operand:QI 2 "register_operand")))
@@ -146,7 +130,7 @@ index c226c39f580..8aaf781f09d 100644
    "operands[2] = gen_lowpart (<MODE>mode, operands[2]);")
  
  ;; We can create a polarity-reversed mask (i.e. bit N -> { set = 0, clear = -1 })
-@@ -1027,28 +1034,30 @@ (define_split
+@@ -1027,28 +1033,30 @@ (define_split
         (neg:GPR (eq:GPR (zero_extract:GPR (match_operand:GPR 1 "register_operand")
                                            (const_int 1)
                                            (match_operand 2))
@@ -185,7 +169,7 @@ index c226c39f580..8aaf781f09d 100644
  }
  [(set_attr "type" "bitmanip")])
  
-@@ -1056,18 +1065,19 @@ (define_insn_and_split "*<or_optab>i<mode>_extrabit"
+@@ -1056,18 +1064,19 @@ (define_insn_and_split "*<or_optab>i<mode>_extrabit"
  (define_insn_and_split "*andi<mode>_extrabit"
    [(set (match_operand:X 0 "register_operand" "=r")
  	(and:X (match_operand:X 1 "register_operand" "r")
