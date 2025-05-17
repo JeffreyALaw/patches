@@ -1,5 +1,5 @@
 diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
-index c226c39f580..0b30c7389f8 100644
+index c226c39f580..8aaf781f09d 100644
 --- a/gcc/config/riscv/bitmanip.md
 +++ b/gcc/config/riscv/bitmanip.md
 @@ -68,23 +68,25 @@ (define_split
@@ -29,7 +29,7 @@ index c226c39f580..0b30c7389f8 100644
     && ((INTVAL (operands[3]) & (HOST_WIDE_INT_1U << 31)) != 0)"
 -  [(set (match_dup 0) (plus:DI (ashift:DI (match_dup 1) (match_dup 2)) (match_dup 4)))
 -   (set (match_dup 0) (zero_extend:DI (subreg:SI (match_dup 0) 0)))])
-+  [(set (match_dup 4) (plus:DI (ashift:DI (match_dup 1) (match_dup 2)) (match_dup 4)))
++  [(set (match_dup 5) (plus:DI (ashift:DI (match_dup 1) (match_dup 2)) (match_dup 4)))
 +   (set (match_dup 0) (zero_extend:DI (subreg:SI (match_dup 5) 0)))])
  
  ; Make sure that an andi followed by a sh[123]add remains a two instruction
@@ -65,8 +65,9 @@ index c226c39f580..0b30c7389f8 100644
    "#"
    "&& 1"
 -  [(set (match_dup 0) (and:DI (match_dup 1) (match_dup 2)))
+-   (set (match_dup 0) (zero_extend:DI (ashift:SI
 +  [(set (match_dup 3) (and:DI (match_dup 1) (match_dup 2)))
-    (set (match_dup 0) (zero_extend:DI (ashift:SI
++   (set (match_dup 0) (any_extend:DI (ashift:SI
  				     (const_int 1)
 -				     (subreg:QI (match_dup 0) 0))))]
 +				     (subreg:QI (match_dup 3) 0))))]
@@ -209,27 +210,3 @@ index c226c39f580..0b30c7389f8 100644
  }
  [(set_attr "type" "bitmanip")])
  
-@@ -1082,7 +1092,8 @@ (define_insn_and_split "*andi<mode>_extrabit"
- (define_insn_and_split ""
-   [(set (match_operand:DI 0 "register_operand" "=r")
- 	(and:DI (match_operand:DI 1 "register_operand" "r")
--		(match_operand 2 "const_int_operand" "n")))]
-+		(match_operand 2 "const_int_operand" "n")))
-+   (clobber (match_operand:X 3 "register_operand"))]
-   "TARGET_64BIT
-    && TARGET_ZBA
-    && !paradoxical_subreg_p (operands[1])
-@@ -1097,10 +1108,10 @@ (define_insn_and_split ""
-        && INTVAL (operands[2]) != 0x7fffffff)"
-   "#"
-   "&& 1"
--  [(set (match_dup 0) (zero_extend:DI (match_dup 3)))
--   (set (match_dup 0) (and:DI (match_dup 0) (match_dup 2)))]
-+  [(set (match_dup 3) (zero_extend:DI (match_dup 4)))
-+   (set (match_dup 0) (and:DI (match_dup 3) (match_dup 2)))]
-   "{
--     operands[3] = gen_lowpart (SImode, operands[1]);
-+     operands[4] = gen_lowpart (SImode, operands[1]);
-      operands[2] = GEN_INT (sext_hwi (INTVAL (operands[2]), 32));
-    }"
-   [(set_attr "type" "bitmanip")])
