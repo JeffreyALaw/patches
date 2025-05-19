@@ -1,0 +1,22 @@
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index 8d84bee4688..48fa38cf7da 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -14390,7 +14390,7 @@ synthesize_ior_xor (rtx_code code, rtx operands[3])
+   /* Synthesis is better than loading the constant.  */
+   ival = INTVAL (operands[2]);
+   rtx input = operands[1];
+-  rtx output;
++  rtx output = NULL_RTX;
+ 
+   /* Emit the [x]ori insn that sets the low 11 bits into
+      the proper state.  */
+@@ -14419,6 +14419,8 @@ synthesize_ior_xor (rtx_code code, rtx operands[3])
+       input = output;
+       ival &= ~tmpval;
+     }
++
++  gcc_assert (output);
+   emit_move_insn (operands[0], output);
+   return true;
+ }
