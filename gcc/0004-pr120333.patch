@@ -1,0 +1,106 @@
+diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
+index c226c39f580..7e6f3df5133 100644
+--- a/gcc/config/riscv/bitmanip.md
++++ b/gcc/config/riscv/bitmanip.md
+@@ -1337,32 +1337,6 @@ (define_insn "*bextdi_position_ze_masked"
+   "bext\t%0,%1,%2"
+   [(set_attr "type" "bitmanip")])
+ 
+-
+-;; Single bit extraction by first shifting it into the sign bit, then
+-;; shifting it down to the low bit.
+-(define_insn "*bext<mode>_position_masked"
+-  [(set (match_operand:X 0 "register_operand" "=r")
+-	(lshiftrt:X (ashift:X (match_operand:X 1 "register_operand" "r")
+-			      (match_operand:QI 2 "register_operand" "r"))
+-		    (match_operand:X 3 "bitpos_mask_operand" "n")))]
+-  "TARGET_ZBS"
+-  "bext\t%0,%1,%2"
+-  [(set_attr "type" "bitmanip")])
+-
+-;; Single bit extraction by shifting into the low bit, but with the
+-;; position formed with a subreg of a mask.
+-(define_insn "*bext<mode>_position_masked_subreg"
+-  [(set (match_operand:X 0 "register_operand" "=r")
+-	(lshiftrt:X
+-	 (ashift:X (match_operand:X 1 "register_operand" "r")
+-		   (subreg:QI
+-		    (and:X (match_operand:X 2 "register_operand" "r")
+-			   (match_operand:X 3 "bitpos_mask_operand" "n")) 0))
+-	 (match_operand:X 4 "bitpos_mask_operand" "n")))]
+-  "TARGET_ZBS"
+-  "bext\t%0,%1,%2"
+-  [(set_attr "type" "bitmanip")])
+-
+ ;; This has shown up in testing.  In particular we end up with an
+ ;; immediate input.  We can load that into a register and target
+ ;; one of the above bext patterns.
+diff --git a/gcc/testsuite/gcc.target/riscv/pr114512.c b/gcc/testsuite/gcc.target/riscv/pr114512.c
+index 205071c0883..70146f5c023 100644
+--- a/gcc/testsuite/gcc.target/riscv/pr114512.c
++++ b/gcc/testsuite/gcc.target/riscv/pr114512.c
+@@ -47,22 +47,6 @@ _Bool my_isxdigit_2a(unsigned char ch) {
+   return 1;
+ }
+ 
+-_Bool my_isxdigit_3(unsigned char ch) {
+-  utype mask1 = 0x7E00FFC0;
+-  if (!((mask1 << (MASK - (ch & MASK))) >> MASK))
+-    return 0;
+-
+-  return 1;
+-}
+-
+-_Bool my_isxdigit_3a(unsigned char ch) {
+-  utype mask2 =  0x7E00FFC0;
+-  if (!((mask2 << (MASK - ((ch >> 4) & MASK))) >> MASK))
+-    return 0;
+-
+-  return 1;
+-}
+-
+ _Bool my_isxdigit_1_parm(unsigned char ch, utype mask1) {
+   if (!((mask1 >> (ch & MASK)) & 1))
+     return 0;
+@@ -91,19 +75,5 @@ _Bool my_isxdigit_2a_parm(unsigned char ch, utype mask2) {
+   return 1;
+ }
+ 
+-_Bool my_isxdigit_3_parm(unsigned char ch, utype mask1) {
+-  if (!((mask1 << (MASK - (ch & MASK))) >> MASK))
+-    return 0;
+-
+-  return 1;
+-}
+-
+-_Bool my_isxdigit_3a_parm(unsigned char ch, utype mask2) {
+-  if (!((mask2 << (MASK - ((ch >> 4) & MASK))) >> MASK))
+-    return 0;
+-
+-  return 1;
+-}
+-
+ /* Each test should generate a single bext.  */
+-/* { dg-final { scan-assembler-times "bext\t" 12 } } */
++/* { dg-final { scan-assembler-times "bext\t" 8 } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/pr120333.c b/gcc/testsuite/gcc.target/riscv/pr120333.c
+new file mode 100644
+index 00000000000..17b376f3add
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr120333.c
+@@ -0,0 +1,15 @@
++/* { dg-do run { target { rv64 } } } */
++/* { dg-additional-options "-march=rv64gcb -std=gnu23" } */
++
++__attribute__ ((noipa)) _Bool
++foo (unsigned char ch, unsigned long mask) {
++  return (mask << (0x3f - (ch & 0x3f))) >> 0x3f;
++}
++
++int main()
++{
++  if (!foo (0x3f, 0x8000000000000000ul))
++    __builtin_abort ();
++  return 0;
++}
++
