@@ -18,3 +18,28 @@ index 7f6d0bbab3e..7e35d7877ed 100644
    [(set_attr "type" "shift")
     (set_attr "mode" "<GPR:MODE>")])
  
+diff --git a/gcc/testsuite/gcc.target/riscv/pr120368.c b/gcc/testsuite/gcc.target/riscv/pr120368.c
+new file mode 100644
+index 00000000000..4fea8e6fe7c
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr120368.c
+@@ -0,0 +1,19 @@
++/* { dg-do run } */
++
++int g;
++
++int
++foo (int s, int v)
++{
++  __builtin_memset (&g, v >> (s & 31), sizeof(g));
++  return g;
++}
++
++int
++main ()
++{
++  int x = foo (-16, 0xdffff);
++  if (x != 0x0d0d0d0d)
++    __builtin_abort();
++  __builtin_exit (0);
++}
