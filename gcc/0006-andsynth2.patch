@@ -1,3 +1,8 @@
+gcc/
+	* config/riscv/riscv.cc (synthesize_and): When profitable, use a three
+	shift sequence to clear bits at both upper and lower bits rather than
+	synthesizing the constant mask.
+
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
 index 41a164bc778..358d1ec5d32 100644
 --- a/gcc/config/riscv/riscv.cc
