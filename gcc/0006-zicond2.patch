@@ -69,7 +69,7 @@ index 92fe7c7741a..7b98cdf1180 100644
 +			   (match_operand 2 "const_int_operand"))
 +	       (match_operand 3 "const_int_operand")))]
 +  "(INTVAL (operands[2]) == BITS_PER_WORD - 1
-+    && exact_log2 (INTVAL (operands[3]) + 1))"
++    && exact_log2 (INTVAL (operands[3]) + 1) >= 0)"
 +  [(set (match_dup 0) (ashiftrt:X (match_dup 1) (match_dup 2)))
 +   (set (match_dup 0) (lshiftrt:X (match_dup 0) (match_dup 3)))]
 +  { operands[3] = GEN_INT (BITS_PER_WORD - exact_log2 (INTVAL (operands[3]) + 1)); })
