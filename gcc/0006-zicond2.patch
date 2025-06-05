@@ -1,0 +1,96 @@
+commit c3587d59b7ebe1f38a1eb181aae2aee2701ff442
+Author: Jeff Law <jlaw@ventanamicro.com>
+Date:   Tue Jun 3 21:16:03 2025 -0600
+
+    Chkpt
+
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index d3cee96d3aa..701d5e99aa1 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -5355,6 +5355,40 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
+   rtx op0 = XEXP (op, 0);
+   rtx op1 = XEXP (op, 1);
+ 
++  /* For some tests, we can easily construct a 0, -1 value
++     which can then be used to synthesize more efficient
++     sequences that don't use zicond.  */
++  if ((code == LT || code == GE)
++      && (REG_P (op0) || SUBREG_P (op0))
++      && op1 == CONST0_RTX (GET_MODE (op0)))
++    {
++      /* The code to expand signed division by a power of 2 uses a
++	 conditional add by 2^n-1 idiom.  It can be more efficiently
++	 synthesized without zicond using srai+srli+add.
++
++	 But we don't see the constants here.  Just a conditional move
++	 with registers as the true/false values.  So this is a little
++	 over-aggressive and can result in a few missed if-conversions.  */
++      if ((REG_P (cons) || SUBREG_P (cons))
++	  && (REG_P (alt) || SUBREG_P (alt)))
++	return false;
++
++      /* If one value is a nonzero constant and the other value is
++	 not a constant, then avoid zicond as more efficient sequences
++	 using the splatted sign bit are often possible.  */
++      if (CONST_INT_P (alt)
++	  && alt != CONST0_RTX (mode)
++	  && !CONST_INT_P (cons))
++	return false;
++
++      if (CONST_INT_P (cons)
++	  && cons != CONST0_RTX (mode)
++	  && !CONST_INT_P (alt))
++	return false;
++
++      /* If we need more special cases, add them here.  */
++    }
++
+   if (((TARGET_ZICOND_LIKE
+ 	|| (arith_operand (cons, mode) && arith_operand (alt, mode)))
+        && (GET_MODE_CLASS (mode) == MODE_INT))
+diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
+index 92fe7c7741a..7b98cdf1180 100644
+--- a/gcc/config/riscv/riscv.md
++++ b/gcc/config/riscv/riscv.md
+@@ -4834,6 +4834,23 @@ (define_insn "@set_guarded<mode>"
+   [(set_attr "type" "move")
+    (set_attr "mode" "<MODE>")])
+ 
++;; If we're trying to create 0 or 2^n-1 based on the result of
++;; a test such as (lt (reg) (const_int 0)), we'll see a splat of
++;; the sign bit across a GPR using srai, then a logical and to
++;; mask off high bits.   We can replace the logical and with
++;; a logical right shift which works without constant synthesis
++;; for larger constants.
++(define_split
++  [(set (match_operand:X 0 "register_operand")
++	(and:X (ashiftrt:X (match_operand:X 1 "register_operand")
++			   (match_operand 2 "const_int_operand"))
++	       (match_operand 3 "const_int_operand")))]
++  "(INTVAL (operands[2]) == BITS_PER_WORD - 1
++    && exact_log2 (INTVAL (operands[3]) + 1))"
++  [(set (match_dup 0) (ashiftrt:X (match_dup 1) (match_dup 2)))
++   (set (match_dup 0) (lshiftrt:X (match_dup 0) (match_dup 3)))]
++  { operands[3] = GEN_INT (BITS_PER_WORD - exact_log2 (INTVAL (operands[3]) + 1)); })
++  
+ (include "bitmanip.md")
+ (include "crypto.md")
+ (include "sync.md")
+diff --git a/gcc/testsuite/gcc.target/riscv/nozicond-3.c b/gcc/testsuite/gcc.target/riscv/nozicond-3.c
+new file mode 100644
+index 00000000000..5116742bc3e
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/nozicond-3.c
+@@ -0,0 +1,11 @@
++/* { dg-do compile { target { rv64 } } } */
++/* { dg-additional-options "-march=rv64gc_zicond -mabi=lp64d -mbranch-cost=4" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" "-Os" "-Oz" } } */
++
++long foo1 (long n) { return n / 4096; }
++
++/* { dg-final { scan-assembler-times {srai\t} 2 } } */
++/* { dg-final { scan-assembler-times {srli\t} 1 } } */
++/* { dg-final { scan-assembler-times {add\t} 1 } } */
++/* { dg-final { scan-assembler-not {czero} } } */
++
