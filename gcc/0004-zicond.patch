@@ -1,25 +1,7 @@
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index dd29059412b..5108d97cce7 100644
+index dd29059412b..2b406ccb9f4 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
-@@ -4605,14 +4605,11 @@ riscv_noce_conversion_profitable_p (rtx_insn *seq,
- 
- 	  /* Do something similar for the  moves that are likely to
- 	     turn into NOP moves by the time the register allocator is
--	     done.  These are also side effects of how our sCC expanders
--	     work.  We'll want to check and update LAST_DEST here too.  */
--	  if (last_dest
--	      && REG_P (dest)
-+	     done.  */
-+	  if (REG_P (dest)
- 	      && GET_MODE (dest) == SImode
- 	      && SUBREG_P (src)
--	      && SUBREG_PROMOTED_VAR_P (src)
--	      && REGNO (SUBREG_REG (src)) == REGNO (last_dest))
-+	      && SUBREG_PROMOTED_VAR_P (src))
- 	    {
- 	      riscv_if_info.original_cost += COSTS_N_INSNS (1);
- 	      riscv_if_info.max_seq_cost += COSTS_N_INSNS (1);
 @@ -5389,11 +5386,18 @@ riscv_expand_conditional_branch (rtx label, rtx_code code, rtx op0, rtx op1)
  bool
  riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
@@ -67,17 +49,12 @@ index dd29059412b..5108d97cce7 100644
        || TARGET_SFB_ALU || TARGET_XTHEADCONDMOV)
      {
        machine_mode mode0 = GET_MODE (op0);
-@@ -5449,13 +5454,18 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
+@@ -5449,13 +5454,13 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
        if (!REG_P (op1) && !CONST_INT_P (op1))
  	op1 = force_reg (word_mode, op1);
  
 -      /* In the fallback generic case use MODE rather than WORD_MODE for
 -	 the output of the SCC instruction, to match the mode of the NEG
-+      if (!REG_P (op0) && !CONST_INT_P (op0))
-+	op0 = force_reg (word_mode, op0);
-+      if (!REG_P (op1) && !CONST_INT_P (op1))
-+	op1 = force_reg (word_mode, op1);
-+
 +      /* In the fallback generic case use DST_MODE rather than WORD_MODE
 +	 for the output of the SCC instruction, to match the mode of the NEG
  	 operation below.  The output of SCC is 0 or 1 boolean, so it is
@@ -89,7 +66,7 @@ index dd29059412b..5108d97cce7 100644
        bool invert = false;
  
        /* Canonicalize the comparison.  It must be an equality comparison
-@@ -5484,7 +5494,7 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
+@@ -5484,7 +5489,7 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
  	  else
  	    return false;
  
@@ -98,7 +75,7 @@ index dd29059412b..5108d97cce7 100644
  
  	  /* We've generated a new comparison.  Update the local variables.  */
  	  code = GET_CODE (op);
-@@ -5503,10 +5513,10 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
+@@ -5503,10 +5508,10 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
  	     arm of the conditional move.  That allows us to support more
  	     cases for extensions which are more general than SFB.  But
  	     does mean we need to force CONS into a register at this point.  */
@@ -112,7 +89,7 @@ index dd29059412b..5108d97cce7 100644
  							      cons, alt)));
  	  return true;
  	}
-@@ -5515,10 +5525,10 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
+@@ -5515,10 +5520,10 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
  	  if (invert)
  	    std::swap (cons, alt);
  
@@ -127,7 +104,7 @@ index dd29059412b..5108d97cce7 100644
  
  	  riscv_emit_unary (NEG, reg1, tmp);
  	  riscv_emit_binary (AND, reg2, reg1, cons);
-@@ -5528,48 +5538,50 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
+@@ -5528,48 +5533,50 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
  	  return true;
  	}
        /* 0, reg or 0, imm */
@@ -193,7 +170,7 @@ index dd29059412b..5108d97cce7 100644
  							    cons, alt)));
  	      return true;
  	    }
-@@ -5577,47 +5589,49 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
+@@ -5577,47 +5584,49 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
  	  riscv_emit_int_compare (&code, &op0, &op1, true);
  	  rtx cond = gen_rtx_fmt_ee (code, GET_MODE (op0), op0, op1);
  
@@ -258,7 +235,7 @@ index dd29059412b..5108d97cce7 100644
  							    cons, alt)));
  	      return true;
  	    }
-@@ -5625,53 +5639,54 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
+@@ -5625,53 +5634,54 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
  	  riscv_emit_int_compare (&code, &op0, &op1, true);
  	  rtx cond = gen_rtx_fmt_ee (code, GET_MODE (op0), op0, op1);
  
