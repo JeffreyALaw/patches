@@ -1,0 +1,166 @@
+
+
+PR119966 showed that combine could generate unfoldable hardware subregs
+for pru-unknown-elf.  To fix, strengthen the checks performed by
+validate_subreg.
+
+The simplify_subreg_regno performs more validity checks than
+the simple info.representable_p.  Most importantly, the
+targetm.hard_regno_mode_ok hook is called to ensure the hardware
+register is valid in subreg's outer mode.  This fixes the rootcause
+for PR119966.
+
+The checks for stack-related registers are bypassed because the i386
+backend generates them, in this seemingly valid peephole optimization:
+
+   ;; Attempt to always use XOR for zeroing registers (including FP modes).
+   (define_peephole2
+     [(set (match_operand 0 "general_reg_operand")
+           (match_operand 1 "const0_operand"))]
+     "GET_MODE_SIZE (GET_MODE (operands[0])) <= UNITS_PER_WORD
+      && (! TARGET_USE_MOV0 || optimize_insn_for_size_p ())
+      && peep2_regno_dead_p (0, FLAGS_REG)"
+     [(parallel [(set (match_dup 0) (const_int 0))
+                 (clobber (reg:CC FLAGS_REG))])]
+     "operands[0] = gen_lowpart (word_mode, operands[0]);")
+
+Testing done:
+  * No regressions were detected for C and C++ on x86_64-pc-linux-gnu.
+  * "contrib/compare-all-tests i386" showed no difference in code
+    generation.
+  * No regressions for pru-unknown-elf.
+  * Reverted r16-809-gf725d6765373f7 to expose the now latent PR119966.
+    Then ensured pru-unknown-elf build is ok.  Only two cases regressed
+    where rnreg pass transforms a valid hardware subreg into invalid
+    one.  But I think that is not related to combine's PR119966:
+      gcc.c-torture/execute/20040709-1.c
+      gcc.c-torture/execute/20040709-2.c
+
+This patch was provisionally approved in:
+  https://gcc.gnu.org/pipermail/gcc-patches/2025-June/685492.html
+I'll wait for 2 days to get pre-commit CI results, then will commit it.
+
+	PR target/119966
+
+gcc/ChangeLog:
+
+	* emit-rtl.cc (validate_subreg): Call simplify_subreg_regno
+	instead of checking info.representable_p..
+	* rtl.h (simplify_subreg_regno): Add new argument
+	allow_stack_regs.
+	* rtlanal.cc (simplify_subreg_regno): Do not reject
+	stack-related registers if allow_stack_regs is true.
+
+Co-authored-by: Richard Sandiford <richard.sandiford@arm.com>
+Co-authored-by: Andrew Pinski <quic_apinski@quicinc.com>
+Signed-off-by: Dimitar Dimitrov <dimitar@dinux.eu>
+---
+ gcc/emit-rtl.cc |  9 ++++++---
+ gcc/rtl.h       |  3 ++-
+ gcc/rtlanal.cc  | 36 ++++++++++++++++++++++--------------
+ 3 files changed, 30 insertions(+), 18 deletions(-)
+
+diff --git a/gcc/emit-rtl.cc b/gcc/emit-rtl.cc
+index 50e3bfcb777..ceb1641da87 100644
+--- a/gcc/emit-rtl.cc
++++ b/gcc/emit-rtl.cc
+@@ -975,8 +975,9 @@ validate_subreg (machine_mode omode, machine_mode imode,
+ 
+   /* Verify that the offset is representable.  */
+ 
+-  /* For hard registers, we already have most of these rules collected in
+-     subreg_offset_representable_p.  */
++  /* Ensure that subregs of hard registers can be folded.  In other words,
++     the hardware register must be valid in the subreg's outer mode,
++     and consequently the subreg can be replaced with a hardware register.  */
+   if (reg && REG_P (reg) && HARD_REGISTER_P (reg))
+     {
+       unsigned int regno = REGNO (reg);
+@@ -987,7 +988,9 @@ validate_subreg (machine_mode omode, machine_mode imode,
+       else if (!REG_CAN_CHANGE_MODE_P (regno, imode, omode))
+ 	return false;
+ 
+-      return subreg_offset_representable_p (regno, imode, offset, omode);
++      /* Pass true to allow_stack_regs because targets like x86
++	 expect to be able to take subregs of the stack pointer.  */
++      return simplify_subreg_regno (regno, imode, offset, omode, true) >= 0;
+     }
+   /* Do not allow normal SUBREG with stricter alignment than the inner MEM.
+ 
+diff --git a/gcc/rtl.h b/gcc/rtl.h
+index 8a740219c2a..5bd0bd4d168 100644
+--- a/gcc/rtl.h
++++ b/gcc/rtl.h
+@@ -2506,7 +2506,8 @@ extern bool subreg_offset_representable_p (unsigned int, machine_mode,
+ 					   poly_uint64, machine_mode);
+ extern unsigned int subreg_regno (const_rtx);
+ extern int simplify_subreg_regno (unsigned int, machine_mode,
+-				  poly_uint64, machine_mode);
++				  poly_uint64, machine_mode,
++				  bool allow_stack_regs = false);
+ extern int lowpart_subreg_regno (unsigned int, machine_mode,
+ 				 machine_mode);
+ extern unsigned int subreg_nregs (const_rtx);
+diff --git a/gcc/rtlanal.cc b/gcc/rtlanal.cc
+index 239d6691c4c..87332ffebce 100644
+--- a/gcc/rtlanal.cc
++++ b/gcc/rtlanal.cc
+@@ -4245,11 +4245,16 @@ subreg_offset_representable_p (unsigned int xregno, machine_mode xmode,
+ 
+    can be simplified.  Return -1 if the subreg can't be simplified.
+ 
+-   XREGNO is a hard register number.  */
++   XREGNO is a hard register number.  ALLOW_STACK_REGS is true if
++   we should allow subregs of stack_pointer_rtx, frame_pointer_rtx.
++   and arg_pointer_rtx (which are normally expected to be the unique
++   way of referring to their respective registers).  */
++
+ 
+ int
+ simplify_subreg_regno (unsigned int xregno, machine_mode xmode,
+-		       poly_uint64 offset, machine_mode ymode)
++		       poly_uint64 offset, machine_mode ymode,
++		       bool allow_stack_regs)
+ {
+   struct subreg_info info;
+   unsigned int yregno;
+@@ -4260,20 +4265,23 @@ simplify_subreg_regno (unsigned int xregno, machine_mode xmode,
+       && !REG_CAN_CHANGE_MODE_P (xregno, xmode, ymode))
+     return -1;
+ 
+-  /* We shouldn't simplify stack-related registers.  */
+-  if ((!reload_completed || frame_pointer_needed)
+-      && xregno == FRAME_POINTER_REGNUM)
+-    return -1;
++  if (!allow_stack_regs)
++    {
++      /* We shouldn't simplify stack-related registers.  */
++      if ((!reload_completed || frame_pointer_needed)
++	  && xregno == FRAME_POINTER_REGNUM)
++	return -1;
+ 
+-  if (FRAME_POINTER_REGNUM != ARG_POINTER_REGNUM
+-      && xregno == ARG_POINTER_REGNUM)
+-    return -1;
++      if (FRAME_POINTER_REGNUM != ARG_POINTER_REGNUM
++	  && xregno == ARG_POINTER_REGNUM)
++	return -1;
+ 
+-  if (xregno == STACK_POINTER_REGNUM
+-      /* We should convert hard stack register in LRA if it is
+-	 possible.  */
+-      && ! lra_in_progress)
+-    return -1;
++      if (xregno == STACK_POINTER_REGNUM
++	  /* We should convert hard stack register in LRA if it is
++	     possible.  */
++	  && ! lra_in_progress)
++	return -1;
++    }
+ 
+   /* Try to get the register offset.  */
+   subreg_get_info (xregno, xmode, offset, ymode, &info);
+-- 
+2.49.0
+
+
