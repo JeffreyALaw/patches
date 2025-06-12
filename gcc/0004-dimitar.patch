@@ -164,3 +164,16 @@ index 239d6691c4c..87332ffebce 100644
 2.49.0
 
 
+diff --git a/gcc/config/avr/avr.opt b/gcc/config/avr/avr.opt
+index fcd2bf68f2a..3aa4955361b 100644
+--- a/gcc/config/avr/avr.opt
++++ b/gcc/config/avr/avr.opt
+@@ -19,7 +19,7 @@
+ ; <http://www.gnu.org/licenses/>.
+ 
+ mlra
+-Target Var(avropt_lra_p) UInteger Init(0) Optimization Undocumented
++Target Var(avropt_lra_p) UInteger Init(1) Optimization Undocumented
+ Usa LRA for reload instead of the old reload framework.  This option is experimental, and it may be removed in future versions of the compiler.
+ 
+ mcall-prologues
