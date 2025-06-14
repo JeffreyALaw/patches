@@ -2,3 +2,4 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 or1k-linux-gnu
+iq2000-elf
