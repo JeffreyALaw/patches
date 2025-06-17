@@ -1,0 +1,253 @@
+diff --git a/gcc/config/riscv/constraints.md b/gcc/config/riscv/constraints.md
+index 58355cf03f2..e4069c3e840 100644
+--- a/gcc/config/riscv/constraints.md
++++ b/gcc/config/riscv/constraints.md
+@@ -237,10 +237,11 @@ (define_constraint "Wb1"
+  (and (match_code "const_vector")
+       (match_test "rtx_equal_p (op, riscv_vector::gen_scalar_move_mask (GET_MODE (op)))")))
+ 
+-(define_memory_constraint "Wdm"
++(define_constraint "Wdm"
+   "Vector duplicate memory operand"
+-  (and (match_code "mem")
+-       (match_code "reg" "0")))
++  (and (match_test "strided_load_broadcast_p ()")
++       (and (match_code "mem")
++	    (match_code "reg" "0"))))
+ 
+ ;; Vendor ISA extension constraints.
+ 
+diff --git a/gcc/config/riscv/riscv-protos.h b/gcc/config/riscv/riscv-protos.h
+index a0331204479..a697d32e8b8 100644
+--- a/gcc/config/riscv/riscv-protos.h
++++ b/gcc/config/riscv/riscv-protos.h
+@@ -812,6 +812,7 @@ extern const char *th_output_move (rtx, rtx);
+ extern bool th_print_operand_address (FILE *, machine_mode, rtx);
+ #endif
+ 
++extern bool strided_load_broadcast_p (void);
+ extern bool riscv_use_divmod_expander (void);
+ void riscv_init_cumulative_args (CUMULATIVE_ARGS *, tree, rtx, tree, int);
+ extern bool
+diff --git a/gcc/config/riscv/riscv-selftests.cc b/gcc/config/riscv/riscv-selftests.cc
+index 34d01ac76b7..9ca1ffee394 100644
+--- a/gcc/config/riscv/riscv-selftests.cc
++++ b/gcc/config/riscv/riscv-selftests.cc
+@@ -342,9 +342,13 @@ run_broadcast_selftests (void)
+ 	  expand_vector_broadcast (mode, mem);                                 \
+ 	  insn = get_last_insn ();                                             \
+ 	  src = SET_SRC (PATTERN (insn));                                      \
+-	  ASSERT_TRUE (MEM_P (XEXP (src, 0)));                                 \
+-	  ASSERT_TRUE (                                                        \
+-	    rtx_equal_p (src, gen_rtx_VEC_DUPLICATE (mode, XEXP (src, 0))));   \
++	  if (strided_load_broadcast_p ())                                     \
++	    {                                                                  \
++	      ASSERT_TRUE (MEM_P (XEXP (src, 0)));                             \
++	      ASSERT_TRUE (                                                    \
++		rtx_equal_p (src,                                              \
++			     gen_rtx_VEC_DUPLICATE (mode, XEXP (src, 0))));    \
++	    }                                                                  \
+ 	  end_sequence ();                                                     \
+ 	  /* Test vmv.v.x or vfmv.v.f.  */                                     \
+ 	  start_sequence ();                                                   \
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index 74462cc76a5..f22822f607a 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -302,6 +302,7 @@ struct riscv_tune_param
+   bool vector_unaligned_access;
+   bool use_divmod_expansion;
+   bool overlap_op_by_pieces;
++  bool use_zero_stride_load;
+   bool speculative_sched_vsetvl;
+   unsigned int fusible_ops;
+   const struct cpu_vector_cost *vec_costs;
+@@ -465,6 +466,7 @@ static const struct riscv_tune_param rocket_tune_info = {
+   false,					/* vector_unaligned_access */
+   false,					/* use_divmod_expansion */
+   false,					/* overlap_op_by_pieces */
++  true,						/* use_zero_stride_load */
+   false,					/* speculative_sched_vsetvl */
+   RISCV_FUSE_NOTHING,                           /* fusible_ops */
+   NULL,						/* vector cost */
+@@ -488,6 +490,7 @@ static const struct riscv_tune_param sifive_7_tune_info = {
+   false,					/* vector_unaligned_access */
+   false,					/* use_divmod_expansion */
+   false,					/* overlap_op_by_pieces */
++  true,						/* use_zero_stride_load */
+   false,					/* speculative_sched_vsetvl */
+   RISCV_FUSE_NOTHING,                           /* fusible_ops */
+   NULL,						/* vector cost */
+@@ -511,6 +514,7 @@ static const struct riscv_tune_param sifive_p400_tune_info = {
+   false,					/* vector_unaligned_access */
+   false,					/* use_divmod_expansion */
+   false,					/* overlap_op_by_pieces */
++  true,						/* use_zero_stride_load */
+   false,					/* speculative_sched_vsetvl */
+   RISCV_FUSE_LUI_ADDI | RISCV_FUSE_AUIPC_ADDI,  /* fusible_ops */
+   &generic_vector_cost,				/* vector cost */
+@@ -534,6 +538,7 @@ static const struct riscv_tune_param sifive_p600_tune_info = {
+   false,					/* vector_unaligned_access */
+   false,					/* use_divmod_expansion */
+   false,					/* overlap_op_by_pieces */
++  true,						/* use_zero_stride_load */
+   false,					/* speculative_sched_vsetvl */
+   RISCV_FUSE_LUI_ADDI | RISCV_FUSE_AUIPC_ADDI,  /* fusible_ops */
+   &generic_vector_cost,				/* vector cost */
+@@ -557,6 +562,7 @@ static const struct riscv_tune_param thead_c906_tune_info = {
+   false,					/* vector_unaligned_access */
+   false,	/* use_divmod_expansion */
+   false,					/* overlap_op_by_pieces */
++  true,						/* use_zero_stride_load */
+   false,					/* speculative_sched_vsetvl */
+   RISCV_FUSE_NOTHING,                           /* fusible_ops */
+   NULL,						/* vector cost */
+@@ -580,6 +586,7 @@ static const struct riscv_tune_param xiangshan_nanhu_tune_info = {
+   false,					/* vector_unaligned_access */
+   false,					/* use_divmod_expansion */
+   false,					/* overlap_op_by_pieces */
++  true,						/* use_zero_stride_load */
+   false,					/* speculative_sched_vsetvl */
+   RISCV_FUSE_ZEXTW | RISCV_FUSE_ZEXTH,          /* fusible_ops */
+   NULL,						/* vector cost */
+@@ -603,6 +610,7 @@ static const struct riscv_tune_param generic_ooo_tune_info = {
+   true,						/* vector_unaligned_access */
+   false,					/* use_divmod_expansion */
+   true,						/* overlap_op_by_pieces */
++  true,						/* use_zero_stride_load */
+   false,					/* speculative_sched_vsetvl */
+   RISCV_FUSE_NOTHING,                           /* fusible_ops */
+   &generic_vector_cost,				/* vector cost */
+@@ -626,6 +634,7 @@ static const struct riscv_tune_param tt_ascalon_d8_tune_info = {
+   true,						/* vector_unaligned_access */
+   true,						/* use_divmod_expansion */
+   true,						/* overlap_op_by_pieces */
++  true,						/* use_zero_stride_load */
+   false,					/* speculative_sched_vsetvl */
+   RISCV_FUSE_NOTHING,                           /* fusible_ops */
+   &generic_vector_cost,				/* vector cost */
+@@ -649,6 +658,7 @@ static const struct riscv_tune_param optimize_size_tune_info = {
+   false,					/* vector_unaligned_access */
+   false,					/* use_divmod_expansion */
+   false,					/* overlap_op_by_pieces */
++  true,						/* use_zero_stride_load */
+   false,					/* speculative_sched_vsetvl */
+   RISCV_FUSE_NOTHING,                           /* fusible_ops */
+   NULL,						/* vector cost */
+@@ -672,6 +682,7 @@ static const struct riscv_tune_param mips_p8700_tune_info = {
+   false,        /* vector_unaligned_access */
+   true,         /* use_divmod_expansion */
+   false,        /* overlap_op_by_pieces */
++  true,						/* use_zero_stride_load */
+   false,					/* speculative_sched_vsetvl */
+   RISCV_FUSE_NOTHING,				/* fusible_ops */
+   NULL,         /* vector cost */
+@@ -12238,6 +12249,14 @@ riscv_lshift_subword (machine_mode mode ATTRIBUTE_UNUSED, rtx value, rtx shift,
+ 						  gen_lowpart (QImode, shift)));
+ }
+ 
++/* Return TRUE if we should use the zero stride load, FALSE otherwise. */
++
++bool
++strided_load_broadcast_p ()
++{
++  return tune_param->use_zero_stride_load;
++}
++
+ /* Return TRUE if we should use the divmod expander, FALSE otherwise.  This
+    allows the behavior to be tuned for specific implementations as well as
+    when optimizing for size.  */
+diff --git a/gcc/config/riscv/vector.md b/gcc/config/riscv/vector.md
+index 851ba4a9490..91155d6bde7 100644
+--- a/gcc/config/riscv/vector.md
++++ b/gcc/config/riscv/vector.md
+@@ -1580,8 +1580,26 @@ (define_insn_and_split "*vec_duplicate<mode>"
+   "&& 1"
+   [(const_int 0)]
+   {
+-    riscv_vector::emit_vlmax_insn (code_for_pred_broadcast (<MODE>mode),
+-                                   riscv_vector::UNARY_OP, operands);
++    /* We cannot do anything with a Float16 mode apart from converting.
++       So convert to float, broadcast and truncate.  */
++    if (TARGET_ZVFHMIN && !TARGET_ZVFH && <VEL>mode == HFmode)
++      {
++	rtx tmpsf = gen_reg_rtx (SFmode);
++	emit_insn (gen_extendhfsf2 (tmpsf, operands[1]));
++	poly_uint64 nunits = GET_MODE_NUNITS (<MODE>mode);
++	machine_mode vmodesf
++	  = riscv_vector::get_vector_mode (SFmode, nunits).require ();
++	rtx tmp = gen_reg_rtx (vmodesf);
++	rtx ops[] =  {tmp, tmpsf};
++	riscv_vector::emit_vlmax_insn (code_for_pred_broadcast (vmodesf),
++				       riscv_vector::UNARY_OP, ops);
++	rtx ops2[] = {operands[0], tmp};
++	riscv_vector::emit_vlmax_insn (code_for_pred_trunc (vmodesf),
++				       riscv_vector::UNARY_OP_FRM_DYN, ops2);
++      }
++    else
++      riscv_vector::emit_vlmax_insn (code_for_pred_broadcast (<MODE>mode),
++				     riscv_vector::UNARY_OP, operands);
+     DONE;
+   }
+   [(set_attr "type" "vector")]
+@@ -2156,7 +2174,8 @@ (define_expand "@pred_broadcast<mode>"
+       if (satisfies_constraint_Wb1 (operands[1]))
+ 	{
+ 	  /* Case 1: vmv.s.x (TA, x == memory) ==> vlse.v (TA)  */
+-	  if (satisfies_constraint_vu (operands[2]))
++	  if (strided_load_broadcast_p ()
++	      && satisfies_constraint_vu (operands[2]))
+ 	    operands[1] = CONSTM1_RTX (<VM>mode);
+ 	  else if (GET_MODE_BITSIZE (<VEL>mode) > GET_MODE_BITSIZE (Pmode))
+ 	    {
+@@ -2171,7 +2190,7 @@ (define_expand "@pred_broadcast<mode>"
+ 	}
+     }
+   else if (GET_MODE_BITSIZE (<VEL>mode) > GET_MODE_BITSIZE (Pmode)
+-           && (immediate_operand (operands[3], Pmode)
++	   && (immediate_operand (operands[3], Pmode)
+ 	       || (CONST_POLY_INT_P (operands[3])
+ 	           && known_ge (rtx_to_poly_int64 (operands[3]), 0U)
+ 		   && known_le (rtx_to_poly_int64 (operands[3]), GET_MODE_SIZE (<MODE>mode)))))
+@@ -2281,29 +2300,6 @@ (define_insn "*pred_broadcast<mode>_zvfh"
+   [(set_attr "type" "vfmov,vfmov,vfmovfv,vfmovfv")
+    (set_attr "mode" "<MODE>")])
+ 
+-(define_insn "*pred_broadcast<mode>_zvfhmin"
+-  [(set (match_operand:V_VLSF_ZVFHMIN   0 "register_operand"              "=vr,  vr,  vr,  vr")
+-	(if_then_else:V_VLSF_ZVFHMIN
+-	  (unspec:<VM>
+-	    [(match_operand:<VM>        1 "vector_broadcast_mask_operand" " vm,  vm, Wc1, Wc1")
+-	     (match_operand             4 "vector_length_operand"         "rvl, rvl, rvl, rvl")
+-	     (match_operand             5 "const_int_operand"             "  i,   i,   i,   i")
+-	     (match_operand             6 "const_int_operand"             "  i,   i,   i,   i")
+-	     (match_operand             7 "const_int_operand"             "  i,   i,   i,   i")
+-	     (reg:SI VL_REGNUM)
+-	     (reg:SI VTYPE_REGNUM)] UNSPEC_VPREDICATE)
+-	  (vec_duplicate:V_VLSF_ZVFHMIN
+-	    (match_operand:<VEL>        3 "direct_broadcast_operand"      "Wdm, Wdm, Wdm, Wdm"))
+-	  (match_operand:V_VLSF_ZVFHMIN 2 "vector_merge_operand"          " vu,   0,  vu,   0")))]
+-  "TARGET_VECTOR"
+-  "@
+-   vlse<sew>.v\t%0,%3,zero,%1.t
+-   vlse<sew>.v\t%0,%3,zero,%1.t
+-   vlse<sew>.v\t%0,%3,zero
+-   vlse<sew>.v\t%0,%3,zero"
+-  [(set_attr "type" "vlds,vlds,vlds,vlds")
+-   (set_attr "mode" "<MODE>")])
+-
+ (define_insn "*pred_broadcast<mode>_extended_scalar"
+   [(set (match_operand:V_VLSI_D 0 "register_operand"               "=vr, vr, vr, vr")
+ 	(if_then_else:V_VLSI_D
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/base/pr115763-2.c b/gcc/testsuite/gcc.target/riscv/rvv/base/pr115763-2.c
+index f4d53e72022..9430dc39ff4 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/base/pr115763-2.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/base/pr115763-2.c
+@@ -6,5 +6,5 @@ void test (_Float16 *dest, _Float16 bias) {
+   dest[1] = bias;
+ }
+ 
+-/* { dg-final { scan-assembler-times {fsh\s+fa[0-9]+,[0-9]+\(sp\)} 1 } } */
+-/* { dg-final { scan-assembler-not {vfmv\.v\.x\s+v[0-9]+,\s*fa[0-9]+} } } */
++/* { dg-final { scan-assembler-times {fcvt.s.h} 1 } } */
++/* { dg-final { scan-assembler-times {vfncvt.f.f.w} 1 } } */
