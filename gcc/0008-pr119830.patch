@@ -22,3 +22,22 @@ index 3c1bb74675a2..80498d6758ba 100644
  	    }
  
  	  if (nval == 0 && alt_cost <= cost)
+diff --git a/gcc/testsuite/gcc.target/riscv/pr119830.c b/gcc/testsuite/gcc.target/riscv/pr119830.c
+new file mode 100644
+index 000000000000..8c7cf3bd79d0
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr119830.c
+@@ -0,0 +1,13 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc_zbb_zbs -mabi=lp64d" { target { rv64 } } } */
++/* { dg-options "-march=rv32gc_zbb_zbs -mabi=ilp32" { target { rv32 } } } */
++
++#include <stdint.h>
++void test(int32_t N, int16_t* A, int16_t val) {
++    int32_t i, j;
++    for (i = 0; i < N; i++) {
++        for (j = 0; j < N; j++) {
++            A[i * N + j] += val;
++        }
++    }
++}
