@@ -1,0 +1,21 @@
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index 3c1bb74675a2..b8f1a26a0154 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -12272,8 +12272,16 @@ riscv_subword_address (rtx mem, rtx *aligned_mem, rtx *shift, rtx *mask,
+   *aligned_mem = change_address (mem, SImode, aligned_addr);
+ 
+   /* Calculate the shift amount.  */
++  /* LE shift amount is ((address & 3) * 8).  */
++  /* BE shift amount is ((3 - (address & 3)) * 8).  */
+   emit_move_insn (*shift, gen_rtx_AND (SImode, gen_lowpart (SImode, addr),
+ 				       gen_int_mode (3, SImode)));
++  if (BYTES_BIG_ENDIAN)
++    {
++      rtx big_endian_adjust = gen_reg_rtx (SImode);
++      emit_move_insn (big_endian_adjust, GEN_INT (3));
++      emit_move_insn (*shift, gen_rtx_MINUS (SImode, big_endian_adjust, *shift));
++    }
+   emit_move_insn (*shift, gen_rtx_ASHIFT (SImode, *shift,
+ 					  gen_int_mode (3, SImode)));
+ 
