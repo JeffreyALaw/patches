@@ -1,0 +1,12 @@
+diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
+index df17b018bf1f..3175634e569e 100644
+--- a/gcc/ext-dce.cc
++++ b/gcc/ext-dce.cc
+@@ -786,6 +786,7 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj,
+ 				   && SUBREG_PROMOTED_SIGNED_P (y))
+ 				  || (GET_CODE (SET_SRC (x)) == ZERO_EXTEND
+ 				      && SUBREG_PROMOTED_UNSIGNED_P (y))
++				  || SET_SRC (x) == y
+ 				  || !TRULY_NOOP_TRUNCATION_MODES_P (
+ 					GET_MODE (y),
+ 					GET_MODE (SUBREG_REG (y))))))
