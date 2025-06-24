@@ -1,0 +1,12 @@
+diff --git a/gcc/testsuite/gcc.target/riscv/pr119971.c b/gcc/testsuite/gcc.target/riscv/pr119971.c
+index c3f23b05ec3..0d73d4ca3f1 100644
+--- a/gcc/testsuite/gcc.target/riscv/pr119971.c
++++ b/gcc/testsuite/gcc.target/riscv/pr119971.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile { target rv64 } } */
+ /* { dg-options "-march=rv64gcb -mabi=lp64" } */
+-/* { dg-skip-if "" { *-*-* } { "-O0" "-g" "-Oz" "-Os" } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" "-Oz" "-Os" } } */
+ 
+ __attribute__ ((noipa)) unsigned
+ foo (unsigned b, unsigned e, unsigned i)
