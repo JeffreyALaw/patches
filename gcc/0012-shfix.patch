@@ -1,0 +1,230 @@
+
+
+On Wed, Jun 25, 2025 at 12:41 PM Jeff Law <jlaw@ventanamicro.com> wrote:
+> Throw the SH patch my way and I'll put it in the tester.
+I'm attaching both the sh independent patch and a change in the
+if-conversion patch that fixes the expected output of pr59533-1.c.
+
+
+-- 
+Raphael Moreira Zinsly
+
+
+0001-sh-Recognize-31-in-treg_set_expr_not_const01.patch
+
+From 095454d56682daa10c39620bab0ebad2cb355401 Mon Sep 17 00:00:00 2001
+From: Raphael Moreira Zinsly <rzinsly@ventanamicro.com>
+Date: Mon, 23 Jun 2025 10:40:50 -0300
+Subject: [PATCH] sh: Recognize >> 31 in treg_set_expr_not_const01
+
+A right shift of 31 will become 0 or 1, this can be checked for
+treg_set_expr_not_const01 to avoid matching addc_t_r as this
+can expand to a 3 insn sequence instead.
+This improves tests 023 to 026 from gcc.target/sh/pr54236-2.c, e.g.:
+test_023:
+shll    r5
+mov     #0,r1
+mov     r4,r0
+rts
+addc    r1,r0
+
+With this change:
+test_023:
+shll    r5
+movt    r0
+rts
+add     r4,r0
+
+We noticed this while evaluating a patch to improve how we handle
+selecting between two constants based on the output of a LT/GE 0
+test.
+
+gcc/ChangeLog:
+	config/sh/predicates.md
+	(treg_set_expr_not_const01): call sh_recog_treg_set_expr_not_01
+	config/sh/sh-protos.h
+	(sh_recog_treg_set_expr_not_01): New function
+	config/sh/sh.cc (sh_recog_treg_set_expr_not_01): Likewise
+
+gcc/testsuite/ChangeLog:
+	gcc.target/sh/pr54236-2.c: Fix comments and expected output
+---
+ gcc/config/sh/predicates.md             |  4 +---
+ gcc/config/sh/sh-protos.h               |  1 +
+ gcc/config/sh/sh.cc                     | 13 +++++++++++++
+ gcc/testsuite/gcc.target/sh/pr54236-2.c | 14 +++++++-------
+ 4 files changed, 22 insertions(+), 10 deletions(-)
+
+diff --git a/gcc/config/sh/predicates.md b/gcc/config/sh/predicates.md
+index 7349c97a2b5..e67ec8a2320 100644
+--- a/gcc/config/sh/predicates.md
++++ b/gcc/config/sh/predicates.md
+@@ -630,9 +630,7 @@
+ ;; Same as treg_set_expr but disallow constants 0 and 1 which can be loaded
+ ;; into the T bit.
+ (define_predicate "treg_set_expr_not_const01"
+-  (and (match_test "op != const0_rtx")
+-       (match_test "op != const1_rtx")
+-       (match_operand 0 "treg_set_expr")))
++  (match_test "sh_recog_treg_set_expr_not_01 (op, mode)"))
+ 
+ ;; A predicate describing the T bit register in any form.
+ (define_predicate "t_reg_operand"
+diff --git a/gcc/config/sh/sh-protos.h b/gcc/config/sh/sh-protos.h
+index c8cc19f4dc7..e78b6697a2b 100644
+--- a/gcc/config/sh/sh-protos.h
++++ b/gcc/config/sh/sh-protos.h
+@@ -261,6 +261,7 @@ extern rtx_insn* sh_peephole_emit_move_insn (rtx dst, rtx src);
+ 
+ extern bool sh_in_recog_treg_set_expr (void);
+ extern bool sh_recog_treg_set_expr (rtx op, machine_mode mode);
++extern bool sh_recog_treg_set_expr_not_01 (rtx op, machine_mode mode);
+ 
+ /* Result value of sh_split_treg_set_expr.  Contains the first insn emitted
+    and the optional trailing nott insn.  */
+diff --git a/gcc/config/sh/sh.cc b/gcc/config/sh/sh.cc
+index 1bc34e0a3e3..d534bb7a86a 100644
+--- a/gcc/config/sh/sh.cc
++++ b/gcc/config/sh/sh.cc
+@@ -12348,6 +12348,19 @@ sh_recog_treg_set_expr (rtx op, machine_mode mode)
+   return result >= 0;
+ }
+ 
++bool
++sh_recog_treg_set_expr_not_01 (rtx op, machine_mode mode)
++{
++  if (op == const0_rtx || op == const1_rtx)
++    return false;
++
++  if ((GET_CODE (op) == LSHIFTRT || GET_CODE (op) == ASHIFTRT)
++      && INTVAL (XEXP (op, 1)) == 31)
++    return false;
++
++  return sh_recog_treg_set_expr (op, mode);
++}
++
+ /* Returns true when recog of a 'treg_set_expr' is currently in progress.
+    This can be used as a condition for insn/split patterns to allow certain
+    T bit setting patters only to be matched as sub expressions of other
+diff --git a/gcc/testsuite/gcc.target/sh/pr54236-2.c b/gcc/testsuite/gcc.target/sh/pr54236-2.c
+index 1e2f3bbcb56..78befe43770 100644
+--- a/gcc/testsuite/gcc.target/sh/pr54236-2.c
++++ b/gcc/testsuite/gcc.target/sh/pr54236-2.c
+@@ -4,10 +4,10 @@
+ /* { dg-do compile }  */
+ /* { dg-options "-O1" } */
+ 
+-/* { dg-final { scan-assembler-times "addc" 36 } } */
++/* { dg-final { scan-assembler-times "addc" 32 } } */
+ /* { dg-final { scan-assembler-times "shll" 14 } } */
+-/* { dg-final { scan-assembler-times "add\tr" 12 } } */
+-/* { dg-final { scan-assembler-not "movt" } } */
++/* { dg-final { scan-assembler-times "add\tr" 16 } } */
++/* { dg-final { scan-assembler-times "movt" 4 } } */
+ 
+ /* { dg-final { scan-assembler-times "add\t#1" 1 } } */
+ 
+@@ -184,28 +184,28 @@ test_022 (int a, int b, int c, int d)
+ int
+ test_023 (int a, int b, int c, int d)
+ {
+-  // 1x shll, 1x addc
++  // 1x shll, 1x add
+   return a + ((b >> 31) & 1);
+ }
+ 
+ int
+ test_024 (int a, int b, int c, int d)
+ {
+-  // 1x shll, 1x addc
++  // 1x shll, 1x add
+   return ((b >> 31) & 1) + a;
+ }
+ 
+ int
+ test_025 (int a, int b, int c, int d)
+ {
+-  // 1x shll, 1x addc
++  // 1x shll, 1x add
+   return ((a >> 31) & 1) + a;
+ }
+ 
+ int
+ test_026 (int a, int b, int c, int d)
+ {
+-  // 1x shll, 1x addc
++  // 1x shll, 1x add
+   return a + ((a >> 31) & 1);
+ }
+ 
+-- 
+2.47.0
+
+
+rzinsly_pr59533-1_fix.patch
+
+diff --git a/gcc/testsuite/gcc.target/sh/pr59533-1.c b/gcc/testsuite/gcc.target/sh/pr59533-1.c
+index eb03b67c32c..b0469859df5 100644
+--- a/gcc/testsuite/gcc.target/sh/pr59533-1.c
++++ b/gcc/testsuite/gcc.target/sh/pr59533-1.c
+@@ -2,19 +2,19 @@
+ /* { dg-do compile }  */
+ /* { dg-options "-O1" } */
+ 
+-/* { dg-final { scan-assembler-times "shll" 5 } }  */
+-/* { dg-final { scan-assembler-times "movt" 9 } }  */
++/* { dg-final { scan-assembler-times "shll" 1 } }  */
++/* { dg-final { scan-assembler-times "movt" 5 } }  */
+ /* { dg-final { scan-assembler-times "rotcl" 1 } }  */
+ /* { dg-final { scan-assembler-times "and" 3 } }  */
+ /* { dg-final { scan-assembler-times "extu.b" 5 } }  */
+ 
+-/* { dg-final { scan-assembler-times "cmp/pz" 23 { target { ! sh2a } } } }  */
++/* { dg-final { scan-assembler-times "cmp/pz" 27 { target { ! sh2a } } } }  */
+ /* { dg-final { scan-assembler-times "addc" 4 { target { ! sh2a } } } }  */
+-/* { dg-final { scan-assembler-times "subc" 12 { target { ! sh2a } } } }  */
++/* { dg-final { scan-assembler-times "subc" 16 { target { ! sh2a } } } }  */
+ 
+-/* { dg-final { scan-assembler-times "cmp/pz" 21 { target { sh2a } } } }  */
++/* { dg-final { scan-assembler-times "cmp/pz" 25 { target { sh2a } } } }  */
+ /* { dg-final { scan-assembler-times "addc" 6 { target { sh2a } } } }  */
+-/* { dg-final { scan-assembler-times "subc" 10 { target { sh2a } } } }  */
++/* { dg-final { scan-assembler-times "subc" 14 { target { sh2a } } } }  */
+ /* { dg-final { scan-assembler-times "bld" 2 { target { sh2a } } } }  */
+ 
+ int
+@@ -186,28 +186,28 @@ test_22 (int x)
+ int
+ test_23 (int x)
+ {
+-  /* 1x shll, 1x add */
++  /* 1x cmp/pz, 1x subc */
+   return x < 0 ? x + 1 : x;
+ }
+ 
+ unsigned int
+ test_24 (unsigned int x)
+ {
+-  /* 1x shll, 1x add */
++  /* 1x cmp/pz, 1x subc */
+   return x & 0x80000000 ? x + 1 : x;
+ }
+ 
+ unsigned int
+ test_25 (unsigned int x)
+ {
+-  /* 1x shll, 1x add */
++  /* 1x cmp/pz, 1x subc */
+   return x >> 31 ? x + 1 : x;
+ }
+ 
+ int
+ test_26 (int x)
+ {
+-  /* 1x shll, 1x add */
++  /* 1x cmp/pz, 1x subc  */
+   return x >> 31 ? x + 1 : x;
+ }
+ 
+
+
