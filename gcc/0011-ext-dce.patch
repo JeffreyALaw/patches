@@ -258,7 +258,7 @@ index 000000000000..f43f45fb571f
 +    x[i] = i;
 +  }
 +  for (;;) {
-+    unsigned ar = 2080554998;
++    unsigned long ar = 2080554998UL;
 +    char as = 4;
 +    if (s(34, al++) < ar)
 +      if (*am)
