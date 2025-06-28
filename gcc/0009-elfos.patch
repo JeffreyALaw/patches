@@ -1,3 +1,4 @@
+This fixes various problems with fr30-elf and likely msp430-elf too
 diff --git a/gcc/config/elfos.h b/gcc/config/elfos.h
 index acb376283cf..09dd4c89985 100644
 --- a/gcc/config/elfos.h
