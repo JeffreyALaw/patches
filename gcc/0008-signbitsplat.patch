@@ -1,0 +1,78 @@
+diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
+index 21426f496798..b38dbb5d9840 100644
+--- a/gcc/config/riscv/bitmanip.md
++++ b/gcc/config/riscv/bitmanip.md
+@@ -1351,3 +1351,53 @@ (define_split
+    (set (match_dup 0) (zero_extract:X (match_dup 3)
+ 				      (const_int 1)
+ 				      (zero_extend:X (match_dup 2))))])
++
++;; If selecting between a constant with a single bit off and zero, that
++;; is a right arithmetic shift to splat the sign bit across the GPR
++;; then a bclr.
++(define_split
++  [(set (match_operand:X 0 "register_operand")
++	(if_then_else:X (lt:X (match_operand:X 1 "register_operand")
++			      (const_int 0))
++			(match_operand 2 "const_int_operand")
++			(const_int 0)))]
++  "TARGET_ZBS && popcount_hwi (~INTVAL (operands[2])) == 1"
++  [(set (match_dup 0) (ashiftrt:X (match_dup 1) (match_dup 3)))
++   (set (match_dup 0) (and:X (match_dup 0) (match_dup 2)))]
++  { operands[3] = GEN_INT (BITS_PER_WORD - 1); })
++
++;; Selecting between -1 and a single bit on is a right arithmetic shift
++;; of the sign bit to splat it across a GPR then a bset.
++(define_split
++  [(set (match_operand:X 0 "register_operand")
++	(plus:X (if_then_else:X (ge:X (match_operand:X 1 "register_operand")
++				      (const_int 0))
++				(match_operand 2 "const_int_operand")
++				(match_operand 3 "const_int_operand"))
++		(match_operand 4 "const_int_operand")))]
++  "(TARGET_ZBS
++    && INTVAL (operands[3]) + INTVAL (operands[4]) == HOST_WIDE_INT_C (-1)
++    && popcount_hwi (INTVAL (operands[2]) + INTVAL (operands[4])) == 1)"
++  [(set (match_dup 0) (ashiftrt:X (match_dup 1) (match_dup 3)))
++   (set (match_dup 0) (ior:X (match_dup 0) (match_dup 2)))]
++  { 
++    operands[2] = GEN_INT (INTVAL (operands[2]) + INTVAL (operands[4]));
++    operands[3] = GEN_INT (BITS_PER_WORD - 1);
++  })
++
++(define_split
++  [(set (match_operand:X 0 "register_operand")
++	(plus:X (if_then_else:X (lt:X (match_operand:X 1 "register_operand")
++				      (const_int 0))
++				(match_operand 2 "const_int_operand")
++				(match_operand 3 "const_int_operand"))
++		(match_operand 4 "const_int_operand")))]
++  "(TARGET_ZBS
++    && INTVAL (operands[3]) + INTVAL (operands[4]) == HOST_WIDE_INT_C (-1)
++    && popcount_hwi (INTVAL (operands[2]) + INTVAL (operands[4])) == 1)"
++  [(set (match_dup 0) (ashiftrt:X (match_dup 1) (match_dup 3)))
++   (set (match_dup 0) (ior:X (match_dup 0) (match_dup 2)))]
++  { 
++    operands[2] = GEN_INT (INTVAL (operands[2]) + INTVAL (operands[4]));
++    operands[3] = GEN_INT (BITS_PER_WORD - 1);
++  })
+diff --git a/gcc/config/riscv/zicond.md b/gcc/config/riscv/zicond.md
+index d170f6ab2628..72a2db593703 100644
+--- a/gcc/config/riscv/zicond.md
++++ b/gcc/config/riscv/zicond.md
+@@ -270,3 +270,15 @@ (define_split
+   [(set (match_dup 0) (ashiftrt:X (match_dup 1) (match_dup 2)))
+    (set (match_dup 0) (ior:X (match_dup 0) (const_int 1)))]
+   { operands[2] = GEN_INT (GET_MODE_BITSIZE (word_mode) - 1); })
++
++(define_split
++  [(set (match_operand:X 0 "register_operand")
++	(and:X (neg:X (ge:X (match_operand:X 1 "register_operand")
++			    (const_int 0)))
++	       (match_operand:X 2 "register_operand")))]
++  "TARGET_ZICOND_LIKE || TARGET_XTHEADCONDMOV"
++  [(set (match_dup 0) (lt:X (match_dup 1) (const_int 0)))
++   (set (match_dup 0) (if_then_else:X (ne:X (match_dup 0) (const_int 0))
++				      (match_dup 2)
++				      (const_int 0)))])
++
