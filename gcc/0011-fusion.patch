@@ -1,15 +1,23 @@
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 8fa1082f7c13..51aa6414a2f2 100644
+index 8fa1082f7c13..167e78d41ef4 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
-@@ -10257,7 +10257,11 @@ riscv_macro_fusion_pair_p (rtx_insn *prev, rtx_insn *curr)
- 		&& riscv_fusion_enabled_p(RISCV_FUSE_ZEXTW) )
- 	      || ( INTVAL (XEXP (SET_SRC (curr_set), 1)) < 32
- 		   && riscv_fusion_enabled_p(RISCV_FUSE_ZEXTWS))))
+@@ -10253,11 +10253,15 @@ riscv_macro_fusion_pair_p (rtx_insn *prev, rtx_insn *curr)
+ 	  && CONST_INT_P (XEXP (SET_SRC (prev_set), 1))
+ 	  && CONST_INT_P (XEXP (SET_SRC (curr_set), 1))
+ 	  && INTVAL (XEXP (SET_SRC (prev_set), 1)) == 32
+-	  && (( INTVAL (XEXP (SET_SRC (curr_set), 1)) == 32
+-		&& riscv_fusion_enabled_p(RISCV_FUSE_ZEXTW) )
+-	      || ( INTVAL (XEXP (SET_SRC (curr_set), 1)) < 32
+-		   && riscv_fusion_enabled_p(RISCV_FUSE_ZEXTWS))))
 -	return true;
++	  && ((INTVAL (XEXP (SET_SRC (curr_set), 1)) == 32
++	       && riscv_fusion_enabled_p (RISCV_FUSE_ZEXTW) )
++	      || (INTVAL (XEXP (SET_SRC (curr_set), 1)) < 32
++		  && riscv_fusion_enabled_p (RISCV_FUSE_ZEXTWS))))
 +	{
 +	  if (dump_file)
-+	    fprintf (dump_file, "RISCV_FUSE_ZEXTW\n");
++	    fprintf (dump_file, "RISCV_FUSE_ZEXTWS\n");
 +	  return true;
 +	}
      }
@@ -144,3 +152,16 @@ index 8fa1082f7c13..51aa6414a2f2 100644
      }
  
    if (simple_sets_p && riscv_fusion_enabled_p (RISCV_FUSE_ALIGNED_STD))
+@@ -10473,7 +10517,11 @@ riscv_macro_fusion_pair_p (rtx_insn *prev, rtx_insn *curr)
+ 		 lower offset.  */
+ 	      if ((INTVAL (offset_prev) % 16) == 0
+ 		  && (INTVAL (offset_prev) + 8 == INTVAL (offset_curr)))
+-		return true;
++		{
++		  if (dump_file)
++		    fprintf (dump_file, "RISCV_FUSE_ALIGNED_STD\n");
++		  return true;
++		}
+ 	    }
+ 	}
+     }
