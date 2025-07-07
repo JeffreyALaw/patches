@@ -308,3 +308,16 @@ index f3a1cc95ada..4b004f5a9cc 100644
  pex_unix_wait (struct pex_obj *obj, pid_t pid, int *status,
  	       struct pex_time *time, int done, const char **errmsg,
  	       int *err)
+diff --git a/gcc/config/cris/cris.h b/gcc/config/cris/cris.h
+index 1681c79e24dc..f35667949c1b 100644
+--- a/gcc/config/cris/cris.h
++++ b/gcc/config/cris/cris.h
+@@ -171,7 +171,7 @@ extern int cris_cpu_version;
+ 
+ /* For the cris-*-elf subtarget.  */
+ #define CRIS_ASM_SUBTARGET_SPEC \
+- "--em=criself %{!march=*:%{!mcpu=*:" CRIS_DEFAULT_ASM_ARCH_OPTION "}}"
++ "--emulation=criself %{!march=*:%{!mcpu=*:" CRIS_DEFAULT_ASM_ARCH_OPTION "}}"
+ 
+ /* FIXME: We should propagate the -melf option to make the criself
+    "emulation" unless a linker script is provided (-T*), but I don't know
