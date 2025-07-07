@@ -1,81 +1,125 @@
-diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
-index 21426f496798..b38dbb5d9840 100644
---- a/gcc/config/riscv/bitmanip.md
-+++ b/gcc/config/riscv/bitmanip.md
-@@ -1351,3 +1351,53 @@ (define_split
-    (set (match_dup 0) (zero_extract:X (match_dup 3)
- 				      (const_int 1)
- 				      (zero_extend:X (match_dup 2))))])
+diff --git a/gcc/ifcvt.cc b/gcc/ifcvt.cc
+index a0c6575e4e42..173b58743239 100644
+--- a/gcc/ifcvt.cc
++++ b/gcc/ifcvt.cc
+@@ -1179,6 +1179,108 @@ noce_try_move (struct noce_if_info *if_info)
+   return false;
+ }
+ 
++/* If a sign bit test is selecting across constants, we may be able
++   to generate efficient code utilizing the -1/0 result of a sign
++   bit splat idiom. 
 +
-+;; If selecting between a constant with a single bit off and zero, that
-+;; is a right arithmetic shift to splat the sign bit across the GPR
-+;; then a bclr.
-+(define_split
-+  [(set (match_operand:X 0 "register_operand")
-+	(if_then_else:X (lt:X (match_operand:X 1 "register_operand")
-+			      (const_int 0))
-+			(match_operand 2 "const_int_operand")
-+			(const_int 0)))]
-+  "TARGET_ZBS && popcount_hwi (~INTVAL (operands[2])) == 1"
-+  [(set (match_dup 0) (ashiftrt:X (match_dup 1) (match_dup 3)))
-+   (set (match_dup 0) (and:X (match_dup 0) (match_dup 2)))]
-+  { operands[3] = GEN_INT (BITS_PER_WORD - 1); })
++   Do this before trying the generalized conditional move as these
++   (when applicable) are hopefully faster than a conditional move.  */
 +
-+;; Selecting between -1 and a single bit on is a right arithmetic shift
-+;; of the sign bit to splat it across a GPR then a bset.
-+(define_split
-+  [(set (match_operand:X 0 "register_operand")
-+	(plus:X (if_then_else:X (ge:X (match_operand:X 1 "register_operand")
-+				      (const_int 0))
-+				(match_operand 2 "const_int_operand")
-+				(match_operand 3 "const_int_operand"))
-+		(match_operand 4 "const_int_operand")))]
-+  "(TARGET_ZBS
-+    && INTVAL (operands[3]) + INTVAL (operands[4]) == HOST_WIDE_INT_C (-1)
-+    && popcount_hwi (INTVAL (operands[2]) + INTVAL (operands[4])) == 1)"
-+  [(set (match_dup 0) (ashiftrt:X (match_dup 1) (match_dup 3)))
-+   (set (match_dup 0) (ior:X (match_dup 0) (match_dup 2)))]
-+  { 
-+    operands[2] = GEN_INT (INTVAL (operands[2]) + INTVAL (operands[4]));
-+    operands[3] = GEN_INT (BITS_PER_WORD - 1);
-+  })
++static bool
++noce_try_sign_bit_splat (struct noce_if_info *if_info)
++{
++  rtx cond = if_info->cond;
++  enum rtx_code code = GET_CODE (cond);
 +
-+(define_split
-+  [(set (match_operand:X 0 "register_operand")
-+	(plus:X (if_then_else:X (lt:X (match_operand:X 1 "register_operand")
-+				      (const_int 0))
-+				(match_operand 2 "const_int_operand")
-+				(match_operand 3 "const_int_operand"))
-+		(match_operand 4 "const_int_operand")))]
-+  "(TARGET_ZBS
-+    && INTVAL (operands[3]) + INTVAL (operands[4]) == HOST_WIDE_INT_C (-1)
-+    && popcount_hwi (INTVAL (operands[2]) + INTVAL (operands[4])) == 1)"
-+  [(set (match_dup 0) (ashiftrt:X (match_dup 1) (match_dup 3)))
-+   (set (match_dup 0) (ior:X (match_dup 0) (match_dup 2)))]
-+  { 
-+    operands[2] = GEN_INT (INTVAL (operands[2]) + INTVAL (operands[4]));
-+    operands[3] = GEN_INT (BITS_PER_WORD - 1);
-+  })
-diff --git a/gcc/config/riscv/zicond.md b/gcc/config/riscv/zicond.md
-index d170f6ab2628..72a2db593703 100644
---- a/gcc/config/riscv/zicond.md
-+++ b/gcc/config/riscv/zicond.md
-@@ -270,3 +270,15 @@ (define_split
-   [(set (match_dup 0) (ashiftrt:X (match_dup 1) (match_dup 2)))
-    (set (match_dup 0) (ior:X (match_dup 0) (const_int 1)))]
-   { operands[2] = GEN_INT (GET_MODE_BITSIZE (word_mode) - 1); })
++  /* We're looking for sign bit tests, so LT/GE are the only cases
++     we care about.  */
++  if (code != LT && code != GE)
++    return false;
 +
-+(define_split
-+  [(set (match_operand:X 0 "register_operand")
-+	(and:X (neg:X (ge:X (match_operand:X 1 "register_operand")
-+			    (const_int 0)))
-+	       (match_operand:X 2 "register_operand")))]
-+  "TARGET_ZICOND_LIKE || TARGET_XTHEADCONDMOV"
-+  [(set (match_dup 0) (lt:X (match_dup 1) (const_int 0)))
-+   (set (match_dup 0) (if_then_else:X (ne:X (match_dup 0) (const_int 0))
-+				      (match_dup 2)
-+				      (const_int 0)))])
++  /* And we only care if comparing LT 0, GE 0.  */
++  if (XEXP (cond, 1) != CONST0_RTX (GET_MODE (cond)))
++    return false;
 +
++  /* It would be good if this could be extended since constant synthesis
++     on some platforms will result in blocks which fail this test.  */
++  if (!noce_simple_bbs (if_info))
++    return false;
++
++  /* Only try this for constants in the true/false arms and a REG
++     destination.   We could select between 0 and a REG pretty
++     easily with a logical AND.  */
++  if (!CONST_INT_P (if_info->a)
++      || !CONST_INT_P (if_info->b)
++      || !REG_P (if_info->x))
++    return false;
++
++  machine_mode mode = GET_MODE (if_info->x);
++
++  HOST_WIDE_INT val_a = INTVAL (if_info->a);
++  HOST_WIDE_INT val_b = INTVAL (if_info->b);
++
++  rtx_insn *seq;
++  start_sequence ();
++
++  /* We're testing the sign bit of this operand.  */
++  rtx condop = XEXP (cond, 0);
++
++  /* To splat the sign bit we arithmetically shift the
++     input value right by the size of the object - 1 bits.  */
++  int splat_count = GET_MODE_BITSIZE (GET_MODE (condop)).to_constant () - 1;
++  rtx splat = GEN_INT (splat_count);
++
++  /* Store the result here.  */
++  rtx temp = gen_reg_rtx (mode);
++  temp = expand_simple_binop (mode, ASHIFTRT, XEXP (cond, 0),
++			      splat, temp, false, OPTAB_WIDEN);
++  if (!temp)
++    {
++      end_ifcvt_sequence (if_info);
++      return false;
++    }
++
++  /* IOR of anything with -1 still results in -1.  So we can
++     IOR the other operand to generate a select between -1 and
++     an arbitrary constant.  */
++  if (val_a == -1)
++    expand_simple_binop (mode, IOR, temp, GEN_INT (val_b),
++			 if_info->x, false, OPTAB_WIDEN);
++  /* AND of anything with 0 is still zero.  So we can AND
++     with the -1 operand with the a constant to select
++     between the constant and zero.  */
++  else if (val_b == 0)
++    expand_simple_binop (mode, AND, temp, GEN_INT (val_a),
++			 if_info->x, false, OPTAB_WIDEN);
++  /* Same cases, but with the test or arms swapped.  These
++     can be realized as well, though it typically costs
++     an extra instruction.  */
++  else if (val_b == -1)
++    expand_simple_binop (mode, IOR, temp, GEN_INT (val_a),
++			 if_info->x, false, OPTAB_WIDEN);
++  else if (val_a == 0)
++    expand_simple_binop (mode, AND, temp, GEN_INT (val_b),
++			 if_info->x, false, OPTAB_WIDEN);
++  /* Nothing worked.  */
++  else
++    {
++      end_ifcvt_sequence (if_info);
++      return false;
++    }
++
++  /* This ends the sequene and tests the cost model.  */
++  seq = end_ifcvt_sequence (if_info);
++  if (!seq)
++    return false;
++
++  /* Everything looks good.  Install the if-converted sequence.  */
++  emit_insn_before_setloc (seq, if_info->jump,
++			   INSN_LOCATION (if_info->insn_a));
++  if_info->transform_name = "splat_sign_bit_trivial";
++  return true;
++}
++
++
+ /* Try forming an IF_THEN_ELSE (cond, b, a) and collapsing that
+    through simplify_rtx.  Sometimes that can eliminate the IF_THEN_ELSE.
+    If that is the case, emit the result into x.  */
+@@ -4238,6 +4340,8 @@ noce_process_if_block (struct noce_if_info *if_info)
+   if (!targetm.have_conditional_execution ()
+       && noce_try_store_flag_constants (if_info))
+     goto success;
++  if (noce_try_sign_bit_splat (if_info))
++    goto success;
+   if (HAVE_conditional_move
+       && noce_try_cmove (if_info))
+     goto success;
 diff --git a/gcc/testsuite/gcc.target/riscv/pr120553-1.c b/gcc/testsuite/gcc.target/riscv/pr120553-1.c
 new file mode 100644
 index 000000000000..a04de05e84b3
