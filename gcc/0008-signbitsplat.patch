@@ -1,8 +1,8 @@
 diff --git a/gcc/ifcvt.cc b/gcc/ifcvt.cc
-index a0c6575e4e42..173b58743239 100644
+index a0c6575e4e42..752a84ec21c8 100644
 --- a/gcc/ifcvt.cc
 +++ b/gcc/ifcvt.cc
-@@ -1179,6 +1179,108 @@ noce_try_move (struct noce_if_info *if_info)
+@@ -1179,6 +1179,113 @@ noce_try_move (struct noce_if_info *if_info)
    return false;
  }
  
@@ -43,6 +43,11 @@ index a0c6575e4e42..173b58743239 100644
 +
 +  machine_mode mode = GET_MODE (if_info->x);
 +
++  /* If the mode of the destination does not match the mode of
++     the value we're testing, then this optimization is not valid.  */
++  if (mode != GET_MODE (XEXP (cond, 0)))
++    return false;
++
 +  HOST_WIDE_INT val_a = INTVAL (if_info->a);
 +  HOST_WIDE_INT val_b = INTVAL (if_info->b);
 +
@@ -58,8 +63,8 @@ index a0c6575e4e42..173b58743239 100644
 +  rtx splat = GEN_INT (splat_count);
 +
 +  /* Store the result here.  */
-+  rtx temp = gen_reg_rtx (mode);
-+  temp = expand_simple_binop (mode, ASHIFTRT, XEXP (cond, 0),
++  rtx temp = gen_reg_rtx (GET_MODE (XEXP (cond, 0)));
++  temp = expand_simple_binop (GET_MODE (temp), ASHIFTRT, XEXP (cond, 0),
 +			      splat, temp, false, OPTAB_WIDEN);
 +  if (!temp)
 +    {
@@ -111,7 +116,7 @@ index a0c6575e4e42..173b58743239 100644
  /* Try forming an IF_THEN_ELSE (cond, b, a) and collapsing that
     through simplify_rtx.  Sometimes that can eliminate the IF_THEN_ELSE.
     If that is the case, emit the result into x.  */
-@@ -4238,6 +4340,8 @@ noce_process_if_block (struct noce_if_info *if_info)
+@@ -4238,6 +4345,8 @@ noce_process_if_block (struct noce_if_info *if_info)
    if (!targetm.have_conditional_execution ()
        && noce_try_store_flag_constants (if_info))
      goto success;
@@ -120,11 +125,11 @@ index a0c6575e4e42..173b58743239 100644
    if (HAVE_conditional_move
        && noce_try_cmove (if_info))
      goto success;
-diff --git a/gcc/testsuite/gcc.target/riscv/pr120553-1.c b/gcc/testsuite/gcc.target/riscv/pr120553-1.c
+diff --git a/gcc/pr120553-1.c b/gcc/pr120553-1.c
 new file mode 100644
 index 000000000000..a04de05e84b3
 --- /dev/null
-+++ b/gcc/testsuite/gcc.target/riscv/pr120553-1.c
++++ b/gcc/pr120553-1.c
 @@ -0,0 +1,93 @@
 +/* { dg-do compile } */
 +/* { dg-options "-march=rv64gcb_zicond -mbranch-cost=5 -mabi=lp64d" { target { rv64 } } } */
