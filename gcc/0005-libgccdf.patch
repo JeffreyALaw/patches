@@ -76,3 +76,97 @@ index 92cb79dc8f8..b1e24927f47 100644
  #else
 
 
+The patch changes order of inclusions, i.e. elfos.h is included before
+target specific h8300/h8300.h, in a way similar to a few other targets.
+Thanks to this change it is possible to override macros from elfos.h in
+h8300/h8300.h, in particular .init/.fini section definitions.
+
+    PR target/109286
+
+gcc/ChangeLog:
+
+    * config.gcc: Include elfos.h before h8300/h8300.h.
+    
+    * config/h8300/h8300.h (INIT_SECTION_ASM_OP): Override
+    default version from elfos.h.
+    (FINI_SECTION_ASM_OP): Ditto.
+    (ASM_DECLARE_FUNCTION_NAME): Ditto.
+    (ASM_GENERATE_INTERNAL_LABEL): Macro removed because it was
+    being overridden in elfos.h anyway.
+    (ASM_OUTPUT_SKIP): Ditto.
+
+initfini_section_warning.patch
+
+ gcc/config.gcc           |  4 ++--
+ gcc/config/h8300/h8300.h | 21 ++++++++-------------
+ 2 files changed, 10 insertions(+), 15 deletions(-)
+
+diff --git a/gcc/config.gcc b/gcc/config.gcc
+index 5953ace0aff..8ed111392bb 100644
+--- a/gcc/config.gcc
++++ b/gcc/config.gcc
+@@ -1847,11 +1847,11 @@ moxie-*-moxiebox*)
+ 	;;
+ h8300-*-elf*)
+ 	tmake_file="h8300/t-h8300"
+-	tm_file="h8300/h8300.h elfos.h newlib-stdint.h h8300/elf.h"
++	tm_file="elfos.h h8300/h8300.h newlib-stdint.h h8300/elf.h"
+ 	;;
+ h8300-*-linux*)
+ 	tmake_file="${tmake_file} h8300/t-h8300 h8300/t-linux"
+-	tm_file="h8300/h8300.h elfos.h gnu-user.h linux.h glibc-stdint.h h8300/linux.h"
++	tm_file="elfos.h h8300/h8300.h gnu-user.h linux.h glibc-stdint.h h8300/linux.h"
+ 	;;
+ hppa*64*-*-linux*)
+ 	target_cpu_default="MASK_PA_11|MASK_PA_20"
+diff --git a/gcc/config/h8300/h8300.h b/gcc/config/h8300/h8300.h
+index 6b2dd6511b3..8018b63965d 100644
+--- a/gcc/config/h8300/h8300.h
++++ b/gcc/config/h8300/h8300.h
+@@ -610,6 +610,12 @@ struct cum_arg
+ #define DATA_SECTION_ASM_OP "\t.section .data"
+ #define BSS_SECTION_ASM_OP "\t.section .bss"
+ 
++/* Override default definitions from elfos.h. */
++#undef INIT_SECTION_ASM_OP
++#define INIT_SECTION_ASM_OP "\t.section\t.init,\"ax\""
++#undef FINI_SECTION_ASM_OP
++#define FINI_SECTION_ASM_OP "\t.section\t.fini,\"ax\""
++
+ #undef DO_GLOBAL_CTORS_BODY
+ #define DO_GLOBAL_CTORS_BODY			\
+ {						\
+@@ -647,19 +653,11 @@ struct cum_arg
+ /* Globalizing directive for a label.  */
+ #define GLOBAL_ASM_OP "\t.global "
+ 
++/* Override default definition from elfos.h. */
++#undef ASM_DECLARE_FUNCTION_NAME
+ #define ASM_DECLARE_FUNCTION_NAME(FILE, NAME, DECL) \
+    ASM_OUTPUT_FUNCTION_LABEL (FILE, NAME, DECL)
+ 
+-/* This is how to store into the string LABEL
+-   the symbol_ref name of an internal numbered label where
+-   PREFIX is the class of label and NUM is the number within the class.
+-   This is suitable for output with `assemble_name'.
+-
+-   N.B.: The h8300.md branch_true and branch_false patterns also know
+-   how to generate internal labels.  */
+-#define ASM_GENERATE_INTERNAL_LABEL(LABEL, PREFIX, NUM)	\
+-  sprintf (LABEL, "*.%s%lu", PREFIX, (unsigned long)(NUM))
+-
+ /* This is how to output an insn to push a register on the stack.
+    It need not be very fast code.  */
+ 
+@@ -690,9 +688,6 @@ struct cum_arg
+   if ((LOG) != 0)				\
+     fprintf (FILE, "\t.align %d\n", (LOG))
+ 
+-#define ASM_OUTPUT_SKIP(FILE, SIZE) \
+-  fprintf (FILE, "\t.space %d\n", (int)(SIZE))
+-
+ /* This says how to output an assembler line
+    to define a global common symbol.  */
+ 
+
+
