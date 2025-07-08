@@ -1,0 +1,257 @@
+diff --git a/gcc/config/riscv/riscv-avlprop.cc b/gcc/config/riscv/riscv-avlprop.cc
+index bb4aceb75064..3031c29ae63c 100644
+--- a/gcc/config/riscv/riscv-avlprop.cc
++++ b/gcc/config/riscv/riscv-avlprop.cc
+@@ -508,7 +508,7 @@ pass_avlprop::execute (function *fn)
+       simplify_replace_vlmax_avl (rinsn, prop.second);
+     }
+ 
+-  if (rvv_vector_bits == RVV_VECTOR_BITS_ZVL)
++  if (rvv_vector_bits == RVV_VECTOR_BITS_ZVL && !TARGET_XTHEADVECTOR)
+     {
+       /* Simplify VLMAX AVL into immediate AVL.
+ 	 E.g. Simplify this following case:
+diff --git a/gcc/ifcvt.cc b/gcc/ifcvt.cc
+index a0c6575e4e42..ecb974185016 100644
+--- a/gcc/ifcvt.cc
++++ b/gcc/ifcvt.cc
+@@ -1179,6 +1179,121 @@ noce_try_move (struct noce_if_info *if_info)
+   return false;
+ }
+ 
++/* If a sign bit test is selecting across constants, we may be able
++   to generate efficient code utilizing the -1/0 result of a sign
++   bit splat idiom. 
++
++   Do this before trying the generalized conditional move as these
++   (when applicable) are hopefully faster than a conditional move.  */
++
++static bool
++noce_try_sign_bit_splat (struct noce_if_info *if_info)
++{
++  rtx cond = if_info->cond;
++  enum rtx_code code = GET_CODE (cond);
++
++  /* We're looking for sign bit tests, so LT/GE are the only cases
++     we care about.  */
++  if (code != LT && code != GE)
++    return false;
++
++  /* And we only care if comparing LT 0, GE 0.  */
++  if (XEXP (cond, 1) != CONST0_RTX (GET_MODE (cond)))
++    return false;
++
++  /* It would be good if this could be extended since constant synthesis
++     on some platforms will result in blocks which fail this test.  */
++  if (!noce_simple_bbs (if_info))
++    return false;
++
++  /* Only try this for constants in the true/false arms and a REG
++     destination.   We could select between 0 and a REG pretty
++     easily with a logical AND.  */
++  if (!CONST_INT_P (if_info->a)
++      || !CONST_INT_P (if_info->b)
++      || !REG_P (if_info->x))
++    return false;
++
++  machine_mode mode = GET_MODE (if_info->x);
++
++  /* If the mode of the destination does not match the mode of
++     the value we're testing, then this optimization is not valid.  */
++  if (mode != GET_MODE (XEXP (cond, 0)))
++    return false;
++
++  HOST_WIDE_INT val_a = INTVAL (if_info->a);
++  HOST_WIDE_INT val_b = INTVAL (if_info->b);
++
++  rtx_insn *seq;
++  start_sequence ();
++
++  /* We're testing the sign bit of this operand.  */
++  rtx condop = XEXP (cond, 0);
++
++  /* To splat the sign bit we arithmetically shift the
++     input value right by the size of the object - 1 bits.  */
++  int splat_count = GET_MODE_BITSIZE (GET_MODE (condop)).to_constant () - 1;
++  rtx splat = GEN_INT (splat_count);
++
++  /* Store the result here.  */
++  rtx temp = gen_reg_rtx (GET_MODE (XEXP (cond, 0)));
++  temp = expand_simple_binop (GET_MODE (temp), ASHIFTRT, XEXP (cond, 0),
++			      splat, temp, false, OPTAB_WIDEN);
++  if (!temp)
++    {
++      end_ifcvt_sequence (if_info);
++      return false;
++    }
++
++  /* IOR of anything with -1 still results in -1.  So we can
++     IOR the other operand to generate a select between -1 and
++     an arbitrary constant.  */
++  if (val_a == -1)
++    expand_simple_binop (mode, IOR, temp, GEN_INT (val_b),
++			 if_info->x, false, OPTAB_WIDEN);
++  /* AND of anything with 0 is still zero.  So we can AND
++     with the -1 operand with the a constant to select
++     between the constant and zero.  */
++  else if (val_b == 0)
++    expand_simple_binop (mode, AND, temp, GEN_INT (val_a),
++			 if_info->x, false, OPTAB_WIDEN);
++  /* Same cases, but with the test or arms swapped.  These
++     can be realized as well, though it typically costs
++     an extra instruction.  */
++  else if (val_b == -1)
++    {
++      temp = expand_simple_unop (GET_MODE (temp), NOT,
++				 temp, temp, true);
++      expand_simple_binop (mode, IOR, temp, GEN_INT (val_a),
++			   if_info->x, false, OPTAB_WIDEN);
++    }
++  else if (val_a == 0)
++    {
++      temp = expand_simple_unop (GET_MODE (temp), NOT,
++				 temp, temp, true);
++      expand_simple_binop (mode, AND, temp, GEN_INT (val_b),
++			   if_info->x, false, OPTAB_WIDEN);
++    }
++  /* Nothing worked.  */
++  else
++    {
++      end_ifcvt_sequence (if_info);
++      return false;
++    }
++
++  /* This ends the sequene and tests the cost model.  */
++  seq = end_ifcvt_sequence (if_info);
++  if (!seq)
++    return false;
++
++  /* Everything looks good.  Install the if-converted sequence.  */
++  emit_insn_before_setloc (seq, if_info->jump,
++			   INSN_LOCATION (if_info->insn_a));
++  if_info->transform_name = "splat_sign_bit_trivial";
++  return true;
++}
++
++
+ /* Try forming an IF_THEN_ELSE (cond, b, a) and collapsing that
+    through simplify_rtx.  Sometimes that can eliminate the IF_THEN_ELSE.
+    If that is the case, emit the result into x.  */
+@@ -4238,6 +4353,8 @@ noce_process_if_block (struct noce_if_info *if_info)
+   if (!targetm.have_conditional_execution ()
+       && noce_try_store_flag_constants (if_info))
+     goto success;
++  if (noce_try_sign_bit_splat (if_info))
++    goto success;
+   if (HAVE_conditional_move
+       && noce_try_cmove (if_info))
+     goto success;
+diff --git a/gcc/testsuite/gcc.target/riscv/pr120553-1.c b/gcc/testsuite/gcc.target/riscv/pr120553-1.c
+new file mode 100644
+index 000000000000..a5ac84471f69
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr120553-1.c
+@@ -0,0 +1,93 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gcb_zicond -mbranch-cost=5 -mabi=lp64d" { target { rv64 } } } */
++/* { dg-options "-march=rv32gcb_zicond -mbranch-cost=5 -mabi=ilp32" { target { rv32 } } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-Oz" "-Og" } } */
++
++/* We need to adjust the constant so this works for rv32 and rv64.  */
++#if __riscv_xlen == 32
++#define ONE 1U
++#define TYPE int
++#else
++#define ONE 1ULL
++#define TYPE long
++#endif
++
++#define T1(N) TYPE test1_##N (TYPE c) { return c < 0 ? -ONE : (ONE << N); } \
++	      TYPE test2_##N (TYPE c) { return c >= 0 ? (ONE << N) : -ONE; } \
++
++T1(0)
++T1(1)
++T1(2)
++T1(3)
++T1(4)
++T1(5)
++T1(6)
++T1(7)
++T1(8)
++T1(9)
++T1(10)
++T1(11)
++T1(12)
++T1(13)
++T1(14)
++T1(15)
++T1(16)
++T1(17)
++T1(18)
++T1(19)
++T1(20)
++T1(21)
++T1(22)
++T1(23)
++T1(24)
++T1(25)
++T1(26)
++T1(27)
++T1(28)
++T1(29)
++T1(30)
++T1(31)
++#if __riscv_xlen == 64
++T1(32)
++T1(33)
++T1(34)
++T1(35)
++T1(36)
++T1(37)
++T1(38)
++T1(39)
++T1(40)
++T1(41)
++T1(42)
++T1(43)
++T1(44)
++T1(45)
++T1(46)
++T1(47)
++T1(48)
++T1(49)
++T1(50)
++T1(51)
++T1(52)
++T1(53)
++T1(54)
++T1(55)
++T1(56)
++T1(57)
++T1(58)
++T1(59)
++T1(60)
++T1(61)
++T1(62)
++T1(63)
++#endif
++
++/* We handled all these cases well for rv64 at branch-cost=5.  We should be
++   able to handle them for small branch costs too, but don't yet.  */
++/* { dg-final { scan-assembler-times "\\t(srai)" 128 { target rv64 } } } */
++/* { dg-final { scan-assembler-times "\\t(ori|bset)" 128 { target rv64 } } } */
++
++/* For rv32 the N=31 case isn't handled well.  */
++/* { dg-final { scan-assembler-times "\\t(srai)" 64 { target rv32 } } } */
++/* { dg-final { scan-assembler-times "\\t(ori|bset)" 64 { target rv32 } } } */
++
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xtheadvector/pr120642.c b/gcc/testsuite/gcc.target/riscv/rvv/xtheadvector/pr120642.c
+new file mode 100644
+index 000000000000..1a72580ad605
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xtheadvector/pr120642.c
+@@ -0,0 +1,4 @@
++/* { dg-do compile } */
++/* { dg-options "-O -mcpu=xt-c920 -mrvv-vector-bits=zvl" } */
++int __attribute__((__vector_size__(4 * sizeof(int)))) v;
++void foo() { v /= 3; }
