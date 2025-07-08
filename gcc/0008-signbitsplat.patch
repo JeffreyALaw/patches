@@ -1,8 +1,8 @@
 diff --git a/gcc/ifcvt.cc b/gcc/ifcvt.cc
-index a0c6575e4e42..ecb974185016 100644
+index a0c6575e4e42..1ef421d9d465 100644
 --- a/gcc/ifcvt.cc
 +++ b/gcc/ifcvt.cc
-@@ -1179,6 +1179,121 @@ noce_try_move (struct noce_if_info *if_info)
+@@ -1179,6 +1179,122 @@ noce_try_move (struct noce_if_info *if_info)
    return false;
  }
  
@@ -51,6 +51,10 @@ index a0c6575e4e42..ecb974185016 100644
 +  HOST_WIDE_INT val_a = INTVAL (if_info->a);
 +  HOST_WIDE_INT val_b = INTVAL (if_info->b);
 +
++  /* Normalize to an LT sequence.  */
++  if (code == GE)
++    std::swap (val_a, val_b);
++    
 +  rtx_insn *seq;
 +  start_sequence ();
 +
@@ -62,53 +66,46 @@ index a0c6575e4e42..ecb974185016 100644
 +  int splat_count = GET_MODE_BITSIZE (GET_MODE (condop)).to_constant () - 1;
 +  rtx splat = GEN_INT (splat_count);
 +
-+  /* Store the result here.  */
-+  rtx temp = gen_reg_rtx (GET_MODE (XEXP (cond, 0)));
-+  temp = expand_simple_binop (GET_MODE (temp), ASHIFTRT, XEXP (cond, 0),
-+			      splat, temp, false, OPTAB_WIDEN);
++  rtx temp;
++  temp = expand_simple_binop (GET_MODE (XEXP (cond, 0)), ASHIFTRT,
++			      XEXP (cond, 0), splat, NULL_RTX,
++			      false, OPTAB_WIDEN);
 +  if (!temp)
-+    {
-+      end_ifcvt_sequence (if_info);
-+      return false;
-+    }
++    goto fail;
 +
 +  /* IOR of anything with -1 still results in -1.  So we can
 +     IOR the other operand to generate a select between -1 and
 +     an arbitrary constant.  */
 +  if (val_a == -1)
-+    expand_simple_binop (mode, IOR, temp, GEN_INT (val_b),
-+			 if_info->x, false, OPTAB_WIDEN);
++    temp = expand_simple_binop (mode, IOR, temp, GEN_INT (val_b),
++				if_info->x, false, OPTAB_WIDEN);
 +  /* AND of anything with 0 is still zero.  So we can AND
 +     with the -1 operand with the a constant to select
 +     between the constant and zero.  */
 +  else if (val_b == 0)
-+    expand_simple_binop (mode, AND, temp, GEN_INT (val_a),
-+			 if_info->x, false, OPTAB_WIDEN);
++    temp = expand_simple_binop (mode, AND, temp, GEN_INT (val_a),
++				if_info->x, false, OPTAB_WIDEN);
 +  /* Same cases, but with the test or arms swapped.  These
 +     can be realized as well, though it typically costs
 +     an extra instruction.  */
 +  else if (val_b == -1)
-+    {
-+      temp = expand_simple_unop (GET_MODE (temp), NOT,
-+				 temp, temp, true);
-+      expand_simple_binop (mode, IOR, temp, GEN_INT (val_a),
-+			   if_info->x, false, OPTAB_WIDEN);
-+    }
++    temp = expand_simple_binop (mode, IOR, temp, GEN_INT (val_a),
++				if_info->x, false, OPTAB_WIDEN);
 +  else if (val_a == 0)
-+    {
-+      temp = expand_simple_unop (GET_MODE (temp), NOT,
-+				 temp, temp, true);
-+      expand_simple_binop (mode, AND, temp, GEN_INT (val_b),
-+			   if_info->x, false, OPTAB_WIDEN);
-+    }
++    temp = expand_simple_binop (mode, AND, temp, GEN_INT (val_b),
++				if_info->x, false, OPTAB_WIDEN);
 +  /* Nothing worked.  */
 +  else
-+    {
-+      end_ifcvt_sequence (if_info);
-+      return false;
-+    }
++    temp = NULL_RTX;
 +
-+  /* This ends the sequene and tests the cost model.  */
++  if (!temp)
++    goto fail;
++
++  /* Move into the final destination.  */
++  if (if_info->x != temp)
++    emit_move_insn (if_info->x, temp);
++
++  /* This ends the sequence and tests the cost model.  */
 +  seq = end_ifcvt_sequence (if_info);
 +  if (!seq)
 +    return false;
@@ -118,13 +115,17 @@ index a0c6575e4e42..ecb974185016 100644
 +			   INSN_LOCATION (if_info->insn_a));
 +  if_info->transform_name = "splat_sign_bit_trivial";
 +  return true;
++
++ fail:
++  end_ifcvt_sequence (if_info);
++  return false;
 +}
 +
 +
  /* Try forming an IF_THEN_ELSE (cond, b, a) and collapsing that
     through simplify_rtx.  Sometimes that can eliminate the IF_THEN_ELSE.
     If that is the case, emit the result into x.  */
-@@ -4238,6 +4353,8 @@ noce_process_if_block (struct noce_if_info *if_info)
+@@ -4238,6 +4354,8 @@ noce_process_if_block (struct noce_if_info *if_info)
    if (!targetm.have_conditional_execution ()
        && noce_try_store_flag_constants (if_info))
      goto success;
