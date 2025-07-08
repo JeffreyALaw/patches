@@ -221,6 +221,6 @@ index 000000000000..a04de05e84b3
 +/* { dg-final { scan-assembler-times "\\t(ori|bset)" 128 { target rv64 } } } */
 +
 +/* For rv32 the N=31 case isn't handled well.  */
-+/* { dg-final { scan-assembler-times "\\t(srai)" 62 { target rv32 } } } */
-+/* { dg-final { scan-assembler-times "\\t(ori|bset)" 62 { target rv32 } } } */
++/* { dg-final { scan-assembler-times "\\t(srai)" 64 { target rv32 } } } */
++/* { dg-final { scan-assembler-times "\\t(ori|bset)" 64 { target rv32 } } } */
 +
