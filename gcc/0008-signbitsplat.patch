@@ -1,8 +1,8 @@
 diff --git a/gcc/ifcvt.cc b/gcc/ifcvt.cc
-index a0c6575e4e42..7eddd0c0cd42 100644
+index a0c6575e4e42..b1417c403f3a 100644
 --- a/gcc/ifcvt.cc
 +++ b/gcc/ifcvt.cc
-@@ -1179,6 +1179,162 @@ noce_try_move (struct noce_if_info *if_info)
+@@ -1179,6 +1179,176 @@ noce_try_move (struct noce_if_info *if_info)
    return false;
  }
  
@@ -41,6 +41,17 @@ index a0c6575e4e42..7eddd0c0cd42 100644
 +      || !REG_P (if_info->x))
 +    return false;
 +
++  /* WTF  This seems like it's just papering over a problem or inconsistency
++     elsehwere.  Clearly there's something about the structure if ifcvt
++     I don't yet understand.  */
++  bool invert = false;
++  if (EDGE_SUCC (if_info->test_bb, 0)->flags & EDGE_FALLTHRU)
++    ;
++  else if (EDGE_SUCC (if_info->test_bb, 1)->flags & EDGE_FALLTHRU)
++    invert = true;
++  else
++    gcc_unreachable ();
++  
 +  machine_mode mode = GET_MODE (if_info->x);
 +
 +  /* If the mode of the destination does not match the mode of
@@ -75,65 +86,68 @@ index a0c6575e4e42..7eddd0c0cd42 100644
 +  if (val_a == -1)
 +    {
 +      if (code != LT)
++	invert = !invert;
++
++      if (invert)
 +	{
-+#if 0
 +	  temp = expand_simple_unop (mode, NOT, temp, NULL_RTX, true);
 +	  if (!temp)
-+#endif
 +	    goto fail;
 +	}
++
 +      temp = expand_simple_binop (mode, IOR, temp, GEN_INT (val_b),
 +				  if_info->x, false, OPTAB_WIDEN);
 +    }
-+#if 0
 +  /* AND of anything with 0 is still zero.  So we can AND
 +     with the -1 operand with the a constant to select
 +     between the constant and zero.  */
 +  else if (val_b == 0)
 +    {
 +      if (code != LT)
++	invert = !invert;
++
++      if (invert)
 +	{
-+#if 0
 +	  temp = expand_simple_unop (mode, NOT, temp, NULL_RTX, true);
 +	  if (!temp)
-+#endif
 +	    goto fail;
 +	}
++
 +      temp = expand_simple_binop (mode, AND, temp, GEN_INT (val_a),
 +				  if_info->x, false, OPTAB_WIDEN);
 +    }
-+#endif
 +  /* Same cases, but with the test or arms swapped.  These
 +     can be realized as well, though it typically costs
 +     an extra instruction.  */
 +  else if (val_b == -1)
 +    {
 +      if (code == LT)
++	invert = !invert;
++
++      if (invert)
 +	{
-+#if 0
 +	  temp = expand_simple_unop (mode, NOT, temp, NULL_RTX, true);
 +	  if (!temp)
-+#endif
 +	    goto fail;
 +	}
++
 +      temp = expand_simple_binop (mode, IOR, temp, GEN_INT (val_a),
 +				  if_info->x, false, OPTAB_WIDEN);
 +    }
-+#if 0
 +  else if (val_a == 0)
 +    {
 +      if (code == LT)
++	invert = !invert;
++
++      if (invert)
 +	{
-+#if 0
 +	  temp = expand_simple_unop (mode, NOT, temp, NULL_RTX, true);
 +	  if (!temp)
-+#endif
 +	    goto fail;
 +	}
 +      temp = expand_simple_binop (mode, AND, temp, GEN_INT (val_b),
 +				  if_info->x, false, OPTAB_WIDEN);
 +    }
-+#endif
 +  /* Nothing worked.  */
 +  else
 +    temp = NULL_RTX;
@@ -165,7 +179,7 @@ index a0c6575e4e42..7eddd0c0cd42 100644
  /* Try forming an IF_THEN_ELSE (cond, b, a) and collapsing that
     through simplify_rtx.  Sometimes that can eliminate the IF_THEN_ELSE.
     If that is the case, emit the result into x.  */
-@@ -4238,6 +4394,8 @@ noce_process_if_block (struct noce_if_info *if_info)
+@@ -4238,6 +4408,8 @@ noce_process_if_block (struct noce_if_info *if_info)
    if (!targetm.have_conditional_execution ()
        && noce_try_store_flag_constants (if_info))
      goto success;
