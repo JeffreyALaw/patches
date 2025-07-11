@@ -1,8 +1,8 @@
 diff --git a/gcc/ifcvt.cc b/gcc/ifcvt.cc
-index a0c6575e4e42..308623db7033 100644
+index a0c6575e4e42..8b37394d2ed8 100644
 --- a/gcc/ifcvt.cc
 +++ b/gcc/ifcvt.cc
-@@ -1179,6 +1179,176 @@ noce_try_move (struct noce_if_info *if_info)
+@@ -1179,6 +1179,178 @@ noce_try_move (struct noce_if_info *if_info)
    return false;
  }
  
@@ -45,12 +45,14 @@ index a0c6575e4e42..308623db7033 100644
 +     elsehwere.  Clearly there's something about the structure if ifcvt
 +     I don't yet understand.  */
 +  bool invert = false;
++#if 0
 +  if (EDGE_SUCC (if_info->test_bb, 0)->flags & EDGE_FALLTHRU)
 +    ;
 +  else if (EDGE_SUCC (if_info->test_bb, 1)->flags & EDGE_FALLTHRU)
 +    invert = true;
 +  else
 +    gcc_unreachable ();
++#endif
 +  
 +  machine_mode mode = GET_MODE (if_info->x);
 +
@@ -179,7 +181,7 @@ index a0c6575e4e42..308623db7033 100644
  /* Try forming an IF_THEN_ELSE (cond, b, a) and collapsing that
     through simplify_rtx.  Sometimes that can eliminate the IF_THEN_ELSE.
     If that is the case, emit the result into x.  */
-@@ -4238,6 +4408,8 @@ noce_process_if_block (struct noce_if_info *if_info)
+@@ -4238,6 +4410,8 @@ noce_process_if_block (struct noce_if_info *if_info)
    if (!targetm.have_conditional_execution ()
        && noce_try_store_flag_constants (if_info))
      goto success;
