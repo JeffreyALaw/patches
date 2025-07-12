@@ -1,82 +1,7 @@
-
-
-This pattern enables the combine pass (or late-combine, depending on the case)
-to merge a float_extend'ed vec_duplicate into a plus-mult or minus-mult RTL
-instruction.
-
-Before this patch, we have three instructions, e.g.:
-  fcvt.s.h       fa5,fa5
-  vfmv.v.f       v24,fa5
-  vfmadd.vv      v8,v24,v16
-
-After, we get only one:
-  vfwmacc.vf     v8,fa5,v16
-
-	PR target/119100
-
-gcc/ChangeLog:
-
-	* config/riscv/autovec-opt.md (*vfwmacc_vf_<mode>): New pattern to
-	handle both vfwmacc and vfwmsac.
-	(*extend_vf_<mode>): New pattern that serves as an intermediate combine
-	step.
-	* config/riscv/vector-iterators.md (vsubel): New mode attribute. This is
-	just the lower-case version of VSUBEL.
-	* config/riscv/vector.md (@pred_widen_mul_<optab><mode>_scalar): Reorder
-	and swap operands to match the RTL emitted by expand, i.e. first
-	float_extend then vec_duplicate.
-
-gcc/testsuite/ChangeLog:
-
-	* gcc.target/riscv/rvv/autovec/vx_vf/vf-1-f16.c: Add vfwmacc and
-	vfwmsac.
-	* gcc.target/riscv/rvv/autovec/vx_vf/vf-1-f32.c: Likewise.
-	* gcc.target/riscv/rvv/autovec/vx_vf/vf-2-f16.c: Likewise. Also check
-	for fcvt and vfmv.
-	* gcc.target/riscv/rvv/autovec/vx_vf/vf-2-f32.c: Likewise.
-	* gcc.target/riscv/rvv/autovec/vx_vf/vf-3-f16.c: Add vfwmacc and
-	vfwmsac.
-	* gcc.target/riscv/rvv/autovec/vx_vf/vf-3-f32.c: Likewise.
-	* gcc.target/riscv/rvv/autovec/vx_vf/vf-4-f16.c: Likewise. Also check
-	for fcvt and vfmv.
-	* gcc.target/riscv/rvv/autovec/vx_vf/vf-4-f32.c: Likewise.
-	* gcc.target/riscv/rvv/autovec/vx_vf/vf_mulop.h: Add support for
-	widening variants.
-	* gcc.target/riscv/rvv/autovec/vx_vf/vf_mulop_widen_run.h: New test
-	helper.
-	* gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmacc-run-1-f16.c: New test.
-	* gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmacc-run-1-f32.c: New test.
-	* gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmsac-run-1-f16.c: New test.
-	* gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmsac-run-1-f32.c: New test.
----
- gcc/config/riscv/autovec-opt.md               | 48 +++++++++++++++++++
- gcc/config/riscv/vector-iterators.md          | 41 ++++++++++++++++
- gcc/config/riscv/vector.md                    |  8 ++--
- .../riscv/rvv/autovec/vx_vf/vf-1-f16.c        |  4 ++
- .../riscv/rvv/autovec/vx_vf/vf-1-f32.c        |  4 ++
- .../riscv/rvv/autovec/vx_vf/vf-2-f16.c        |  4 ++
- .../riscv/rvv/autovec/vx_vf/vf-2-f32.c        |  4 ++
- .../riscv/rvv/autovec/vx_vf/vf-3-f16.c        |  4 ++
- .../riscv/rvv/autovec/vx_vf/vf-3-f32.c        |  4 ++
- .../riscv/rvv/autovec/vx_vf/vf-4-f16.c        |  3 ++
- .../riscv/rvv/autovec/vx_vf/vf-4-f32.c        |  3 ++
- .../riscv/rvv/autovec/vx_vf/vf_mulop.h        | 30 ++++++++++++
- .../rvv/autovec/vx_vf/vf_mulop_widen_run.h    | 32 +++++++++++++
- .../rvv/autovec/vx_vf/vf_vfwmacc-run-1-f16.c  | 17 +++++++
- .../rvv/autovec/vx_vf/vf_vfwmacc-run-1-f32.c  | 17 +++++++
- .../rvv/autovec/vx_vf/vf_vfwmsac-run-1-f16.c  | 17 +++++++
- .../rvv/autovec/vx_vf/vf_vfwmsac-run-1-f32.c  | 17 +++++++
- 17 files changed, 253 insertions(+), 4 deletions(-)
- create mode 100644 gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_mulop_widen_run.h
- create mode 100644 gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmacc-run-1-f16.c
- create mode 100644 gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmacc-run-1-f32.c
- create mode 100644 gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmsac-run-1-f16.c
- create mode 100644 gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmsac-run-1-f32.c
-
-diff --git gcc/config/riscv/autovec-opt.md gcc/config/riscv/autovec-opt.md
+diff --git a/gcc/config/riscv/autovec-opt.md b/gcc/config/riscv/autovec-opt.md
 index 8df7f6494cf..f372f0e6a69 100644
---- gcc/config/riscv/autovec-opt.md
-+++ gcc/config/riscv/autovec-opt.md
+--- a/gcc/config/riscv/autovec-opt.md
++++ b/gcc/config/riscv/autovec-opt.md
 @@ -1725,6 +1725,8 @@ (define_insn_and_split "*<optab>_vx_<mode>"
  ;; - vfmsac.vf
  ;; - vfnmacc.vf
@@ -136,10 +61,10 @@ index 8df7f6494cf..f372f0e6a69 100644
 +  }
 +  [(set_attr "type" "vfwmuladd")]
 +)
-diff --git gcc/config/riscv/vector-iterators.md gcc/config/riscv/vector-iterators.md
+diff --git a/gcc/config/riscv/vector-iterators.md b/gcc/config/riscv/vector-iterators.md
 index e60e3a8399c..5f6cc42b46b 100644
---- gcc/config/riscv/vector-iterators.md
-+++ gcc/config/riscv/vector-iterators.md
+--- a/gcc/config/riscv/vector-iterators.md
++++ b/gcc/config/riscv/vector-iterators.md
 @@ -2418,6 +2418,47 @@ (define_mode_attr vsingle [
    (RVVM1x2DF "rvvm1df")
  ])
@@ -188,11 +113,11 @@ index e60e3a8399c..5f6cc42b46b 100644
  (define_mode_attr VSUBEL [
    (RVVM8HI "QI") (RVVM4HI "QI") (RVVM2HI "QI") (RVVM1HI "QI") (RVVMF2HI "QI") (RVVMF4HI "QI")
  
-diff --git gcc/config/riscv/vector.md gcc/config/riscv/vector.md
-index 2046f04a02c..f51baf61911 100644
---- gcc/config/riscv/vector.md
-+++ gcc/config/riscv/vector.md
-@@ -7267,10 +7267,10 @@ (define_insn "@pred_widen_mul_<optab><mode>_scalar"
+diff --git a/gcc/config/riscv/vector.md b/gcc/config/riscv/vector.md
+index c5b23b37f7d..baf215b8a44 100644
+--- a/gcc/config/riscv/vector.md
++++ b/gcc/config/riscv/vector.md
+@@ -7299,10 +7299,10 @@ (define_insn "@pred_widen_mul_<optab><mode>_scalar"
  	  (plus_minus:VWEXTF
  	    (mult:VWEXTF
  	      (float_extend:VWEXTF
@@ -207,10 +132,10 @@ index 2046f04a02c..f51baf61911 100644
  	    (match_operand:VWEXTF 2 "register_operand"               "    0"))
  	  (match_dup 2)))]
    "TARGET_VECTOR"
-diff --git gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-1-f16.c gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-1-f16.c
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-1-f16.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-1-f16.c
 index 05cf57cc8cb..b17fd8ec1f1 100644
---- gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-1-f16.c
-+++ gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-1-f16.c
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-1-f16.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-1-f16.c
 @@ -11,6 +11,8 @@ DEF_VF_MULOP_ACC_CASE_0 (_Float16, +, +, acc)
  DEF_VF_MULOP_ACC_CASE_0 (_Float16, -, +, sac)
  DEF_VF_MULOP_ACC_CASE_0 (_Float16, +, -, nacc)
@@ -226,10 +151,10 @@ index 05cf57cc8cb..b17fd8ec1f1 100644
  /* { dg-final { scan-assembler-times {vfnmsac.vf} 1 } } */
 +/* { dg-final { scan-assembler-times {vfwmacc.vf} 1 } } */
 +/* { dg-final { scan-assembler-times {vfwmsac.vf} 1 } } */
-diff --git gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-1-f32.c gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-1-f32.c
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-1-f32.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-1-f32.c
 index 873e3151347..efd887dc8bf 100644
---- gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-1-f32.c
-+++ gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-1-f32.c
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-1-f32.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-1-f32.c
 @@ -11,6 +11,8 @@ DEF_VF_MULOP_ACC_CASE_0 (float, +, +, acc)
  DEF_VF_MULOP_ACC_CASE_0 (float, -, +, sac)
  DEF_VF_MULOP_ACC_CASE_0 (float, +, -, nacc)
@@ -245,10 +170,10 @@ index 873e3151347..efd887dc8bf 100644
  /* { dg-final { scan-assembler-times {vfnmsac.vf} 1 } } */
 +/* { dg-final { scan-assembler-times {vfwmacc.vf} 1 } } */
 +/* { dg-final { scan-assembler-times {vfwmsac.vf} 1 } } */
-diff --git gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-2-f16.c gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-2-f16.c
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-2-f16.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-2-f16.c
 index 78127b6dabb..84987a9c0f4 100644
---- gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-2-f16.c
-+++ gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-2-f16.c
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-2-f16.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-2-f16.c
 @@ -11,3 +11,7 @@
  /* { dg-final { scan-assembler-not {vfmsac.vf} } } */
  /* { dg-final { scan-assembler-not {vfnmacc.vf} } } */
@@ -257,10 +182,10 @@ index 78127b6dabb..84987a9c0f4 100644
 +/* { dg-final { scan-assembler-not {vfwmsac.vf} } } */
 +/* { dg-final { scan-assembler-times {fcvt.s.h} 2 } } */
 +/* { dg-final { scan-assembler-times {vfmv.v.f} 10 } } */
-diff --git gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-2-f32.c gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-2-f32.c
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-2-f32.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-2-f32.c
 index 30d57e0c757..dbd3d022d5e 100644
---- gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-2-f32.c
-+++ gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-2-f32.c
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-2-f32.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-2-f32.c
 @@ -11,3 +11,7 @@
  /* { dg-final { scan-assembler-not {vfmsac.vf} } } */
  /* { dg-final { scan-assembler-not {vfnmacc.vf} } } */
@@ -269,10 +194,10 @@ index 30d57e0c757..dbd3d022d5e 100644
 +/* { dg-final { scan-assembler-not {vfwmsac.vf} } } */
 +/* { dg-final { scan-assembler-times {fcvt.d.s} 2 } } */
 +/* { dg-final { scan-assembler-times {vfmv.v.f} 10 } } */
-diff --git gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-3-f16.c gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-3-f16.c
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-3-f16.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-3-f16.c
 index 8295ffb7d53..5f0d7585e65 100644
---- gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-3-f16.c
-+++ gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-3-f16.c
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-3-f16.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-3-f16.c
 @@ -11,6 +11,8 @@ DEF_VF_MULOP_ACC_CASE_1 (_Float16, +, +, acc, VF_MULOP_ACC_BODY_X128)
  DEF_VF_MULOP_ACC_CASE_1 (_Float16, -, +, sac, VF_MULOP_ACC_BODY_X128)
  DEF_VF_MULOP_ACC_CASE_1 (_Float16, +, -, nacc, VF_MULOP_ACC_BODY_X128)
@@ -288,10 +213,10 @@ index 8295ffb7d53..5f0d7585e65 100644
  /* { dg-final { scan-assembler {vfnmsac.vf} } } */
 +/* { dg-final { scan-assembler {vfwmacc.vf} } } */
 +/* { dg-final { scan-assembler {vfwmsac.vf} } } */
-diff --git gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-3-f32.c gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-3-f32.c
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-3-f32.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-3-f32.c
 index f237f848d03..951b0ef2a67 100644
---- gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-3-f32.c
-+++ gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-3-f32.c
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-3-f32.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-3-f32.c
 @@ -11,6 +11,8 @@ DEF_VF_MULOP_ACC_CASE_1 (float, +, +, acc, VF_MULOP_ACC_BODY_X128)
  DEF_VF_MULOP_ACC_CASE_1 (float, -, +, sac, VF_MULOP_ACC_BODY_X128)
  DEF_VF_MULOP_ACC_CASE_1 (float, +, -, nacc, VF_MULOP_ACC_BODY_X128)
@@ -307,10 +232,10 @@ index f237f848d03..951b0ef2a67 100644
  /* { dg-final { scan-assembler {vfnmsac.vf} } } */
 +/* { dg-final { scan-assembler {vfwmacc.vf} } } */
 +/* { dg-final { scan-assembler {vfwmsac.vf} } } */
-diff --git gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-4-f16.c gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-4-f16.c
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-4-f16.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-4-f16.c
 index 7a50f674337..a4edd92f1ef 100644
---- gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-4-f16.c
-+++ gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-4-f16.c
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-4-f16.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-4-f16.c
 @@ -11,3 +11,6 @@
  /* { dg-final { scan-assembler-not {vfmsac.vf} } } */
  /* { dg-final { scan-assembler-not {vfnmacc.vf} } } */
@@ -318,10 +243,10 @@ index 7a50f674337..a4edd92f1ef 100644
 +/* { dg-final { scan-assembler-not {vfwmacc.vf} } } */
 +/* { dg-final { scan-assembler-not {vfwmsac.vf} } } */
 +/* { dg-final { scan-assembler {fcvt.s.h} } } */
-diff --git gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-4-f32.c gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-4-f32.c
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-4-f32.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-4-f32.c
 index fb0493ea72c..4eb28e585a0 100644
---- gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-4-f32.c
-+++ gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-4-f32.c
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-4-f32.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf-4-f32.c
 @@ -11,3 +11,6 @@
  /* { dg-final { scan-assembler-not {vfmsac.vf} } } */
  /* { dg-final { scan-assembler-not {vfnmacc.vf} } } */
@@ -329,10 +254,10 @@ index fb0493ea72c..4eb28e585a0 100644
 +/* { dg-final { scan-assembler-not {vfwmacc.vf} } } */
 +/* { dg-final { scan-assembler-not {vfwmsac.vf} } } */
 +/* { dg-final { scan-assembler {fcvt.d.s} } } */
-diff --git gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_mulop.h gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_mulop.h
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_mulop.h b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_mulop.h
 index 1659f78beea..b1a324f65ce 100644
---- gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_mulop.h
-+++ gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_mulop.h
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_mulop.h
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_mulop.h
 @@ -34,6 +34,21 @@
  #define RUN_VF_MULOP_ACC_CASE_0_WRAP(T, NAME, out, in, x, n)                   \
    RUN_VF_MULOP_ACC_CASE_0 (T, NAME, out, in, x, n)
@@ -375,11 +300,11 @@ index 1659f78beea..b1a324f65ce 100644
 +  }
 +
  #endif
-diff --git gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_mulop_widen_run.h gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_mulop_widen_run.h
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_mulop_widen_run.h b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_mulop_widen_run.h
 new file mode 100644
 index 00000000000..9f95fbba535
 --- /dev/null
-+++ gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_mulop_widen_run.h
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_mulop_widen_run.h
 @@ -0,0 +1,32 @@
 +#ifndef HAVE_DEFINED_VF_MULOP_WIDEN_RUN_H
 +#define HAVE_DEFINED_VF_MULOP_WIDEN_RUN_H
@@ -413,11 +338,11 @@ index 00000000000..9f95fbba535
 +}
 +
 +#endif
-diff --git gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmacc-run-1-f16.c gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmacc-run-1-f16.c
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmacc-run-1-f16.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmacc-run-1-f16.c
 new file mode 100644
 index 00000000000..d78cf7384a4
 --- /dev/null
-+++ gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmacc-run-1-f16.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmacc-run-1-f16.c
 @@ -0,0 +1,17 @@
 +/* { dg-do run { target { riscv_v } } } */
 +/* { dg-additional-options "-march=rv64gcv_zvfh --param=fpr2vr-cost=0" } */
@@ -436,11 +361,11 @@ index 00000000000..d78cf7384a4
 +#define LIMIT -32768
 +
 +#include "vf_mulop_widen_run.h"
-diff --git gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmacc-run-1-f32.c gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmacc-run-1-f32.c
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmacc-run-1-f32.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmacc-run-1-f32.c
 new file mode 100644
 index 00000000000..1af5240b285
 --- /dev/null
-+++ gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmacc-run-1-f32.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmacc-run-1-f32.c
 @@ -0,0 +1,17 @@
 +/* { dg-do run { target { riscv_v } } } */
 +/* { dg-additional-options "--param=fpr2vr-cost=0" } */
@@ -459,11 +384,11 @@ index 00000000000..1af5240b285
 +#define LIMIT -2147483648
 +
 +#include "vf_mulop_widen_run.h"
-diff --git gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmsac-run-1-f16.c gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmsac-run-1-f16.c
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmsac-run-1-f16.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmsac-run-1-f16.c
 new file mode 100644
 index 00000000000..6422bbaa496
 --- /dev/null
-+++ gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmsac-run-1-f16.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmsac-run-1-f16.c
 @@ -0,0 +1,17 @@
 +/* { dg-do run { target { riscv_v } } } */
 +/* { dg-additional-options "-march=rv64gcv_zvfh --param=fpr2vr-cost=0" } */
@@ -482,11 +407,11 @@ index 00000000000..6422bbaa496
 +#define LIMIT -32768
 +
 +#include "vf_mulop_widen_run.h"
-diff --git gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmsac-run-1-f32.c gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmsac-run-1-f32.c
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmsac-run-1-f32.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmsac-run-1-f32.c
 new file mode 100644
 index 00000000000..13617a090d7
 --- /dev/null
-+++ gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmsac-run-1-f32.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vx_vf/vf_vfwmsac-run-1-f32.c
 @@ -0,0 +1,17 @@
 +/* { dg-do run { target { riscv_v } } } */
 +/* { dg-additional-options "--param=fpr2vr-cost=0" } */
@@ -505,7 +430,3 @@ index 00000000000..13617a090d7
 +#define LIMIT -2147483648
 +
 +#include "vf_mulop_widen_run.h"
--- 
-2.39.5
-
-
