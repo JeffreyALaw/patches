@@ -94,4 +94,4 @@ gcc/testsuite/g++.dg/warn/Wsequence-point-5.C
 gcc/testsuite/gfortran.dg/pr120191_1.f90
 
 # Not sure if this is mine or someone else's
-gcc/testsuite/c-c++-common/torture/pr116156.c
+gcc/testsuite/c-c++-common/torture/pr116156-1.c
