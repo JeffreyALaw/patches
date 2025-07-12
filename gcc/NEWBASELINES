@@ -1,3 +1,6 @@
 # This file contains the job names that need fresh baselines.  In general it
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
+riscv32-elf
+riscv64-elf
+riscv64-linux-gnu
