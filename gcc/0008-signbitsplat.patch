@@ -1,8 +1,8 @@
 diff --git a/gcc/ifcvt.cc b/gcc/ifcvt.cc
-index a0c6575e4e42..8b37394d2ed8 100644
+index a0c6575e4e42..6de22c5264c9 100644
 --- a/gcc/ifcvt.cc
 +++ b/gcc/ifcvt.cc
-@@ -1179,6 +1179,178 @@ noce_try_move (struct noce_if_info *if_info)
+@@ -1179,6 +1179,161 @@ noce_try_move (struct noce_if_info *if_info)
    return false;
  }
  
@@ -19,13 +19,15 @@ index a0c6575e4e42..8b37394d2ed8 100644
 +  rtx cond = if_info->cond;
 +  enum rtx_code code = GET_CODE (cond);
 +
-+  /* We're looking for sign bit tests, so LT/GE are the only cases
++  /* We're looking for sign bit tests, so only a few cases are
++     interesting.  LT/GE 0 LE/GT -1.  */
 +     we care about.  */
-+  if (code != LT && code != GE)
-+    return false;
-+
-+  /* And we only care if comparing LT 0, GE 0.  */
-+  if (XEXP (cond, 1) != CONST0_RTX (GET_MODE (cond)))
++  if (((code == LT || code == GE)
++       && XEXP (cond, 1) == CONST0_RTX (GET_MODE (cond)))
++      || ((code == LE || code == GT)
++	  && XEXP (cond, 1) == CONSTM1_RTX (GET_MODE (cond))))
++    ;
++  else
 +    return false;
 +
 +  /* It would be good if this could be extended since constant synthesis
@@ -41,19 +43,6 @@ index a0c6575e4e42..8b37394d2ed8 100644
 +      || !REG_P (if_info->x))
 +    return false;
 +
-+  /* WTF  This seems like it's just papering over a problem or inconsistency
-+     elsehwere.  Clearly there's something about the structure if ifcvt
-+     I don't yet understand.  */
-+  bool invert = false;
-+#if 0
-+  if (EDGE_SUCC (if_info->test_bb, 0)->flags & EDGE_FALLTHRU)
-+    ;
-+  else if (EDGE_SUCC (if_info->test_bb, 1)->flags & EDGE_FALLTHRU)
-+    invert = true;
-+  else
-+    gcc_unreachable ();
-+#endif
-+  
 +  machine_mode mode = GET_MODE (if_info->x);
 +
 +  /* If the mode of the destination does not match the mode of
@@ -71,7 +60,12 @@ index a0c6575e4e42..8b37394d2ed8 100644
 +  rtx condop = XEXP (cond, 0);
 +
 +  /* To splat the sign bit we arithmetically shift the
-+     input value right by the size of the object - 1 bits.  */
++     input value right by the size of the object - 1 bits. 
++
++     Note some targets do not have strong shifters, but do have
++     alternative ways to generate the sign bit splat.  The
++     profitability test when we end the sequence should reject
++     cases when the branchy sequence is better.  */
 +  int splat_count = GET_MODE_BITSIZE (GET_MODE (condop)).to_constant () - 1;
 +  rtx splat = GEN_INT (splat_count);
 +
@@ -87,10 +81,7 @@ index a0c6575e4e42..8b37394d2ed8 100644
 +     an arbitrary constant.  */
 +  if (val_a == -1)
 +    {
-+      if (code == LT)
-+	invert = !invert;
-+
-+      if (invert)
++      if (code == LT || code == LE)
 +	{
 +	  temp = expand_simple_unop (mode, NOT, temp, NULL_RTX, true);
 +	  if (!temp)
@@ -105,10 +96,7 @@ index a0c6575e4e42..8b37394d2ed8 100644
 +     between the constant and zero.  */
 +  else if (val_b == 0)
 +    {
-+      if (code == LT)
-+	invert = !invert;
-+
-+      if (invert)
++      if (code == LT || code == LE)
 +	{
 +	  temp = expand_simple_unop (mode, NOT, temp, NULL_RTX, true);
 +	  if (!temp)
@@ -123,10 +111,7 @@ index a0c6575e4e42..8b37394d2ed8 100644
 +     an extra instruction.  */
 +  else if (val_b == -1)
 +    {
-+      if (code != LT)
-+	invert = !invert;
-+
-+      if (invert)
++      if (code != LT && code != LE)
 +	{
 +	  temp = expand_simple_unop (mode, NOT, temp, NULL_RTX, true);
 +	  if (!temp)
@@ -138,10 +123,7 @@ index a0c6575e4e42..8b37394d2ed8 100644
 +    }
 +  else if (val_a == 0)
 +    {
-+      if (code != LT)
-+	invert = !invert;
-+
-+      if (invert)
++      if (code != LT && code != LE)
 +	{
 +	  temp = expand_simple_unop (mode, NOT, temp, NULL_RTX, true);
 +	  if (!temp)
@@ -157,7 +139,8 @@ index a0c6575e4e42..8b37394d2ed8 100644
 +  if (!temp)
 +    goto fail;
 +
-+  /* Move into the final destination.  */
++  /* Move into the final destination if the value wasn't
++     constructed there.  */
 +  if (if_info->x != temp)
 +    emit_move_insn (if_info->x, temp);
 +
@@ -181,7 +164,7 @@ index a0c6575e4e42..8b37394d2ed8 100644
  /* Try forming an IF_THEN_ELSE (cond, b, a) and collapsing that
     through simplify_rtx.  Sometimes that can eliminate the IF_THEN_ELSE.
     If that is the case, emit the result into x.  */
-@@ -4238,6 +4410,8 @@ noce_process_if_block (struct noce_if_info *if_info)
+@@ -4238,6 +4393,8 @@ noce_process_if_block (struct noce_if_info *if_info)
    if (!targetm.have_conditional_execution ()
        && noce_try_store_flag_constants (if_info))
      goto success;
