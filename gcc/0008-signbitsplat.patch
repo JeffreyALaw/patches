@@ -2,7 +2,7 @@ diff --git a/gcc/ifcvt.cc b/gcc/ifcvt.cc
 index a0c6575e4e42..6de22c5264c9 100644
 --- a/gcc/ifcvt.cc
 +++ b/gcc/ifcvt.cc
-@@ -1179,6 +1179,161 @@ noce_try_move (struct noce_if_info *if_info)
+@@ -1179,6 +1179,160 @@ noce_try_move (struct noce_if_info *if_info)
    return false;
  }
  
@@ -21,7 +21,6 @@ index a0c6575e4e42..6de22c5264c9 100644
 +
 +  /* We're looking for sign bit tests, so only a few cases are
 +     interesting.  LT/GE 0 LE/GT -1.  */
-+     we care about.  */
 +  if (((code == LT || code == GE)
 +       && XEXP (cond, 1) == CONST0_RTX (GET_MODE (cond)))
 +      || ((code == LE || code == GT)
