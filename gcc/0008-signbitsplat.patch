@@ -1,8 +1,8 @@
 diff --git a/gcc/ifcvt.cc b/gcc/ifcvt.cc
-index a0c6575e4e42..41f435a5efe1 100644
+index a0c6575e4e42..8113c0ff22e7 100644
 --- a/gcc/ifcvt.cc
 +++ b/gcc/ifcvt.cc
-@@ -1179,6 +1179,160 @@ noce_try_move (struct noce_if_info *if_info)
+@@ -1179,6 +1179,207 @@ noce_try_move (struct noce_if_info *if_info)
    return false;
  }
  
@@ -102,8 +102,31 @@ index a0c6575e4e42..41f435a5efe1 100644
 +	    goto fail;
 +	}
 +
-+      temp = expand_simple_binop (mode, AND, temp, GEN_INT (val_a),
-+				  if_info->x, false, OPTAB_WIDEN);
++      /* Since we know the value is currenly -1 or 0, some constants may
++	 be more easily handled by shifting the value again.  A right
++	 logical shift constructs 2^n-1 constants a left shift constructs
++	 ~(2^n-1) constants.  Given some targets don't have efficient
++	 shifts, generate the obvious RTL for both forms and select the
++	 one with smaller cost.  */
++      rtx and_form = gen_rtx_AND (mode, temp, GEN_INT (val_a));
++      rtx shift_left = gen_rtx_ASHIFT (mode, temp, GEN_INT (ctz_hwi (val_a)));
++      rtx shift_right = gen_rtx_LSHIFTRT (mode, temp, GEN_INT (clz_hwi (val_a)));
++      bool speed_p = optimize_insn_for_speed_p ();
++      if (exact_log2 (val_a + 1) >= 0
++	  && (rtx_cost (shift_right, mode, SET, 1, speed_p)
++	      <= rtx_cost (and_form, mode, SET, 1, speed_p)))
++	temp = expand_simple_binop (mode, LSHIFTRT, temp,
++				    GEN_INT (clz_hwi (val_a)),
++				    if_info->x, false, OPTAB_WIDEN);
++      else if (exact_log2 (~val_a + 1) >= 0
++	       && (rtx_cost (shift_right, mode, SET, 1, speed_p)
++		   <= rtx_cost (and_form, mode, SET, 1, speed_p)))
++	temp = expand_simple_binop (mode, ASHIFT, temp,
++				    GEN_INT (ctz_hwi (val_a)),
++				    if_info->x, false, OPTAB_WIDEN);
++      else
++	temp = expand_simple_binop (mode, AND, temp, GEN_INT (val_a),
++				    if_info->x, false, OPTAB_WIDEN);
 +    }
 +  /* Same cases, but with the test or arms swapped.  These
 +     can be realized as well, though it typically costs
@@ -128,8 +151,32 @@ index a0c6575e4e42..41f435a5efe1 100644
 +	  if (!temp)
 +	    goto fail;
 +	}
-+      temp = expand_simple_binop (mode, AND, temp, GEN_INT (val_b),
-+				  if_info->x, false, OPTAB_WIDEN);
++
++      /* Since we know the value is currenly -1 or 0, some constants may
++	 be more easily handled by shifting the value again.  A right
++	 logical shift constructs 2^n-1 constants a left shift constructs
++	 ~(2^n-1) constants.  Given some targets don't have efficient
++	 shifts, generate the obvious RTL for both forms and select the
++	 one with smaller cost.  */
++      rtx and_form = gen_rtx_AND (mode, temp, GEN_INT (val_b));
++      rtx shift_left = gen_rtx_ASHIFT (mode, temp, GEN_INT (ctz_hwi (val_b)));
++      rtx shift_right = gen_rtx_LSHIFTRT (mode, temp, GEN_INT (clz_hwi (val_b)));
++      bool speed_p = optimize_insn_for_speed_p ();
++      if (exact_log2 (val_b + 1) >= 0
++	  && (rtx_cost (shift_right, mode, SET, 1, speed_p)
++	      <= rtx_cost (and_form, mode, SET, 1, speed_p)))
++	temp = expand_simple_binop (mode, LSHIFTRT, temp,
++				    GEN_INT (clz_hwi (val_b)),
++				    if_info->x, false, OPTAB_WIDEN);
++      else if (exact_log2 (~val_b + 1) >= 0
++	       && (rtx_cost (shift_right, mode, SET, 1, speed_p)
++		   <= rtx_cost (and_form, mode, SET, 1, speed_p)))
++	temp = expand_simple_binop (mode, ASHIFT, temp,
++				    GEN_INT (ctz_hwi (val_b)),
++				    if_info->x, false, OPTAB_WIDEN);
++      else
++        temp = expand_simple_binop (mode, AND, temp, GEN_INT (val_b),
++				    if_info->x, false, OPTAB_WIDEN);
 +    }
 +  /* Nothing worked.  */
 +  else
@@ -163,7 +210,7 @@ index a0c6575e4e42..41f435a5efe1 100644
  /* Try forming an IF_THEN_ELSE (cond, b, a) and collapsing that
     through simplify_rtx.  Sometimes that can eliminate the IF_THEN_ELSE.
     If that is the case, emit the result into x.  */
-@@ -4238,6 +4392,8 @@ noce_process_if_block (struct noce_if_info *if_info)
+@@ -4238,6 +4439,8 @@ noce_process_if_block (struct noce_if_info *if_info)
    if (!targetm.have_conditional_execution ()
        && noce_try_store_flag_constants (if_info))
      goto success;
