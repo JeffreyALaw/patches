@@ -1,5 +1,5 @@
 diff --git a/gcc/ifcvt.cc b/gcc/ifcvt.cc
-index a0c6575e4e42..6de22c5264c9 100644
+index a0c6575e4e42..41f435a5efe1 100644
 --- a/gcc/ifcvt.cc
 +++ b/gcc/ifcvt.cc
 @@ -1179,6 +1179,160 @@ noce_try_move (struct noce_if_info *if_info)
@@ -145,7 +145,7 @@ index a0c6575e4e42..6de22c5264c9 100644
 +
 +  /* This ends the sequence and tests the cost model.  */
 +  seq = end_ifcvt_sequence (if_info);
-+  if (!seq)
++  if (!seq || !targetm.noce_conversion_profitable_p (seq, if_info))
 +    return false;
 +
 +  /* Everything looks good.  Install the if-converted sequence.  */
@@ -163,7 +163,7 @@ index a0c6575e4e42..6de22c5264c9 100644
  /* Try forming an IF_THEN_ELSE (cond, b, a) and collapsing that
     through simplify_rtx.  Sometimes that can eliminate the IF_THEN_ELSE.
     If that is the case, emit the result into x.  */
-@@ -4238,6 +4393,8 @@ noce_process_if_block (struct noce_if_info *if_info)
+@@ -4238,6 +4392,8 @@ noce_process_if_block (struct noce_if_info *if_info)
    if (!targetm.have_conditional_execution ()
        && noce_try_store_flag_constants (if_info))
      goto success;
