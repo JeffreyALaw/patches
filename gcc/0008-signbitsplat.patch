@@ -1,5 +1,5 @@
 diff --git a/gcc/ifcvt.cc b/gcc/ifcvt.cc
-index a0c6575e4e42..8113c0ff22e7 100644
+index a0c6575e4e42..fe520e419642 100644
 --- a/gcc/ifcvt.cc
 +++ b/gcc/ifcvt.cc
 @@ -1179,6 +1179,207 @@ noce_try_move (struct noce_if_info *if_info)
@@ -110,13 +110,13 @@ index a0c6575e4e42..8113c0ff22e7 100644
 +	 one with smaller cost.  */
 +      rtx and_form = gen_rtx_AND (mode, temp, GEN_INT (val_a));
 +      rtx shift_left = gen_rtx_ASHIFT (mode, temp, GEN_INT (ctz_hwi (val_a)));
-+      rtx shift_right = gen_rtx_LSHIFTRT (mode, temp, GEN_INT (clz_hwi (val_a)));
++      rtx shift_right = gen_rtx_LSHIFTRT (mode, temp, GEN_INT (ctz_hwi (~val_a)));
 +      bool speed_p = optimize_insn_for_speed_p ();
 +      if (exact_log2 (val_a + 1) >= 0
 +	  && (rtx_cost (shift_right, mode, SET, 1, speed_p)
 +	      <= rtx_cost (and_form, mode, SET, 1, speed_p)))
 +	temp = expand_simple_binop (mode, LSHIFTRT, temp,
-+				    GEN_INT (clz_hwi (val_a)),
++				    GEN_INT (ctz_hwi (~val_a)),
 +				    if_info->x, false, OPTAB_WIDEN);
 +      else if (exact_log2 (~val_a + 1) >= 0
 +	       && (rtx_cost (shift_right, mode, SET, 1, speed_p)
@@ -160,13 +160,13 @@ index a0c6575e4e42..8113c0ff22e7 100644
 +	 one with smaller cost.  */
 +      rtx and_form = gen_rtx_AND (mode, temp, GEN_INT (val_b));
 +      rtx shift_left = gen_rtx_ASHIFT (mode, temp, GEN_INT (ctz_hwi (val_b)));
-+      rtx shift_right = gen_rtx_LSHIFTRT (mode, temp, GEN_INT (clz_hwi (val_b)));
++      rtx shift_right = gen_rtx_LSHIFTRT (mode, temp, GEN_INT (ctz_hwi (~val_b)));
 +      bool speed_p = optimize_insn_for_speed_p ();
 +      if (exact_log2 (val_b + 1) >= 0
 +	  && (rtx_cost (shift_right, mode, SET, 1, speed_p)
 +	      <= rtx_cost (and_form, mode, SET, 1, speed_p)))
 +	temp = expand_simple_binop (mode, LSHIFTRT, temp,
-+				    GEN_INT (clz_hwi (val_b)),
++				    GEN_INT (ctz_hwi (~val_b)),
 +				    if_info->x, false, OPTAB_WIDEN);
 +      else if (exact_log2 (~val_b + 1) >= 0
 +	       && (rtx_cost (shift_right, mode, SET, 1, speed_p)
