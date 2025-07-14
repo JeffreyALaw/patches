@@ -1,5 +1,5 @@
 diff --git a/gcc/ifcvt.cc b/gcc/ifcvt.cc
-index a0c6575e4e42..fe520e419642 100644
+index a0c6575e4e42..1181b44ff3ea 100644
 --- a/gcc/ifcvt.cc
 +++ b/gcc/ifcvt.cc
 @@ -1179,6 +1179,207 @@ noce_try_move (struct noce_if_info *if_info)
@@ -119,7 +119,7 @@ index a0c6575e4e42..fe520e419642 100644
 +				    GEN_INT (ctz_hwi (~val_a)),
 +				    if_info->x, false, OPTAB_WIDEN);
 +      else if (exact_log2 (~val_a + 1) >= 0
-+	       && (rtx_cost (shift_right, mode, SET, 1, speed_p)
++	       && (rtx_cost (shift_left, mode, SET, 1, speed_p)
 +		   <= rtx_cost (and_form, mode, SET, 1, speed_p)))
 +	temp = expand_simple_binop (mode, ASHIFT, temp,
 +				    GEN_INT (ctz_hwi (val_a)),
@@ -169,7 +169,7 @@ index a0c6575e4e42..fe520e419642 100644
 +				    GEN_INT (ctz_hwi (~val_b)),
 +				    if_info->x, false, OPTAB_WIDEN);
 +      else if (exact_log2 (~val_b + 1) >= 0
-+	       && (rtx_cost (shift_right, mode, SET, 1, speed_p)
++	       && (rtx_cost (shift_left, mode, SET, 1, speed_p)
 +		   <= rtx_cost (and_form, mode, SET, 1, speed_p)))
 +	temp = expand_simple_binop (mode, ASHIFT, temp,
 +				    GEN_INT (ctz_hwi (val_b)),
