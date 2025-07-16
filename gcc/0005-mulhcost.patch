@@ -61,9 +61,10 @@ new file mode 100644
 index 00000000000..7932cb9a590
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/int_div.c
-@@ -0,0 +1,12 @@
+@@ -0,0 +1,13 @@
 +/* { dg-do compile } */
-+/* { dg-options "-march=rv64gc" } */
++/* { dg-options "-march=rv64gc -mabi=lp64d" { target rv64 } } */
++/* { dg-options "-march=rv32gc -mabi=ilp32" { target rv32 } } */
 +/* { dg-skip-if "" { *-*-* } { "-Os" "-Oz" } } */
 +
 +long
