@@ -50,7 +50,7 @@ index 44c508a4c31..4a885f9f177 100644
 +	  if (!speed)
 +	    *total = COSTS_N_INSNS (1);
 +	  else
-+	    *total = tune_param->int_mul[1];
++	    *total = tune_param->int_mul[mode == TImode];
 +	  return true;
 +	}
 +	/* Fall through.  */
