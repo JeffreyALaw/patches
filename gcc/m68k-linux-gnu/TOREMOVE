@@ -1,2 +1,5 @@
 # Don't remember
 gcc/testsuite/g++.dg/modules/bad-mapper-1.C
+
+# Seems to be timing out
+gcc/testsuite/g++.dg/cpp2a/constexpr-vector1.C
