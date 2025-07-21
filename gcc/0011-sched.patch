@@ -1,0 +1,25 @@
+diff --git a/gcc/config/riscv/mips-p8700.md b/gcc/config/riscv/mips-p8700.md
+index ae0ea8dc896..fac9abbb198 100644
+--- a/gcc/config/riscv/mips-p8700.md
++++ b/gcc/config/riscv/mips-p8700.md
+@@ -163,5 +163,5 @@ (define_insn_reservation "mips_p8700_unknown" 1
+    vgather,vcompress,vmov,vector,vandn,vbrev,vbrev8,vrev8,vclz,vctz,vcpop,vrol,vror,vwsll,
+    vclmul,vclmulh,vghsh,vgmul,vaesef,vaesem,vaesdf,vaesdm,vaeskf1,vaeskf2,vaesz,
+    vsha2ms,vsha2ch,vsha2cl,vsm4k,vsm4r,vsm3me,vsm3c,vfncvtbf16,vfwcvtbf16,vfwmaccbf16,
+-   sf_vc,sf_vc_se"))
++   sf_vc,sf_vc_se,ghost"))
+   "mips_p8700_dummies")
+diff --git a/gcc/config/riscv/xiangshan.md b/gcc/config/riscv/xiangshan.md
+index 5ed6bacdd70..34b4a8f1f3f 100644
+--- a/gcc/config/riscv/xiangshan.md
++++ b/gcc/config/riscv/xiangshan.md
+@@ -107,7 +107,8 @@ (define_insn_reservation "xiangshan_alu" 1
+ ;; they are just dummies like this one.
+ (define_insn_reservation "xiangshan_alu_unknown" 1
+   (and (eq_attr "tune" "xiangshan")
+-       (eq_attr "type" "zicond,min,max,minu,maxu,clz,ctz,cpop,ghost,rotate,clmul,condmove,crypto,mvpair,rdvlenb,rdvl,wrvxrm,wrfrm,rdfrm,vsetvl,vsetvl_pre,vlde,vste,vldm,vstm,vlds,vsts,vldux,vldox,vstux,vstox,vldff,vldr,vstr,vlsegde,vssegte,vlsegds,vssegts,vlsegdux,vlsegdox,vssegtux,vssegtox,vlsegdff,vialu,viwalu,vext,vicalu,vshift,vnshift,vicmp,viminmax,vimul,vidiv,viwmul,vimuladd,sf_vqmacc,viwmuladd,vimerge,vimov,vsalu,vaalu,vsmul,vsshift,vnclip,sf_vfnrclip,vfalu,vfwalu,vfmul,vfdiv,vfwmul,vfmuladd,vfwmuladd,vfsqrt,vfrecp,vfcmp,vfminmax,vfsgnj,vfclass,vfmerge,vfmov,vfcvtitof,vfcvtftoi,vfwcvtitof,vfwcvtftoi,vfwcvtftof,vfncvtitof,vfncvtftoi,vfncvtftof,vired,viwred,vfredu,vfredo,vfwredu,vfwredo,vmalu,vmpop,vmffs,vmsfs,vmiota,vmidx,vimovvx,vimovxv,vfmovvf,vfmovfv,vslideup,vslidedown,vislide1up,vislide1down,vfslide1up,vfslide1down,vgather,vcompress,vmov,vector,vandn,vbrev,vbrev8,vrev8,vclz,vctz,vcpop,vrol,vror,vwsll,vclmul,vclmulh,vghsh,vgmul,vaesef,vaesem,vaesdf,vaesdm,vaeskf1,vaeskf2,vaesz,vsha2ms,vsha2ch,vsha2cl,vsm4k,vsm4r,vsm3me,vsm3c,vfncvtbf16,vfwcvtbf16,vfwmaccbf16"))
++       (eq_attr "type" "zicond,min,max,minu,maxu,clz,ctz,cpop,ghost,rotate,clmul,condmove,crypto,mvpair,rdvlenb,rdvl,wrvxrm,wrfrm,rdfrm,vsetvl,vsetvl_pre,vlde,vste,vldm,vstm,vlds,vsts,vldux,vldox,vstux,vstox,vldff,vldr,vstr,vlsegde,vssegte,vlsegds,vssegts,vlsegdux,vlsegdox,vssegtux,vssegtox,vlsegdff,vialu,viwalu,vext,vicalu,vshift,vnshift,vicmp,viminmax,vimul,vidiv,viwmul,vimuladd,sf_vqmacc,viwmuladd,vimerge,vimov,vsalu,vaalu,vsmul,vsshift,vnclip,sf_vfnrclip,vfalu,vfwalu,vfmul,vfdiv,vfwmul,vfmuladd,vfwmuladd,vfsqrt,vfrecp,vfcmp,vfminmax,vfsgnj,vfclass,vfmerge,vfmov,vfcvtitof,vfcvtftoi,vfwcvtitof,vfwcvtftoi,vfwcvtftof,vfncvtitof,vfncvtftoi,vfncvtftof,vired,viwred,vfredu,vfredo,vfwredu,vfwredo,vmalu,vmpop,vmffs,vmsfs,vmiota,vmidx,vimovvx,vimovxv,vfmovvf,vfmovfv,vslideup,vslidedown,vislide1up,vislide1down,vfslide1up,vfslide1down,vgather,vcompress,vmov,vector,vandn,vbrev,vbrev8,vrev8,vclz,vctz,vcpop,vrol,vror,vwsll,vclmul,vclmulh,vghsh,vgmul,vaesef,vaesem,vaesdf,vaesdm,vaeskf1,vaeskf2,vaesz,vsha2ms,vsha2ch,vsha2cl,vsm4k,vsm4r,vsm3me,vsm3c,vfncvtbf16,vfwcvtbf16,vfwmaccbf16,sf_vc,sf_vc_se"))
++
+   "xs_alu_rs")
+ 
+ ;; ----------------------------------------------------
