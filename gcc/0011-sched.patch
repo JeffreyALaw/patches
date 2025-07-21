@@ -1,0 +1,532 @@
+diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
+index 21426f49679..650c88c7cbc 100644
+--- a/gcc/config/riscv/bitmanip.md
++++ b/gcc/config/riscv/bitmanip.md
+@@ -36,7 +36,7 @@ (define_insn "*shNadd"
+ 		(match_operand:X 3 "register_operand" "r")))]
+   "TARGET_ZBA"
+   "sh%2add\t%0,%1,%3"
+-  [(set_attr "type" "bitmanip")
++  [(set_attr "type" "shftadd")
+    (set_attr "mode" "<X:MODE>")])
+ 
+ ; When using strength-reduction, we will reduce a multiplication to a
+@@ -108,7 +108,7 @@ (define_insn_and_split "*andi_add.uw"
+ {
+ 	operands[3] = GEN_INT (INTVAL (operands[3]) >> INTVAL (operands[2]));
+ }
+-[(set_attr "type" "bitmanip")])
++[(set_attr "type" "shftadd")])
+ 
+ (define_insn "*shNadduw"
+   [(set (match_operand:DI 0 "register_operand" "=r")
+@@ -120,7 +120,7 @@ (define_insn "*shNadduw"
+   "TARGET_64BIT && TARGET_ZBA
+    && (INTVAL (operands[3]) >> INTVAL (operands[2])) == 0xffffffff"
+   "sh%2add.uw\t%0,%1,%4"
+-  [(set_attr "type" "bitmanip")
++  [(set_attr "type" "shftadd")
+    (set_attr "mode" "DI")])
+ 
+ ;; During combine, we may encounter an attempt to combine
+@@ -174,7 +174,7 @@ (define_insn "*add.uw"
+ 		 (match_operand:DI 2 "register_operand" "r")))]
+   "TARGET_64BIT && TARGET_ZBA"
+   "add.uw\t%0,%1,%2"
+-  [(set_attr "type" "bitmanip")
++  [(set_attr "type" "shftadd")
+    (set_attr "mode" "DI")])
+ 
+ (define_insn "*slliuw"
+diff --git a/gcc/config/riscv/generic-ooo.md b/gcc/config/riscv/generic-ooo.md
+index ae9430e4759..529e40313c2 100644
+--- a/gcc/config/riscv/generic-ooo.md
++++ b/gcc/config/riscv/generic-ooo.md
+@@ -87,7 +87,7 @@ (define_insn_reservation "generic_ooo_float_store" 6
+ (define_insn_reservation "generic_ooo_alu" 1
+   (and (eq_attr "tune" "generic_ooo")
+        (eq_attr "type" "unknown,const,arith,shift,slt,multi,auipc,nop,logical,\
+-			move,bitmanip,rotate,min,max,minu,maxu,clz,ctz,atomic,\
++			move,bitmanip,shftadd,rotate,min,max,minu,maxu,clz,ctz,atomic,\
+ 			condmove,mvpair,zicond"))
+   "generic_ooo_issue,generic_ooo_ixu_alu")
+ 
+@@ -105,7 +105,7 @@ (define_insn_reservation "generic_ooo_branch" 1
+ ;; Float move, convert and compare.
+ (define_insn_reservation "generic_ooo_float_move" 3
+   (and (eq_attr "tune" "generic_ooo")
+-       (eq_attr "type" "fmove"))
++       (eq_attr "type" "fmove,fsgnj"))
+   "generic_ooo_issue,generic_ooo_fxu")
+ 
+ (define_insn_reservation "generic_ooo_fcvt" 3
+diff --git a/gcc/config/riscv/generic.md b/gcc/config/riscv/generic.md
+index 9d1d3588d39..6e295d8ff10 100644
+--- a/gcc/config/riscv/generic.md
++++ b/gcc/config/riscv/generic.md
+@@ -28,7 +28,7 @@ (define_cpu_unit "fdivsqrt" "pipe0")
+ (define_insn_reservation "generic_alu" 1
+   (and (eq_attr "tune" "generic")
+        (eq_attr "type" "unknown,const,arith,shift,slt,multi,auipc,nop,logical,\
+-			move,bitmanip,min,max,minu,maxu,clz,ctz,rotate,atomic,\
++			move,bitmanip,shftadd,min,max,minu,maxu,clz,ctz,rotate,atomic,\
+ 			condmove,crypto,mvpair,zicond"))
+   "alu")
+ 
+@@ -44,7 +44,7 @@ (define_insn_reservation "generic_store" 1
+ 
+ (define_insn_reservation "generic_xfer" 3
+   (and (eq_attr "tune" "generic")
+-       (eq_attr "type" "mfc,mtc,fcvt,fcvt_i2f,fcvt_f2i,fmove,fcmp"))
++       (eq_attr "type" "mfc,mtc,fcvt,fcvt_i2f,fcvt_f2i,fmove,fsgnj,fcmp"))
+   "alu")
+ 
+ (define_insn_reservation "generic_branch" 1
+diff --git a/gcc/config/riscv/riscv-cores.def b/gcc/config/riscv/riscv-cores.def
+index 98f347034fb..b0353a1ce99 100644
+--- a/gcc/config/riscv/riscv-cores.def
++++ b/gcc/config/riscv/riscv-cores.def
+@@ -50,10 +50,10 @@ RISCV_TUNE("xt-c920", generic, generic_ooo_tune_info)
+ RISCV_TUNE("xt-c920v2", generic, generic_ooo_tune_info)
+ RISCV_TUNE("xiangshan-nanhu", xiangshan, xiangshan_nanhu_tune_info)
+ RISCV_TUNE("xiangshan-kunminghu", xiangshan, generic_ooo_tune_info)
++RISCV_TUNE("spacemit-x60", spacemit_x60, spacemit_x60_tune_info)
+ RISCV_TUNE("generic-ooo", generic_ooo, generic_ooo_tune_info)
+ RISCV_TUNE("size", generic, optimize_size_tune_info)
+ RISCV_TUNE("mips-p8700", mips_p8700, mips_p8700_tune_info)
+-
+ #undef RISCV_TUNE
+ 
+ /* This is a list of cores that implement RISC-V.
+@@ -171,4 +171,7 @@ RISCV_CORE("xiangshan-kunminghu",   "rv64imafdcbvh_sdtrig_sha_shcounterenw_"
+ 
+ RISCV_CORE("mips-p8700",      "rv64imfd_zicsr_zifencei_zalrsc_zba_zbb",
+ 			      "mips-p8700")
++RISCV_CORE("spacemit-x60",    "rv64imafdcv_zba_zbb_zbc_zbs_zicboz_zicond_"
++			      "zbkc_zfh_zvfh_zvkt_zvl256b_sscofpmf",
++			      "spacemit-x60")
+ #undef RISCV_CORE
+diff --git a/gcc/config/riscv/riscv-opts.h b/gcc/config/riscv/riscv-opts.h
+index e1a820bb50e..d16f0d3918c 100644
+--- a/gcc/config/riscv/riscv-opts.h
++++ b/gcc/config/riscv/riscv-opts.h
+@@ -60,6 +60,7 @@ enum riscv_microarchitecture_type {
+   xiangshan,
+   generic_ooo,
+   mips_p8700,
++  spacemit_x60,
+ };
+ extern enum riscv_microarchitecture_type riscv_microarchitecture;
+ 
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index 1275b034cf8..5de0ba789d3 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -626,6 +626,31 @@ static const struct riscv_tune_param xiangshan_nanhu_tune_info = {
+   NULL,						/* jump_align */
+   NULL,						/* loop_align */
+ };
++/*int_div estimated based on c908, not confirmed*/
++/*int mul latency is 5, mulh, mulhsu, mulhu is 6, worst case used*/
++/*some mem latency is 3, others is 5, worst case used*/
++/*fmv_x_h has latency 6, rest are latency 4, worst case used*/
++static const struct riscv_tune_param spacemit_x60_tune_info= {
++  {COSTS_N_INSNS (4), COSTS_N_INSNS (5)},	      /* fp_add */
++  {COSTS_N_INSNS (4), COSTS_N_INSNS (5)},       /* fp_mul */
++  {COSTS_N_INSNS (15), COSTS_N_INSNS (22)},     /* fp_div */
++  {COSTS_N_INSNS (3), COSTS_N_INSNS (6)},       /* int_mul */
++  {COSTS_N_INSNS (12), COSTS_N_INSNS (20)},     /* int_div */
++  2,                                            /* issue_rate */
++  3,                                            /* branch_cost */
++  5,                                            /* memory_cost */
++  6,                                            /* fmv_cost */
++  false,                                        /* slow_unaligned_access */
++  false,                                        /* vector_unaligned_access */
++  false,                                         /* use_divmod_expansion */
++  false,                                        /* overlap_op_by_pieces */
++  true,  					/* speculative_sched_vsetvl */
++  RISCV_FUSE_NOTHING,                           /* fusible_ops */
++  &generic_vector_cost,                         /* vector cost */
++  NULL,                                         /* function_align */
++  NULL,                                         /* jump_align */
++  NULL,                                         /* loop_align */
++};
+ 
+ /* Costs to use when optimizing for a generic ooo profile.  */
+ static const struct riscv_tune_param generic_ooo_tune_info = {
+diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
+index c3b504d0883..6ea1b232304 100644
+--- a/gcc/config/riscv/riscv.md
++++ b/gcc/config/riscv/riscv.md
+@@ -211,7 +211,7 @@ (define_attr "got" "unset,xgot_high,load"
+ ;; the split instructions; in some cases, it is more appropriate for the
+ ;; scheduling type to be "multi" instead.
+ (define_attr "move_type"
+-  "unknown,load,fpload,store,fpstore,mtc,mfc,move,fmove,
++  "unknown,load,fpload,store,fpstore,mtc,mfc,move,fmove,fsgnj,
+    const,logical,arith,andi,shift_shift,rdvlenb"
+   (const_string "unknown"))
+ 
+@@ -333,6 +333,7 @@ (define_attr "ext_enabled" "no,yes"
+ ;; idiv		integer divide
+ ;; move		integer register move (addi rd, rs1, 0)
+ ;; fmove	floating point register move
++;; fsgnj        fsgnj (floating point sign inject)
+ ;; fadd		floating point add/subtract
+ ;; fmul		floating point multiply
+ ;; fmadd	floating point multiply-add
+@@ -349,6 +350,7 @@ (define_attr "ext_enabled" "no,yes"
+ ;; trap		trap instruction
+ ;; ghost	an instruction that produces no real code
+ ;; bitmanip	bit manipulation instructions
++;; shftadd      shadd, add.uw
+ ;; clmul    clmul, clmulh, clmulr
+ ;; rotate   rotation instructions
+ ;; atomic   atomic instructions
+@@ -499,9 +501,9 @@ (define_attr "ext_enabled" "no,yes"
+ ;; sf_vc_se vector coprocessor interface with side effect
+ (define_attr "type"
+   "unknown,branch,jump,jalr,ret,call,load,fpload,store,fpstore,
+-   mtc,mfc,const,arith,logical,shift,slt,imul,idiv,move,fmove,fadd,fmul,
++   mtc,mfc,const,arith,logical,shift,slt,imul,idiv,move,fmove,fsgnj,fadd,fmul,
+    fmadd,fdiv,fcmp,fcvt,fcvt_i2f,fcvt_f2i,fsqrt,multi,auipc,sfb_alu,nop,trap,
+-   ghost,bitmanip,rotate,clmul,min,max,minu,maxu,clz,ctz,cpop,
++   ghost,bitmanip,shftadd,rotate,clmul,min,max,minu,maxu,clz,ctz,cpop,
+    atomic,condmove,crypto,mvpair,zicond,rdvlenb,rdvl,wrvxrm,wrfrm,
+    rdfrm,vsetvl,vsetvl_pre,vlde,vste,vldm,vstm,vlds,vsts,
+    vldux,vldox,vstux,vstox,vldff,vldr,vstr,
+@@ -534,6 +536,7 @@ (define_attr "type"
+ 
+ 	 ;; These types of move are always single insns.
+ 	 (eq_attr "move_type" "fmove") (const_string "fmove")
++	 (eq_attr "move_type" "fsgnj") (const_string "fsgnj")
+ 	 (eq_attr "move_type" "arith") (const_string "arith")
+ 	 (eq_attr "move_type" "logical") (const_string "logical")
+ 	 (eq_attr "move_type" "andi") (const_string "logical")
+@@ -670,9 +673,9 @@ (define_attr "length" ""
+ (define_attr "cannot_copy" "no,yes" (const_string "no"))
+ 
+ ;; Microarchitectures we know how to tune for.
+-;; Keep this in sync with enum riscv_microarchitecture.
++;; Keep this in sync with enum riscv_microarchitecture_type in riscv-opts.h
+ (define_attr "tune"
+-  "generic,sifive_7,sifive_p400,sifive_p600,xiangshan,generic_ooo,mips_p8700"
++  "generic,sifive_7,sifive_p400,sifive_p600,xiangshan,generic_ooo,mips_p8700,spacemit_x60"
+   (const (symbol_ref "((enum attr_tune) riscv_microarchitecture)")))
+ 
+ ;; Describe a user's asm statement.
+@@ -1642,7 +1645,7 @@ (define_insn "copysign<mode>3"
+ 		     UNSPEC_COPYSIGN))]
+   "TARGET_HARD_FLOAT || TARGET_ZFINX"
+   "fsgnj.<fmt>\t%0,%1,%2"
+-  [(set_attr "type" "fmove")
++  [(set_attr "type" "fsgnj")
+    (set_attr "mode" "<UNITMODE>")])
+ 
+ (define_insn "neg<mode>2"
+@@ -4898,3 +4901,4 @@ (define_split
+ (include "sifive-p600.md")
+ (include "generic-vector-ooo.md")
+ (include "generic-ooo.md")
++(include "spacemit-x60.md")
+diff --git a/gcc/config/riscv/sifive-7.md b/gcc/config/riscv/sifive-7.md
+index a04b80bff04..7ddcdc04446 100644
+--- a/gcc/config/riscv/sifive-7.md
++++ b/gcc/config/riscv/sifive-7.md
+@@ -67,7 +67,7 @@ (define_insn_reservation "sifive_7_div" 16
+ 
+ (define_insn_reservation "sifive_7_alu" 2
+   (and (eq_attr "tune" "sifive_7")
+-       (eq_attr "type" "unknown,arith,shift,slt,multi,logical,move,bitmanip,\
++       (eq_attr "type" "unknown,arith,shift,slt,multi,logical,move,bitmanip,shftadd,\
+ 			min,max,minu,maxu,atomic,condmove,mvpair,zicond"))
+   "sifive_7_A|sifive_7_B")
+ 
+@@ -101,7 +101,7 @@ (define_insn_reservation "sifive_7_dfma" 7
+ 
+ (define_insn_reservation "sifive_7_fp_other" 3
+   (and (eq_attr "tune" "sifive_7")
+-       (eq_attr "type" "fcvt,fcvt_i2f,fcvt_f2i,fcmp,fmove"))
++       (eq_attr "type" "fcvt,fcvt_i2f,fcvt_f2i,fcmp,fmove,fsgnj"))
+   "sifive_7_B")
+ 
+ (define_insn_reservation "sifive_7_fdiv_h" 14
+diff --git a/gcc/config/riscv/sifive-p400.md b/gcc/config/riscv/sifive-p400.md
+index ed8b8ec9da7..21a68a6c026 100644
+--- a/gcc/config/riscv/sifive-p400.md
++++ b/gcc/config/riscv/sifive-p400.md
+@@ -114,7 +114,7 @@ (define_insn_reservation "sifive_p400_div" 31
+ 
+ (define_insn_reservation "sifive_p400_alu" 1
+   (and (eq_attr "tune" "sifive_p400")
+-       (eq_attr "type" "unknown,arith,logical,shift,slt,multi,bitmanip,\
++       (eq_attr "type" "unknown,arith,logical,shift,slt,multi,bitmanip,shftadd,\
+ 			clz,ctz,rotate,min,max,minu,maxu,condmove,mvpair,zicond"))
+   "p400_int_pipe+sifive_p400_ialu")
+ 
+@@ -150,7 +150,7 @@ (define_insn_reservation "sifive_p400_f2i" 2
+ 
+ (define_insn_reservation "sifive_p400_fmove" 2
+   (and (eq_attr "tune" "sifive_p400")
+-       (eq_attr "type" "fmove,fcvt"))
++       (eq_attr "type" "fmove,fsgnj,fcvt"))
+   "p400_float_pipe,sifive_p400_fpu")
+ 
+ (define_insn_reservation "sifive_p400_fdiv_s" 18
+diff --git a/gcc/config/riscv/sifive-p600.md b/gcc/config/riscv/sifive-p600.md
+index 240134976fa..1c42be88379 100644
+--- a/gcc/config/riscv/sifive-p600.md
++++ b/gcc/config/riscv/sifive-p600.md
+@@ -118,7 +118,7 @@ (define_insn_reservation "sifive_p600_div" 16
+ 
+ (define_insn_reservation "sifive_p600_alu" 1
+   (and (eq_attr "tune" "sifive_p600")
+-       (eq_attr "type" "unknown,arith,logical,shift,slt,multi,bitmanip,\
++       (eq_attr "type" "unknown,arith,logical,shift,slt,multi,bitmanip,shftadd,\
+ 			clz,ctz,rotate,min,max,minu,maxu,condmove,mvpair,zicond"))
+   "int_pipe+sifive_p600_ialu")
+ 
+@@ -154,7 +154,7 @@ (define_insn_reservation "sifive_p600_f2i" 2
+ 
+ (define_insn_reservation "sifive_p600_fmove" 2
+   (and (eq_attr "tune" "sifive_p600")
+-       (eq_attr "type" "fmove,fcvt"))
++       (eq_attr "type" "fmove,fsgnj,fcvt"))
+   "float_pipe,sifive_p600_fpu")
+ 
+ (define_insn_reservation "sifive_p600_fdiv_s" 11
+diff --git a/gcc/config/riscv/spacemit-x60.md b/gcc/config/riscv/spacemit-x60.md
+new file mode 100644
+index 00000000000..d74d0869b80
+--- /dev/null
++++ b/gcc/config/riscv/spacemit-x60.md
+@@ -0,0 +1,207 @@
++;; spacemit_x60 DFA-based pipeline description for RISC-V targets.
++;; Copyright (C) 2011-2025 Free Software Foundation, Inc.
++;; Contributed by Andrew Waterman (andrew@sifive.com).
++;; Based on MIPS target for GNU compiler.
++
++;; This file is part of GCC.
++
++;; GCC is free software; you can redistribute it and/or modify it
++;; under the terms of the GNU General Public License as published
++;; by the Free Software Foundation; either version 3, or (at your
++;; option) any later version.
++
++;; GCC is distributed in the hope that it will be useful, but WITHOUT
++;; ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
++;; or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
++;; License for more details.
++
++;; You should have received a copy of the GNU General Public License
++;; along with GCC; see the file COPYING3.  If not see
++;; <http://www.gnu.org/licenses/>.
++
++;; ----------------------------------------------------
++;; Spacemit-x60 Units
++;; 2*alu + 2*lsu + 1*fpalu + 1*fdivsqrt + 2*vxu
++;; ----------------------------------------------------
++
++(define_automaton "spacemit_x60")
++(define_cpu_unit "spacemit_x60_alu0, spacemit_x60_alu1" "spacemit_x60")
++(define_cpu_unit "spacemit_x60_lsu0, spacemit_x60_lsu1" "spacemit_x60")
++(define_cpu_unit "spacemit_x60_vxu0, spacemit_x60_vxu1" "spacemit_x60")
++(define_cpu_unit "spacemit_x60_fpalu" "spacemit_x60")
++(define_cpu_unit "spacemit_x60_fdivsqrt" "spacemit_x60")
++
++;; ----------------------------------------------------
++;; Memory (load/store)
++;; ----------------------------------------------------
++
++(define_insn_reservation "spacemit_x60_load" 5
++  (and (eq_attr "tune" "spacemit_x60")
++       (eq_attr "type" "load,fpload,atomic"))
++  "spacemit_x60_lsu0 | spacemit_x60_lsu1")
++
++(define_insn_reservation "spacemit_x60_store" 3
++  (and (eq_attr "tune" "spacemit_x60")
++       (eq_attr "type" "store,fpstore"))
++  "spacemit_x60_lsu0 | spacemit_x60_lsu1")
++
++;; ----------------------------------------------------
++;; Int
++;; ----------------------------------------------------
++
++;; alu0 handles div/rem and jumps
++(define_insn_reservation "spacemit_x60_jump" 1
++  (and (eq_attr "tune" "spacemit_x60")
++       (eq_attr "type" "branch,jump,call,jalr,ret,trap,sfb_alu"))
++  "spacemit_x60_alu0")
++
++(define_insn_reservation "spacemit_x60_idivsi" 12
++  (and (eq_attr "tune" "spacemit_x60")
++       (and (eq_attr "type" "idiv")
++	    (eq_attr "mode" "SI")))
++  "spacemit_x60_alu0*12")
++
++(define_insn_reservation "spacemit_x60_idivdi" 20
++  (and (eq_attr "tune" "spacemit_x60")
++       (and (eq_attr "type" "idiv")
++	    (eq_attr "mode" "DI")))
++  "spacemit_x60_alu0*20")
++
++(define_insn_reservation "spacemit_x60_imulsi" 3
++  (and (eq_attr "tune" "spacemit_x60")
++       (and (eq_attr "type" "imul")
++	    (eq_attr "mode" "SI")))
++  "spacemit_x60_alu0 | spacemit_x60_alu1")
++
++(define_insn_reservation "spacemit_x60_imuldi" 5
++  (and (eq_attr "tune" "spacemit_x60")
++       (and (eq_attr "type" "imul")
++	    (eq_attr "mode" "DI")))
++  "spacemit_x60_alu0 | spacemit_x60_alu1")
++
++(define_insn_reservation "spacemit_x60_clmul" 5
++  (and (eq_attr "tune" "spacemit_x60")
++       (eq_attr "type" "clmul"))
++  "spacemit_x60_alu0 | spacemit_x60_alu1")
++
++;; TODO: This numbers made up
++(define_insn_reservation "spacemit_x60_mtc_mfc" 3
++  (and (eq_attr "tune" "spacemit_x60")
++       (eq_attr "type" "mtc,mfc"))
++  "spacemit_x60_alu0 | spacemit_x60_alu1")
++
++(define_insn_reservation "spacemit_x60_fcvt_i2f" 4
++  (and (eq_attr "tune" "spacemit_x60")
++       (eq_attr "type" "fcvt_i2f"))
++  "spacemit_x60_alu0 | spacemit_x60_alu1")
++
++(define_insn_reservation "spacemit_x60_fcvt_f2i" 6
++  (and (eq_attr "tune" "spacemit_x60")
++       (eq_attr "type" "fcvt_f2i"))
++  "spacemit_x60_alu0 | spacemit_x60_alu1")
++
++;;TODO: Might be more dummy reservations? Need to check
++(define_insn_reservation "spacemit_x60_alu" 1
++  (and (eq_attr "tune" "spacemit_x60")
++       (eq_attr "type" "unknown,const,arith,shift,slt,multi,auipc,nop,logical,\
++			move,bitmanip,min,max,minu,maxu,clz,ctz,rotate,\
++			condmove,crypto,mvpair,zicond,cpop"))
++  "spacemit_x60_alu0 | spacemit_x60_alu1")
++
++(define_insn_reservation "spacemit_x60_alu2c" 2
++  (and (eq_attr "tune" "spacemit_x60")
++       (eq_attr "type" "cpop,shftadd"))
++  "spacemit_x60_alu0 | spacemit_x60_alu1")
++
++;;Dummy reservations
++(define_insn_reservation "spacemit_x60_alu_unknown" 1
++  (and (eq_attr "tune" "spacemit_x60")
++       (eq_attr "type" "ghost"))
++  "spacemit_x60_alu0")
++
++;; ----------------------------------------------------
++;; Float
++;; ----------------------------------------------------
++
++(define_insn_reservation "spacemit_x60_fcvt" 4
++  (and (eq_attr "tune" "spacemit_x60")
++       (eq_attr "type" "fcvt,fmove"))
++  "spacemit_x60_fpalu")
++
++(define_insn_reservation "spacemit_x60_fcmp" 6
++  (and (eq_attr "tune" "spacemit_x60")
++       (eq_attr "type" "fcmp"))
++  "spacemit_x60_fpalu")
++
++(define_insn_reservation "spacemit_x60_fmul_half_single" 4
++  (and (eq_attr "tune" "spacemit_x60")
++       (and (eq_attr "type" "fadd,fmul,fsgnj")
++       (ior (eq_attr "mode" "HF")
++	    (eq_attr "mode" "SF"))))
++  "spacemit_x60_fpalu")
++
++(define_insn_reservation "spacemit_x60_fmadd_half_single" 5
++  (and (eq_attr "tune" "spacemit_x60")
++       (and (eq_attr "type" "fmadd")
++       (ior (eq_attr "mode" "HF")
++	    (eq_attr "mode" "SF"))))
++  "spacemit_x60_fpalu")
++
++(define_insn_reservation "spacemit_x60_fmul_double" 5
++  (and (eq_attr "tune" "spacemit_x60")
++       (and (eq_attr "type" "fadd,fmul,fsgnj")
++	    (eq_attr "mode" "DF")))
++  "spacemit_x60_fpalu")
++
++(define_insn_reservation "spacemit_x60_fmadd_double" 5
++  (and (eq_attr "tune" "spacemit_x60")
++       (and (eq_attr "type" "fmadd")
++	    (eq_attr "mode" "DF")))
++  "spacemit_x60_fpalu")
++
++(define_insn_reservation "spacemit_x60_fdiv_half" 12
++  (and (eq_attr "tune" "spacemit_x60")
++       (and (eq_attr "type" "fdiv,fsqrt")
++	    (eq_attr "mode" "HF")))
++  "spacemit_x60_fdivsqrt*12")
++
++(define_insn_reservation "spacemit_x60_fdiv_single" 15
++  (and (eq_attr "tune" "spacemit_x60")
++       (and (eq_attr "type" "fdiv,fsqrt")
++	    (eq_attr "mode" "SF")))
++  "spacemit_x60_fdivsqrt*15")
++
++(define_insn_reservation "spacemit_x60_fdiv_double" 22
++  (and (eq_attr "tune" "spacemit_x60")
++       (and (eq_attr "type" "fdiv,fsqrt")
++	    (eq_attr "mode" "DF")))
++  "spacemit_x60_fdivsqrt*22")
++
++;; ----------------------------------------------------
++;; Vector 
++;; ----------------------------------------------------
++
++;;TODO: These all need to get sorted out
++;;VSetVL 2c latency when input operand comes from GPR
++(define_insn_reservation "spacemit_x60_vxu_unassigned" 1
++  (and (eq_attr "tune" "spacemit_x60")
++       (eq_attr "type" "rdvlenb,rdvl,wrvxrm,wrfrm,\
++   rdfrm,vsetvl,vsetvl_pre,vlde,vste,vldm,vstm,vlds,vsts,\
++   vldux,vldox,vstux,vstox,vldff,vldr,vstr,\
++   vlsegde,vssegte,vlsegds,vssegts,vlsegdux,vlsegdox,vssegtux,vssegtox,vlsegdff,\
++   vialu,viwalu,vext,vicalu,vshift,vnshift,vicmp,viminmax,\
++   vimul,vidiv,viwmul,vimuladd,sf_vqmacc,viwmuladd,vimerge,vimov,\
++   vsalu,vaalu,vsmul,vsshift,vnclip,sf_vfnrclip,\
++   vfalu,vfwalu,vfmul,vfdiv,vfwmul,vfmuladd,vfwmuladd,vfsqrt,vfrecp,\
++   vfcmp,vfminmax,vfsgnj,vfclass,vfmerge,vfmov,\
++   vfcvtitof,vfcvtftoi,vfwcvtitof,vfwcvtftoi,\
++   vfwcvtftof,vfncvtitof,vfncvtftoi,vfncvtftof,\
++   vired,viwred,vfredu,vfredo,vfwredu,vfwredo,\
++   vmalu,vmpop,vmffs,vmsfs,vmiota,vmidx,vimovvx,vimovxv,vfmovvf,vfmovfv,\
++   vslideup,vslidedown,vislide1up,vislide1down,vfslide1up,vfslide1down,\
++   vgather,vcompress,vmov,vector,vandn,vbrev,vbrev8,vrev8,vclz,vctz,vcpop,vrol,vror,vwsll,\
++   vclmul,vclmulh,vghsh,vgmul,vaesef,vaesem,vaesdf,vaesdm,vaeskf1,vaeskf2,vaesz,\
++   vsha2ms,vsha2ch,vsha2cl,vsm4k,vsm4r,vsm3me,vsm3c,vfncvtbf16,vfwcvtbf16,vfwmaccbf16,\
++   sf_vc,sf_vc_se"))
++   "spacemit_x60_vxu0 | spacemit_x60_vxu1"
++)
+diff --git a/gcc/config/riscv/xiangshan.md b/gcc/config/riscv/xiangshan.md
+index 5ed6bacdd70..1979dab69b1 100644
+--- a/gcc/config/riscv/xiangshan.md
++++ b/gcc/config/riscv/xiangshan.md
+@@ -95,7 +95,7 @@ (define_insn_reservation "xiangshan_div" 21
+ 
+ (define_insn_reservation "xiangshan_alu" 1
+   (and (eq_attr "tune" "xiangshan")
+-       (eq_attr "type" "nop,const,branch,arith,shift,slt,multi,logical,move,bitmanip,unknown"))
++       (eq_attr "type" "nop,const,branch,arith,shift,slt,multi,logical,move,bitmanip,shftadd,unknown"))
+   "xs_alu_rs")
+ 
+ ;; Someone familiar with the xiangshan uarch needs to put
+@@ -132,7 +132,7 @@ (define_insn_reservation "xiangshan_fmul" 3
+ 
+ (define_insn_reservation "xiangshan_f2f" 3
+   (and (eq_attr "tune" "xiangshan")
+-       (eq_attr "type" "fcvt,fcvt_f2i,fmove"))
++       (eq_attr "type" "fcvt,fcvt_f2i,fmove,fsgnj"))
+   "xs_fmisc_rs")
+ 
+ (define_insn_reservation "xiangshan_f2i" 3
