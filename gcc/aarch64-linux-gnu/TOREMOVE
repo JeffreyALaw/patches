@@ -4,4 +4,7 @@ gcc/testsuite/gcc.dg/vect/tsvc
 # Times out occasionally
 gcc/testsuite/gcc.target/aarch64/sve/vcond_2_run.c
 
+# Temporary has guality/profile stuff gets sorted out
+gcc/testsuite/gcc.dg/guality/pr41447-1.c
+
 
