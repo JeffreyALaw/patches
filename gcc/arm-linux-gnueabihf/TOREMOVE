@@ -1,7 +1,2 @@
 # Seems to be bouncing, unclear why
 gcc/testsuite/gcc.target/arm/bics_3.c
-
-# Profile nonsense
-gcc/testsuite/gcc.prof/cmpsf-1.c
-
-
