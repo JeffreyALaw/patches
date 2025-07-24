@@ -98,6 +98,5 @@ gcc/testsuite/c-c++-common/torture/pr116156-1.c
 gcc/testsuite/g++.dg/torture/pr58552.C
 
 # Temporary
-gcc/testsuite/gcc.dg/tree-prof/bb-reorg.c
-gcc/testsuite/gcc.dg/tree-prof/cmpsf-1.c
+gcc/testsuite/gcc.dg/tree-prof
 
