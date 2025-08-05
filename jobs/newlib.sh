@@ -14,6 +14,8 @@ SRCDIR=../../
 PATH=/usr/lib/ccache:$PATH
 ccache -M 100G
 
+cd /home/jlaw/jenkins/workspace/$TARGET
+
 rm -rf ${TARGET}-obj
 rm -rf ${TARGET}-installed
 mkdir -p ${TARGET}-installed
