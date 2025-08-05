@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Ensure that we're in a sensible directory
+cd /home/jlaw/jenkins/workspace/$TARGET
+
 # Ensure that we fail if any command fails
 set -e
 set -o pipefail
@@ -14,7 +17,6 @@ SRCDIR=../../
 PATH=/usr/lib/ccache:$PATH
 ccache -M 100G
 
-cd /home/jlaw/jenkins/workspace/$TARGET
 
 rm -rf ${TARGET}-obj
 rm -rf ${TARGET}-installed
