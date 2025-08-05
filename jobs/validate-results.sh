@@ -11,13 +11,31 @@ rm -rf testresults
 mkdir -p testresults
 if [ -f ${TARGET}-obj/gcc/gcc/testsuite/gcc/gcc.sum ]; then
   cp `find ${TARGET}-obj -name \*.sum -print` testresults
-#  cp `find ${TARGET}-obj -name gcc.log -print | grep -v config` testresults
 fi
 if [ -f obj/gcc/gcc/testsuite/gcc/gcc.sum ]; then
   cp `find obj -name \*.sum -print` testresults
-#  cp `find obj -name \*.log -print | grep -v config` testresults
 fi
 
+if [ -f ${TARGET}-obj/binutils/gas/testsuite/gas.sum ]; then
+  cp `find ${TARGET}-obj -name \*.sum -print` testresults
+fi
+if [ -f obj/binutils/gas/testsuite/gas.sum
+  cp `find obj -name \*.sum -print` testresults
+fi
+
+if [ -f ${TARGET}-obj/binutils/binutils/binutils.sum ]; then
+  cp `find ${TARGET}-obj -name \*.sum -print` testresults
+fi
+if [ -f obj/binutils/binutils/binutils.sum
+  cp `find obj -name \*.sum -print` testresults
+fi
+
+if [ -f ${TARGET}-obj/binutils/ld/ld.sum ]; then
+  cp `find ${TARGET}-obj -name \*.sum -print` testresults
+fi
+if [ -f obj/binutils/ld/ld.sum
+  cp `find obj -name \*.sum -print` testresults
+fi
 
 newbase=`grep ${TARGET} patches/gcc/NEWBASELINES || true`
 if [ -f old-testresults/gcc.sum.gz ]; then
