@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # Ensure that we're in a sensible directory
+TARGET=$1
 cd /home/jlaw/jenkins/workspace/$TARGET
 
 # Ensure that we fail if any command fails
 set -e
 set -o pipefail
 
-TARGET=$1
 LOGFILE=`pwd`/log
 
 NPROC=`nproc --all`
