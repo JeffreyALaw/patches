@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Ensure that we're in a sensible directory
+cd /home/jlaw/jenkins/workspace/$TARGET
+
 # If any command fails, exit immediately
 set -e
 set -o pipefail
