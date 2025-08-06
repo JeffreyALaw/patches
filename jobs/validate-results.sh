@@ -19,14 +19,14 @@ fi
 if [ -f ${TARGET}-obj/binutils/gas/testsuite/gas.sum ]; then
   cp `find ${TARGET}-obj -name \*.sum -print` testresults
 fi
-if [ -f obj/binutils/gas/testsuite/gas.sum
+if [ -f obj/binutils/gas/testsuite/gas.sum ]; then
   cp `find obj -name \*.sum -print` testresults
 fi
 
 if [ -f ${TARGET}-obj/binutils/binutils/binutils.sum ]; then
   cp `find ${TARGET}-obj -name \*.sum -print` testresults
 fi
-if [ -f obj/binutils/binutils/binutils.sum
+if [ -f obj/binutils/binutils/binutils.sum ]; then
   cp `find obj -name \*.sum -print` testresults
 fi
 
