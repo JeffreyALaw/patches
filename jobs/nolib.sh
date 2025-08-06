@@ -57,4 +57,4 @@ cd ../..
 
 gzip --best $LOGFILE
 
-#patches/jobs/validate-results.sh $TARGET
+patches/jobs/validate-results.sh $TARGET
