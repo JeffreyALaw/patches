@@ -33,7 +33,8 @@ fi
 if [ -f ${TARGET}-obj/binutils/ld/ld.sum ]; then
   cp `find ${TARGET}-obj -name \*.sum -print` testresults
 fi
-if [ -f obj/binutils/ld/ld.sum
+
+if [ -f obj/binutils/ld/ld.sum ]; then
   cp `find obj -name \*.sum -print` testresults
 fi
 
