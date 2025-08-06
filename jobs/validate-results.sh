@@ -50,8 +50,5 @@ if [ -f old-testresults/gcc.sum.gz ]; then
 fi
 
 cd testresults
-if [ -f gcc.sum ]; then
-  gzip --best *.sum
-#  gzip --best *.log
-fi
+gzip --best *.sum || true
 
