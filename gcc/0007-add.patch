@@ -167,11 +167,11 @@ index 578dd43441e2..a72604e29218 100644
  		 (match_operand:DI 2 "arith_operand"    " r,I")))]
 diff --git a/gcc/testsuite/gcc.target/riscv/add-synthesis-1.c b/gcc/testsuite/gcc.target/riscv/add-synthesis-1.c
 new file mode 100644
-index 000000000000..fb3bbeeffe74
+index 000000000000..c3e512b7696a
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/add-synthesis-1.c
-@@ -0,0 +1,36 @@
-+/* { dg-options "-march=rv32gcb -mabi=ilp32" { target { rv32 } } } */
+@@ -0,0 +1,40 @@
++/* { dg-options "-march=rv32gcb -mabi=ilp32d" { target { rv32 } } } */
 +/* { dg-options "-march=rv64gcb -mabi=lp64d" { target { rv64 } } } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" } } */
 +
@@ -201,9 +201,13 @@ index 000000000000..fb3bbeeffe74
 +TM (4096)
 +TM (4100)
 +TM (8200)
-+TM (0x200000000)
 +
-+/* We have 5 tests which should use shNadd insns and 4
++#if  __riscv_xlen == 64
++TM (0x21000000)
++#endif
++
++/* We have 4/5 tests which should use shNadd insns and 4
 +   which used paired addi insns.  */
-+/* { dg-final { scan-assembler-times "sh.add\t" 5 } } */
++/* { dg-final { scan-assembler-times "sh.add\t" 4 { target { rv32 } } } } */
++/* { dg-final { scan-assembler-times "sh.add\t" 5 { target { rv64 } } } } */
 +/* { dg-final { scan-assembler-times "addi\t" 8 } } */
