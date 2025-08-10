@@ -203,7 +203,7 @@ index 000000000000..c3e512b7696a
 +TM (8200)
 +
 +#if  __riscv_xlen == 64
-+TM (0x21000000)
++TM (0x200000000)
 +#endif
 +
 +/* We have 4/5 tests which should use shNadd insns and 4
