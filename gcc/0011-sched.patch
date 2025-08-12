@@ -1,0 +1,58 @@
+diff --git a/gcc/config/riscv/sifive-p400.md b/gcc/config/riscv/sifive-p400.md
+index ed8b8ec9da7b..d6f6e2a3b6c0 100644
+--- a/gcc/config/riscv/sifive-p400.md
++++ b/gcc/config/riscv/sifive-p400.md
+@@ -153,10 +153,13 @@ (define_insn_reservation "sifive_p400_fmove" 2
+        (eq_attr "type" "fmove,fcvt"))
+   "p400_float_pipe,sifive_p400_fpu")
+ 
++;; We need something for HF so that we don't abort during
++;; scheduling if someone was to ask for p400 scheduling, but
++;; enable the various HF mode extensions.
+ (define_insn_reservation "sifive_p400_fdiv_s" 18
+   (and (eq_attr "tune" "sifive_p400")
+        (eq_attr "type" "fdiv,fsqrt")
+-       (eq_attr "mode" "SF"))
++       (eq_attr "mode" "HF,SF"))
+   "sifive_p400_FM, sifive_p400_fdiv*5")
+ 
+ (define_insn_reservation "sifive_p400_fdiv_d" 31
+diff --git a/gcc/config/riscv/sifive-p600.md b/gcc/config/riscv/sifive-p600.md
+index 240134976fa1..ff51149f9b70 100644
+--- a/gcc/config/riscv/sifive-p600.md
++++ b/gcc/config/riscv/sifive-p600.md
+@@ -157,10 +157,13 @@ (define_insn_reservation "sifive_p600_fmove" 2
+        (eq_attr "type" "fmove,fcvt"))
+   "float_pipe,sifive_p600_fpu")
+ 
++;; We need something for HF so that we don't abort during
++;; scheduling if someone was to ask for p600 scheduling, but
++;; enable the various HF mode extensions.
+ (define_insn_reservation "sifive_p600_fdiv_s" 11
+   (and (eq_attr "tune" "sifive_p600")
+        (eq_attr "type" "fdiv,fsqrt")
+-       (eq_attr "mode" "SF"))
++       (eq_attr "mode" "HF,SF"))
+   "sifive_p600_FM, sifive_p600_fdiv*5")
+ 
+ (define_insn_reservation "sifive_p600_fdiv_d" 19
+diff --git a/gcc/config/riscv/xiangshan.md b/gcc/config/riscv/xiangshan.md
+index 34b4a8f1f3fc..617914087815 100644
+--- a/gcc/config/riscv/xiangshan.md
++++ b/gcc/config/riscv/xiangshan.md
+@@ -144,13 +144,13 @@ (define_insn_reservation "xiangshan_f2i" 3
+ (define_insn_reservation "xiangshan_sfdiv" 11
+   (and (eq_attr "tune" "xiangshan")
+        (eq_attr "type" "fdiv")
+-       (eq_attr "mode" "SF"))
++       (eq_attr "mode" "HF,SF"))
+   "xs_fmisc_rs")
+ 
+ (define_insn_reservation "xiangshan_sfsqrt" 17
+   (and (eq_attr "tune" "xiangshan")
+        (eq_attr "type" "fsqrt")
+-       (eq_attr "mode" "SF"))
++       (eq_attr "mode" "HF,SF"))
+   "xs_fmisc_rs")
+ 
+ (define_insn_reservation "xiangshan_dfdiv" 21
