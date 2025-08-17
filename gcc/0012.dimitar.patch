@@ -1,0 +1,100 @@
+
+
+Commit r16-3028-g0c517ddf9b136c introduced parsing of conditional blocks
+in riscv-ext*.def.  For simplicity, it used a simple regular expression
+to match the C++ lambda function for each condition.  But the regular
+expression is too simple - it matches only the first scoped code block,
+without any trailing closing braces.
+
+The "c" dependency for the "zca" extension has two code blocks inside
+its conditional.  One for RV32 and one for RV64.  The script matches
+only the RV32 block, and leaves the RV64 one.  Any strings left, in turn,
+are considered a list of non-conditional extensions.  Thus the quoted
+strings "d" and "zcd" from that block are taken as "simple" (non-conditional)
+dependencies:
+
+  if (subset_list->xlen () == 64)
+    {
+      if (subset_list->lookup ("d"))
+        return subset_list->lookup ("zcd");
+
+As a result, arch-canonicalize erroneously adds "d" extension:
+  $ ./config/riscv/arch-canonicalize rv32ec
+  rv32efdc_zicsr_zca_zcd_zcf
+
+  Before r16-3028-g0c517ddf9b136c the command returned:
+  $ ./config/riscv/arch-canonicalize rv32ec
+  rv32ec
+
+Fix by extending the conditional block match until the number of opening
+and closing braces is equal.  This change might seem crude, but it does
+save us from introducing a full C++ parser into the simple
+arch-canonicalize python script.  With this patch the script now
+returns:
+
+  $ ./config/riscv/arch-canonicalize rv32ec
+  rv32ec_zca
+
+Ok for trunk?
+
+	PR target/121538
+
+gcc/ChangeLog:
+
+	* config/riscv/arch-canonicalize (parse_dep_exts):
+	Match condition block up to closing brace.
+	(test_parse_long_condition_block): New test.
+---
+ gcc/config/riscv/arch-canonicalize | 22 ++++++++++++++++++++--
+ 1 file changed, 20 insertions(+), 2 deletions(-)
+
+diff --git a/gcc/config/riscv/arch-canonicalize b/gcc/config/riscv/arch-canonicalize
+index 5d24f5eda2f..15a398502b3 100755
+--- a/gcc/config/riscv/arch-canonicalize
++++ b/gcc/config/riscv/arch-canonicalize
+@@ -163,7 +163,19 @@ def parse_dep_exts(dep_exts_str):
+     ext_name = match.group(1)
+     condition_code = match.group(2)
+     deps.append({'ext': ext_name, 'type': 'conditional', 'condition': condition_code})
+-    conditional_matches.append((match.start(), match.end()))
++    # The conditional_pattern RE matches only the first code block enclosed
++    # in braces.
++    #
++    # Extend the match to the condition block's closing brace, encompassing
++    # all code blocks,  by simply trying to match the numbers of opening
++    # and closing braces.  While crude, this avoids writing a complicated
++    # parse here.
++    closing_braces_left = condition_code.count('{') - condition_code.count('}')
++    condition_end = match.end()
++    while closing_braces_left > 0:
++      condition_end = dep_exts_str.find('}', condition_end)
++      closing_braces_left -= 1
++    conditional_matches.append((match.start(), condition_end))
+ 
+   # Remove conditional dependency blocks from the string
+   remaining_str = dep_exts_str
+@@ -534,6 +546,11 @@ def run_unit_tests():
+     assert extensions[0]['name'] == 'test'
+     assert len(extensions[0]['dep_exts']) == 2
+ 
++  def test_parse_long_condition_block():
++    """Test condition block containing several code blocks."""
++    result = arch_canonicalize("rv32ec", "20191213")
++    assert "rv32ec_zca" in result
++
+   # Collect test functions
+   test_functions = [
+     test_basic_arch_parsing,
+@@ -542,7 +559,8 @@ def run_unit_tests():
+     test_conditional_dependencies,
+     test_parse_dep_exts,
+     test_evaluate_conditional_dependency,
+-    test_parse_define_riscv_ext
++    test_parse_define_riscv_ext,
++    test_parse_long_condition_block
+   ]
+ 
+   # Run tests manually first, then optionally with pytest
+-- 
+2.50.1
+
