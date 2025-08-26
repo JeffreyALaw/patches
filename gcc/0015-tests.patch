@@ -1,5 +1,5 @@
 diff --git a/gcc/config/riscv/riscv-cores.def b/gcc/config/riscv/riscv-cores.def
-index 98f347034fb..df3c8c2ab6b 100644
+index 98f347034fb..8f0f63078ff 100644
 --- a/gcc/config/riscv/riscv-cores.def
 +++ b/gcc/config/riscv/riscv-cores.def
 @@ -113,7 +113,7 @@ RISCV_CORE("xt-c908v",        "rv64imafdcv_zicbom_zicbop_zicboz_zicntr_zicsr_"
@@ -11,7 +11,23 @@ index 98f347034fb..df3c8c2ab6b 100644
  			      "xt-c908")
  RISCV_CORE("xt-c910",         "rv64imafdc_zicntr_zicsr_zifencei_zihpm_zfh_"
  			      "xtheadba_xtheadbb_xtheadbs_xtheadcmo_"
-@@ -141,7 +141,7 @@ RISCV_CORE("xt-c920v2",       "rv64imafdcv_zicbom_zicbop_zicboz_zicntr_zicond_"
+@@ -121,7 +121,7 @@ RISCV_CORE("xt-c910",         "rv64imafdc_zicntr_zicsr_zifencei_zihpm_zfh_"
+ 			      "xtheadmemidx_xtheadmempair_xtheadsync",
+ 			      "xt-c910")
+ RISCV_CORE("xt-c910v2",       "rv64imafdc_zicbom_zicbop_zicboz_zicntr_zicond_"
+-			      "zicsr_zifencei _zihintntl_zihintpause_zihpm_"
++			      "zicsr_zifencei_zihintntl_zihintpause_zihpm_"
+ 			      "zawrs_zfa_zfbfmin_zfh_zca_zcb_zcd_zba_zbb_zbc_"
+ 			      "zbs_sscofpmf_sstc_svinval_svnapot_svpbmt_"
+ 			      "xtheadba_xtheadbb_xtheadbs_xtheadcmo_"
+@@ -135,13 +135,13 @@ RISCV_CORE("xt-c920",         "rv64imafdc_zicntr_zicsr_zifencei_zihpm_zfh_"
+ 			      "xtheadvector",
+ 			      "xt-c910")
+ RISCV_CORE("xt-c920v2",       "rv64imafdcv_zicbom_zicbop_zicboz_zicntr_zicond_"
+-			      "zicsr_zifencei _zihintntl_zihintpause_zihpm_"
++			      "zicsr_zifencei_zihintntl_zihintpause_zihpm_"
+ 			      "zawrs_zfa_zfbfmin_zfh_zca_zcb_zcd_zba_zbb_zbc_"
+ 			      "zbs_zvfbfmin_zvfbfwma_zvfh_sscofpmf_sstc_"
  			      "svinval_svnapot_svpbmt_xtheadba_xtheadbb_"
  			      "xtheadbs_xtheadcmo_xtheadcondmov_xtheadfmemidx_"
  			      "xtheadmac_xtheadmemidx_xtheadmempair_"
@@ -44,7 +60,7 @@ index bb9e3109920..c96d0b5865a 100644
  #endif
  
 diff --git a/gcc/testsuite/gcc.target/riscv/mcpu-xt-c920v2.c b/gcc/testsuite/gcc.target/riscv/mcpu-xt-c920v2.c
-index 1f21d07f37a..1884858490e 100644
+index 1f21d07f37a..806949e67a0 100644
 --- a/gcc/testsuite/gcc.target/riscv/mcpu-xt-c920v2.c
 +++ b/gcc/testsuite/gcc.target/riscv/mcpu-xt-c920v2.c
 @@ -1,7 +1,7 @@
