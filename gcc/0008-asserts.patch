@@ -1,5 +1,5 @@
 diff --git a/gcc/config/riscv/riscv-avlprop.cc b/gcc/config/riscv/riscv-avlprop.cc
-index 3031c29ae63c..7ff1b1e2d709 100644
+index 3031c29ae63c..b27a4c0723bc 100644
 --- a/gcc/config/riscv/riscv-avlprop.cc
 +++ b/gcc/config/riscv/riscv-avlprop.cc
 @@ -156,6 +156,7 @@ get_insn_vtype_mode (rtx_insn *rinsn)
@@ -18,16 +18,19 @@ index 3031c29ae63c..7ff1b1e2d709 100644
        validate_change_or_fail (rinsn, recog_data.operand_loc[index],
  			       get_avl_type_rtx (avl_type::NONVLMAX), false);
      }
-@@ -361,6 +363,7 @@ pass_avlprop::get_vlmax_ta_preferred_avl (insn_info *insn) const
+@@ -361,7 +363,10 @@ pass_avlprop::get_vlmax_ta_preferred_avl (insn_info *insn) const
  	     is not depend on.  */
  	  extract_insn_cached (use_insn->rtl ());
  	  int merge_op_idx = get_attr_merge_op_idx (use_insn->rtl ());
-+	  gcc_assert (merge_op_idx <= recog_data.n_operands);
++	  gcc_assert (merge_op_idx == INVALID_ATTRIBUTE
++		      || merge_op_idx <= recog_data.n_operands);
  	  if (merge_op_idx != INVALID_ATTRIBUTE
++	      && merge_op_idx <= recog_data.n_operands
  	      && !satisfies_constraint_vu (recog_data.operand[merge_op_idx])
  	      && refers_to_regno_p (set->regno (),
+ 				    recog_data.operand[merge_op_idx])
 diff --git a/gcc/config/riscv/vector.md b/gcc/config/riscv/vector.md
-index c11d61a5cd23..46ea2395f5a2 100644
+index e7ffeeb9cd64..df132a22a8d1 100644
 --- a/gcc/config/riscv/vector.md
 +++ b/gcc/config/riscv/vector.md
 @@ -1398,6 +1398,7 @@ (define_insn_and_split "*mov<VT:mode>_<P:mode>"
