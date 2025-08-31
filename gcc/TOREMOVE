@@ -96,7 +96,3 @@ gcc/testsuite/gfortran.dg/pr120191_1.f90
 # Not sure if this is mine or someone else's
 gcc/testsuite/c-c++-common/torture/pr116156-1.c
 gcc/testsuite/g++.dg/torture/pr58552.C
-
-# Temporary
-gcc/testsuite/gcc.dg/tree-prof
-

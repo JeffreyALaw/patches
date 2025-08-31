@@ -1,3 +1,5 @@
 gcc/testsuite/gcc.dg/torture/pr48542.c
 gcc/testsuite/gcc.c-torture/execute/20210505-1.c
 
+# Problems with uleb128
+gcc/testsuite/gcc.dg/pr94589-6.c

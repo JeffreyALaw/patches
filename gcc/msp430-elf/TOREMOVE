@@ -19,3 +19,7 @@ gcc/testsuite/gcc.dg/pow-sqrt-2.c
 gcc/testsuite/gcc.dg/crc-crc32.c
 gcc/testsuite/gcc.dg/torture/crc-crc32.c
 gcc/testsuite/gcc.dg/compat
+
+# Problems with uleb128
+gcc/testsuite/gcc.dg/pr94589-6.c
+
