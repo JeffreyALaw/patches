@@ -1,0 +1,164 @@
+
+Hey Jeff, 
+
+Sent a pointer to the patchfile in slack but I've attached it below too
+
+-Shreya
+
+pr120811.patch
+
+diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
+index bf9cd589d0d..cb23116dbdc 100644
+--- a/gcc/config/riscv/riscv.md
++++ b/gcc/config/riscv/riscv.md
+@@ -702,6 +702,27 @@ (define_insn "add<mode>3"
+   [(set_attr "type" "fadd")
+    (set_attr "mode" "<UNITMODE>")])
+ 
++(define_expand "addptr<mode>3"
++  [(set (match_operand:X 	 0 "register_operand")
++        (plus:X (match_operand:X 1 "register_operand")
++                (match_operand 	 2 "const_int_operand")))]
++  ""
++{
++  gcc_assert (CONST_INT_P (operands[2]));
++  bool status = synthesize_add (operands);
++
++#if 0
++  if (status)
++    DONE;
++#endif
++
++  if (!SMALL_OPERAND (INTVAL (operands[2])))
++    {
++      gcc_assert (status);
++      DONE;
++    }
++})
++
+ (define_insn "*addsi3"
+   [(set (match_operand:SI          0 "register_operand" "=r,r")
+ 	(plus:SI (match_operand:SI 1 "register_operand" " r,r")
+@@ -763,46 +784,6 @@ (define_insn "*adddi3"
+   [(set_attr "type" "arith")
+    (set_attr "mode" "DI")])
+ 
+-;; Special case of adding a reg and constant if latter is sum of two S12
+-;; values (in range -2048 to 2047). Avoid materialized the const and fuse
+-;; into the add (with an additional add for 2nd value). Makes a 3 insn
+-;; sequence into 2 insn.
+-
+-(define_insn_and_split "*add<mode>3_const_sum_of_two_s12"
+-  [(set (match_operand:P	 0 "register_operand" "=r,r")
+-	(plus:P (match_operand:P 1 "register_operand" " r,r")
+-		(match_operand:P 2 "const_two_s12"    " MiG,r")))]
+-  "!riscv_reg_frame_related (operands[0])"
+-{
+-  /* operand matching MiG constraint is always meant to be split.  */
+-  if (which_alternative == 0)
+-    return "#";
+-  else
+-    return "add %0,%1,%2";
+-}
+-  ""
+-  [(set (match_dup 0)
+-	(plus:P (match_dup 1) (match_dup 3)))
+-   (set (match_dup 0)
+-	(plus:P (match_dup 0) (match_dup 4)))]
+-{
+-  int val = INTVAL (operands[2]);
+-  if (SUM_OF_TWO_S12_P (val))
+-    {
+-       operands[3] = GEN_INT (2047);
+-       operands[4] = GEN_INT (val - 2047);
+-    }
+-  else if (SUM_OF_TWO_S12_N (val))
+-    {
+-       operands[3] = GEN_INT (-2048);
+-       operands[4] = GEN_INT (val + 2048);
+-    }
+-  else
+-      gcc_unreachable ();
+-}
+-  [(set_attr "type" "arith")
+-   (set_attr "mode" "<P:MODE>")])
+-
+ (define_expand "addv<mode>4"
+   [(set (match_operand:GPR           0 "register_operand" "=r,r")
+ 	(plus:GPR (match_operand:GPR 1 "register_operand" " r,r")
+diff --git a/gcc/testsuite/gcc.target/riscv/add-synthesis-1.c b/gcc/testsuite/gcc.target/riscv/add-synthesis-1.c
+index 247096cec00..982b2fa7f2b 100644
+--- a/gcc/testsuite/gcc.target/riscv/add-synthesis-1.c
++++ b/gcc/testsuite/gcc.target/riscv/add-synthesis-1.c
+@@ -25,7 +25,7 @@ T (4100)
+ T (8200)
+ 
+ TM (2049)
+-TM (4096)
++TM (4094)
+ TM (4100)
+ TM (8200)
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/pr120811.c b/gcc/testsuite/gcc.target/riscv/pr120811.c
+new file mode 100644
+index 00000000000..4351a39f15e
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr120811.c
+@@ -0,0 +1,42 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -march=rv64gc -mabi=lp64d -fdump-rtl-reload -fdump-rtl-late_combine2" { target { rv64 } } } */
++/* { dg-options "-O2 -march=rv32gc -mabi=ilp32d -fdump-rtl-reload -fdump-rtl-late_combine2" { target { rv32 } } } */
++/* { dg-skip-if "" { *-*-* } "-fomit-frame-pointer" } */
++
++double *a, *b, *ab, *ac, *ad, *ae, *af, *c, *i, *k, *l;
++int n(int *, int, int, int), d, ag, aj;
++long ai, e;
++double f, g, h, o, p;
++int m;
++void q() {
++  long am = n(&d, 0, 1, 0);
++  for (;;)
++    for (int j = ag; j; ++j) {
++      int ao = 0;
++      for (; ao < aj; ao++) {
++        long ap = ao + j;
++        double ar = ad[ap] = ae[ap], az;
++        switch (m)
++        case 4: {
++          o = (&l[ap])[2] - (&l[ap])[3] * ((char *)ap)[am] + (&l[ap])[e] +
++              (&l[ap])[am];
++          p = (&l[ap])[ai - 1] + (&ap)[ai] * (&l[ap])[am * ai] +
++              (&l[ap])[ai * 3];
++          az = (&b[ap])[1] +
++               (&b[ap])[3] * i[ap] * (&ap)[203] * ((char *)&i[ap])[ai] -
++               (&i[ap])[ai * 3];
++          g = (&i[ap])[e] + (&i[ap])[ai];
++          h = (&ab[ap])[am] * (&ab[ap])[2] - ((char *)ap)[ai] +
++              (&ab[ap])[ai] * (&ap)[0] * (&af[ap])[am] * (&af[ap])[e] +
++              (&ap)[2] + (&af[ap])[e * am] + (&af[ap])[am * 3];
++        }
++          ar = az * f * k[ap];
++        c[ap] = ar;
++        a[ap] = ac[ap];
++      }
++    }
++}
++/* { dg-final { scan-rtl-dump-not "const_sum_of_two_s12" "reload" } } */
++/* { dg-final { scan-rtl-dump-not "const_sum_of_two_s12" "late_combine2" } } */
++/* { dg-final { scan-assembler "addi.*sp,2047\n\tld\t.*,1\(.*\).*" } } */
++
+diff --git a/gcc/testsuite/gcc.target/riscv/sum-of-two-s12-const-1.c b/gcc/testsuite/gcc.target/riscv/sum-of-two-s12-const-1.c
+index 4d6d135de5f..ac17ec271be 100644
+--- a/gcc/testsuite/gcc.target/riscv/sum-of-two-s12-const-1.c
++++ b/gcc/testsuite/gcc.target/riscv/sum-of-two-s12-const-1.c
+@@ -26,7 +26,7 @@ plus3(unsigned long i)
+ long
+ minus1(unsigned long i)
+ {
+-   return i - 4096;
++   return i - 4094;
+ }
+ 
+ long
+
+
