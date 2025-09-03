@@ -16,6 +16,9 @@ if [ "$BRANCH" == "" ]; then
   BRANCH=master
 fi
 
+PATH=/usr/lib/ccache:$PATH
+ccache -M 100G
+
 patches/jobs/setupsources.sh $TARGET $BRANCH binutils-gdb gcc glibc linux > $LOGFILE 2>&1
 
 rm -rf obj
