@@ -104,10 +104,9 @@ new file mode 100644
 index 00000000000..4351a39f15e
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/pr120811.c
-@@ -0,0 +1,42 @@
-+/* { dg-do compile } */
+@@ -0,0 +1,41 @@
++/* { dg-do compile { target { rv64 } } } */
 +/* { dg-options "-O2 -march=rv64gc -mabi=lp64d -fdump-rtl-reload -fdump-rtl-late_combine2" { target { rv64 } } } */
-+/* { dg-options "-O2 -march=rv32gc -mabi=ilp32d -fdump-rtl-reload -fdump-rtl-late_combine2" { target { rv32 } } } */
 +/* { dg-skip-if "" { *-*-* } "-fomit-frame-pointer" } */
 +
 +double *a, *b, *ab, *ac, *ad, *ae, *af, *c, *i, *k, *l;
