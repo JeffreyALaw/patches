@@ -145,7 +145,7 @@ index 00000000000..4351a39f15e
 +}
 +/* { dg-final { scan-rtl-dump-not "const_sum_of_two_s12" "reload" } } */
 +/* { dg-final { scan-rtl-dump-not "const_sum_of_two_s12" "late_combine2" } } */
-+/* { dg-final { scan-assembler "addi.*sp,2047\n\tld\t.*,1\(.*\).*" } } */
++/* { dg-final { scan-assembler "addi.*\[ats\]\[0-9\]*,sp,\[0-9\]*\n\tld\t.*,2047\(.*\).*" } } */
 +
 diff --git a/gcc/testsuite/gcc.target/riscv/sum-of-two-s12-const-1.c b/gcc/testsuite/gcc.target/riscv/sum-of-two-s12-const-1.c
 index 4d6d135de5f..ac17ec271be 100644
