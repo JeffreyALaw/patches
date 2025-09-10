@@ -1,13 +1,17 @@
-commit 1b9cebb75a97f97c3a0ad53ab647a00918fbf183
+commit 58a4a34cc58c0a5179a1ce76ba225092687e1102
 Author: Jeff Law <jlaw@ventanamicro.com>
-Date:   Mon Sep 8 09:49:35 2025 -0600
+Date:   Wed Sep 10 07:13:35 2025 -0600
 
+    Revert "compare_tests: Improve non-unique tests report"
+    
+    This reverts commit 21d4a0b08a6883763ccdf9ce1d1ff1dedd6240a2.
+    
     Revert "compare_tests: Report non-unique test names"
     
     This reverts commit 750346a763df2573ea4c8a8dde8cddced64f69a5.
 
 diff --git a/contrib/compare_tests b/contrib/compare_tests
-index 152957bc3247..e09fc4f113a3 100755
+index 8efd15e903f..e09fc4f113a 100755
 --- a/contrib/compare_tests
 +++ b/contrib/compare_tests
 @@ -41,8 +41,6 @@ tmp1=$TMPDIR/$tool-testing.$$a
@@ -28,14 +32,22 @@ index 152957bc3247..e09fc4f113a3 100755
  
  [ "$1" = "-strict" ] && strict=$1 && shift
  [ "$1" = "-?" ] && usage
-@@ -126,28 +124,6 @@ fi
+@@ -126,36 +124,6 @@ fi
  sort -t ':' $skip1 "$now" > "$now_s"
  sort -t ':' $skip1 "$before" > "$before_s"
  
--# Report non-unique test names, but print the two lists only if they
--# are different.
--sed '/^$/d' "$now_s"    | uniq -cd > "$now_u"
--sed '/^$/d' "$before_s" | uniq -cd > "$before_u"
+-# Report non-unique test names and print the diff between the two
+-# lists if they are different.
+-#
+-# If the results include several configurations (schedule of
+-# variations), we report duplicates several times with different
+-# target/tool prefixes because at this stage we do not know if the
+-# target and/or tool prefix was inserted.
+-# If we used the input files (so generally several times the same
+-# results in one section per target), we would incorreclty detect
+-# duplicates (as many as targets)
+-grep -E '^(PASS|XPASS|FAIL|XFAIL|UNRESOLVED|UNSUPPORTED|UNTESTED|ERROR):' "$now_s"    | uniq -cd > "$now_u"
+-grep -E '^(PASS|XPASS|FAIL|XFAIL|UNRESOLVED|UNSUPPORTED|UNTESTED|ERROR):' "$before_s" | uniq -cd > "$before_u"
 -
 -same_uniq=" now"
 -cmp -s "$before_u" "$now_u" && same_uniq=""
@@ -48,8 +60,8 @@ index 152957bc3247..e09fc4f113a3 100755
 -fi
 -
 -if [ -s "$before_u" -a "x$same_uniq" != "x" ]; then
--    echo "Non-unique test names before: (Eeek!)"
--    cat "$before_u"
+-    echo "Changes to non-unique test names:"
+-    diff -u "$before_u" "$now_u" | grep -E '^[-\\+] '
 -    echo
 -    exit_status=1
 -fi
