@@ -1,0 +1,384 @@
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vd4dots.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vd4dots.c
+index 7f53d900d987..eaf46cc8b267 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vd4dots.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vd4dots.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_xandesvdot -O3 -mabi=ilp32" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_xandesvdot -O3 -mabi=lp64" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_xandesvdot -O3 -mabi=lp64d" { target { rv64 } } } */
+ 
+ #include "andes_vector.h"
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vd4dotsu.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vd4dotsu.c
+index 5cfc9ce3b8f9..92c667f3eb08 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vd4dotsu.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vd4dotsu.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_xandesvdot -O3 -mabi=ilp32" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_xandesvdot -O3 -mabi=lp64" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_xandesvdot -O3 -mabi=lp64d" { target { rv64 } } } */
+ 
+ #include "andes_vector.h"
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vd4dotu.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vd4dotu.c
+index a99a1a32651e..d03a49a35267 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vd4dotu.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vd4dotu.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_xandesvdot -O3 -mabi=ilp32" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_xandesvdot -O3 -mabi=lp64" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_xandesvdot -O3 -mabi=lp64d" { target { rv64 } } } */
+ 
+ #include "andes_vector.h"
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vfncvtbf16s.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vfncvtbf16s.c
+index f1c66acca00d..8b03564d4ffc 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vfncvtbf16s.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vfncvtbf16s.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_xandesvbfhcvt -mabi=ilp32 -O3 -fno-schedule-insns -fno-schedule-insns2" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_xandesvbfhcvt -mabi=lp64 -O3 -fno-schedule-insns -fno-schedule-insns2" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_xandesvbfhcvt -mabi=lp64d -O3 -fno-schedule-insns -fno-schedule-insns2" { target { rv64 } } } */
+ 
+ #include <andes_vector.h>
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vfpmadb.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vfpmadb.c
+index decd594ceb54..449d180c7b9c 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vfpmadb.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vfpmadb.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_zvfh_xandesvpackfph -O3 -mabi=ilp32" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_zvfh_xandesvpackfph -O3 -mabi=lp64" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_zvfh_xandesvpackfph -O3 -mabi=lp64d" { target { rv64 } } } */
+ 
+ #include "andes_vector.h"
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vfpmadt.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vfpmadt.c
+index bc104ff79a5b..04583dfd02ff 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vfpmadt.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vfpmadt.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_zvfh_xandesvpackfph -O3 -mabi=ilp32" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_zvfh_xandesvpackfph -O3 -mabi=lp64" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_zvfh_xandesvpackfph -O3 -mabi=lp64d" { target { rv64 } } } */
+ 
+ #include "andes_vector.h"
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vfwcvtsbf16.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vfwcvtsbf16.c
+index 4193c6b10ba4..b5aba62150b1 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vfwcvtsbf16.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vfwcvtsbf16.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_xandesvbfhcvt -mabi=ilp32 -O3 -fno-schedule-insns -fno-schedule-insns2" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_xandesvbfhcvt -mabi=lp64 -O3 -fno-schedule-insns -fno-schedule-insns2" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_xandesvbfhcvt -mabi=lp64d -O3 -fno-schedule-insns -fno-schedule-insns2" { target { rv64 } } } */
+ 
+ #include <andes_vector.h>
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vln8.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vln8.c
+index ddabe658bdee..9367944a118a 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vln8.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/non-overloaded/nds_vln8.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_xandesvsintload -O3 -mabi=ilp32" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_xandesvsintload -O3 -mabi=lp64" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_xandesvsintload -O3 -mabi=lp64d" { target { rv64 } } } */
+ 
+ #include "andes_vector.h"
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vd4dots.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vd4dots.c
+index e5408abd1485..72b984ef85fd 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vd4dots.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vd4dots.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_xandesvdot -O3 -mabi=ilp32" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_xandesvdot -O3 -mabi=lp64" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_xandesvdot -O3 -mabi=lp64d" { target { rv64 } } } */
+ 
+ #include "andes_vector.h"
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vd4dotsu.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vd4dotsu.c
+index 89b8c9e6fb5d..edfe2efd40b5 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vd4dotsu.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vd4dotsu.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_xandesvdot -O3 -mabi=ilp32" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_xandesvdot -O3 -mabi=lp64" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_xandesvdot -O3 -mabi=lp64d" { target { rv64 } } } */
+ 
+ #include "andes_vector.h"
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vd4dotu.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vd4dotu.c
+index 1b168d490936..fbac25a27a6d 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vd4dotu.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vd4dotu.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_xandesvdot -O3 -mabi=ilp32" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_xandesvdot -O3 -mabi=lp64" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_xandesvdot -O3 -mabi=lp64d" { target { rv64 } } } */
+ 
+ #include "andes_vector.h"
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vfncvtbf16s.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vfncvtbf16s.c
+index 838bea77a62b..0409d6f5049f 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vfncvtbf16s.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vfncvtbf16s.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_xandesvbfhcvt -mabi=ilp32 -O3 -fno-schedule-insns -fno-schedule-insns2" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_xandesvbfhcvt -mabi=lp64 -O3 -fno-schedule-insns -fno-schedule-insns2" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_xandesvbfhcvt -mabi=lp64d -O3 -fno-schedule-insns -fno-schedule-insns2" { target { rv64 } } } */
+ 
+ #include <andes_vector.h>
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vfpmadb.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vfpmadb.c
+index bbb084dfae0b..b25e7cf4f1a6 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vfpmadb.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vfpmadb.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_zvfh_xandesvpackfph -O3 -mabi=ilp32" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_zvfh_xandesvpackfph -O3 -mabi=lp64" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_zvfh_xandesvpackfph -O3 -mabi=lp64d" { target { rv64 } } } */
+ 
+ #include "andes_vector.h"
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vfpmadt.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vfpmadt.c
+index 1e1347ed193c..31b46c646637 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vfpmadt.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vfpmadt.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_zvfh_xandesvpackfph -O3 -mabi=ilp32" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_zvfh_xandesvpackfph -O3 -mabi=lp64" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_zvfh_xandesvpackfph -O3 -mabi=lp64d" { target { rv64 } } } */
+ 
+ #include "andes_vector.h"
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vfwcvtsbf16.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vfwcvtsbf16.c
+index 0a09916e47f4..eefe6e257cd7 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vfwcvtsbf16.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vfwcvtsbf16.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_xandesvbfhcvt -mabi=ilp32 -O3 -fno-schedule-insns -fno-schedule-insns2" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_xandesvbfhcvt -mabi=lp64 -O3 -fno-schedule-insns -fno-schedule-insns2" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_xandesvbfhcvt -mabi=lp64d -O3 -fno-schedule-insns -fno-schedule-insns2" { target { rv64 } } } */
+ 
+ #include <andes_vector.h>
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vln8.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vln8.c
+index 08be93f2b3a5..c494e003c8e4 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vln8.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/non-policy/overloaded/nds_vln8.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_xandesvsintload -O3 -mabi=ilp32" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_xandesvsintload -O3 -mabi=lp64" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_xandesvsintload -O3 -mabi=lp64d" { target { rv64 } } } */
+ 
+ #include "andes_vector.h"
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vd4dots.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vd4dots.c
+index 0ca7788b7ab2..76d58c02f5a8 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vd4dots.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vd4dots.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_xandesvdot -O3 -mabi=ilp32" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_xandesvdot -O3 -mabi=lp64" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_xandesvdot -O3 -mabi=lp64d" { target { rv64 } } } */
+ 
+ #include "andes_vector.h"
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vd4dotsu.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vd4dotsu.c
+index 0fc31c50053e..814224d67bd1 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vd4dotsu.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vd4dotsu.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_xandesvdot -O3 -mabi=ilp32" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_xandesvdot -O3 -mabi=lp64" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_xandesvdot -O3 -mabi=lp64d" { target { rv64 } } } */
+ 
+ #include "andes_vector.h"
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vd4dotu.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vd4dotu.c
+index 2fb544443541..d49cf8864b23 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vd4dotu.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vd4dotu.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_xandesvdot -O3 -mabi=ilp32" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_xandesvdot -O3 -mabi=lp64" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_xandesvdot -O3 -mabi=lp64d" { target { rv64 } } } */
+ 
+ #include "andes_vector.h"
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vfncvtbf16s.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vfncvtbf16s.c
+index 29a0d681c7dd..35061eaf9357 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vfncvtbf16s.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vfncvtbf16s.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_xandesvbfhcvt -mabi=ilp32 -O3 -fno-schedule-insns -fno-schedule-insns2" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_xandesvbfhcvt -mabi=lp64 -O3 -fno-schedule-insns -fno-schedule-insns2" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_xandesvbfhcvt -mabi=lp64d -O3 -fno-schedule-insns -fno-schedule-insns2" { target { rv64 } } } */
+ 
+ #include <andes_vector.h>
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vfpmadb.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vfpmadb.c
+index 31de0dde2f7c..438ddcf8e96a 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vfpmadb.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vfpmadb.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_zvfh_xandesvpackfph -O3 -mabi=ilp32" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_zvfh_xandesvpackfph -O3 -mabi=lp64" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_zvfh_xandesvpackfph -O3 -mabi=lp64d" { target { rv64 } } } */
+ 
+ #include "andes_vector.h"
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vfpmadt.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vfpmadt.c
+index 0b41e9a5c886..bf43168c99b4 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vfpmadt.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vfpmadt.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_zvfh_xandesvpackfph -O3 -mabi=ilp32" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_zvfh_xandesvpackfph -O3 -mabi=lp64" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_zvfh_xandesvpackfph -O3 -mabi=lp64d" { target { rv64 } } } */
+ 
+ #include "andes_vector.h"
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vfwcvtsbf16.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vfwcvtsbf16.c
+index 8d206435a0b5..142b1b47ea8d 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vfwcvtsbf16.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vfwcvtsbf16.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_xandesvbfhcvt -mabi=ilp32 -O3 -fno-schedule-insns -fno-schedule-insns2" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_xandesvbfhcvt -mabi=lp64 -O3 -fno-schedule-insns -fno-schedule-insns2" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_xandesvbfhcvt -mabi=lp64d -O3 -fno-schedule-insns -fno-schedule-insns2" { target { rv64 } } } */
+ 
+ #include <andes_vector.h>
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vln8.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vln8.c
+index 137b56ea4bb1..6454e54c7772 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vln8.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/non-overloaded/nds_vln8.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_xandesvsintload -O3 -mabi=ilp32" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_xandesvsintload -O3 -mabi=lp64" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_xandesvsintload -O3 -mabi=lp64d" { target { rv64 } } } */
+ 
+ #include "andes_vector.h"
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vd4dots.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vd4dots.c
+index ea78fa989bd3..0afc0ff13dde 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vd4dots.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vd4dots.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_xandesvdot -O3 -mabi=ilp32" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_xandesvdot -O3 -mabi=lp64" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_xandesvdot -O3 -mabi=lp64d" { target { rv64 } } } */
+ 
+ #include "andes_vector.h"
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vd4dotsu.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vd4dotsu.c
+index ba14b7e3132e..01f68a049a53 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vd4dotsu.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vd4dotsu.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_xandesvdot -O3 -mabi=ilp32" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_xandesvdot -O3 -mabi=lp64" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_xandesvdot -O3 -mabi=lp64d" { target { rv64 } } } */
+ 
+ #include "andes_vector.h"
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vd4dotu.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vd4dotu.c
+index 7518934aba88..80fd1295670c 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vd4dotu.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vd4dotu.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_xandesvdot -O3 -mabi=ilp32" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_xandesvdot -O3 -mabi=lp64" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_xandesvdot -O3 -mabi=lp64d" { target { rv64 } } } */
+ 
+ #include "andes_vector.h"
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vfncvtbf16s.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vfncvtbf16s.c
+index a9f77ed2e5b7..bce60f199266 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vfncvtbf16s.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vfncvtbf16s.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_xandesvbfhcvt -mabi=ilp32 -O3 -fno-schedule-insns -fno-schedule-insns2" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_xandesvbfhcvt -mabi=lp64 -O3 -fno-schedule-insns -fno-schedule-insns2" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_xandesvbfhcvt -mabi=lp64d -O3 -fno-schedule-insns -fno-schedule-insns2" { target { rv64 } } } */
+ 
+ #include <andes_vector.h>
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vfpmadb.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vfpmadb.c
+index ff79fe7aafd1..989a3c7312fd 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vfpmadb.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vfpmadb.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_zvfh_xandesvpackfph -O3 -mabi=ilp32" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_zvfh_xandesvpackfph -O3 -mabi=lp64" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_zvfh_xandesvpackfph -O3 -mabi=lp64d" { target { rv64 } } } */
+ 
+ #include "andes_vector.h"
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vfpmadt.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vfpmadt.c
+index f40b54fb2586..7d8cc288ac07 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vfpmadt.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vfpmadt.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_zvfh_xandesvpackfph -O3 -mabi=ilp32" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_zvfh_xandesvpackfph -O3 -mabi=lp64" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_zvfh_xandesvpackfph -O3 -mabi=lp64d" { target { rv64 } } } */
+ 
+ #include "andes_vector.h"
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vfwcvtsbf16.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vfwcvtsbf16.c
+index 8d206435a0b5..142b1b47ea8d 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vfwcvtsbf16.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vfwcvtsbf16.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_xandesvbfhcvt -mabi=ilp32 -O3 -fno-schedule-insns -fno-schedule-insns2" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_xandesvbfhcvt -mabi=lp64 -O3 -fno-schedule-insns -fno-schedule-insns2" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_xandesvbfhcvt -mabi=lp64d -O3 -fno-schedule-insns -fno-schedule-insns2" { target { rv64 } } } */
+ 
+ #include <andes_vector.h>
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vln8.c b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vln8.c
+index 5a5e2a781e4a..a9839dd0b992 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vln8.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/xandesvector/policy/overloaded/nds_vln8.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gv_xandesvsintload -O3 -mabi=ilp32" { target { rv32 } } } */
+-/* { dg-options "-march=rv64gv_xandesvsintload -O3 -mabi=lp64" { target { rv64 } } } */
++/* { dg-options "-march=rv64gv_xandesvsintload -O3 -mabi=lp64d" { target { rv64 } } } */
+ 
+ #include "andes_vector.h"
+ 
