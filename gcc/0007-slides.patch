@@ -1,0 +1,964 @@
+
+
+Improve shuffle_slide_patterns to better recognize permutations that
+can be constructed by a slideup or slidedown, covering more cases:
+Slideup one vector into the middle the other like
+  {0, 4, 5, 3}.
+Slidedown one vector not ending in the last element like
+  {5, 6, 2, 3}.
+Slidedown one vector from the beginning like
+  {4, 5, 2, 3}.
+
+gcc/ChangeLog:
+
+	* riscv/riscv-v.c
+	(shuffle_slide_patterns): Cover more permutations.
+
+gcc/testsuite/ChangeLog:
+
+	* gcc.target/riscv/rvv/autovec/shuffle-slide-run.h:
+	New test.
+	* gcc.target/riscv/rvv/autovec/shuffle-slidedown-run.c:
+	Likewise.
+	* gcc.target/riscv/rvv/autovec/shuffle-slideup-run.c:
+	Likewise.
+	* gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slide.h:
+	Likewise.
+	* gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slidedown-1.c:
+	Likewise.
+	* gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slidedown-2.c:
+	Likewise.
+	* gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slidedown-perm.h:
+	Likewise.
+	* gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slideup-1.c:
+	Likewise.
+	* gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slideup-2.c:
+	Likewise.
+	* gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slideup-perm.h:
+	Likewise.
+---
+ gcc/config/riscv/riscv-v.cc                   |  54 ++--
+ .../riscv/rvv/autovec/shuffle-slide-run.h     | 106 ++++++++
+ .../riscv/rvv/autovec/shuffle-slidedown-run.c |   7 +
+ .../riscv/rvv/autovec/shuffle-slideup-run.c   |   7 +
+ .../rvv/autovec/vls-vlmax/shuffle-slide.h     | 240 ++++++++++++++++++
+ .../autovec/vls-vlmax/shuffle-slidedown-1.c   |  41 +++
+ .../autovec/vls-vlmax/shuffle-slidedown-2.c   |  41 +++
+ .../vls-vlmax/shuffle-slidedown-perm.h        | 107 ++++++++
+ .../rvv/autovec/vls-vlmax/shuffle-slideup-1.c |  37 +++
+ .../rvv/autovec/vls-vlmax/shuffle-slideup-2.c |  37 +++
+ .../autovec/vls-vlmax/shuffle-slideup-perm.h  |  93 +++++++
+ 11 files changed, 748 insertions(+), 22 deletions(-)
+ create mode 100644 gcc/testsuite/gcc.target/riscv/rvv/autovec/shuffle-slide-run.h
+ create mode 100644 gcc/testsuite/gcc.target/riscv/rvv/autovec/shuffle-slidedown-run.c
+ create mode 100644 gcc/testsuite/gcc.target/riscv/rvv/autovec/shuffle-slideup-run.c
+ create mode 100644 gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slide.h
+ create mode 100644 gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slidedown-1.c
+ create mode 100644 gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slidedown-2.c
+ create mode 100644 gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slidedown-perm.h
+ create mode 100644 gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slideup-1.c
+ create mode 100644 gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slideup-2.c
+ create mode 100644 gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slideup-perm.h
+
+diff --git a/gcc/config/riscv/riscv-v.cc b/gcc/config/riscv/riscv-v.cc
+index 012ca5918cb..2242297d7b5 100644
+--- a/gcc/config/riscv/riscv-v.cc
++++ b/gcc/config/riscv/riscv-v.cc
+@@ -3742,8 +3742,8 @@ shuffle_compress_patterns (struct expand_vec_perm_d *d)
+   return true;
+ }
+ 
+-/* Recognize patterns like [4 5 6 7 12 13 14 15] where either the lower
+-   or the higher parts of both vectors are combined into one.  */
++/* Recognize patterns like [4 5 6 7 12 13 14 15] where a consecutive part of a
++   vector is combined into another.  */
+ 
+ static bool
+ shuffle_slide_patterns (struct expand_vec_perm_d *d)
+@@ -3755,6 +3755,7 @@ shuffle_slide_patterns (struct expand_vec_perm_d *d)
+     return false;
+ 
+   int vlen = vec_len.to_constant ();
++  int len = 0;
+   if (vlen < 4)
+     return false;
+ 
+@@ -3763,8 +3764,7 @@ shuffle_slide_patterns (struct expand_vec_perm_d *d)
+ 
+   /* For a slideup OP0 can stay, for a slidedown OP1 can.
+      The former requires that the first element of the permutation
+-     is the first element of OP0, the latter that the last permutation
+-     element is the last element of OP1.  */
++     is the first element of OP0.  */
+   bool slideup = false;
+   bool slidedown = false;
+ 
+@@ -3776,13 +3776,10 @@ shuffle_slide_patterns (struct expand_vec_perm_d *d)
+   if (known_eq (d->perm[vlen - 1], 2 * vlen - 1))
+     slidedown = true;
+ 
+-  if (slideup && slidedown)
+-    return false;
+-
+   if (!slideup && !slidedown)
+     return false;
+ 
+-  /* Check for a monotonic sequence with one pivot.  */
++  /* Check for a monotonic sequence with one or two pivots.  */
+   int pivot = -1;
+   for (int i = 0; i < vlen; i++)
+     {
+@@ -3790,22 +3787,34 @@ shuffle_slide_patterns (struct expand_vec_perm_d *d)
+ 	pivot = i;
+       if (i > 0 && i != pivot
+ 	  && maybe_ne (d->perm[i], d->perm[i - 1] + 1))
+-	return false;
++	{
++	  if (pivot == -1 || len != 0)
++	    return false;
++	  /* A second pivot would indicate the vector length.  */
++	  len = i;
++	}
+     }
+ 
+   if (pivot == -1)
+     return false;
+ 
++  /* In case we have both the permutation starting at OP0's first element and
++     ending at OP1's last element we may have a slidedown from the
++     beginning.  */
++  if (slideup && slidedown)
++    {
++      /* The first pivot must be OP1's element in the PIVOT position.  */
++      if (maybe_ne (d->perm[pivot], vlen + pivot))
++	return false;
++
++      slideup = false;
++    }
++
+   /* For a slideup OP1's part (to be slid up) must be a low part,
+      i.e. starting with its first element.  */
+   if (slideup && maybe_ne (d->perm[pivot], vlen))
+       return false;
+ 
+-  /* For a slidedown OP0's part (to be slid down) must be a high part,
+-     i.e. ending with its last element.  */
+-  if (slidedown && maybe_ne (d->perm[pivot - 1], vlen - 1))
+-    return false;
+-
+   /* Success!  */
+   if (d->testing_p)
+     return true;
+@@ -3813,22 +3822,23 @@ shuffle_slide_patterns (struct expand_vec_perm_d *d)
+   /* PIVOT is the start of the lower/higher part of OP1 or OP2.
+      For a slideup it indicates how many elements of OP1 to
+      skip/slide over.  For a slidedown it indicates how long
+-     OP1's high part is, while VLEN - PIVOT is the amount to slide.  */
+-  int slide_cnt = slideup ? pivot : vlen - pivot;
++     OP1's high part is, while the first element is the amount to slide.  */
+   insn_code icode;
++  int slide_cnt = slideup ? pivot : d->perm[0].to_constant();
+   if (slideup)
+     {
+-      /* No need for a vector length because we slide up until the
+-	 end of OP1 anyway.  */
+       rtx ops[] = {d->target, d->op0, d->op1, gen_int_mode (slide_cnt, Pmode)};
+       icode = code_for_pred_slide (UNSPEC_VSLIDEUP, vmode);
+-      emit_vlmax_insn (icode, SLIDEUP_OP_MERGE, ops);
++      /* If we didn't set a vector length we slide up until the end of OP1.  */
++      if (len)
++	emit_nonvlmax_insn (icode, BINARY_OP_TUMA, ops,
++			    gen_int_mode (len, Pmode));
++      else
++	emit_vlmax_insn (icode, SLIDEUP_OP_MERGE, ops);
+     }
+   else
+     {
+-      /* Here we need a length because we slide to the beginning of OP1
+-	 leaving the remaining elements undisturbed.  */
+-      int len = pivot;
++      len = pivot;
+       rtx ops[] = {d->target, d->op1, d->op0,
+ 		   gen_int_mode (slide_cnt, Pmode)};
+       icode = code_for_pred_slide (UNSPEC_VSLIDEDOWN, vmode);
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/shuffle-slide-run.h b/gcc/testsuite/gcc.target/riscv/rvv/autovec/shuffle-slide-run.h
+new file mode 100644
+index 00000000000..e14ebeb974e
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/shuffle-slide-run.h
+@@ -0,0 +1,106 @@
++#define comp(a, b, n)                                                          \
++  for (unsigned i = 0; i < n; ++i)                                             \
++    if ((a)[i] != (b)[i])                                                      \
++      __builtin_abort ();
++
++#define CHECK4(TYPE, NUNITS, A, B, C)                                          \
++  __attribute__ ((noipa)) void check4_##A##_##B##_##C##_##TYPE ()               \
++  {                                                                            \
++    TYPE v0_##TYPE = (TYPE){SERIES_##NUNITS (0, NUNITS)};                     \
++    TYPE v1_##TYPE = (TYPE){SERIES_##NUNITS (NUNITS, NUNITS)};                \
++    TYPE ref_##TYPE = (TYPE){MASK4_##NUNITS (0, NUNITS, A, B, C)};             \
++    TYPE res_##TYPE;                                                          \
++    permute4_##A##_##B##_##C##_##TYPE (v0_##TYPE, v1_##TYPE, &res_##TYPE);   \
++    comp (res_##TYPE, ref_##TYPE, NUNITS);                                   \
++  }
++
++#define CHECK8(TYPE, NUNITS, A, B, C)                                          \
++  __attribute__ ((noipa)) void check8_##A##_##B##_##C##_##TYPE ()               \
++  {                                                                            \
++    TYPE v0_##TYPE = (TYPE){SERIES_##NUNITS (0, NUNITS)};                     \
++    TYPE v1_##TYPE = (TYPE){SERIES_##NUNITS (NUNITS, NUNITS)};                \
++    TYPE ref_##TYPE = (TYPE){MASK8_##NUNITS (0, NUNITS, A, B, C)};             \
++    TYPE res_##TYPE;                                                          \
++    permute8_##A##_##B##_##C##_##TYPE (v0_##TYPE, v1_##TYPE, &res_##TYPE);   \
++    comp (res_##TYPE, ref_##TYPE, NUNITS);                                   \
++  }
++
++#define CHECK8(TYPE, NUNITS, A, B, C)                                          \
++  __attribute__ ((noipa)) void check8_##A##_##B##_##C##_##TYPE ()               \
++  {                                                                            \
++    TYPE v0_##TYPE = (TYPE){SERIES_##NUNITS (0, NUNITS)};                     \
++    TYPE v1_##TYPE = (TYPE){SERIES_##NUNITS (NUNITS, NUNITS)};                \
++    TYPE ref_##TYPE = (TYPE){MASK8_##NUNITS (0, NUNITS, A, B, C)};             \
++    TYPE res_##TYPE;                                                          \
++    permute8_##A##_##B##_##C##_##TYPE (v0_##TYPE, v1_##TYPE, &res_##TYPE);   \
++    comp (res_##TYPE, ref_##TYPE, NUNITS);                                   \
++  }
++
++#define CHECK16(TYPE, NUNITS, A, B, C)                                          \
++  __attribute__ ((noipa)) void check16_##A##_##B##_##C##_##TYPE ()               \
++  {                                                                            \
++    TYPE v0_##TYPE = (TYPE){SERIES_##NUNITS (0, NUNITS)};                     \
++    TYPE v1_##TYPE = (TYPE){SERIES_##NUNITS (NUNITS, NUNITS)};                \
++    TYPE ref_##TYPE = (TYPE){MASK16_##NUNITS (0, NUNITS, A, B, C)};             \
++    TYPE res_##TYPE;                                                          \
++    permute16_##A##_##B##_##C##_##TYPE (v0_##TYPE, v1_##TYPE, &res_##TYPE);   \
++    comp (res_##TYPE, ref_##TYPE, NUNITS);                                   \
++  }
++
++#define CHECK32(TYPE, NUNITS, A, B, C)                                          \
++  __attribute__ ((noipa)) void check32_##A##_##B##_##C##_##TYPE ()               \
++  {                                                                            \
++    TYPE v0_##TYPE = (TYPE){SERIES_##NUNITS (0, NUNITS)};                     \
++    TYPE v1_##TYPE = (TYPE){SERIES_##NUNITS (NUNITS, NUNITS)};                \
++    TYPE ref_##TYPE = (TYPE){MASK32_##NUNITS (0, NUNITS, A, B, C)};             \
++    TYPE res_##TYPE;                                                          \
++    permute32_##A##_##B##_##C##_##TYPE (v0_##TYPE, v1_##TYPE, &res_##TYPE);   \
++    comp (res_##TYPE, ref_##TYPE, NUNITS);                                   \
++  }
++
++#define CHECK64(TYPE, NUNITS, A, B, C)                                          \
++  __attribute__ ((noipa)) void check64_##A##_##B##_##C##_##TYPE ()               \
++  {                                                                            \
++    TYPE v0_##TYPE = (TYPE){SERIES_##NUNITS (0, NUNITS)};                     \
++    TYPE v1_##TYPE = (TYPE){SERIES_##NUNITS (NUNITS, NUNITS)};                \
++    TYPE ref_##TYPE = (TYPE){MASK64_##NUNITS (0, NUNITS, A, B, C)};             \
++    TYPE res_##TYPE;                                                          \
++    permute64_##A##_##B##_##C##_##TYPE (v0_##TYPE, v1_##TYPE, &res_##TYPE);   \
++    comp (res_##TYPE, ref_##TYPE, NUNITS);                                   \
++  }
++
++#define CHECK128(TYPE, NUNITS, A, B, C)                                          \
++  __attribute__ ((noipa)) void check128_##A##_##B##_##C##_##TYPE ()               \
++  {                                                                            \
++    TYPE v0_##TYPE = (TYPE){SERIES_##NUNITS (0, NUNITS)};                     \
++    TYPE v1_##TYPE = (TYPE){SERIES_##NUNITS (NUNITS, NUNITS)};                \
++    TYPE ref_##TYPE = (TYPE){MASK128_##NUNITS (0, NUNITS, A, B, C)};             \
++    TYPE res_##TYPE;                                                          \
++    permute128_##A##_##B##_##C##_##TYPE (v0_##TYPE, v1_##TYPE, &res_##TYPE);   \
++    comp (res_##TYPE, ref_##TYPE, NUNITS);                                   \
++  }
++
++DO_ALL_TEST4(CHECK4)
++DO_ALL_TEST8(CHECK8)
++DO_ALL_TEST16(CHECK16)
++DO_ALL_TEST32(CHECK32)
++DO_ALL_TEST64(CHECK64)
++DO_ALL_TEST128(CHECK128)
++
++#define CALL_CHECK4(TYPE, NUNITS, A, B, C) check4_##A##_##B##_##C##_##TYPE ();
++#define CALL_CHECK8(TYPE, NUNITS, A, B, C) check8_##A##_##B##_##C##_##TYPE ();
++#define CALL_CHECK16(TYPE, NUNITS, A, B, C) check16_##A##_##B##_##C##_##TYPE ();
++#define CALL_CHECK32(TYPE, NUNITS, A, B, C) check32_##A##_##B##_##C##_##TYPE ();
++#define CALL_CHECK64(TYPE, NUNITS, A, B, C) check64_##A##_##B##_##C##_##TYPE ();
++#define CALL_CHECK128(TYPE, NUNITS, A, B, C) check128_##A##_##B##_##C##_##TYPE ();
++
++int
++main ()
++{
++  DO_ALL_TEST4(CALL_CHECK4)
++  DO_ALL_TEST8(CALL_CHECK8)
++  DO_ALL_TEST16(CALL_CHECK16)
++  DO_ALL_TEST32(CALL_CHECK32)
++  DO_ALL_TEST64(CALL_CHECK64)
++  DO_ALL_TEST128(CALL_CHECK128)
++}
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/shuffle-slidedown-run.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/shuffle-slidedown-run.c
+new file mode 100644
+index 00000000000..1c7203d26a5
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/shuffle-slidedown-run.c
+@@ -0,0 +1,7 @@
++/* { dg-do run } */
++/* { dg-require-effective-target riscv_v_ok } */
++/* { dg-add-options riscv_v } */
++/* { dg-additional-options "-O3 -std=gnu99 -mrvv-max-lmul=m8 -Wno-overflow" } */
++
++#include "vls-vlmax/shuffle-slidedown-1.c"
++#include "shuffle-slide-run.h"
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/shuffle-slideup-run.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/shuffle-slideup-run.c
+new file mode 100644
+index 00000000000..201b36f65cb
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/shuffle-slideup-run.c
+@@ -0,0 +1,7 @@
++/* { dg-do run } */
++/* { dg-require-effective-target riscv_v_ok } */
++/* { dg-add-options riscv_v } */
++/* { dg-additional-options "-O3 -std=gnu99 -mrvv-max-lmul=m8 -Wno-overflow" } */
++
++#include "vls-vlmax/shuffle-slideup-1.c"
++#include "shuffle-slide-run.h"
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slide.h b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slide.h
+new file mode 100644
+index 00000000000..d426433d6ea
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slide.h
+@@ -0,0 +1,240 @@
++#include "perm.h"
++
++#define SERIES_1(x, y) (x)
++#define SERIES_2(x, y) (x), (x + 1)
++#define SERIES_3(x, y) SERIES_1 (x, y), SERIES_2 (x + 1, y)
++#define SERIES_4(x, y) SERIES_2 (x, y), SERIES_2 (x + 2, y)
++#define SERIES_5(x, y) SERIES_2 (x, y), SERIES_3 (x + 2, y)
++#define SERIES_6(x, y) SERIES_3 (x, y), SERIES_3 (x + 3, y)
++#define SERIES_7(x, y) SERIES_3 (x, y), SERIES_4 (x + 3, y)
++#define SERIES_8(x, y) SERIES_4 (x, y), SERIES_4 (x + 4, y)
++#define SERIES_9(x, y) SERIES_4 (x, y), SERIES_5 (x + 4, y)
++#define SERIES_10(x, y) SERIES_5 (x, y), SERIES_5 (x + 5, y)
++#define SERIES_11(x, y) SERIES_5 (x, y), SERIES_6 (x + 5, y)
++#define SERIES_12(x, y) SERIES_6 (x, y), SERIES_6 (x + 6, y)
++#define SERIES_13(x, y) SERIES_6 (x, y), SERIES_7 (x + 6, y)
++#define SERIES_14(x, y) SERIES_7 (x, y), SERIES_7 (x + 7, y)
++#define SERIES_15(x, y) SERIES_7 (x, y), SERIES_8 (x + 7, y)
++#define SERIES_16(x, y) SERIES_8 (x, y), SERIES_8 (x + 8, y)
++#define SERIES_17(x, y) SERIES_8 (x, y), SERIES_9 (x + 8, y)
++#define SERIES_18(x, y) SERIES_9 (x, y), SERIES_9 (x + 9, y)
++#define SERIES_19(x, y) SERIES_9 (x, y), SERIES_10 (x + 9, y)
++#define SERIES_20(x, y) SERIES_10 (x, y), SERIES_10 (x + 10, y)
++#define SERIES_21(x, y) SERIES_10 (x, y), SERIES_11 (x + 10, y)
++#define SERIES_22(x, y) SERIES_11 (x, y), SERIES_11 (x + 11, y)
++#define SERIES_23(x, y) SERIES_11 (x, y), SERIES_12 (x + 11, y)
++#define SERIES_24(x, y) SERIES_12 (x, y), SERIES_12 (x + 12, y)
++#define SERIES_25(x, y) SERIES_12 (x, y), SERIES_13 (x + 12, y)
++#define SERIES_26(x, y) SERIES_13 (x, y), SERIES_13 (x + 13, y)
++#define SERIES_27(x, y) SERIES_13 (x, y), SERIES_14 (x + 13, y)
++#define SERIES_28(x, y) SERIES_14 (x, y), SERIES_14 (x + 14, y)
++#define SERIES_29(x, y) SERIES_14 (x, y), SERIES_15 (x + 14, y)
++#define SERIES_30(x, y) SERIES_15 (x, y), SERIES_15 (x + 15, y)
++#define SERIES_31(x, y) SERIES_15 (x, y), SERIES_16 (x + 15, y)
++#define SERIES_32(x, y) SERIES_16 (x, y), SERIES_16 (x + 16, y)
++#define SERIES_33(x, y) SERIES_16 (x, y), SERIES_17 (x + 16, y)
++#define SERIES_34(x, y) SERIES_17 (x, y), SERIES_17 (x + 17, y)
++#define SERIES_35(x, y) SERIES_17 (x, y), SERIES_18 (x + 17, y)
++#define SERIES_36(x, y) SERIES_18 (x, y), SERIES_18 (x + 18, y)
++#define SERIES_37(x, y) SERIES_18 (x, y), SERIES_19 (x + 18, y)
++#define SERIES_38(x, y) SERIES_19 (x, y), SERIES_19 (x + 19, y)
++#define SERIES_39(x, y) SERIES_19 (x, y), SERIES_20 (x + 19, y)
++#define SERIES_40(x, y) SERIES_20 (x, y), SERIES_20 (x + 20, y)
++#define SERIES_41(x, y) SERIES_20 (x, y), SERIES_21 (x + 20, y)
++#define SERIES_42(x, y) SERIES_21 (x, y), SERIES_21 (x + 21, y)
++#define SERIES_43(x, y) SERIES_21 (x, y), SERIES_22 (x + 21, y)
++#define SERIES_44(x, y) SERIES_22 (x, y), SERIES_22 (x + 22, y)
++#define SERIES_45(x, y) SERIES_22 (x, y), SERIES_23 (x + 22, y)
++#define SERIES_46(x, y) SERIES_23 (x, y), SERIES_23 (x + 23, y)
++#define SERIES_47(x, y) SERIES_23 (x, y), SERIES_24 (x + 23, y)
++#define SERIES_48(x, y) SERIES_24 (x, y), SERIES_24 (x + 24, y)
++#define SERIES_49(x, y) SERIES_24 (x, y), SERIES_25 (x + 24, y)
++#define SERIES_50(x, y) SERIES_25 (x, y), SERIES_25 (x + 25, y)
++#define SERIES_51(x, y) SERIES_25 (x, y), SERIES_26 (x + 25, y)
++#define SERIES_52(x, y) SERIES_26 (x, y), SERIES_26 (x + 26, y)
++#define SERIES_53(x, y) SERIES_26 (x, y), SERIES_27 (x + 26, y)
++#define SERIES_54(x, y) SERIES_27 (x, y), SERIES_27 (x + 27, y)
++#define SERIES_55(x, y) SERIES_27 (x, y), SERIES_28 (x + 27, y)
++#define SERIES_56(x, y) SERIES_28 (x, y), SERIES_28 (x + 28, y)
++#define SERIES_57(x, y) SERIES_28 (x, y), SERIES_29 (x + 28, y)
++#define SERIES_58(x, y) SERIES_29 (x, y), SERIES_29 (x + 29, y)
++#define SERIES_59(x, y) SERIES_29 (x, y), SERIES_30 (x + 29, y)
++#define SERIES_60(x, y) SERIES_30 (x, y), SERIES_30 (x + 30, y)
++#define SERIES_61(x, y) SERIES_30 (x, y), SERIES_31 (x + 30, y)
++#define SERIES_62(x, y) SERIES_31 (x, y), SERIES_31 (x + 31, y)
++#define SERIES_63(x, y) SERIES_31 (x, y), SERIES_32 (x + 31, y)
++#define SERIES_64(x, y) SERIES_32 (x, y), SERIES_32 (x + 32, y)
++#define SERIES_65(x, y) SERIES_32 (x, y), SERIES_33 (x + 32, y)
++#define SERIES_66(x, y) SERIES_33 (x, y), SERIES_33 (x + 33, y)
++#define SERIES_67(x, y) SERIES_33 (x, y), SERIES_34 (x + 33, y)
++#define SERIES_68(x, y) SERIES_34 (x, y), SERIES_34 (x + 34, y)
++#define SERIES_69(x, y) SERIES_34 (x, y), SERIES_35 (x + 34, y)
++#define SERIES_70(x, y) SERIES_35 (x, y), SERIES_35 (x + 35, y)
++#define SERIES_71(x, y) SERIES_35 (x, y), SERIES_36 (x + 35, y)
++#define SERIES_72(x, y) SERIES_36 (x, y), SERIES_36 (x + 36, y)
++#define SERIES_73(x, y) SERIES_36 (x, y), SERIES_37 (x + 36, y)
++#define SERIES_74(x, y) SERIES_37 (x, y), SERIES_37 (x + 37, y)
++#define SERIES_75(x, y) SERIES_37 (x, y), SERIES_38 (x + 37, y)
++#define SERIES_76(x, y) SERIES_38 (x, y), SERIES_38 (x + 38, y)
++#define SERIES_77(x, y) SERIES_38 (x, y), SERIES_39 (x + 38, y)
++#define SERIES_78(x, y) SERIES_39 (x, y), SERIES_39 (x + 39, y)
++#define SERIES_79(x, y) SERIES_39 (x, y), SERIES_40 (x + 39, y)
++#define SERIES_80(x, y) SERIES_40 (x, y), SERIES_40 (x + 40, y)
++#define SERIES_81(x, y) SERIES_40 (x, y), SERIES_41 (x + 40, y)
++#define SERIES_82(x, y) SERIES_41 (x, y), SERIES_41 (x + 41, y)
++#define SERIES_83(x, y) SERIES_41 (x, y), SERIES_42 (x + 41, y)
++#define SERIES_84(x, y) SERIES_42 (x, y), SERIES_42 (x + 42, y)
++#define SERIES_85(x, y) SERIES_42 (x, y), SERIES_43 (x + 42, y)
++#define SERIES_86(x, y) SERIES_43 (x, y), SERIES_43 (x + 43, y)
++#define SERIES_87(x, y) SERIES_43 (x, y), SERIES_44 (x + 43, y)
++#define SERIES_88(x, y) SERIES_44 (x, y), SERIES_44 (x + 44, y)
++#define SERIES_89(x, y) SERIES_44 (x, y), SERIES_45 (x + 44, y)
++#define SERIES_90(x, y) SERIES_45 (x, y), SERIES_45 (x + 45, y)
++#define SERIES_91(x, y) SERIES_45 (x, y), SERIES_46 (x + 45, y)
++#define SERIES_92(x, y) SERIES_46 (x, y), SERIES_46 (x + 46, y)
++#define SERIES_93(x, y) SERIES_46 (x, y), SERIES_47 (x + 46, y)
++#define SERIES_94(x, y) SERIES_47 (x, y), SERIES_47 (x + 47, y)
++#define SERIES_95(x, y) SERIES_47 (x, y), SERIES_48 (x + 47, y)
++#define SERIES_96(x, y) SERIES_48 (x, y), SERIES_48 (x + 48, y)
++#define SERIES_97(x, y) SERIES_48 (x, y), SERIES_49 (x + 48, y)
++#define SERIES_98(x, y) SERIES_49 (x, y), SERIES_49 (x + 49, y)
++#define SERIES_99(x, y) SERIES_49 (x, y), SERIES_50 (x + 49, y)
++#define SERIES_100(x, y) SERIES_50 (x, y), SERIES_50 (x + 50, y)
++#define SERIES_101(x, y) SERIES_50 (x, y), SERIES_51 (x + 50, y)
++#define SERIES_102(x, y) SERIES_51 (x, y), SERIES_51 (x + 51, y)
++#define SERIES_103(x, y) SERIES_51 (x, y), SERIES_52 (x + 51, y)
++#define SERIES_104(x, y) SERIES_52 (x, y), SERIES_52 (x + 52, y)
++#define SERIES_105(x, y) SERIES_52 (x, y), SERIES_53 (x + 52, y)
++#define SERIES_106(x, y) SERIES_53 (x, y), SERIES_53 (x + 53, y)
++#define SERIES_107(x, y) SERIES_53 (x, y), SERIES_54 (x + 53, y)
++#define SERIES_108(x, y) SERIES_54 (x, y), SERIES_54 (x + 54, y)
++#define SERIES_109(x, y) SERIES_54 (x, y), SERIES_55 (x + 54, y)
++#define SERIES_110(x, y) SERIES_55 (x, y), SERIES_55 (x + 55, y)
++#define SERIES_111(x, y) SERIES_55 (x, y), SERIES_56 (x + 55, y)
++#define SERIES_112(x, y) SERIES_56 (x, y), SERIES_56 (x + 56, y)
++#define SERIES_113(x, y) SERIES_56 (x, y), SERIES_57 (x + 56, y)
++#define SERIES_114(x, y) SERIES_57 (x, y), SERIES_57 (x + 57, y)
++#define SERIES_115(x, y) SERIES_57 (x, y), SERIES_58 (x + 57, y)
++#define SERIES_116(x, y) SERIES_58 (x, y), SERIES_58 (x + 58, y)
++#define SERIES_117(x, y) SERIES_58 (x, y), SERIES_59 (x + 58, y)
++#define SERIES_118(x, y) SERIES_59 (x, y), SERIES_59 (x + 59, y)
++#define SERIES_119(x, y) SERIES_59 (x, y), SERIES_60 (x + 59, y)
++#define SERIES_120(x, y) SERIES_60 (x, y), SERIES_60 (x + 60, y)
++#define SERIES_121(x, y) SERIES_60 (x, y), SERIES_61 (x + 60, y)
++#define SERIES_122(x, y) SERIES_61 (x, y), SERIES_61 (x + 61, y)
++#define SERIES_123(x, y) SERIES_61 (x, y), SERIES_62 (x + 61, y)
++#define SERIES_124(x, y) SERIES_62 (x, y), SERIES_62 (x + 62, y)
++#define SERIES_125(x, y) SERIES_62 (x, y), SERIES_63 (x + 62, y)
++#define SERIES_126(x, y) SERIES_63 (x, y), SERIES_63 (x + 63, y)
++#define SERIES_127(x, y) SERIES_63 (x, y), SERIES_64 (x + 63, y)
++#define SERIES_128(x, y) SERIES_64 (x, y), SERIES_64 (x + 64, y)
++#define SERIES_129(x, y) SERIES_64 (x, y), SERIES_65 (x + 64, y)
++#define SERIES_128(x, y) SERIES_64 (x, y), SERIES_64 (x + 64, y)
++
++#define PERMUTE4(TYPE, NUNITS, A, B, C)                                        \
++  __attribute__ ((noipa)) void permute4_##A##_##B##_##C##_##TYPE               \
++								(TYPE values1, \
++								 TYPE values2, \
++								 TYPE *out)    \
++  {                                                                            \
++    TYPE v = __builtin_shufflevector (values1, values2,                        \
++				      MASK4_##NUNITS (0, NUNITS, A, B, C));    \
++    *(TYPE *) out = v;                                                         \
++  }
++
++#define PERMUTE8(TYPE, NUNITS, A, B, C)                                        \
++  __attribute__ ((noipa)) void permute8_##A##_##B##_##C##_##TYPE               \
++								(TYPE values1, \
++								 TYPE values2, \
++								 TYPE *out)    \
++  {                                                                            \
++    TYPE v = __builtin_shufflevector (values1, values2,                        \
++				      MASK8_##NUNITS (0, NUNITS, A, B, C));    \
++    *(TYPE *) out = v;                                                         \
++  }
++
++#define PERMUTE16(TYPE, NUNITS, A, B, C)                                       \
++  __attribute__ ((noipa)) void permute16_##A##_##B##_##C##_##TYPE              \
++								(TYPE values1, \
++								 TYPE values2, \
++								 TYPE *out)    \
++  {                                                                            \
++    TYPE v = __builtin_shufflevector (values1, values2,                        \
++				      MASK16_##NUNITS (0, NUNITS, A, B, C));   \
++    *(TYPE *) out = v;                                                         \
++  }
++
++#define PERMUTE32(TYPE, NUNITS, A, B, C)                                       \
++  __attribute__ ((noipa)) void permute32_##A##_##B##_##C##_##TYPE              \
++								(TYPE values1, \
++								 TYPE values2, \
++								 TYPE *out)    \
++  {                                                                            \
++    TYPE v = __builtin_shufflevector (values1, values2,                        \
++				      MASK32_##NUNITS (0, NUNITS, A, B, C));   \
++    *(TYPE *) out = v;                                                         \
++  }
++
++#define PERMUTE64(TYPE, NUNITS, A, B, C)                                       \
++  __attribute__ ((noipa)) void permute64_##A##_##B##_##C##_##TYPE              \
++								(TYPE values1, \
++								 TYPE values2, \
++								 TYPE *out)    \
++  {                                                                            \
++    TYPE v = __builtin_shufflevector (values1, values2,                        \
++				      MASK64_##NUNITS (0, NUNITS, A, B, C));   \
++    *(TYPE *) out = v;                                                         \
++  }
++
++#define PERMUTE128(TYPE, NUNITS, A, B, C)                                      \
++  __attribute__ ((noipa)) void permute128_##A##_##B##_##C##_##TYPE             \
++								(TYPE values1, \
++								 TYPE values2, \
++								 TYPE *out)    \
++  {                                                                            \
++    TYPE v = __builtin_shufflevector (values1, values2,                        \
++				      MASK128_##NUNITS (0, NUNITS, A, B, C));  \
++    *(TYPE *) out = v;                                                         \
++  }
++
++#define TEST_128(FUNC, T) 							\
++  T (vnx128qi, 128, FUNC)
++
++#define TEST_64(FUNC, T) 							\
++  T (vnx64qi, 64, FUNC)                                                         \
++  T (vnx64hi, 64, FUNC)                                                         \
++  TEST_128(FUNC, T)
++
++#define TEST_32(FUNC, T)							\
++  T (vnx32hi, 32, FUNC)                                                         \
++  T (vnx32si, 32, FUNC)                                                         \
++  T (vnx32sf, 32, FUNC)                                                         \
++  T (vnx32qi, 32, FUNC)                                                         \
++  TEST_64(FUNC, T)
++
++#define TEST_16(FUNC, T)							\
++  T (vnx16qi, 16, FUNC)                                                         \
++  T (vnx16hi, 16, FUNC)                                                         \
++  T (vnx16si, 16, FUNC)                                                         \
++  T (vnx16di, 16, FUNC)                                                         \
++  T (vnx16sf, 16, FUNC)                                                         \
++  T (vnx16df, 16, FUNC) 							\
++  TEST_32(FUNC, T)
++
++#define TEST_8(FUNC, T)							        \
++  T (vnx8qi, 8, FUNC)                                                           \
++  T (vnx8hi, 8, FUNC)                                                           \
++  T (vnx8si, 8, FUNC)                                                           \
++  T (vnx8di, 8, FUNC)                                                           \
++  T (vnx8sf, 8, FUNC)                                                           \
++  T (vnx8df, 8, FUNC)                                                           \
++  TEST_16(FUNC, T)
++
++#define TEST_4(FUNC, T)                                                         \
++  T (vnx4qi, 4, FUNC)                                                           \
++  T (vnx4hi, 4, FUNC)                                                           \
++  T (vnx4si, 4, FUNC)                                                           \
++  T (vnx4di, 4, FUNC)                                                           \
++  T (vnx4sf, 4, FUNC)                                                           \
++  T (vnx4df, 4, FUNC)                                                           \
++  TEST_8(FUNC, T)
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slidedown-1.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slidedown-1.c
+new file mode 100644
+index 00000000000..c91e1bc3735
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slidedown-1.c
+@@ -0,0 +1,41 @@
++/* { dg-do compile { target { ! riscv_abi_e } } } */
++/* { dg-options "-O3 -march=rv64gcv -mrvv-max-lmul=m8 -Wno-overflow" { target { rv64 } } } */
++/* { dg-options "-O3 -march=rv32gcv -mrvv-max-lmul=m8 -Wno-overflow" { target { rv32 } } } */
++
++#define MASK(X, Y, A, B, C) SERIES_##A (X + C, Y), SERIES_##B (X + Y + A, Y)
++
++#define MASK4_4(X, Y, A, B, C) MASK(X, Y, A, B, C)
++#define MASK4_8(X, Y, A, B, C) MASK4_4(X, Y, A, B, C), SERIES_4 (X + Y + 4, Y)
++#define MASK4_16(X, Y, A, B, C) MASK4_8(X, Y, A, B, C), SERIES_8 (X + Y + 8, Y) 
++#define MASK4_32(X, Y, A, B, C) MASK4_16(X, Y, A, B, C), SERIES_16 (X + Y + 16, Y) 
++#define MASK4_64(X, Y, A, B, C) MASK4_32(X, Y, A, B, C), SERIES_32 (X + Y + 32, Y) 
++#define MASK4_128(X, Y, A, B, C) MASK4_64(X, Y, A, B, C), SERIES_64 (X + Y + 64, Y) 
++
++#define MASK8_8(X, Y, A, B, C) MASK(X, Y, A, B, C)
++#define MASK8_16(X, Y, A, B, C) MASK8_8(X, Y, A, B, C), SERIES_8 (X + Y + 8, Y) 
++#define MASK8_32(X, Y, A, B, C) MASK8_16(X, Y, A, B, C), SERIES_16 (X + Y + 16, Y) 
++#define MASK8_64(X, Y, A, B, C) MASK8_32(X, Y, A, B, C), SERIES_32 (X + Y + 32, Y) 
++#define MASK8_128(X, Y, A, B, C) MASK8_64(X, Y, A, B, C), SERIES_64 (X + Y + 64, Y) 
++
++#define MASK16_16(X, Y, A, B, C) MASK(X, Y, A, B, C)
++#define MASK16_32(X, Y, A, B, C) MASK16_16(X, Y, A, B, C), SERIES_16 (X + Y + 16, Y) 
++#define MASK16_64(X, Y, A, B, C) MASK16_32(X, Y, A, B, C), SERIES_32 (X + Y + 32, Y) 
++#define MASK16_128(X, Y, A, B, C) MASK16_64(X, Y, A, B, C), SERIES_64 (X + Y + 64, Y) 
++
++#define MASK32_32(X, Y, A, B, C) MASK(X, Y, A, B, C)
++#define MASK32_64(X, Y, A, B, C) MASK32_32(X, Y, A, B, C), SERIES_32 (X + Y + 32, Y) 
++#define MASK32_128(X, Y, A, B, C) MASK32_64(X, Y, A, B, C), SERIES_64 (X + Y + 64, Y) 
++
++#define MASK64_64(X, Y, A, B, C) MASK(X, Y, A, B, C)
++#define MASK64_128(X, Y, A, B, C) MASK64_64(X, Y, A, B, C), SERIES_64 (X + Y + 64, Y) 
++
++#define MASK128_128(X, Y, A, B, C) MASK(X, Y, A, B, C)
++
++#include "shuffle-slidedown-perm.h"
++
++/* All cases are covered by shuffle_slide_patterns but shuffle_merge_patterns is
++   called first, that's why we see some vmerge here.  */
++/* { dg-final { scan-assembler-times "vslidedown" 477 } } */
++/* { dg-final { scan-assembler-times "vmerge" 164 } } */
++/* { dg-final { scan-assembler-not "vslideup" } } */
++/* { dg-final { scan-assembler-not "vrgather" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slidedown-2.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slidedown-2.c
+new file mode 100644
+index 00000000000..5fa7848f04c
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slidedown-2.c
+@@ -0,0 +1,41 @@
++/* { dg-do compile { target { ! riscv_abi_e } } } */
++/* { dg-options "-O3 -march=rv64gcv -mrvv-max-lmul=m8 -Wno-overflow" { target { rv64 } } } */
++/* { dg-options "-O3 -march=rv32gcv -mrvv-max-lmul=m8 -Wno-overflow" { target { rv32 } } } */
++
++#define MASK(X, Y, A, B, C) SERIES_##A (X + Y + C, Y), SERIES_##B (X + A, Y)
++
++#define MASK4_4(X, Y, A, B, C) MASK(X, Y, A, B, C)
++#define MASK4_8(X, Y, A, B, C) MASK4_4(X, Y, A, B, C), SERIES_4 (X  + 4, Y)
++#define MASK4_16(X, Y, A, B, C) MASK4_8(X, Y, A, B, C), SERIES_8 (X  + 8, Y) 
++#define MASK4_32(X, Y, A, B, C) MASK4_16(X, Y, A, B, C), SERIES_16 (X + 16, Y) 
++#define MASK4_64(X, Y, A, B, C) MASK4_32(X, Y, A, B, C), SERIES_32 (X + 32, Y) 
++#define MASK4_128(X, Y, A, B, C) MASK4_64(X, Y, A, B, C), SERIES_64 (X + 64, Y) 
++
++#define MASK8_8(X, Y, A, B, C) MASK(X, Y, A, B, C)
++#define MASK8_16(X, Y, A, B, C) MASK8_8(X, Y, A, B, C), SERIES_8 (X + 8, Y) 
++#define MASK8_32(X, Y, A, B, C) MASK8_16(X, Y, A, B, C), SERIES_16 (X + 16, Y) 
++#define MASK8_64(X, Y, A, B, C) MASK8_32(X, Y, A, B, C), SERIES_32 (X  + 32, Y) 
++#define MASK8_128(X, Y, A, B, C) MASK8_64(X, Y, A, B, C), SERIES_64 (X + 64, Y) 
++
++#define MASK16_16(X, Y, A, B, C) MASK(X, Y, A, B, C)
++#define MASK16_32(X, Y, A, B, C) MASK16_16(X, Y, A, B, C), SERIES_16 (X + 16, Y) 
++#define MASK16_64(X, Y, A, B, C) MASK16_32(X, Y, A, B, C), SERIES_32 (X + 32, Y) 
++#define MASK16_128(X, Y, A, B, C) MASK16_64(X, Y, A, B, C), SERIES_64 (X + 64, Y) 
++
++#define MASK32_32(X, Y, A, B, C) MASK(X, Y, A, B, C)
++#define MASK32_64(X, Y, A, B, C) MASK32_32(X, Y, A, B, C), SERIES_32 (X + 32, Y) 
++#define MASK32_128(X, Y, A, B, C) MASK32_64(X, Y, A, B, C), SERIES_64 (X + 64, Y) 
++
++#define MASK64_64(X, Y, A, B, C) MASK(X, Y, A, B, C)
++#define MASK64_128(X, Y, A, B, C) MASK64_64(X, Y, A, B, C), SERIES_64 (X + 64, Y) 
++
++#define MASK128_128(X, Y, A, B, C) MASK(X, Y, A, B, C)
++
++#include "shuffle-slidedown-perm.h"
++
++/* All cases are covered by shuffle_slide_patterns but shuffle_merge_patterns is
++   called first, that's why we see some vmerge here.  */
++/* { dg-final { scan-assembler-times "vslidedown" 477 } } */
++/* { dg-final { scan-assembler-times "vmerge" 164 } } */
++/* { dg-final { scan-assembler-not "vslideup" } } */
++/* { dg-final { scan-assembler-not "vrgather" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slidedown-perm.h b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slidedown-perm.h
+new file mode 100644
+index 00000000000..f031de4173c
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slidedown-perm.h
+@@ -0,0 +1,107 @@
++#include "shuffle-slide.h"
++
++/* All permutations with 4 and 8 elements.  */
++#define PERM4_1(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 1, 3, 0)
++#define PERM4_2(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 1, 3, 1)
++#define PERM4_3(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 1, 3, 2)
++#define PERM4_4(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 2, 2, 0)
++#define PERM4_5(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 2, 2, 1)
++#define PERM4_6(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 3, 1, 0)
++#define PERM8_1(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 1, 7, 3)
++#define PERM8_2(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 1, 7, 4)
++#define PERM8_3(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 1, 7, 5)
++#define PERM8_4(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 1, 7, 6)
++#define PERM8_5(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 2, 6, 2)
++#define PERM8_6(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 2, 6, 3)
++#define PERM8_7(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 2, 6, 4)
++#define PERM8_8(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 2, 6, 5)
++#define PERM8_9(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 3, 5, 1)
++#define PERM8_10(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 3, 5, 2)
++#define PERM8_11(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 3, 5, 3)
++#define PERM8_12(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 3, 5, 4)
++#define PERM8_13(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 4, 4, 0)
++#define PERM8_14(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 4, 4, 1)
++#define PERM8_15(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 4, 4, 2)
++#define PERM8_16(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 4, 4, 3)
++#define PERM8_17(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 5, 3, 0)
++#define PERM8_18(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 5, 3, 1)
++#define PERM8_19(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 5, 3, 2)
++#define PERM8_20(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 6, 2, 0)
++#define PERM8_21(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 6, 2, 1)
++#define PERM8_22(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 7, 1, 0)
++
++/* We don't test all possible permutations with higher number of elements to avoid
++   timing out.  */
++#define PERM16_1(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 4, 12, 6)
++#define PERM16_2(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 7, 9, 4)
++#define PERM16_3(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 14, 2, 0)
++#define PERM32_1(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 2, 30, 17)
++#define PERM32_2(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 3, 29, 20)
++#define PERM32_3(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 13, 19, 18)
++#define PERM64_1(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 1, 63, 31)
++#define PERM64_2(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 25, 39, 14)
++#define PERM64_3(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 59, 5, 3)
++#define PERM128_1(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 4, 124, 73)
++#define PERM128_2(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 10, 118, 117)
++#define PERM128_3(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 22, 106, 50)
++#define PERM128_4(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 35, 93, 42)
++
++#define DO_ALL_TEST4(FUNC)      \
++  TEST_4 (FUNC, PERM4_1)        \
++  TEST_4 (FUNC, PERM4_2)        \
++  TEST_4 (FUNC, PERM4_3)        \
++  TEST_4 (FUNC, PERM4_4)        \
++  TEST_4 (FUNC, PERM4_5)        \
++  TEST_4 (FUNC, PERM4_6)
++
++#define DO_ALL_TEST8(FUNC)      \
++  TEST_8 (FUNC, PERM8_1)        \
++  TEST_8 (FUNC, PERM8_2)        \
++  TEST_8 (FUNC, PERM8_3)        \
++  TEST_8 (FUNC, PERM8_4)        \
++  TEST_8 (FUNC, PERM8_5)        \
++  TEST_8 (FUNC, PERM8_6)        \
++  TEST_8 (FUNC, PERM8_7)        \
++  TEST_8 (FUNC, PERM8_8)        \
++  TEST_8 (FUNC, PERM8_9)        \
++  TEST_8 (FUNC, PERM8_10)        \
++  TEST_8 (FUNC, PERM8_11)        \
++  TEST_8 (FUNC, PERM8_12)        \
++  TEST_8 (FUNC, PERM8_13)        \
++  TEST_8 (FUNC, PERM8_14)        \
++  TEST_8 (FUNC, PERM8_15)        \
++  TEST_8 (FUNC, PERM8_16)        \
++  TEST_8 (FUNC, PERM8_17)        \
++  TEST_8 (FUNC, PERM8_18)        \
++  TEST_8 (FUNC, PERM8_19)        \
++  TEST_8 (FUNC, PERM8_20)        \
++  TEST_8 (FUNC, PERM8_21)        \
++  TEST_8 (FUNC, PERM8_22)
++
++#define DO_ALL_TEST16(FUNC)       \
++  TEST_16 (FUNC, PERM16_1)        \
++  TEST_16 (FUNC, PERM16_2)        \
++  TEST_16 (FUNC, PERM16_3)
++
++#define DO_ALL_TEST32(FUNC)       \
++  TEST_32 (FUNC, PERM32_1)        \
++  TEST_32 (FUNC, PERM32_2)        \
++  TEST_32 (FUNC, PERM32_3)
++
++#define DO_ALL_TEST64(FUNC)       \
++  TEST_64 (FUNC, PERM64_1)        \
++  TEST_64 (FUNC, PERM64_2)        \
++  TEST_64 (FUNC, PERM64_3)
++
++#define DO_ALL_TEST128(FUNC)        \
++  TEST_128 (FUNC, PERM128_1)        \
++  TEST_128 (FUNC, PERM128_2)        \
++  TEST_128 (FUNC, PERM128_3)        \
++  TEST_128 (FUNC, PERM128_4)
++
++DO_ALL_TEST4(PERMUTE4)
++DO_ALL_TEST8(PERMUTE8)
++DO_ALL_TEST16(PERMUTE16)
++DO_ALL_TEST32(PERMUTE32)
++DO_ALL_TEST64(PERMUTE64)
++DO_ALL_TEST128(PERMUTE128)
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slideup-1.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slideup-1.c
+new file mode 100644
+index 00000000000..47a5f8692ff
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slideup-1.c
+@@ -0,0 +1,37 @@
++/* { dg-do compile { target { ! riscv_abi_e } } } */
++/* { dg-options "-O3 -march=rv64gcv -mrvv-max-lmul=m8 -Wno-overflow" { target { rv64 } } } */
++/* { dg-options "-O3 -march=rv32gcv -mrvv-max-lmul=m8 -Wno-overflow" { target { rv32 } } } */
++
++#define MASK4_4(X, Y, A, B, C) SERIES_##A (X, Y), SERIES_##B (X + Y,  Y), SERIES_##C (X + 4 - C, Y)
++#define MASK4_8(X, Y, A, B, C) MASK4_4(X, Y, A, B, C), SERIES_4 (X + 4, Y)
++#define MASK4_16(X, Y, A, B, C) MASK4_8(X, Y, A, B, C), SERIES_8 (X + 8, Y) 
++#define MASK4_32(X, Y, A, B, C) MASK4_16(X, Y, A, B, C), SERIES_16 (X + 16, Y) 
++#define MASK4_64(X, Y, A, B, C) MASK4_32(X, Y, A, B, C), SERIES_32 (X + 32, Y) 
++#define MASK4_128(X, Y, A, B, C) MASK4_64(X, Y, A, B, C), SERIES_64 (X + 64, Y) 
++
++#define MASK8_8(X, Y, A, B, C) SERIES_##A (X, Y), SERIES_##B (X + Y,  Y), SERIES_##C (X + 8 - C, Y)
++#define MASK8_16(X, Y, A, B, C) MASK8_8(X, Y, A, B, C), SERIES_8 (X + 8, Y) 
++#define MASK8_32(X, Y, A, B, C) MASK8_16(X, Y, A, B, C), SERIES_16 (X + 16, Y) 
++#define MASK8_64(X, Y, A, B, C) MASK8_32(X, Y, A, B, C), SERIES_32 (X + 32, Y) 
++#define MASK8_128(X, Y, A, B, C) MASK8_64(X, Y, A, B, C), SERIES_64 (X + 64, Y) 
++
++#define MASK16_16(X, Y, A, B, C) SERIES_##A (X, Y), SERIES_##B (X + Y,  Y), SERIES_##C (X + 16 - C, Y)
++#define MASK16_32(X, Y, A, B, C) MASK16_16(X, Y, A, B, C), SERIES_16 (X + 16, Y) 
++#define MASK16_64(X, Y, A, B, C) MASK16_32(X, Y, A, B, C), SERIES_32 (X + 32, Y) 
++#define MASK16_128(X, Y, A, B, C) MASK16_64(X, Y, A, B, C), SERIES_64 (X + 64, Y) 
++
++#define MASK32_32(X, Y, A, B, C) SERIES_##A (X, Y), SERIES_##B (X + Y,  Y), SERIES_##C (X + 32 - C, Y)
++#define MASK32_64(X, Y, A, B, C) MASK32_32(X, Y, A, B, C), SERIES_32 (X + 32, Y) 
++#define MASK32_128(X, Y, A, B, C) MASK32_64(X, Y, A, B, C), SERIES_64 (X + 64, Y) 
++
++#define MASK64_64(X, Y, A, B, C) SERIES_##A (X, Y), SERIES_##B (X + Y,  Y), SERIES_##C (X + 64 - C, Y)
++#define MASK64_128(X, Y, A, B, C) MASK64_64(X, Y, A, B, C), SERIES_64 (X + 64, Y) 
++
++#define MASK128_128(X, Y, A, B, C) SERIES_##A (X, Y), SERIES_##B (X + Y,  Y), SERIES_##C (X + 128 - C, Y)
++
++#include "shuffle-slideup-perm.h"
++
++/* { dg-final { scan-assembler-times "vslideup" 490 } } */
++/* { dg-final { scan-assembler-not "vslidedown" } } */
++/* { dg-final { scan-assembler-not "vrgather" } } */
++/* { dg-final { scan-assembler-not "vmerge" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slideup-2.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slideup-2.c
+new file mode 100644
+index 00000000000..cc82dd185ae
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slideup-2.c
+@@ -0,0 +1,37 @@
++/* { dg-do compile { target { ! riscv_abi_e } } } */
++/* { dg-options "-O3 -march=rv64gcv -mrvv-max-lmul=m8 -Wno-overflow" { target { rv64 } } } */
++/* { dg-options "-O3 -march=rv32gcv -mrvv-max-lmul=m8 -Wno-overflow" { target { rv32 } } } */
++
++#define MASK4_4(X, Y, A, B, C) SERIES_##A (X + Y, Y), SERIES_##B (X,  Y), SERIES_##C (X + Y + 4 - C, Y)
++#define MASK4_8(X, Y, A, B, C) MASK4_4(X, Y, A, B, C), SERIES_4 (X + Y + 4, Y)
++#define MASK4_16(X, Y, A, B, C) MASK4_8(X, Y, A, B, C), SERIES_8 (X + Y + 8, Y) 
++#define MASK4_32(X, Y, A, B, C) MASK4_16(X, Y, A, B, C), SERIES_16 (X + Y + 16, Y) 
++#define MASK4_64(X, Y, A, B, C) MASK4_32(X, Y, A, B, C), SERIES_32 (X + Y + 32, Y) 
++#define MASK4_128(X, Y, A, B, C) MASK4_64(X, Y, A, B, C), SERIES_64 (X + Y + 64, Y) 
++
++#define MASK8_8(X, Y, A, B, C) SERIES_##A (X + Y, Y), SERIES_##B (X,  Y), SERIES_##C (X + Y + 8 - C, Y)
++#define MASK8_16(X, Y, A, B, C) MASK8_8(X, Y, A, B, C), SERIES_8 (X + Y + 8, Y) 
++#define MASK8_32(X, Y, A, B, C) MASK8_16(X, Y, A, B, C), SERIES_16 (X + Y + 16, Y) 
++#define MASK8_64(X, Y, A, B, C) MASK8_32(X, Y, A, B, C), SERIES_32 (X + Y + 32, Y) 
++#define MASK8_128(X, Y, A, B, C) MASK8_64(X, Y, A, B, C), SERIES_64 (X + Y + 64, Y) 
++
++#define MASK16_16(X, Y, A, B, C) SERIES_##A (X + Y, Y), SERIES_##B (X,  Y), SERIES_##C (X + Y + 16 - C, Y)
++#define MASK16_32(X, Y, A, B, C) MASK16_16(X, Y, A, B, C), SERIES_16 (X + Y + 16, Y) 
++#define MASK16_64(X, Y, A, B, C) MASK16_32(X, Y, A, B, C), SERIES_32 (X + Y + 32, Y) 
++#define MASK16_128(X, Y, A, B, C) MASK16_64(X, Y, A, B, C), SERIES_64 (X + Y + 64, Y) 
++
++#define MASK32_32(X, Y, A, B, C) SERIES_##A (X + Y, Y), SERIES_##B (X,  Y), SERIES_##C (X + Y + 32 - C, Y)
++#define MASK32_64(X, Y, A, B, C) MASK32_32(X, Y, A, B, C), SERIES_32 (X + Y + 32, Y) 
++#define MASK32_128(X, Y, A, B, C) MASK32_64(X, Y, A, B, C), SERIES_64 (X + Y + 64, Y) 
++
++#define MASK64_64(X, Y, A, B, C) SERIES_##A (X + Y, Y), SERIES_##B (X,  Y), SERIES_##C (X + Y + 64 - C, Y)
++#define MASK64_128(X, Y, A, B, C) MASK64_64(X, Y, A, B, C), SERIES_64 (X + Y + 64, Y) 
++
++#define MASK128_128(X, Y, A, B, C) SERIES_##A (X + Y, Y), SERIES_##B (X,  Y), SERIES_##C (X + Y + 128 - C, Y)
++
++#include "shuffle-slideup-perm.h"
++
++/* { dg-final { scan-assembler-times "vslideup" 490 } } */
++/* { dg-final { scan-assembler-not "vslidedown" } } */
++/* { dg-final { scan-assembler-not "vrgather" } } */
++/* { dg-final { scan-assembler-not "vmerge" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slideup-perm.h b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slideup-perm.h
+new file mode 100644
+index 00000000000..907793f5e1c
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slideup-perm.h
+@@ -0,0 +1,93 @@
++#include "shuffle-slide.h"
++
++/* All permutations with 4 and 8 elements.  */
++#define PERM4_1(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 1, 1, 2)
++#define PERM4_2(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 1, 2, 1)
++#define PERM4_3(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 2, 1, 1)
++#define PERM8_1(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 1, 3, 4)
++#define PERM8_2(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 1, 4, 3)
++#define PERM8_3(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 1, 5, 2)
++#define PERM8_4(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 1, 6, 1)
++#define PERM8_5(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 2, 2, 4)
++#define PERM8_6(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 2, 3, 3)
++#define PERM8_7(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 2, 4, 2)
++#define PERM8_8(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 2, 5, 1)
++#define PERM8_9(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 3, 1, 4)
++#define PERM8_10(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 3, 2, 3)
++#define PERM8_11(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 3, 3, 2)
++#define PERM8_12(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 3, 4, 1)
++#define PERM8_13(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 4, 1, 3)
++#define PERM8_14(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 4, 2, 2)
++#define PERM8_15(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 4, 3, 1)
++#define PERM8_16(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 5, 1, 2)
++#define PERM8_17(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 5, 2, 1)
++#define PERM8_18(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 6, 1, 1)
++
++/* We don't test all possible permutations with higher number of elements to avoid
++   timing out.  */
++#define PERM16_1(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 1, 13, 2)
++#define PERM16_2(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 4, 9, 3)
++#define PERM16_3(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 11, 4, 1)
++#define PERM32_1(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 4, 27, 1)
++#define PERM32_2(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 6, 19, 7)
++#define PERM32_3(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 20, 4, 8)
++#define PERM64_1(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 2, 37, 25)
++#define PERM64_2(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 6, 29, 29)
++#define PERM64_3(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 34, 10, 20)
++#define PERM128_1(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 2, 68, 58)
++#define PERM128_2(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 32, 45, 51)
++#define PERM128_3(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 60, 63, 5)
++#define PERM128_4(TYPE, NUNITS, FUNC) FUNC(TYPE, NUNITS, 81, 7, 40)
++
++#define DO_ALL_TEST4(FUNC)  \
++  TEST_4 (FUNC, PERM4_1)    \
++  TEST_4 (FUNC, PERM4_2)    \
++  TEST_4 (FUNC, PERM4_3)
++
++#define DO_ALL_TEST8(FUNC)      \
++  TEST_8 (FUNC, PERM8_1)        \
++  TEST_8 (FUNC, PERM8_2)        \
++  TEST_8 (FUNC, PERM8_3)        \
++  TEST_8 (FUNC, PERM8_4)        \
++  TEST_8 (FUNC, PERM8_5)        \
++  TEST_8 (FUNC, PERM8_6)        \
++  TEST_8 (FUNC, PERM8_7)        \
++  TEST_8 (FUNC, PERM8_8)        \
++  TEST_8 (FUNC, PERM8_9)        \
++  TEST_8 (FUNC, PERM8_10)        \
++  TEST_8 (FUNC, PERM8_11)        \
++  TEST_8 (FUNC, PERM8_12)        \
++  TEST_8 (FUNC, PERM8_13)        \
++  TEST_8 (FUNC, PERM8_14)        \
++  TEST_8 (FUNC, PERM8_15)        \
++  TEST_8 (FUNC, PERM8_16)        \
++  TEST_8 (FUNC, PERM8_17)        \
++  TEST_8 (FUNC, PERM8_18)
++
++#define DO_ALL_TEST16(FUNC)      \
++  TEST_16 (FUNC, PERM16_1)        \
++  TEST_16 (FUNC, PERM16_2)        \
++  TEST_16 (FUNC, PERM16_3)
++
++#define DO_ALL_TEST32(FUNC)       \
++  TEST_32 (FUNC, PERM32_1)        \
++  TEST_32 (FUNC, PERM32_2)        \
++  TEST_32 (FUNC, PERM32_3)
++
++#define DO_ALL_TEST64(FUNC)       \
++  TEST_64 (FUNC, PERM64_1)        \
++  TEST_64 (FUNC, PERM64_2)        \
++  TEST_64 (FUNC, PERM64_3)
++
++#define DO_ALL_TEST128(FUNC)        \
++  TEST_128 (FUNC, PERM128_1)        \
++  TEST_128 (FUNC, PERM128_2)        \
++  TEST_128 (FUNC, PERM128_3)        \
++  TEST_128 (FUNC, PERM128_4)
++
++DO_ALL_TEST4(PERMUTE4)
++DO_ALL_TEST8(PERMUTE8)
++DO_ALL_TEST16(PERMUTE16)
++DO_ALL_TEST32(PERMUTE32)
++DO_ALL_TEST64(PERMUTE64)
++DO_ALL_TEST128(PERMUTE128)
+-- 
+2.51.0
+
+
+
