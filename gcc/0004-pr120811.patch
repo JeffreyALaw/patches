@@ -7,6 +7,47 @@ Sent a pointer to the patchfile in slack but I've attached it below too
 
 pr120811.patch
 
+
+Hey Jeff,
+
+I've attached the patch file with the ival/saturated changes also included.
+
+-Shreya
+
+bug-pr120811.patch
+
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index 1aaafff9480..3a096b6630f 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -15408,9 +15408,9 @@ synthesize_add (rtx operands[3])
+ 
+       ival -= saturated;
+ 
+-      rtx x = gen_rtx_PLUS (word_mode, operands[1], GEN_INT (saturated));
++      rtx x = gen_rtx_PLUS (word_mode, operands[1], GEN_INT (ival));
+       emit_insn (gen_rtx_SET (operands[0], x));
+-      rtx output = gen_rtx_PLUS (word_mode, operands[0], GEN_INT (ival));
++      rtx output = gen_rtx_PLUS (word_mode, operands[0], GEN_INT (saturated));
+       emit_insn (gen_rtx_SET (operands[0], output));
+       return true;
+     }
+@@ -15539,13 +15539,13 @@ synthesize_addsi (rtx operands[3])
+       ival -= saturated;
+ 
+       rtx temp = gen_reg_rtx (DImode);  
+-      emit_insn (gen_addsi3_extended (temp, operands[1], GEN_INT (saturated)));
++      emit_insn (gen_addsi3_extended (temp, operands[1], GEN_INT (ival)));
+       temp = gen_lowpart (SImode, temp);
+       SUBREG_PROMOTED_VAR_P (temp) = 1;
+       SUBREG_PROMOTED_SET (temp, SRP_SIGNED);
+       emit_insn (gen_rtx_SET (operands[0], temp));
+       rtx t = gen_reg_rtx (DImode);
+-      emit_insn (gen_addsi3_extended (t, operands[0], GEN_INT (ival)));
++      emit_insn (gen_addsi3_extended (t, operands[0], GEN_INT (saturated)));
+       t = gen_lowpart (SImode, t);
+       SUBREG_PROMOTED_VAR_P (t) = 1;
+       SUBREG_PROMOTED_SET (t, SRP_SIGNED);
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
 index bf9cd589d0d..cb23116dbdc 100644
 --- a/gcc/config/riscv/riscv.md
@@ -104,9 +145,10 @@ new file mode 100644
 index 00000000000..4351a39f15e
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/pr120811.c
-@@ -0,0 +1,41 @@
-+/* { dg-do compile { target { rv64 } } } */
+@@ -0,0 +1,42 @@
++/* { dg-do compile } */
 +/* { dg-options "-O2 -march=rv64gc -mabi=lp64d -fdump-rtl-reload -fdump-rtl-late_combine2" { target { rv64 } } } */
++/* { dg-options "-O2 -march=rv32gc -mabi=ilp32d -fdump-rtl-reload -fdump-rtl-late_combine2" { target { rv32 } } } */
 +/* { dg-skip-if "" { *-*-* } "-fomit-frame-pointer" } */
 +
 +double *a, *b, *ab, *ac, *ad, *ae, *af, *c, *i, *k, *l;
@@ -144,7 +186,7 @@ index 00000000000..4351a39f15e
 +}
 +/* { dg-final { scan-rtl-dump-not "const_sum_of_two_s12" "reload" } } */
 +/* { dg-final { scan-rtl-dump-not "const_sum_of_two_s12" "late_combine2" } } */
-+/* { dg-final { scan-assembler "addi.*\[ats\]\[0-9\]*,sp,\[0-9\]*\n\tl\[dw\]\t.*,2047\(.*\).*" } } */
++/* { dg-final { scan-assembler "addi.*sp,2047\n\tld\t.*,1\(.*\).*" } } */
 +
 diff --git a/gcc/testsuite/gcc.target/riscv/sum-of-two-s12-const-1.c b/gcc/testsuite/gcc.target/riscv/sum-of-two-s12-const-1.c
 index 4d6d135de5f..ac17ec271be 100644
@@ -161,35 +203,3 @@ index 4d6d135de5f..ac17ec271be 100644
  long
 
 
-diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 07d40f459e3..243e9d85734 100644
---- a/gcc/config/riscv/riscv.cc
-+++ b/gcc/config/riscv/riscv.cc
-@@ -15441,9 +15441,9 @@ synthesize_add (rtx operands[3])
- 
-       ival -= saturated;
- 
--      rtx x = gen_rtx_PLUS (word_mode, operands[1], GEN_INT (saturated));
-+      rtx x = gen_rtx_PLUS (word_mode, operands[1], GEN_INT (ival));
-       emit_insn (gen_rtx_SET (operands[0], x));
--      rtx output = gen_rtx_PLUS (word_mode, operands[0], GEN_INT (ival));
-+      rtx output = gen_rtx_PLUS (word_mode, operands[0], GEN_INT (saturated));
-       emit_insn (gen_rtx_SET (operands[0], output));
-       return true;
-     }
-@@ -15541,13 +15541,13 @@ synthesize_add_extended (rtx operands[3])
-       ival -= saturated;
- 
-       rtx temp = gen_reg_rtx (DImode);
--      emit_insn (gen_addsi3_extended (temp, operands[1], GEN_INT (saturated)));
-+      emit_insn (gen_addsi3_extended (temp, operands[1], GEN_INT (ival)));
-       temp = gen_lowpart (SImode, temp);
-       SUBREG_PROMOTED_VAR_P (temp) = 1;
-       SUBREG_PROMOTED_SET (temp, SRP_SIGNED);
-       emit_insn (gen_rtx_SET (operands[0], temp));
-       rtx t = gen_reg_rtx (DImode);
--      emit_insn (gen_addsi3_extended (t, operands[0], GEN_INT (ival)));
-+      emit_insn (gen_addsi3_extended (t, operands[0], GEN_INT (saturated)));
-       t = gen_lowpart (SImode, t);
-       SUBREG_PROMOTED_VAR_P (t) = 1;
-       SUBREG_PROMOTED_SET (t, SRP_SIGNED);
