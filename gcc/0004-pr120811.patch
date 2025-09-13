@@ -1,26 +1,8 @@
-
-Hey Jeff, 
-
-Sent a pointer to the patchfile in slack but I've attached it below too
-
--Shreya
-
-pr120811.patch
-
-
-Hey Jeff,
-
-I've attached the patch file with the ival/saturated changes also included.
-
--Shreya
-
-bug-pr120811.patch
-
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 1aaafff9480..3a096b6630f 100644
+index b93103616b8..b067a11a24b 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
-@@ -15408,9 +15408,9 @@ synthesize_add (rtx operands[3])
+@@ -15444,9 +15444,9 @@ synthesize_add (rtx operands[3])
  
        ival -= saturated;
  
@@ -32,10 +14,10 @@ index 1aaafff9480..3a096b6630f 100644
        emit_insn (gen_rtx_SET (operands[0], output));
        return true;
      }
-@@ -15539,13 +15539,13 @@ synthesize_addsi (rtx operands[3])
+@@ -15544,13 +15544,13 @@ synthesize_add_extended (rtx operands[3])
        ival -= saturated;
  
-       rtx temp = gen_reg_rtx (DImode);  
+       rtx temp = gen_reg_rtx (DImode);
 -      emit_insn (gen_addsi3_extended (temp, operands[1], GEN_INT (saturated)));
 +      emit_insn (gen_addsi3_extended (temp, operands[1], GEN_INT (ival)));
        temp = gen_lowpart (SImode, temp);
@@ -49,7 +31,7 @@ index 1aaafff9480..3a096b6630f 100644
        SUBREG_PROMOTED_VAR_P (t) = 1;
        SUBREG_PROMOTED_SET (t, SRP_SIGNED);
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index bf9cd589d0d..cb23116dbdc 100644
+index 2a3a20e122a..4d05068da40 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
 @@ -702,6 +702,27 @@ (define_insn "add<mode>3"
@@ -80,7 +62,7 @@ index bf9cd589d0d..cb23116dbdc 100644
  (define_insn "*addsi3"
    [(set (match_operand:SI          0 "register_operand" "=r,r")
  	(plus:SI (match_operand:SI 1 "register_operand" " r,r")
-@@ -763,46 +784,6 @@ (define_insn "*adddi3"
+@@ -759,46 +780,6 @@ (define_insn "*adddi3"
    [(set_attr "type" "arith")
     (set_attr "mode" "DI")])
  
@@ -140,54 +122,6 @@ index 247096cec00..982b2fa7f2b 100644
  TM (4100)
  TM (8200)
  
-diff --git a/gcc/testsuite/gcc.target/riscv/pr120811.c b/gcc/testsuite/gcc.target/riscv/pr120811.c
-new file mode 100644
-index 00000000000..4351a39f15e
---- /dev/null
-+++ b/gcc/testsuite/gcc.target/riscv/pr120811.c
-@@ -0,0 +1,42 @@
-+/* { dg-do compile } */
-+/* { dg-options "-O2 -march=rv64gc -mabi=lp64d -fdump-rtl-reload -fdump-rtl-late_combine2" { target { rv64 } } } */
-+/* { dg-options "-O2 -march=rv32gc -mabi=ilp32d -fdump-rtl-reload -fdump-rtl-late_combine2" { target { rv32 } } } */
-+/* { dg-skip-if "" { *-*-* } "-fomit-frame-pointer" } */
-+
-+double *a, *b, *ab, *ac, *ad, *ae, *af, *c, *i, *k, *l;
-+int n(int *, int, int, int), d, ag, aj;
-+long ai, e;
-+double f, g, h, o, p;
-+int m;
-+void q() {
-+  long am = n(&d, 0, 1, 0);
-+  for (;;)
-+    for (int j = ag; j; ++j) {
-+      int ao = 0;
-+      for (; ao < aj; ao++) {
-+        long ap = ao + j;
-+        double ar = ad[ap] = ae[ap], az;
-+        switch (m)
-+        case 4: {
-+          o = (&l[ap])[2] - (&l[ap])[3] * ((char *)ap)[am] + (&l[ap])[e] +
-+              (&l[ap])[am];
-+          p = (&l[ap])[ai - 1] + (&ap)[ai] * (&l[ap])[am * ai] +
-+              (&l[ap])[ai * 3];
-+          az = (&b[ap])[1] +
-+               (&b[ap])[3] * i[ap] * (&ap)[203] * ((char *)&i[ap])[ai] -
-+               (&i[ap])[ai * 3];
-+          g = (&i[ap])[e] + (&i[ap])[ai];
-+          h = (&ab[ap])[am] * (&ab[ap])[2] - ((char *)ap)[ai] +
-+              (&ab[ap])[ai] * (&ap)[0] * (&af[ap])[am] * (&af[ap])[e] +
-+              (&ap)[2] + (&af[ap])[e * am] + (&af[ap])[am * 3];
-+        }
-+          ar = az * f * k[ap];
-+        c[ap] = ar;
-+        a[ap] = ac[ap];
-+      }
-+    }
-+}
-+/* { dg-final { scan-rtl-dump-not "const_sum_of_two_s12" "reload" } } */
-+/* { dg-final { scan-rtl-dump-not "const_sum_of_two_s12" "late_combine2" } } */
-+/* { dg-final { scan-assembler "addi.*sp,2047\n\tl\[dw\]\t.*,1\(.*\).*" } } */
-+
 diff --git a/gcc/testsuite/gcc.target/riscv/sum-of-two-s12-const-1.c b/gcc/testsuite/gcc.target/riscv/sum-of-two-s12-const-1.c
 index 4d6d135de5f..ac17ec271be 100644
 --- a/gcc/testsuite/gcc.target/riscv/sum-of-two-s12-const-1.c
@@ -201,5 +135,3 @@ index 4d6d135de5f..ac17ec271be 100644
  }
  
  long
-
-
