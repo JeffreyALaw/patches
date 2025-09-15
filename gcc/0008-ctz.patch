@@ -13,7 +13,7 @@ index 9da9ac51eccd..71097b80cfe1 100644
  	target_gtfiles="$target_gtfiles \$(srcdir)/config/riscv/riscv-vector-builtins.cc"
 diff --git a/gcc/config/riscv/riscv-bclr-lowest-set-bit.cc b/gcc/config/riscv/riscv-bclr-lowest-set-bit.cc
 new file mode 100644
-index 000000000000..e582a5275390
+index 000000000000..51bd4301ce7a
 --- /dev/null
 +++ b/gcc/config/riscv/riscv-bclr-lowest-set-bit.cc
 @@ -0,0 +1,306 @@
@@ -257,9 +257,8 @@ index 000000000000..e582a5275390
 +	  if (dec_src != and_op0 && dec_src != and_op1)
 +	    continue;
 +
-+	  /* We've found x & (x - 1).  Now look for a suitable ctz nearby. 
++	  /* We've found x & (x - 1).  Now look for a suitable ctz nearby.  */
 +
-+	     XXX FIXME.  Need to verify the source of the CTZ is unchanged.  */
 +	  rtx_insn *prior_ctz = find_prior_ctz (insn, dec_src, 10);
 +	  if (prior_ctz)
 +	    {
@@ -273,6 +272,7 @@ index 000000000000..e582a5275390
 +
 +	      /* Slam that pattern in as the SET_SRC of the original AND.  */
 +	      SET_SRC (and_set) = pat;
++	      INSN_CODE (next) = -1;
 +	      df_insn_rescan (next);
 +
 +	      /* Start next loop iteration.  */
@@ -363,3 +363,137 @@ index d86dc7443658..b53a2dff2cf7 100644
  riscv-shorten-memrefs.o: $(srcdir)/config/riscv/riscv-shorten-memrefs.cc \
    $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) $(TARGET_H)
  	$(COMPILE) $<
+diff --git a/gcc/testsuite/gcc.target/riscv/bclr-lowest-set-bit-1.c b/gcc/testsuite/gcc.target/riscv/bclr-lowest-set-bit-1.c
+new file mode 100644
+index 000000000000..fa201cec3590
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/bclr-lowest-set-bit-1.c
+@@ -0,0 +1,128 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gcb -mabi=lp64d" { target { rv64} } } */
++/* { dg-options "-march=rv32gcb -mabi=ilp32" { target { rv32} } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
++
++int foo1_res1;
++int foo1_res2;
++void foo1(unsigned int x)
++{
++  unsigned int tz = __builtin_ctz (x);
++  unsigned int t = x - 1UL;
++  foo1_res1 = t & x;
++  foo1_res2 = tz;
++}
++
++int foo2_res1;
++int foo2_res2;
++void foo2(unsigned int x)
++{
++  unsigned int t = x - 1UL;
++  unsigned int tz = __builtin_ctz (x);
++  foo2_res1 = t & x;
++  foo2_res2 = tz;
++}
++
++int foo3_res1;
++int foo3_res2;
++void foo3(unsigned int x)
++{
++  unsigned int t = x - 1UL;
++  foo3_res1 = t & x;
++  unsigned int tz = __builtin_ctz (x);
++  foo3_res2 = tz;
++}
++
++unsigned int foo4_res1;
++unsigned int foo4_res2;
++void foo4(unsigned int x)
++{
++  unsigned int tz = __builtin_ctz (x);
++  unsigned int t = x - 1UL;
++  foo4_res1 = t & x;
++  foo4_res2 = tz;
++}
++
++unsigned int foo5_res1;
++unsigned int foo5_res2;
++void foo5(unsigned int x)
++{
++  unsigned int t = x - 1UL;
++  unsigned int tz = __builtin_ctz (x);
++  foo5_res1 = t & x;
++  foo5_res2 = tz;
++}
++
++unsigned int foo6_res1;
++unsigned int foo6_res2;
++void foo6(unsigned int x)
++{
++  unsigned int t = x - 1UL;
++  foo6_res1 = t & x;
++  unsigned int tz = __builtin_ctzl (x);
++  foo6_res2 = tz;
++}
++
++long foo7_res1;
++long foo7_res2;
++void foo7(unsigned long x)
++{
++  unsigned long tz = __builtin_ctzl (x);
++  unsigned long t = x - 1UL;
++  foo7_res1 = t & x;
++  foo7_res2 = tz;
++}
++
++long foo8_res1;
++long foo8_res2;
++void foo8(unsigned long x)
++{
++  unsigned long t = x - 1UL;
++  unsigned long tz = __builtin_ctzl (x);
++  foo8_res1 = t & x;
++  foo8_res2 = tz;
++}
++
++long foo9_res1;
++long foo9_res2;
++void foo9(unsigned long x)
++{
++  unsigned long t = x - 1UL;
++  foo9_res1 = t & x;
++  unsigned long tz = __builtin_ctzl (x);
++  foo9_res2 = tz;
++}
++
++unsigned long foo10_res1;
++unsigned long foo10_res2;
++void foo10(unsigned long x)
++{
++  unsigned long tz = __builtin_ctzl (x);
++  unsigned long t = x - 1UL;
++  foo10_res1 = t & x;
++  foo10_res2 = tz;
++}
++
++unsigned long foo11_res1;
++unsigned long foo11_res2;
++void foo11(unsigned long x)
++{
++  unsigned long t = x - 1UL;
++  unsigned long tz = __builtin_ctzl (x);
++  foo11_res1 = t & x;
++  foo11_res2 = tz;
++}
++
++unsigned long foo12_res1;
++unsigned long foo12_res2;
++void foo12(unsigned long x)
++{
++  unsigned long t = x - 1UL;
++  foo12_res1 = t & x;
++  unsigned long tz = __builtin_ctzl (x);
++  foo12_res2 = tz;
++}
++
++/* { dg-final { scan-assembler-not "\\sand\\s" } } */
++/* { dg-final { scan-assembler-times "\\sbclr\\s" 12 } } */
++
