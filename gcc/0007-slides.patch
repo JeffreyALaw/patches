@@ -1,5 +1,10 @@
 
 
+Changes since v1:
+	- Fixed permutations with two pivots and repeated elements.
+
+-- >8 --
+
 Improve shuffle_slide_patterns to better recognize permutations that
 can be constructed by a slideup or slidedown, covering more cases:
 Slideup one vector into the middle the other like
@@ -37,7 +42,7 @@ gcc/testsuite/ChangeLog:
 	* gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slideup-perm.h:
 	Likewise.
 ---
- gcc/config/riscv/riscv-v.cc                   |  54 ++--
+ gcc/config/riscv/riscv-v.cc                   |  56 ++--
  .../riscv/rvv/autovec/shuffle-slide-run.h     | 106 ++++++++
  .../riscv/rvv/autovec/shuffle-slidedown-run.c |   7 +
  .../riscv/rvv/autovec/shuffle-slideup-run.c   |   7 +
@@ -48,7 +53,7 @@ gcc/testsuite/ChangeLog:
  .../rvv/autovec/vls-vlmax/shuffle-slideup-1.c |  37 +++
  .../rvv/autovec/vls-vlmax/shuffle-slideup-2.c |  37 +++
  .../autovec/vls-vlmax/shuffle-slideup-perm.h  |  93 +++++++
- 11 files changed, 748 insertions(+), 22 deletions(-)
+ 11 files changed, 751 insertions(+), 21 deletions(-)
  create mode 100644 gcc/testsuite/gcc.target/riscv/rvv/autovec/shuffle-slide-run.h
  create mode 100644 gcc/testsuite/gcc.target/riscv/rvv/autovec/shuffle-slidedown-run.c
  create mode 100644 gcc/testsuite/gcc.target/riscv/rvv/autovec/shuffle-slideup-run.c
@@ -61,7 +66,7 @@ gcc/testsuite/ChangeLog:
  create mode 100644 gcc/testsuite/gcc.target/riscv/rvv/autovec/vls-vlmax/shuffle-slideup-perm.h
 
 diff --git a/gcc/config/riscv/riscv-v.cc b/gcc/config/riscv/riscv-v.cc
-index 012ca5918cb..2242297d7b5 100644
+index 012ca5918cb..8021bc14e7c 100644
 --- a/gcc/config/riscv/riscv-v.cc
 +++ b/gcc/config/riscv/riscv-v.cc
 @@ -3742,8 +3742,8 @@ shuffle_compress_patterns (struct expand_vec_perm_d *d)
@@ -108,7 +113,7 @@ index 012ca5918cb..2242297d7b5 100644
    int pivot = -1;
    for (int i = 0; i < vlen; i++)
      {
-@@ -3790,22 +3787,34 @@ shuffle_slide_patterns (struct expand_vec_perm_d *d)
+@@ -3790,21 +3787,37 @@ shuffle_slide_patterns (struct expand_vec_perm_d *d)
  	pivot = i;
        if (i > 0 && i != pivot
  	  && maybe_ne (d->perm[i], d->perm[i - 1] + 1))
@@ -145,11 +150,13 @@ index 012ca5918cb..2242297d7b5 100644
 -     i.e. ending with its last element.  */
 -  if (slidedown && maybe_ne (d->perm[pivot - 1], vlen - 1))
 -    return false;
--
++  /* The second pivot in a slideup must be following OP0's position.  */
++  if (slideup && len && maybe_ne (d->perm[len], len))
++      return false;
+ 
    /* Success!  */
    if (d->testing_p)
-     return true;
-@@ -3813,22 +3822,23 @@ shuffle_slide_patterns (struct expand_vec_perm_d *d)
+@@ -3813,22 +3826,23 @@ shuffle_slide_patterns (struct expand_vec_perm_d *d)
    /* PIVOT is the start of the lower/higher part of OP1 or OP2.
       For a slideup it indicates how many elements of OP1 to
       skip/slide over.  For a slidedown it indicates how long
@@ -959,6 +966,7 @@ index 00000000000..907793f5e1c
 +DO_ALL_TEST128(PERMUTE128)
 -- 
 2.51.0
+
 
 
 
