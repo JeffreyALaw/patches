@@ -28,7 +28,7 @@ index 000000000000..9d8244722e3e
 +++ b/gcc/testsuite/gcc.target/riscv/pr122051.c
 @@ -0,0 +1,24 @@
 +/* { dg-do compile { target int128 } } */
-+/* { dg-additional-options "-mrvv-vector-bits=zvl -mcpu=xt-c920" } */
++/* { dg-additional-options "-mrvv-vector-bits=zvl -mcpu=xt-c920 -w" } */
 +
 +typedef __attribute__((__vector_size__(4))) char B;
 +typedef __attribute__((__vector_size__(16))) long V;
