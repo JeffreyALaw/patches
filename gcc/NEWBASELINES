@@ -3,3 +3,5 @@
 # reset.  
 microblaze-linux
 v850e-elf
+iq2000-elf
+cris-elf
