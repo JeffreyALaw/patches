@@ -16,3 +16,23 @@ index 056f9e219092..f811a4e40ca7 100644
      default:
        return true;
      }
+diff --git a/gcc/testsuite/gcc.target/riscv/pr122147.c b/gcc/testsuite/gcc.target/riscv/pr122147.c
+new file mode 100644
+index 000000000000..14da321bc85f
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr122147.c
+@@ -0,0 +1,14 @@
++/* { dg-do compile } */
++/* { dg-additional-options "-w -march=rv64gcv -mabi=lp64d" { target rv64 } } */
++/* { dg-additional-options "-w -march=rv32gcv -mabi=ilp32" { target rv32 } } */
++
++typedef __attribute__((__vector_size__ (4))) _Float16 F;
++_Complex char cc;
++F f;
++
++void
++foo ()
++{
++  __builtin_memmove (&f, &cc, 2);
++  f *= f;
++}
