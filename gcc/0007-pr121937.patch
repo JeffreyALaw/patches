@@ -7,7 +7,7 @@ index 46f1df6fab46..0d68036ecfec 100644
  
        /* Don't let a relocatable value get a negative coeff.  */
 -      if (poly_int_rtx_p (op1) && GET_MODE (op0) != VOIDmode)
-+      if (is_a <scalar_int_mode> (mode, &int_mode)
++      if (is_a <scalar_int_mode> (mode)
 +	  && poly_int_rtx_p (op1)
 +	  && GET_MODE (op0) != VOIDmode)
  	return simplify_gen_binary (PLUS, mode,
