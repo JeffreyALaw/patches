@@ -1,0 +1,18 @@
+diff --git a/gcc/config/riscv/predicates.md b/gcc/config/riscv/predicates.md
+index 056f9e219092..f811a4e40ca7 100644
+--- a/gcc/config/riscv/predicates.md
++++ b/gcc/config/riscv/predicates.md
+@@ -334,6 +334,13 @@ (define_predicate "move_operand"
+ 	      && riscv_split_symbol_type (symbol_type)
+ 	      && symbol_type != SYMBOL_PCREL;
+ 
++    /* Be tight about the SUBREGs we accept.  In particular,
++       (subreg (mem)) has been discouraged for decades.  Just
++       allow (subreg (reg)) until such time as we see a strong
++       need to be more permissive.  */
++    case SUBREG:
++      return REG_P (SUBREG_REG (op));
++
+     default:
+       return true;
+     }
