@@ -1,0 +1,42 @@
+
+diff --git a/gcc/simplify-rtx.cc b/gcc/simplify-rtx.cc
+index 8f0f16c865d..8c8594d4231 100644
+--- a/gcc/simplify-rtx.cc
++++ b/gcc/simplify-rtx.cc
+@@ -3671,6 +3671,36 @@ simplify_context::simplify_binary_operation_1 (rtx_code code,
+ 	  && GET_MODE_CLASS (mode) != MODE_CC)
+ 	return CONSTM1_RTX (mode);
+ 
++      if (GET_CODE (op0) == AND
++	  && GET_CODE (op1) == AND
++	  && GET_CODE (XEXP (op0, 0)) == LSHIFTRT
++	  && GET_CODE (XEXP (op1, 0)) == LSHIFTRT
++	  && XEXP (XEXP (op0, 0), 0) == XEXP (XEXP (op1, 0), 0)
++	  && XEXP (op0, 1) == CONST1_RTX (mode)
++	  && XEXP (op1, 1) == CONST1_RTX (mode))
++	{
++	  //my own notes: delete later
++	  /* XEXP(op, arg) vs XEXP (XEXP (op, arg), arg)
++	     inner XEXP breaks down outer and
++	     outer XEXP breaks down inner lshiftrt, which is first arg of and
++	     in this case, inner XEXP gives first arg of and which is lshiftrt
++			   outer XEXP gives int value of lshiftrt's second arg
++
++	  TODO:
++	  make both bitpos HOST wIDE INT
++	  make 1 in mask uhwi
++	  */
++	  unsigned HOST_WIDE_INT bitpos1 = INTVAL (XEXP (XEXP (op0, 0), 1));
++	  unsigned HOST_WIDE_INT bitpos2 = INTVAL (XEXP (XEXP (op1, 0), 1));
++	  unsigned HOST_WIDE_INT mask = (HOST_WIDE_INT_1U << bitpos1) | (HOST_WIDE_INT_1U << bitpos2);
++
++	  rtx m = GEN_INT (mask);
++	  rtx t = gen_rtx_AND (mode, XEXP (XEXP (op0, 0), 0), m);
++	  t = gen_rtx_NE (mode, t, CONST0_RTX (mode));
++	  return t;
++	}
++
++
+       /* Convert (ior (plus (A - 1)) (neg A)) to -1.  */
+       if (match_plus_neg_pattern (op0, op1, mode))
+ 	return CONSTM1_RTX (mode);
