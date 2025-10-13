@@ -1,0 +1,102 @@
+diff --git a/gcc/config/riscv/.bitmanip.md.swo b/gcc/config/riscv/.bitmanip.md.swo
+new file mode 100644
+index 000000000000..dbe7de0de849
+Binary files /dev/null and b/gcc/config/riscv/.bitmanip.md.swo differ
+diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
+index 59b71ed263b0..ed69db55d7f6 100644
+--- a/gcc/config/riscv/bitmanip.md
++++ b/gcc/config/riscv/bitmanip.md
+@@ -1,4 +1,4 @@
+-;); Machine description for RISC-V Bit Manipulation operations.
++;; Machine description for RISC-V Bit Manipulation operations.
+ ;; Copyright (C) 2021-2025 Free Software Foundation, Inc.
+ 
+ ;; This file is part of GCC.
+@@ -237,19 +237,17 @@ (define_insn "<optab>_not<mode>3"
+   [(set_attr "type" "bitmanip")
+    (set_attr "mode" "<X:MODE>")])
+ 
+-(define_insn_and_split "*<optab>_not_const<mode>"
+-  [(set (match_operand:X 0 "register_operand" "=r")
+-       (bitmanip_bitwise:X (not:X (match_operand:X 1 "register_operand" "r"))
+-              (match_operand:X 2 "const_arith_operand" "I")))
+-  (clobber (match_scratch:X 3 "=&r"))]
++(define_peephole2
++  [(match_scratch:X 3 "r")
++   (set (match_operand:X 0 "register_operand")
++	(not:X (match_operand:X 1 "register_operand")))
++   (set (match_dup 0)
++	(bitmanip_bitwise:X (match_dup 0)
++			    (match_operand 2 "const_int_operand")))]
+   "(TARGET_ZBB || TARGET_ZBKB) && !TARGET_ZCB
+    && !optimize_function_for_size_p (cfun)"
+-  "#"
+-  "&& reload_completed"
+   [(set (match_dup 3) (match_dup 2))
+-   (set (match_dup 0) (bitmanip_bitwise:X (not:X (match_dup 1)) (match_dup 3)))]
+-  ""
+-  [(set_attr "type" "bitmanip")])
++   (set (match_dup 0) (bitmanip_bitwise:X (not:X (match_dup 0)) (match_dup 3)))])
+ 
+ ;; '(a >= 0) ? b : 0' is emitted branchless (from if-conversion).  Without a
+ ;; bit of extra help for combine (i.e., the below split), we end up emitting
+diff --git a/gcc/testsuite/gcc.target/riscv/pr64345.c b/gcc/testsuite/gcc.target/riscv/pr64345.c
+new file mode 100644
+index 000000000000..8ca4e2411ee9
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr64345.c
+@@ -0,0 +1,30 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -march=rv64gcbv_zicond -mabi=lp64d" { target rv64 } } */
++/* { dg-options "-O2 -march=rv32gcbv_zicond -mabi=ilp32" { target rv32 } } */
++
++
++
++unsigned int test0 (unsigned int x) { return ((x >> 4) ^ 1) & 1; }
++
++unsigned int test1 (unsigned int x) { return ((x >> 4) & 1) ^ 1; }
++
++unsigned int test2 (unsigned int x) { return ~(x >> 4) & 1; }
++
++unsigned int test3 (unsigned int x) { return ((~x >> 4) & 1); }
++
++unsigned int test4 (unsigned int x) { return (x >> 4) & 1; }
++
++int test5 (int vi) { return vi - (((vi >> 6) & 0x01) << 1); }
++
++int test6 (int vi) { return vi - (((vi >> 6) & 0x01) << 1) - 1; }
++
++
++/* { dg-final { scan-assembler-times "\\tbexti" 5 } } */
++/* { dg-final { scan-assembler-times "\\txori" 3 } } */
++/* { dg-final { scan-assembler-times "\\tnot" 1 } } */
++/* { dg-final { scan-assembler-times "\\tsrli" 2 } } */
++/* { dg-final { scan-assembler-times "\\tandi" 2 } } */
++/* { dg-final { scan-assembler-times "\\tsub" 2 } } */
++/* { dg-final { scan-assembler-times "\\taddi" 1 } } */
++
++
+diff --git a/gcc/testsuite/gcc.target/riscv/zbb-andn-orn-01.c b/gcc/testsuite/gcc.target/riscv/zbb-andn-orn-01.c
+index f9f32227bd58..9d8a772fb8f3 100644
+--- a/gcc/testsuite/gcc.target/riscv/zbb-andn-orn-01.c
++++ b/gcc/testsuite/gcc.target/riscv/zbb-andn-orn-01.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv64gc_zbb -mabi=lp64" } */
+-/* { dg-skip-if "" { *-*-* } { "-O0" "-g" "-Oz" "-Os" } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-g" "-O1" "-Oz" "-Os" } } */
+ 
+ int foo1(int rs1)
+ {
+diff --git a/gcc/testsuite/gcc.target/riscv/zbb-andn-orn-02.c b/gcc/testsuite/gcc.target/riscv/zbb-andn-orn-02.c
+index 112c0fa968eb..430d9984c4b3 100644
+--- a/gcc/testsuite/gcc.target/riscv/zbb-andn-orn-02.c
++++ b/gcc/testsuite/gcc.target/riscv/zbb-andn-orn-02.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv32gc_zbb -mabi=ilp32" } */
+-/* { dg-skip-if "" { *-*-* } { "-O0" "-g" "-Oz" "-Os" } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-g" "-O1" "-Oz" "-Os" } } */
+ 
+ int foo1(int rs1)
+ {
