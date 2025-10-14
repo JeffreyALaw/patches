@@ -1,5 +1,5 @@
 diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
-index 59b71ed263b0..ed69db55d7f6 100644
+index 59b71ed263b0..5548acbf707e 100644
 --- a/gcc/config/riscv/bitmanip.md
 +++ b/gcc/config/riscv/bitmanip.md
 @@ -1,4 +1,4 @@
@@ -18,7 +18,7 @@ index 59b71ed263b0..ed69db55d7f6 100644
 -              (match_operand:X 2 "const_arith_operand" "I")))
 -  (clobber (match_scratch:X 3 "=&r"))]
 +(define_peephole2
-+  [(match_scratch:X 3 "r")
++  [(match_scratch:X 3 "=&r")
 +   (set (match_operand:X 0 "register_operand")
 +	(not:X (match_operand:X 1 "register_operand")))
 +   (set (match_dup 0)
