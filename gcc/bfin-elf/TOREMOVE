@@ -8,3 +8,6 @@ gcc/testsuite/gcc.dg/pr44028.c
 
 # Often time out on loaded systems
 gcc/testsuite/gcc.dg/torture/inline-mem-cpy-cmp-1.c
+
+# Flakey, may be timing out once in a while
+gcc/testsuite/gcc.dg/graphite/interchange-2.c
