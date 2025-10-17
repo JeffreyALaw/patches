@@ -1,0 +1,49 @@
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/imm_switch-6.c b/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/imm_switch-6.c
+index 32c4f03b6abd..4c419b605889 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/imm_switch-6.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/imm_switch-6.c
+@@ -25,6 +25,6 @@ void f (void * restrict in, void * restrict out, int n)
+     }
+ }
+ 
+-/* { dg-final { scan-assembler-times {vsetivli\s+zero,\s*5,\s*e8,\s*mf8,\s*t[au],\s*m[au]} 1 { target { no-opts "-O0" no-opts "-Os" no-opts "-Oz" no-opts "-g" no-opts "-funroll-loops" } } } } */
+-/* { dg-final { scan-assembler-times {\.L[0-9]+\:\s+vsetivli\s+zero,\s*5,\s*e16,\s*mf4,\s*t[au],\s*m[au]\s+\.L[0-9]+} 1 { target { no-opts "-O0" no-opts "-Os" no-opts "-Oz" no-opts "-g" no-opts "-funroll-loops" } } } } */
++/* { dg-final { scan-assembler-times {vsetivli\s+zero,\s*5,\s*e8,\s*mf8,\s*t[au],\s*m[au]} 1 { target { no-opts "-O0" no-opts "-Os" no-opts "-Oz" no-opts "-g" no-opts "-funroll-loops" no-opts "-O1" } } } } */
++/* { dg-final { scan-assembler-times {\.L[0-9]+\:\s+vsetivli\s+zero,\s*5,\s*e16,\s*mf4,\s*t[au],\s*m[au]\s+\.L[0-9]+} 1 { target { no-opts "-O0" no-opts "-Os" no-opts "-Oz" no-opts "-g" no-opts "-funroll-loops" no-opts "-O1" } } } } */
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/imm_switch-7.c b/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/imm_switch-7.c
+index 927ea1f15689..38d448625731 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/imm_switch-7.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/imm_switch-7.c
+@@ -24,6 +24,6 @@ void f (void * restrict in, void * restrict out, int n)
+     }
+ }
+ 
+-/* { dg-final { scan-assembler-times {vsetivli\s+zero,\s*5,\s*e8,\s*mf8,\s*t[au],\s*m[au]} 1 { target { no-opts "-O0" no-opts "-Os" no-opts "-Oz" no-opts "-g" no-opts "-funroll-loops" } } } } */
+-/* { dg-final { scan-assembler-times {\.L[0-9]+\:\s+vsetivli\s+zero,\s*5,\s*e16,\s*mf4,\s*t[au],\s*m[au]} 1 { target { no-opts "-O0" no-opts "-Os" no-opts "-Oz" no-opts "-g" no-opts "-funroll-loops" } } } } */
+-/* { dg-final { scan-assembler-times {vsetivli\s+zero,\s*8,\s*e16,\s*mf2,\s*t[au],\s*m[au]} 1 { target { no-opts "-O0" no-opts "-Os" no-opts "-Oz" no-opts "-g" no-opts "-funroll-loops" } } } } */
++/* { dg-final { scan-assembler-times {vsetivli\s+zero,\s*5,\s*e8,\s*mf8,\s*t[au],\s*m[au]} 1 { target { no-opts "-O0" no-opts "-Os" no-opts "-Oz" no-opts "-g" no-opts "-funroll-loops" no-opts "-O1" } } } } */
++/* { dg-final { scan-assembler-times {\.L[0-9]+\:\s+vsetivli\s+zero,\s*5,\s*e16,\s*mf4,\s*t[au],\s*m[au]} 1 { target { no-opts "-O0" no-opts "-Os" no-opts "-Oz" no-opts "-g" no-opts "-funroll-loops" no-opts "-O1" } } } } */
++/* { dg-final { scan-assembler-times {vsetivli\s+zero,\s*8,\s*e16,\s*mf2,\s*t[au],\s*m[au]} 1 { target { no-opts "-O0" no-opts "-Os" no-opts "-Oz" no-opts "-g" no-opts "-funroll-loops" no-opts "-O1" } } } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/shrink-wrap-1.c b/gcc/testsuite/gcc.target/riscv/shrink-wrap-1.c
+index e1e07c3d4c54..4a15983d63ca 100644
+--- a/gcc/testsuite/gcc.target/riscv/shrink-wrap-1.c
++++ b/gcc/testsuite/gcc.target/riscv/shrink-wrap-1.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-fshrink-wrap" } */
+-/* { dg-skip-if "" { *-*-* } { "-O0" "-Os" "-Oz" } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Os" "-Oz" "-O1" "-Og" } } */
+ 
+ void g(void);
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/xandes/xandesperf-1.c b/gcc/testsuite/gcc.target/riscv/xandes/xandesperf-1.c
+index b8db0d84614e..20bdad397127 100644
+--- a/gcc/testsuite/gcc.target/riscv/xandes/xandesperf-1.c
++++ b/gcc/testsuite/gcc.target/riscv/xandes/xandesperf-1.c
+@@ -10,4 +10,4 @@ long foo (long cond)
+   return cond;
+ }
+ 
+-/* { dg-final { scan-assembler {\mnds.beqc} } } */
++/* { dg-final { scan-assembler {\mnds.b..c} } } */
