@@ -1,5 +1,5 @@
 diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
-index 59b71ed263b0..354a270dd663 100644
+index 59b71ed263b0..697198fcc913 100644
 --- a/gcc/config/riscv/bitmanip.md
 +++ b/gcc/config/riscv/bitmanip.md
 @@ -1,4 +1,4 @@
@@ -37,7 +37,7 @@ index 59b71ed263b0..354a270dd663 100644
 +   && rtx_equal_p (operands[0], operands[2])
 +   && riscv_const_insns (operands[3], false) == 1"
 +  [(set (match_dup 4) (match_dup 3))
-+   (set (match_dup 0) (bitmanip_bitwise:X (not:X (match_dup 0)) (match_dup 4)))])
++   (set (match_dup 0) (bitmanip_bitwise:X (not:X (match_dup 1)) (match_dup 4)))])
  
  ;; '(a >= 0) ? b : 0' is emitted branchless (from if-conversion).  Without a
  ;; bit of extra help for combine (i.e., the below split), we end up emitting
@@ -77,6 +77,28 @@ index 3dcb1be48692..97ef09a7a680 100644
  	temp = expand_simple_binop (mode, ASHIFT, temp,
  				    GEN_INT (ctz_hwi (val_b)),
  				    if_info->x, false, OPTAB_WIDEN);
+diff --git a/gcc/simplify-rtx.cc b/gcc/simplify-rtx.cc
+index c4de035b44fd..6a67607a0cdc 100644
+--- a/gcc/simplify-rtx.cc
++++ b/gcc/simplify-rtx.cc
+@@ -3806,6 +3806,17 @@ simplify_context::simplify_binary_operation_1 (rtx_code code,
+ 	  && rtx_equal_p (XEXP (XEXP (op0, 0), 0), op1))
+ 	return simplify_gen_binary (IOR, mode, XEXP (op0, 1), op1);
+ 
++      if (GET_CODE (op0) == NEG
++	  && GET_CODE (XEXP (op0, 0)) == GE
++	  && XEXP (op0, 1) == CONST0_RTX (mode))
++	{
++	  tem = gen_rtx_ASHIFTRT (mode, XEXP (XEXP (op0, 0), 0),
++				  GEN_INT (GET_MODE_BITSIZE (mode).to_constant ()));
++	  tem = gen_rtx_NOT (mode, tem);
++	  tem = gen_rtx_IOR (mode, tem, op1);
++	  return tem;
++	}
++
+       tem = simplify_with_subreg_not (code, mode, op0, op1);
+       if (tem)
+ 	return tem;
 diff --git a/gcc/testsuite/gcc.target/riscv/pr120553-2.c b/gcc/testsuite/gcc.target/riscv/pr120553-2.c
 index 1501f8654d9a..000f4bb687cd 100644
 --- a/gcc/testsuite/gcc.target/riscv/pr120553-2.c
