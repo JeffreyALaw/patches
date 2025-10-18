@@ -1,5 +1,5 @@
 diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
-index 59b71ed263b0..35ff459eaa4b 100644
+index 59b71ed263b0..354a270dd663 100644
 --- a/gcc/config/riscv/bitmanip.md
 +++ b/gcc/config/riscv/bitmanip.md
 @@ -1,4 +1,4 @@
@@ -41,6 +41,42 @@ index 59b71ed263b0..35ff459eaa4b 100644
  
  ;; '(a >= 0) ? b : 0' is emitted branchless (from if-conversion).  Without a
  ;; bit of extra help for combine (i.e., the below split), we end up emitting
+diff --git a/gcc/ifcvt.cc b/gcc/ifcvt.cc
+index 3dcb1be48692..97ef09a7a680 100644
+--- a/gcc/ifcvt.cc
++++ b/gcc/ifcvt.cc
+@@ -1289,13 +1289,13 @@ noce_try_sign_bit_splat (struct noce_if_info *if_info)
+       bool speed_p = optimize_insn_for_speed_p ();
+       if (exact_log2 (val_a + 1) >= 0
+ 	  && (rtx_cost (shift_right, mode, SET, 1, speed_p)
+-	      <= rtx_cost (and_form, mode, SET, 1, speed_p)))
++	      < rtx_cost (and_form, mode, SET, 1, speed_p)))
+ 	temp = expand_simple_binop (mode, LSHIFTRT, temp,
+ 				    GEN_INT (rshift_count),
+ 				    if_info->x, false, OPTAB_WIDEN);
+       else if (exact_log2 (~val_a + 1) >= 0
+ 	       && (rtx_cost (shift_left, mode, SET, 1, speed_p)
+-		   <= rtx_cost (and_form, mode, SET, 1, speed_p)))
++		   < rtx_cost (and_form, mode, SET, 1, speed_p)))
+ 	temp = expand_simple_binop (mode, ASHIFT, temp,
+ 				    GEN_INT (ctz_hwi (val_a)),
+ 				    if_info->x, false, OPTAB_WIDEN);
+@@ -1341,13 +1341,13 @@ noce_try_sign_bit_splat (struct noce_if_info *if_info)
+       bool speed_p = optimize_insn_for_speed_p ();
+       if (exact_log2 (val_b + 1) >= 0
+ 	  && (rtx_cost (shift_right, mode, SET, 1, speed_p)
+-	      <= rtx_cost (and_form, mode, SET, 1, speed_p)))
++	      < rtx_cost (and_form, mode, SET, 1, speed_p)))
+ 	temp = expand_simple_binop (mode, LSHIFTRT, temp,
+ 				    GEN_INT (rshift_count),
+ 				    if_info->x, false, OPTAB_WIDEN);
+       else if (exact_log2 (~val_b + 1) >= 0
+ 	       && (rtx_cost (shift_left, mode, SET, 1, speed_p)
+-		   <= rtx_cost (and_form, mode, SET, 1, speed_p)))
++		   < rtx_cost (and_form, mode, SET, 1, speed_p)))
+ 	temp = expand_simple_binop (mode, ASHIFT, temp,
+ 				    GEN_INT (ctz_hwi (val_b)),
+ 				    if_info->x, false, OPTAB_WIDEN);
 diff --git a/gcc/testsuite/gcc.target/riscv/pr120553-2.c b/gcc/testsuite/gcc.target/riscv/pr120553-2.c
 index 1501f8654d9a..000f4bb687cd 100644
 --- a/gcc/testsuite/gcc.target/riscv/pr120553-2.c
