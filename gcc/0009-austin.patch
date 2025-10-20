@@ -1,0 +1,230 @@
+
+sorry should be 12 for the success, forgot to change it (2 per instruction, 6 instructions)
+
+On Mon, Oct 20, 2025 at 3:13 AM Austin Law <austinkylelaw@gmail.com> wrote:
+
+    actually heres the patch, i'll keep chugging away at getting my stuff fixed
+
+
+    On Mon, Oct 20, 2025 at 3:09 AM Austin Law <austinkylelaw@gmail.com> wrote:
+
+        turns out i was missing dejanu and some other prerequisites? i'll send the patch file when my computer is done actually running the suite
+        i also tried to figure out how to "run the test" on a single file, but couldn't find anything or stumble my way on it so if you have any insight there itd be helpful
+
+
+
+        On Sat, Oct 18, 2025 at 3:27 PM Jeff Law <jeffreyalaw@gmail.com> wrote:
+
+
+
+            On 10/17/25 9:10 AM, Austin Law wrote:
+            > sorry its a bit late, heres the fix
+            >
+            > looks like the thing thats happening with xor is the complements being
+            > moved to the end through some other optimization? seemed to be getting
+            > the correct result either way and same amount of instructions so not
+            > gonna touch it
+
+            So your patch did trip one failure:
+
+            > Tests that now fail, but worked before (7 tests):
+            >
+            > gcc: gcc.c-torture/compile/920928-2.c   -O1  (test for excess errors)
+            > gcc: gcc.c-torture/compile/920928-2.c   -O2  (test for excess errors)
+            > gcc: gcc.c-torture/compile/920928-2.c   -O2 -flto -fno-use-linker-plugin -flto-partition=none  (test for excess errors)
+            > gcc: gcc.c-torture/compile/920928-2.c   -O2 -flto -fuse-linker-plugin -fno-fat-lto-objects  (test for excess errors)
+            > gcc: gcc.c-torture/compile/920928-2.c   -O3 -fomit-frame-pointer -funroll-loops -fpeel-loops -ftracer -finline-functions  (test for excess errors)
+            > gcc: gcc.c-torture/compile/920928-2.c   -O3 -g  (test for excess errors)
+            > gcc: gcc.c-torture/compile/920928-2.c   -Os  (test for excess errors)
+
+            > New tests that FAIL (8 tests):
+            >
+            > gcc: gcc.c-torture/compile/920928-2.c   -O1  (internal compiler error: tree check: expected integer_cst, have ssa_name in get_len, at tree.h:6652)
+            > gcc: gcc.c-torture/compile/920928-2.c   -O2  (internal compiler error: tree check: expected integer_cst, have ssa_name in get_len, at tree.h:6652)
+            > gcc: gcc.c-torture/compile/920928-2.c   -O2 -flto -fno-use-linker-plugin -flto-partition=none  (internal compiler error: tree check: expected integer_cst, have ssa_name in get_len, at tree.h:6652)
+            > gcc: gcc.c-torture/compile/920928-2.c   -O2 -flto -fuse-linker-plugin -fno-fat-lto-objects  (internal compiler error: tree check: expected integer_cst, have ssa_name in get_len, at tree.h:6652)
+            > gcc: gcc.c-torture/compile/920928-2.c   -O3 -fomit-frame-pointer -funroll-loops -fpeel-loops -ftracer -finline-functions  (internal compiler error: tree check: expected integer_cst, have ssa_name in get_len, at tree.h:6652)
+            > gcc: gcc.c-torture/compile/920928-2.c   -O3 -g  (internal compiler error: tree check: expected integer_cst, have ssa_name in get_len, at tree.h:6652)
+            > gcc: gcc.c-torture/compile/920928-2.c   -Os  (internal compiler error: tree check: expected integer_cst, have ssa_name in get_len, at tree.h:6652)
+
+            So that's all probably just one issue under the hood.  The second set of
+            messages are the most useful.  In simplest terms there's somewhere that
+            we're trying to do something like extract an integer value out of a node
+            that is not an INTEGER_CST node (instead the code is an SSA_NAME).   The
+            accessor macros will try to catch the most egregious errors of this nature.
+
+            There's typically two ways that happens.  First is in analysis code.  If
+            we were to do something like TREE_INT_CST_LOW (node) to extract the
+            value of a constant integer node, but the node wasn't a constant integer
+            node, then we'll see an error like the above.
+
+            Second if we create a node with an invalid field.  I think that's what's
+            happening here.
+
+            So if I throw your compiler under the debugger and the 920928-2.c
+            testcase into it it faults.  You're not really supposed to know how to
+            do this yet...
+
+            > Breakpoint 2 at 0x1dba483: file /home/jlaw/test/gcc/gcc/tree.cc, line 9161.
+            > (gdb) r
+            > The program being debugged has been started already.
+            > Start it from the beginning? (y or n) y
+            > Starting program: /home/jlaw/test/obj/x86/austin/gcc/cc1 -O2 -std=gnu89 j.c
+            > [Thread debugging using libthread_db enabled]
+            > Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+            >  g
+            > Analyzing compilation unit
+            > Performing interprocedural optimizations
+            >  <*free_lang_data> {heap 1088k} <visibility> {heap 1088k} <build_ssa_passes> {heap 1088k} <targetclone> {heap 1380k} <opt_local_passes> {heap 1380k}
+            > Breakpoint 2, tree_check_failed (node=0x7ffff740b7e0, file=0x3900448 "/home/jlaw/test/gcc/gcc/tree.h", line=6652, function=0x3902609 "get_len") at /home/jlaw/test/gcc/gcc/tree.cc:9161
+            > 9161      unsigned length = 0;
+
+            So that's exactly what we'd expect to see with an invalid access (if we
+            ever call tree_check_failed, then something bad has happened).
+
+            If we look at the call trace:
+            > (gdb) bt
+            > #0  tree_check_failed (node=0x7ffff740b7e0, file=0x3900448 "/home/jlaw/test/gcc/gcc/tree.h", line=6652, function=0x3902609 "get_len") at /home/jlaw/test/gcc/gcc/tree.cc:9161
+            > #1  0x0000000000ee4f34 in tree_check (__t=0x7ffff740b7e0, __f=0x3900448 "/home/jlaw/test/gcc/gcc/tree.h", __l=6652, __g=0x3902609 "get_len", __c=INTEGER_CST) at /home/jlaw/test/gcc/gcc/tree.h:4034
+            > #2  0x00000000010c3db4 in wi::extended_tree<128>::get_len (this=0x7fffffffd4a8) at /home/jlaw/test/gcc/gcc/tree.h:6652
+            > #3  0x00000000010c3cb5 in wi::int_traits<generic_wide_int<wi::extended_tree<128> > >::decompose (precision=128, x=...) at /home/jlaw/test/gcc/gcc/wide-int.h:1050
+            > #4  0x00000000010c3ac9 in wide_int_ref_storage<true, false>::wide_int_ref_storage<generic_wide_int<wi::extended_tree<128> > > (this=0x7fffffffce90, x=..., precision=128) at /home/jlaw/test/gcc/gcc/wide-int.h:1099
+            > #5  0x00000000010c3417 in generic_wide_int<wide_int_ref_storage<true, false> >::generic_wide_int<generic_wide_int<wi::extended_tree<128> > > (this=0x7fffffffce90, x=..., precision=128) at /home/jlaw/test/gcc/gcc/wide-int.h:855
+            > #6  0x00000000010c2bf3 in wi::add<generic_wide_int<fixed_wide_int_storage<128> >, generic_wide_int<wi::extended_tree<128> > > (x=..., y=...) at /home/jlaw/test/gcc/gcc/wide-int.h:2872
+            > #7  0x00000000013633e7 in generic_wide_int<fixed_wide_int_storage<128> >::operator+=<generic_wide_int<wi::extended_tree<128> > > (this=0x7fffffffd430, c=...) at /home/jlaw/test/gcc/gcc/wide-int.h:820
+            > #8  0x00000000013622d4 in poly_int<1u, generic_wide_int<fixed_wide_int_storage<128> > >::operator+=<generic_wide_int<wi::extended_tree<128> > > (this=0x7fffffffd430, a=...) at /home/jlaw/test/gcc/gcc/poly-int.h:502
+            > #9  0x00000000019e1a4d in get_ref_base_and_extent (exp=0x7ffff761cd50, poffset=0x7fffffffd7d8, psize=0x7fffffffd7d0, pmax_size=0x7fffffffd7c8, preverse=0x7fffffffd7c7) at /home/jlaw/test/gcc/gcc/tree-dfa.cc:423
+            > #10 0x0000000001440a18 in fold_const_aggregate_ref_1 (t=0x7ffff761cd50, valueize=0x0) at /home/jlaw/test/gcc/gcc/gimple-fold.cc:10306
+            > #11 0x000000000144137a in fold_const_aggregate_ref (t=0x7ffff761cd50) at /home/jlaw/test/gcc/gcc/gimple-fold.cc:10403
+            > #12 0x000000000141b2af in maybe_fold_reference (expr=0x7ffff761cd50) at /home/jlaw/test/gcc/gcc/gimple-fold.cc:326
+            > #13 0x000000000141b9c4 in fold_gimple_assign (si=0x7fffffffe010) at /home/jlaw/test/gcc/gcc/gimple-fold.cc:474
+            [ ... ]
+
+            I'm just looking for a point in the trace where there's a statement I
+            can get to and print it symbolically (I could just print the tree nodes,
+            but it'll make more sense if I can print the whole statement).
+
+            > (gdb) frame 13
+            > #13 0x000000000141b9c4 in fold_gimple_assign (si=0x7fffffffe010) at /home/jlaw/test/gcc/gcc/gimple-fold.cc:474
+            > 474               return maybe_fold_reference (rhs);> (gdb) p debug_gimple_stmt (gsi_stmt (*si))
+            > _196 = BIT_FIELD_REF <_46, 1, _168>;
+
+            OK, so that makes a lot of sense.  Your optimization is making
+            BIT_FIELD_REFs out of shift+mask sequences.   I also happen to know that
+            BIT_FIELD_REF is only supposed to accept constants for the length (1)
+            and bit position (_168).  In this node the bit position, _168 is
+            variable (SSA_NAME node).  Naturally when other code tries to interpret
+            this node as an INTEGER_CST node it blows up.
+
+            So we need to make a minor adjustment to your match.pd patterns.
+
+            > +//Replace bitshifts with bit extractions
+            > +(for op (bit_xor bit_ior bit_and)
+            > +  (simplify
+            > +    (bit_and (op:c (rshift @0 @1) (rshift @2 @3))  integer_onep)
+            > +    (convert (op (BIT_FIELD_REF:boolean_type_node @0 { build_one_cst (bitsizetype); } (convert:bitsizetype @1))
+            > +     (BIT_FIELD_REF:boolean_type_node @2 { build_one_cst (bitsizetype); } (convert:bitsizetype @3))))))
+            > +
+            > +(simplify
+            > +  (bit_and (bit_and:c (rshift @0 @1) (convert? (bit_not (convert? (bit_and (rshift @2 @3) integer_onep))))) integer_onep)
+            > +  (convert (bit_and (BIT_FIELD_REF:boolean_type_node @0 { build_one_cst (bitsizetype); } (convert:bitsizetype @1))
+            > +      (bit_not (BIT_FIELD_REF:boolean_type_node @2 { build_one_cst (bitsizetype); } (convert:bitsizetype @3))))))
+            > +
+            > +(simplify
+            > +  (bit_ior:c (bit_and (rshift @0 @1) integer_onep) (convert? (bit_not (convert? (bit_and (rshift @2 @3) integer_onep)))))
+            > +  (convert (bit_ior (BIT_FIELD_REF:boolean_type_node @0 { build_one_cst (bitsizetype); } (convert:bitsizetype @1))
+            > +      (bit_not (BIT_FIELD_REF:boolean_type_node @2 { build_one_cst (bitsizetype); } (convert:bitsizetype @3))))))
+
+            So in the patching part of each pattern we have "@3" and we allow it to
+            be any kind of node.  We just need to restrict them.  There's a
+            convenient syntax for that.  If you replace "@3" with "INTEGER_CST@3"
+            then that will ensure the pattern only matches when that operand is an
+            integer constant node.
+
+            So you'll want to make that change in the match clause of each pattern.
+
+            THe other thing we're going to want to do is write a testcase.
+
+
+            Something like:
+
+            > /* { dg-do compile } */
+            > /* { dg-options "-O2 -fdump-tree-optimized" } */
+
+            [ ... C test source ... ]
+
+            > /* { dg-final { scan-tree-dump-times "BIT_FIELD_REF" 3 "optimized"} } */
+
+            So the first statements says this is a compile-only test.  The second
+            line says turn on the optimizer at level -O2 and dump the IL at the end
+            of the gimple optimization pipeline.
+
+            The last line is a scan line.  The testing harness will look through the
+            .optimized dump for "BIT_FIELD_REF" and expect to see it 3 times.
+            Obviously I'm just guessing how many should show up.  It'll depend on
+            the precise number of test functions you include.  Ideally you'll
+            include a test which triggers each of the new match.pd patterns.
+
+            Put it into gcc/gcc/testsuite/gcc.dg/tree-ssa/pr32648.c
+
+            Send the updated patch file and testcase and I'll update that tree and
+            retest.  Overall this is looking good.  I'm not an expert in match.pd,
+            so someone may have a cleaner way to deal with all the explicit types
+            once we submit upstream, but I think your next revision is likely ready
+            to go.
+
+            Jeff
+
+
+
+pr32648_02.patch
+
+diff --git a/gcc/match.pd b/gcc/match.pd
+index bfc51e6579a..8c45fb22b79 100644
+--- a/gcc/match.pd
++++ b/gcc/match.pd
+@@ -11877,3 +11877,21 @@ and,
+       && direct_internal_fn_supported_p (IFN_AVG_CEIL, type, OPTIMIZE_FOR_BOTH))
+       (IFN_AVG_CEIL @0 @2)))
+ #endif
++
++//Replace bitshifts with bit extractions
++(for op (bit_xor bit_ior bit_and)
++  (simplify
++    (bit_and (op:c (rshift @0 INTEGER_CST@1) (rshift @2 INTEGER_CST@3))  integer_onep)
++    (convert (op (BIT_FIELD_REF:boolean_type_node @0 { build_one_cst (bitsizetype); } (convert:bitsizetype @1))
++     (BIT_FIELD_REF:boolean_type_node @2 { build_one_cst (bitsizetype); } (convert:bitsizetype @3))))))
++
++//and:c bitmasks at the end, ior after the shift, could maybe optimized to one pattern?
++(simplify
++  (bit_and (bit_and:c (rshift @0 INTEGER_CST@1) (convert? (bit_not (convert? (bit_and (rshift @2 INTEGER_CST@3) integer_onep))))) integer_onep)
++  (convert (bit_and (BIT_FIELD_REF:boolean_type_node @0 { build_one_cst (bitsizetype); } (convert:bitsizetype @1))
++      (bit_not (BIT_FIELD_REF:boolean_type_node @2 { build_one_cst (bitsizetype); } (convert:bitsizetype @3))))))
++
++(simplify
++  (bit_ior:c (bit_and (rshift @0 INTEGER_CST@1) integer_onep) (convert? (bit_not (convert? (bit_and (rshift @2 INTEGER_CST@3) integer_onep)))))
++  (convert (bit_ior (BIT_FIELD_REF:boolean_type_node @0 { build_one_cst (bitsizetype); } (convert:bitsizetype @1))
++      (bit_not (BIT_FIELD_REF:boolean_type_node @2 { build_one_cst (bitsizetype); } (convert:bitsizetype @3))))))
+diff --git a/gcc/testsuite/gcc.dg/tree-ssa/pr32648.c b/gcc/testsuite/gcc.dg/tree-ssa/pr32648.c
+new file mode 100644
+index 00000000000..19bd491ac6a
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/tree-ssa/pr32648.c
+@@ -0,0 +1,15 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -fdump-tree-optimized" } */
++
++#define F(OP,NAME) unsigned f##NAME (unsigned a) { long b5 = (a & 0x20)>>5; long b3 = (a & 0x08)>>3; return b5 OP b3; }
++#define F2(OP,NAME) unsigned f2##NAME (unsigned a) { long b5 = (a & 0x20)>>5; long b3 = (a & 0x08)>>3; return b5 OP ~b3; }
++
++F(&,_and)
++F(|,_or)
++F(^,_xor)
++
++F2(&,_and)
++F2(|,_or)
++F2(^,_xor)
++
++/* { dg-final { scan-tree-dump-times "BIT_FIELD_REF" 12 "optimized"} } */
+
+
