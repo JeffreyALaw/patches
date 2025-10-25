@@ -3,3 +3,14 @@
 # reset.  
 riscv64-elf
 riscv32-elf
+ft32-elf
+msp430-elf
+fr30-elf
+m32r-elf
+c6x-elf
+lm32-elf
+arc-elf
+cris-elf
+iq2000-elf
+bfin-elf
+mcore-elf
