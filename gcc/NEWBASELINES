@@ -3,3 +3,7 @@
 # reset.  
 h8300-elf
 v850e-elf
+csky-linux-gnu
+microblaze-linux
+sh3eb-linux-gnu
+sh3-linux-gnu
