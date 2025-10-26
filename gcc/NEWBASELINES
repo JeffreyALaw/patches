@@ -2,8 +2,3 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 h8300-elf
-v850e-elf
-csky-linux-gnu
-microblaze-linux
-sh3eb-linux-gnu
-sh3-linux-gnu
