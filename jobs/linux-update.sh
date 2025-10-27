@@ -51,7 +51,7 @@ fi
 echo Building GCC
 PATH=`pwd`/${TARGET}-installed/bin:$PATH
 cd ${TARGET}-obj/gcc
-../../gcc/configure $SHARED --disable-analyzer --disable-multilib --without-headers --disable-threads --enable-languages=c,c++,fortran,lto --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} >> $LOGFILE 2>&1
+../../gcc/configure $SHARED --disable-libatomic --disable-analyzer --disable-multilib --without-headers --disable-threads --enable-languages=c,c++,fortran,lto --prefix=`pwd`/../../${TARGET}-installed --target=${TARGET} >> $LOGFILE 2>&1
 make -j $NPROC -l $NPROC all-gcc >> $LOGFILE 2>&1
 make install-gcc >> $LOGFILE 2>&1
 
