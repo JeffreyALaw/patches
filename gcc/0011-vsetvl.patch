@@ -248,39 +248,3 @@ index 3cb87bf4eae9..9d34725a7570 100644
     (set (attr "avl_type_idx") (const_int INVALID_ATTRIBUTE))
     (set (attr "mode_idx") (const_int INVALID_ATTRIBUTE))]
  )
-diff --git a/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/pr111037-1.c b/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/pr111037-1.c
-index 803ce5702ebf..96c1f312cc4d 100644
---- a/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/pr111037-1.c
-+++ b/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/pr111037-1.c
-@@ -11,5 +11,5 @@ void foo(_Float16 y, int64_t *i64p)
-   asm volatile ("# use %0 %1" : : "vr"(vx), "vr" (vy));
- }
- 
--/* { dg-final { scan-assembler-times {vsetivli\s+zero,\s*1,\s*e16,\s*mf4,\s*t[au],\s*m[au]} 1 } } */
--/* { dg-final { scan-assembler-times {vsetvli\s+zero,\s*zero,\s*e64,\s*m1,\s*t[au],\s*m[au]} 1 } } */
-+/* { dg-final { scan-assembler-times {vsetivli\s+zero,\s*1,\s*e16,\s*m1,\s*t[au],\s*m[au]} 1 } } */
-+/* { dg-final { scan-assembler-times {vsetivli\s+zero,\s*1,\s*e64,\s*m1,\s*t[au],\s*m[au]} 1 } } */
-diff --git a/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/pr111037-4.c b/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/pr111037-4.c
-index 5949085bdc9f..6cf3c64679f1 100644
---- a/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/pr111037-4.c
-+++ b/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/pr111037-4.c
-@@ -12,5 +12,5 @@ void foo(_Float16 y, int16_t z, int64_t *i64p)
-   asm volatile ("# use %0 %1" : : "vr"(vx), "vr" (vy), "vr" (vz));
- }
- 
--/* { dg-final { scan-assembler-times {vsetivli\s+zero,\s*1,\s*e16,\s*mf4,\s*t[au],\s*m[au]} 1 } } */
--/* { dg-final { scan-assembler-times {vsetvli\s+zero,\s*zero,\s*e64,\s*m1,\s*t[au],\s*m[au]} 1 } } */
-+/* { dg-final { scan-assembler-times {vsetivli\s+zero,\s*1,\s*e64,\s*m1,\s*t[au],\s*m[au]} 1 } } */
-+/* { dg-final { scan-assembler-times {vsetivli\s+zero,\s*1,\s*e16,\s*m1,\s*t[au],\s*m[au]} 1 } } */
-diff --git a/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/pr113248.c b/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/pr113248.c
-index d95281362a83..fe5739339779 100644
---- a/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/pr113248.c
-+++ b/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/pr113248.c
-@@ -11,5 +11,5 @@ void foo(_Float16 y, int64_t *i64p)
-   asm volatile ("# use %0 %1" : : "vr"(vx), "vr" (vy));
- }
- 
--/* { dg-final { scan-assembler-times {vsetivli\s+zero,\s*1,\s*e16,\s*mf4,\s*t[au],\s*m[au]} 1 } } */
--/* { dg-final { scan-assembler-times {vsetvli\s+zero,\s*zero,\s*e64,\s*m1,\s*t[au],\s*m[au]} 1 } } */
-+/* { dg-final { scan-assembler-times {vsetivli\s+zero,\s*1,\s*e64,\s*m1,\s*t[au],\s*m[au]} 1 } } */
-+/* { dg-final { scan-assembler-times {vsetivli\s+zero,\s*1,\s*e16,\s*m1,\s*t[au],\s*m[au]} 1 } } */
