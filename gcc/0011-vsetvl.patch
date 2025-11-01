@@ -1,3 +1,16 @@
+	* config/riscv/riscv-protos.h (has_vtype_op): Add prototype.
+	(mask_agnostic_p, get_avl, vsetvl_insn_p): Likewise.
+	* config/riscv/riscv-vsetvl.cc (has_vtype_op): No longer static.
+	(vsetvl_insn_p, get_avl_mask_agnostic_p): Likewise.
+	* config/riscv/riscv.cc (struct last_vcofnig): New structure.
+	(clear_vconfig): New function.
+	(compatible_with_last_vconfig, riscv_sched_init): Likewise.
+	(riscv_sched_reorder): Likewise.
+	(TARGET_SCHED_INIT, TARGET_SCHED_REORDER): Define.
+	* config/riscv/vector.md ("*mov<mode>"): Set has_vtype_op, has_vl_op
+	attributes.
+
+
 diff --git a/gcc/config/riscv/riscv-protos.h b/gcc/config/riscv/riscv-protos.h
 index cdb706ab82ac..570acb14f585 100644
 --- a/gcc/config/riscv/riscv-protos.h
@@ -55,7 +68,7 @@ index 3586d0cdcc24..580ac9cbe8e8 100644
  {
    /* If it doesn't have MA, we return agnostic by default.  */
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 63404d3d5143..2faadbc32a3e 100644
+index 63404d3d5143..564734426ed6 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
 @@ -10576,6 +10576,71 @@ riscv_issue_rate (void)
@@ -193,23 +206,23 @@ index 63404d3d5143..2faadbc32a3e 100644
 +	 designs appear, we can probably put an entry in the tuning
 +	 structure to indicate how much difference in priority to allow.  */
 +      if (INSN_PRIORITY (insn) < priority)
-+       break;
++	break;
 +
 +      if (compatible_with_last_vconfig (insn))
-+       {
-+	 /* This entry is compatible with the last vconfig and has
-+	    the same priority as the most important insn.  So swap
-+	    it so that we keep the vector configuration as-is and
-+	    ultimately eliminate a vsetvl.
++	{
++	  /* This entry is compatible with the last vconfig and has
++	     the same priority as the most important insn.  So swap
++	     it so that we keep the vector configuration as-is and
++	     ultimately eliminate a vsetvl.
 +
-+	    Note no need to swap if this is the first entry in the
-+	    queue.  */
-+         if (i == nready - 1)
-+           break;
++	     Note no need to swap if this is the first entry in the
++	     queue.  */
++	  if (i == nready - 1)
++	    break;
 +
-+         std::swap (ready[i], ready[nready - 1]);
-+         break;
-+       }
++	  std::swap (ready[i], ready[nready - 1]);
++	  break;
++	}
 +    }
 +
 +  return riscv_issue_rate ();
