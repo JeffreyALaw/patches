@@ -1,0 +1,13 @@
+diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
+index 697198fcc913..166ddd9db9e6 100644
+--- a/gcc/config/riscv/bitmanip.md
++++ b/gcc/config/riscv/bitmanip.md
+@@ -357,7 +357,7 @@ (define_expand "rotrsi3"
+ {
+   if (TARGET_XTHEADBB && !immediate_operand (operands[2], VOIDmode))
+     FAIL;
+-  if (TARGET_64BIT && register_operand (operands[2], QImode))
++  if (TARGET_64BIT)
+     {
+       rtx t = gen_reg_rtx (DImode);
+       emit_insn (gen_rotrsi3_sext (t, operands[1], operands[2]));
