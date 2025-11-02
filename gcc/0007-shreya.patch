@@ -32,7 +32,7 @@ index 00000000000..9836dd078d7
 @@ -0,0 +1,21 @@
 +/* { dg-do compile } */
 +/* { dg-options "-O2 -march=rv64gcbv_zicond -mabi=lp64d" { target { rv64 } } } */
-+/* { dg-options "-O2 -march=rv32gcbv_zicond -mabi=ilp322" { target { rv32 } } } */
++/* { dg-options "-O2 -march=rv32gcbv_zicond -mabi=ilp32" { target { rv32 } } } */
 +
 +int f(int a, int b)
 +{
