@@ -43,11 +43,11 @@ index c2a9de610526..5f0d59dcaa02 100644
 +  return "sltiu\t%0,%1,%2";
 +}
 +  [(set_attr "type" "slt")
-+   (set_attr "mode" "<GPR:MODE>")])
++   (set_attr "mode" "<X:MODE>")])
 +
 +(define_insn ""
 +  [(set (match_operand:X 0 "register_operand" "=r")
-+	(eq:X (lshiftrt:X (match_operand:GPR 1 "register_operand" "r")
++	(eq:X (lshiftrt:X (match_operand:X 1 "register_operand" "r")
 +			  (match_operand 2 "const_int_operand"))
 +	      (const_int 0)))]
 +  "INTVAL (operands[2]) < 11"
