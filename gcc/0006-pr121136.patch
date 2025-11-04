@@ -1,8 +1,8 @@
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index c2a9de610526..5f0d59dcaa02 100644
+index 640ca5f9b0ea..a09079cb8b1c 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
-@@ -3684,6 +3684,57 @@ (define_insn "*sle<u>_<X:mode><GPR:mode>"
+@@ -3752,6 +3752,57 @@ (define_insn "*sle<u>_<X:mode><GPR:mode>"
    [(set_attr "type" "slt")
     (set_attr "mode" "<X:MODE>")])
  
@@ -62,10 +62,10 @@ index c2a9de610526..5f0d59dcaa02 100644
  ;;
 diff --git a/gcc/testsuite/gcc.target/riscv/pr121136.c b/gcc/testsuite/gcc.target/riscv/pr121136.c
 new file mode 100644
-index 000000000000..b0bca4ce4882
+index 000000000000..77585f42cbf4
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/pr121136.c
-@@ -0,0 +1,104 @@
+@@ -0,0 +1,103 @@
 +/* { dg-do compile } */
 +/* { dg-options "-std=gnu23 -O2 -march=rv64gc -mabi=lp64d" { target rv64} } */
 +/* { dg-options "-std=gnu23 -O2 -march=rv32gc -mabi=ilp32" { target rv32} } */
