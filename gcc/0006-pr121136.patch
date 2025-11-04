@@ -67,8 +67,8 @@ index 000000000000..b0bca4ce4882
 +++ b/gcc/testsuite/gcc.target/riscv/pr121136.c
 @@ -0,0 +1,104 @@
 +/* { dg-do compile } */
-+/* { dg-additional-options "-std=gnu23" } */
-+/* { dg-skip-if "" { *-*-* } { "-O0"} } */
++/* { dg-options "-std=gnu23 -O2 -march=rv64gc -mabi=lp64d" { target rv64} } */
++/* { dg-options "-std=gnu23 -O2 -march=rv32gc -mabi=ilp32" { target rv32} } */
 +
 +/* We need to adjust the constant so this works for rv32 and rv64.  */
 +#if __riscv_xlen == 32
@@ -158,15 +158,14 @@ index 000000000000..b0bca4ce4882
 +   sltu as the lui has no incoming data dependencies.  */
 +/* { dg-final { scan-assembler-times "\tsltiu" 30 { target { rv64 } } } } */
 +/* { dg-final { scan-assembler-times "\tnot" 3 { target { rv64 } } } } */
-+/* { dg-final { scan-assembler-times "\tsrli" 55 { target { rv64 } } } } */
-+/* { dg-final { scan-assembler-times "\tsltu" 104 { target { rv64 } } } } */
-+/* { dg-final { scan-assembler-times "\tseqz" 52 { target { rv64 } } } } */
-+/* { dg-final { scan-assembler-times "\tslli" 64 { target { rv64 } } } } */
-+/* { dg-final { scan-assembler-times "\tli" 104 { target { rv64 } } } } */
++/* { dg-final { scan-assembler-times "\tsrli" 121 { target { rv64 } } } } */
++/* { dg-final { scan-assembler-times "\tsltu" 38 { target { rv64 } } } } */
++/* { dg-final { scan-assembler-times "\tseqz" 118 { target { rv64 } } } } */
++/* { dg-final { scan-assembler-times "\tli" 38 { target { rv64 } } } } */
 +
 +/* { dg-final { scan-assembler-times "\tsltiu" 30 { target { rv32 } } } } */
 +/* { dg-final { scan-assembler-times "\tnot" 3 { target { rv32 } } } } */
-+/* { dg-final { scan-assembler-times "\tsrli" 23 { target { rv32 } } } } */
-+/* { dg-final { scan-assembler-times "\tsltu" 40 { target { rv32 } } } } */
-+/* { dg-final { scan-assembler-times "\tseqz" 20 { target { rv32 } } } } */
-+/* { dg-final { scan-assembler-times "\tli" 40 { target { rv32 } } } } */
++/* { dg-final { scan-assembler-times "\tsrli" 25 { target { rv32 } } } } */
++/* { dg-final { scan-assembler-times "\tsltu" 38 { target { rv32 } } } } */
++/* { dg-final { scan-assembler-times "\tseqz" 22 { target { rv32 } } } } */
++/* { dg-final { scan-assembler-times "\tli" 38 { target { rv32 } } } } */
