@@ -1,17 +1,21 @@
 diff --git a/gcc/match.pd b/gcc/match.pd
-index 0ea86d974167..2fe370f8c044 100644
+index 0ea86d974167..09eb48de4870 100644
 --- a/gcc/match.pd
 +++ b/gcc/match.pd
-@@ -12020,3 +12020,10 @@ and,
+@@ -12020,3 +12020,14 @@ and,
  (simplify
   (IFN_VEC_SHL_INSERT (vec_duplicate@1 @0) @0)
    @1)
 +
++/* Be extra careful with the shift count.  Don't transform a negative count
++   or a count larger than the object's size.  */
 +(simplify
-+ (bit_and (rshift @0 INTEGER_CST@1) integer_onep)
-+ (convert (BIT_FIELD_REF:boolean_type_node @0
-+	   { build_one_cst (bitsizetype); }
-+	   (convert:bitsizetype @1))))
++ (bit_and (rshift SSA_NAME@0 INTEGER_CST@1) integer_onep)
++ (if (tree_int_cst_sgn (@1) >= 0
++      && wi::ltu_p (wi::to_wide (@1), TYPE_PRECISION (TREE_TYPE (@0))))
++  (convert (BIT_FIELD_REF:boolean_type_node @0
++	    { build_one_cst (bitsizetype); }
++	    (convert:bitsizetype @1)))))
 +
 diff --git a/gcc/testsuite/gcc.target/riscv/pr32648.c b/gcc/testsuite/gcc.target/riscv/pr32648.c
 new file mode 100644
