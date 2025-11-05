@@ -1,8 +1,8 @@
 diff --git a/gcc/match.pd b/gcc/match.pd
-index 0ea86d974167..aac67018a3f2 100644
+index 6aaf80eee7d5..141b603d92e4 100644
 --- a/gcc/match.pd
 +++ b/gcc/match.pd
-@@ -12020,3 +12020,17 @@ and,
+@@ -12028,3 +12028,19 @@ and,
  (simplify
   (IFN_VEC_SHL_INSERT (vec_duplicate@1 @0) @0)
    @1)
@@ -15,11 +15,13 @@ index 0ea86d974167..aac67018a3f2 100644
 +      && wi::ltu_p (wi::to_wide (@1), TYPE_PRECISION (TREE_TYPE (@0)))
 +      && (fold_before_rtl_expansion_p ()
 +          || !flag_tree_vrp
-+          || optimize_debug))
++          || optimize_debug)
++      && !BYTES_BIG_ENDIAN)
 +  (convert (BIT_FIELD_REF:boolean_type_node @0
 +	    { build_one_cst (bitsizetype); }
 +	    (convert:bitsizetype @1)))))
 +
++	   || (BYTES_BIG_ENDIAN == WORDS_BIG_ENDIAN
 diff --git a/gcc/testsuite/gcc.target/riscv/pr32648.c b/gcc/testsuite/gcc.target/riscv/pr32648.c
 new file mode 100644
 index 000000000000..f4f5975bde5a
