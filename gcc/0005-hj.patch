@@ -1,0 +1,2329 @@
+
+
+On Tue, Oct 28, 2025 at 5:53 AM H.J. Lu <hjl.tools@gmail.com> wrote:
+>
+> On Tue, Oct 28, 2025 at 12:04 AM Jeff Law <jeffreyalaw@gmail.com> wrote:
+>>
+>>
+>>
+>> On 10/27/25 2:37 AM, Richard Biener wrote:
+>> ?
+>>>>
+>>>> There are 2 reasons:
+>>>>
+>>>> 1.  RISC processors only allow moves with memory.   Since this optimization
+>>>> only applies to other load operations, it is nop for most RISC processors.
+>>>> 2.  Some GCC tests scan compiler assembly outputs which don't expect other
+>>>> load operations with volatile memory.   I have to disable this optimization
+>>>> in 100+ x86 tests in my patch.  If this is enabled for other targets, it may
+>>>> cause many GCC tests failures.
+>>>>
+>>>> If your target supports this, you can give it a try.
+>>>>
+>>>>> Can it break volatile correctness or so?
+>>>>
+>>>> No.   My patch has some tests to verify the volatile correctness.
+>>>
+>>> IMO the -fcombine-op-with-volatile-memory-load is quite a bad name.
+>>> Options should have names that mean something to users.  As this seems to
+>>> supposed to be a target opt-in I'd suggest to not expose this to users
+>>> (or if targets are concerned, via some -m...) but instead make this a
+>>> target hook/macro.  Of course I think this should be enabled by default.
+>>
+>> If we're going to go with this patch or a variant thereof; I'd go a step
+>> further and not bother with a target hook.  If the semantics are wrong
+>> for some case, we're more likely to find it the more targets use the
+>> option.  And it sounds like the main purpose behind the hook is to avoid
+>> working through any testsuite issues on those other targets, which isn't
+>> a great reason to introduce a new target hook.
+>
+> One advantage of a target hook is that if a target doesn't opt in, there
+> no need to do additional check:
+>
+> diff --git a/gcc/recog.cc b/gcc/recog.cc
+> index 67d7fa63069..fc411842859 100644
+> --- a/gcc/recog.cc
+> +++ b/gcc/recog.cc
+> @@ -1596,7 +1596,8 @@ general_operand (rtx op, machine_mode mode)
+>      {
+>        rtx y = XEXP (op, 0);
+>
+> -      if (! volatile_ok && MEM_VOLATILE_P (op))
+> +      if (!targetm.volatile_mem_ok_in_insn (op,
+> +                  recog_data.try_combine_insn))
+>    return false;
+>
+>        /* Use the mem's mode, since it will be reloaded thus.  LRA can
+> diff --git a/gcc/targhooks.cc b/gcc/targhooks.cc
+> index 1873d572ba3..ece1f496571 100644
+> --- a/gcc/targhooks.cc
+> +++ b/gcc/targhooks.cc
+> @@ -1839,6 +1839,14 @@ default_new_address_profitable_p (rtx memref
+> ATTRIBUTE_UNUSED,
+>    return true;
+>  }
+>
+> +/* The default implementation of TARGET_VOLATILE_MEM_OK_IN_INSN.  */
+> +
+> +bool
+> +default_volatile_mem_ok_in_insn (rtx memref, rtx_insn *)
+> +{
+> +  return volatile_ok || !MEM_VOLATILE_P (memref);
+> +}
+> +
+>
+>> As HJ indicated, I wouldn't expect significant fallout on load/store
+>> architectures.  So the scope of fallout isn't likely to be too terrible.
+>>
+>> I was going to throw it in my tester, but it doesn't apply cleanly on
+>> the trunk.
+>>
+>>> patching file gcc/recog.cc
+>>> Hunk #1 FAILED at 116.
+>>> 1 out of 2 hunks FAILED -- saving rejects to file gcc/recog.cc.rej
+>>
+>
+> I put my branch at
+>
+> https://gitlab.com/x86-gcc/gcc/-/commits/users/hjl/pr122343/master
+>
+> on top of
+>
+> commit 76943639ddd861dce3886d1def2a353ccfcdd585
+> Author: Eric Botcazou <ebotcazou@adacore.com>
+> Date:   Mon Oct 27 19:51:11 2025 +0100
+>
+>     Ada: Fix assertion failure on child generic package
+>
+> Does it work for you?
+>
+
+Here is the patch to add TARGET_VOLATILE_MEM_OK_IN_INSN.
+
+For x86, volatile memory can be used as source operand for loads.  Add
+TARGET_VOLATILE_MEM_OK_IN_INSN to allow a target to support operations
+with volatile memory load:
+
+1. Add a field, try_combine_insn, to recog_data_d for the combine pass to
+   pass the instruction information to general_operand.
+2. Update recog_for_combine_1 to set recog_data.try_combine_insn before
+   calling recog and clear it afterward.
+3. Add a target hook, TARGET_VOLATILE_MEM_OK_IN_INSN which returns true
+   if a volatile memory reference is OK in an instruction.  The default
+   returns true only if volatile memory reference is OK or the memory
+   reference isn't volatile.
+4. Update general_operand to call targetm.volatile_mem_ok_in_insn to
+   determine if a memory operand is OK.
+5. Add an x86 TARGET_VOLATILE_MEM_OK_IN_INSN hook which returns true when
+   volatile memory is used in load and -mfuse-ops-with-volatile-access is
+   enabled.
+
+This optimizes
+
+extern volatile int bar;
+
+int
+foo (int z)
+{
+  z *= 123;
+  return bar + z;
+}
+
+into
+
+foo:
+imull $123, %edi, %eax
+addl bar(%rip), %eax
+ret
+
+instead of
+
+foo:
+imull $123, %edi, %eax
+movl bar(%rip), %edx
+addl %edx, %eax
+ret
+
+Tested with Linux kernel 6.17.4 on Intel Core i7-1195G7.
+
+TODO: Investigate if adding the LOCK prefix to allow volatile memory store
+will improve performance since the LOCK prefix may be expensive.
+
+gcc/
+
+PR target/122343
+* combine.cc (recog_for_combine_1): Set and clear
+recog_data.try_combine_insn when calling recog.
+* recog.cc (general_operand): Call targetm.volatile_mem_ok_in_insn.
+* recog.h (recog_data_d): Add try_combine_insn.
+* target.def (volatile_mem_ok_in_insn): New hook.
+* targhooks.cc (default_volatile_mem_ok_in_insn): New.
+* targhooks.h (default_volatile_mem_ok_in_insn): Likewise.
+* config/i386/i386.cc (ix86_volatile_mem_ok_in_insn): Likewise.
+(TARGET_VOLATILE_MEM_OK_IN_INSN): Likewise.
+* doc/invoke.texi: Document -mfuse-ops-with-volatile-access.
+* doc/tm.texi: Regenerated.
+* doc/tm.texi.in: Add TARGET_VOLATILE_MEM_OK_IN_INSN.
+
+gcc/testsuite/
+
+PR target/122343
+* gcc.target/i386/avx-ne-convert-1.c: Compile with
+-mno-fuse-ops-with-volatile-access.
+* gcc.target/i386/avx10_2-bf16-1.c: Likewise.
+* gcc.target/i386/avx10_2-convert-1.c: Likewise.
+* gcc.target/i386/avx10_2-satcvt-1.c: Likewise.
+* gcc.target/i386/avx512bf16-vcvtneps2bf16-1.c: Likewise.
+* gcc.target/i386/avx512bf16vl-vcvtneps2bf16-1a.c: Likewise.
+* gcc.target/i386/avx512bf16vl-vcvtneps2bf16-1b.c: Likewise.
+* gcc.target/i386/avx512dq-vcvtps2qq-1.c: Likewise.
+* gcc.target/i386/avx512dq-vcvtps2uqq-1.c: Likewise.
+* gcc.target/i386/avx512dq-vcvtqq2pd-1.c: Likewise.
+* gcc.target/i386/avx512dq-vcvtqq2ps-1.c: Likewise.
+* gcc.target/i386/avx512dq-vcvttps2qq-1.c: Likewise.
+* gcc.target/i386/avx512dq-vcvttps2uqq-1.c: Likewise.
+* gcc.target/i386/avx512dq-vcvtuqq2pd-1.c: Likewise.
+* gcc.target/i386/avx512dq-vcvtuqq2ps-1.c: Likewise.
+* gcc.target/i386/avx512dq-vfpclasspd-1.c: Likewise.
+* gcc.target/i386/avx512dq-vfpclassps-1.c: Likewise.
+* gcc.target/i386/avx512dq-vfpclasssd-1.c: Likewise.
+* gcc.target/i386/avx512dq-vfpclassss-1.c: Likewise.
+* gcc.target/i386/avx512dq-vpmullq-1.c: Likewise.
+* gcc.target/i386/avx512dq-vpmullq-3.c: Likewise.
+* gcc.target/i386/avx512f-pr100267-1.c: Likewise.
+* gcc.target/i386/avx512f-vcvtps2pd-1.c: Likewise.
+* gcc.target/i386/avx512f-vcvtsd2si-1.c: Likewise.
+* gcc.target/i386/avx512f-vcvtsd2si64-1.c: Likewise.
+* gcc.target/i386/avx512f-vcvtsd2usi-1.c: Likewise.
+* gcc.target/i386/avx512f-vcvtsd2usi64-1.c: Likewise.
+* gcc.target/i386/avx512f-vcvtss2si-1.c: Likewise.
+* gcc.target/i386/avx512f-vcvtss2si64-1.c: Likewise.
+* gcc.target/i386/avx512f-vcvtss2usi-1.c: Likewise.
+* gcc.target/i386/avx512f-vcvtss2usi64-1.c: Likewise.
+* gcc.target/i386/avx512f-vcvttsd2si-1.c: Likewise.
+* gcc.target/i386/avx512f-vcvttsd2si64-1.c: Likewise.
+* gcc.target/i386/avx512f-vcvttsd2usi-1.c: Likewise.
+* gcc.target/i386/avx512f-vcvttsd2usi64-1.c: Likewise.
+* gcc.target/i386/avx512f-vcvttss2si-1.c: Likewise.
+* gcc.target/i386/avx512f-vcvttss2si64-1.c: Likewise.
+* gcc.target/i386/avx512f-vcvttss2usi-1.c: Likewise.
+* gcc.target/i386/avx512f-vcvttss2usi64-1.c: Likewise.
+* gcc.target/i386/avx512f-vmovapd-1.c: Likewise.
+* gcc.target/i386/avx512f-vmovaps-1.c: Likewise.
+* gcc.target/i386/avx512f-vmovdqa64-1.c: Likewise.
+* gcc.target/i386/avx512f-vpandnq-1.c: Likewise.
+* gcc.target/i386/avx512f-vpbroadcastd-1.c: Likewise.
+* gcc.target/i386/avx512f-vpbroadcastq-1.c: Likewise.
+* gcc.target/i386/avx512f-vpcmpeqq-1.c: Likewise.
+* gcc.target/i386/avx512f-vpcmpequq-1.c: Likewise.
+* gcc.target/i386/avx512f-vrndscalepd-1.c: Likewise.
+* gcc.target/i386/avx512f-vrndscaleps-1.c: Likewise.
+* gcc.target/i386/avx512fp16-complex-fma.c: Likewise.
+* gcc.target/i386/avx512fp16-vaddph-1a.c: Likewise.
+* gcc.target/i386/avx512fp16-vcvtpd2ph-1a.c: Likewise.
+* gcc.target/i386/avx512fp16-vcvtph2dq-1a.c: Likewise.
+* gcc.target/i386/avx512fp16-vcvtph2pd-1a.c: Likewise.
+* gcc.target/i386/avx512fp16-vcvtph2psx-1a.c: Likewise.
+* gcc.target/i386/avx512fp16-vcvtph2qq-1a.c: Likewise.
+* gcc.target/i386/avx512fp16-vcvtph2udq-1a.c: Likewise.
+* gcc.target/i386/avx512fp16-vcvtph2uqq-1a.c: Likewise.
+* gcc.target/i386/avx512fp16-vcvtph2uw-1a.c: Likewise.
+* gcc.target/i386/avx512fp16-vcvtph2w-1a.c: Likewise.
+* gcc.target/i386/avx512fp16-vcvtps2ph-1a.c: Likewise.
+* gcc.target/i386/avx512fp16-vcvtqq2ph-1a.c: Likewise.
+* gcc.target/i386/avx512fp16-vcvttph2dq-1a.c: Likewise.
+* gcc.target/i386/avx512fp16-vcvttph2qq-1a.c: Likewise.
+* gcc.target/i386/avx512fp16-vcvttph2udq-1a.c: Likewise.
+* gcc.target/i386/avx512fp16-vcvttph2uqq-1a.c: Likewise.
+* gcc.target/i386/avx512fp16-vcvttph2uw-1a.c: Likewise.
+* gcc.target/i386/avx512fp16-vcvttph2w-1a.c: Likewise.
+* gcc.target/i386/avx512fp16-vcvtuqq2ph-1a.c: Likewise.
+* gcc.target/i386/avx512fp16-vfcmaddcph-1a.c: Likewise.
+* gcc.target/i386/avx512fp16-vfcmulcph-1a.c: Likewise.
+* gcc.target/i386/avx512fp16-vfmaddcph-1a.c: Likewise.
+* gcc.target/i386/avx512fp16-vfmulcph-1a.c: Likewise.
+* gcc.target/i386/avx512fp16-vfpclassph-1a.c: Likewise.
+* gcc.target/i386/avx512fp16-vfpclasssh-1a.c: Likewise.
+* gcc.target/i386/avx512fp16-vmulph-1a.c: Likewise.
+* gcc.target/i386/avx512fp16-vrcpph-1a.c: Likewise.
+* gcc.target/i386/avx512fp16-vrsqrtph-1a.c: Likewise.
+* gcc.target/i386/avx512fp16-vsqrtph-1a.c: Likewise.
+* gcc.target/i386/avx512fp16vl-vaddph-1a.c: Likewise.
+* gcc.target/i386/avx512fp16vl-vcvtpd2ph-1a.c: Likewise.
+* gcc.target/i386/avx512fp16vl-vcvtph2dq-1a.c: Likewise.
+* gcc.target/i386/avx512fp16vl-vcvtph2psx-1a.c: Likewise.
+* gcc.target/i386/avx512fp16vl-vcvtph2qq-1a.c: Likewise.
+* gcc.target/i386/avx512fp16vl-vcvtph2udq-1a.c: Likewise.
+* gcc.target/i386/avx512fp16vl-vcvtph2uqq-1a.c: Likewise.
+* gcc.target/i386/avx512fp16vl-vcvtph2uw-1a.c: Likewise.
+* gcc.target/i386/avx512fp16vl-vcvtph2w-1a.c: Likewise.
+* gcc.target/i386/avx512fp16vl-vcvtps2ph-1a.c: Likewise.
+* gcc.target/i386/avx512fp16vl-vcvtqq2ph-1a.c: Likewise.
+* gcc.target/i386/avx512fp16vl-vcvttph2dq-1a.c: Likewise.
+* gcc.target/i386/avx512fp16vl-vcvttph2udq-1a.c: Likewise.
+* gcc.target/i386/avx512fp16vl-vcvttph2uw-1a.c: Likewise.
+* gcc.target/i386/avx512fp16vl-vcvttph2w-1a.c: Likewise.
+* gcc.target/i386/avx512fp16vl-vcvtuqq2ph-1a.c: Likewise.
+* gcc.target/i386/avx512fp16vl-vfcmaddcph-1a.c: Likewise.
+* gcc.target/i386/avx512fp16vl-vfcmulcph-1a.c: Likewise.
+* gcc.target/i386/avx512fp16vl-vfmaddcph-1a.c: Likewise.
+* gcc.target/i386/avx512fp16vl-vfmulcph-1a.c: Likewise.
+* gcc.target/i386/avx512fp16vl-vfpclassph-1a.c: Likewise.
+* gcc.target/i386/avx512fp16vl-vmulph-1a.c: Likewise.
+* gcc.target/i386/avx512fp16vl-vrcpph-1a.c: Likewise.
+* gcc.target/i386/avx512fp16vl-vrsqrtph-1a.c: Likewise.
+* gcc.target/i386/avx512fp16vl-vsqrtph-1a.c: Likewise.
+* gcc.target/i386/avx512vl-pr100267-1.c: Likewise.
+* gcc.target/i386/avx512vl-vcvtpd2ps-1.c: Likewise.
+* gcc.target/i386/avx512vl-vcvtpd2udq-1.c: Likewise.
+* gcc.target/i386/avx512vl-vcvttpd2udq-1.c: Likewise.
+* gcc.target/i386/avx512vl-vcvttps2udq-1.c: Likewise.
+* gcc.target/i386/avx512vl-vmovapd-1.c: Likewise.
+* gcc.target/i386/avx512vl-vmovaps-1.c: Likewise.
+* gcc.target/i386/avx512vl-vmovdqa64-1.c: Likewise.
+* gcc.target/i386/avx512vl-vpcmpeqq-1.c: Likewise.
+* gcc.target/i386/avx512vl-vpcmpequq-1.c: Likewise.
+* gcc.target/i386/avx512vl-vpcmpuq-1.c: Likewise.
+* gcc.target/i386/pr122343-1a.c: New test.
+* gcc.target/i386/pr122343-1b.c: Likewise.
+* gcc.target/i386/pr122343-2a.c: Likewise.
+* gcc.target/i386/pr122343-2b.c: Likewise.
+* gcc.target/i386/pr122343-3.c: Likewise.
+* gcc.target/i386/pr122343-4a.c: Likewise.
+* gcc.target/i386/pr122343-4b.c: Likewise.
+
+-- 
+H.J.
+
+
+0001-Add-TARGET_VOLATILE_MEM_OK_IN_INSN.patch
+
+From dcfda8da8691a9374d890e40694be317b6b6c91e Mon Sep 17 00:00:00 2001
+From: "H.J. Lu" <hjl.tools@gmail.com>
+Date: Fri, 24 Oct 2025 09:00:59 +0800
+Subject: [PATCH] Add TARGET_VOLATILE_MEM_OK_IN_INSN
+
+For x86, volatile memory can be used as source operand for loads.  Add
+TARGET_VOLATILE_MEM_OK_IN_INSN to allow a target to support operations
+with volatile memory load:
+
+1. Add a field, try_combine_insn, to recog_data_d for the combine pass to
+   pass the instruction information to general_operand.
+2. Update recog_for_combine_1 to set recog_data.try_combine_insn before
+   calling recog and clear it afterward.
+3. Add a target hook, TARGET_VOLATILE_MEM_OK_IN_INSN which returns true
+   if a volatile memory reference is OK in an instruction.  The default
+   returns true only if volatile memory reference is OK or the memory
+   reference isn't volatile.
+4. Update general_operand to call targetm.volatile_mem_ok_in_insn to
+   determine if a memory operand is OK.
+5. Add an x86 TARGET_VOLATILE_MEM_OK_IN_INSN hook which returns true when
+   volatile memory is used in load and -mfuse-ops-with-volatile-access is
+   enabled.
+
+This optimizes
+
+extern volatile int bar;
+
+int
+foo (int z)
+{
+  z *= 123;
+  return bar + z;
+}
+
+into
+
+foo:
+	imull	$123, %edi, %eax
+	addl	bar(%rip), %eax
+	ret
+
+instead of
+
+foo:
+	imull	$123, %edi, %eax
+	movl	bar(%rip), %edx
+	addl	%edx, %eax
+	ret
+
+Tested with Linux kernel 6.17.4 on Intel Core i7-1195G7.
+
+TODO: Investigate if adding the LOCK prefix to allow volatile memory store
+will improve performance since the LOCK prefix may be expensive.
+
+gcc/
+
+	PR target/122343
+	* combine.cc (recog_for_combine_1): Set and clear
+	recog_data.try_combine_insn when calling recog.
+	* recog.cc (general_operand): Call targetm.volatile_mem_ok_in_insn.
+	* recog.h (recog_data_d): Add try_combine_insn.
+	* target.def (volatile_mem_ok_in_insn): New hook.
+	* targhooks.cc (default_volatile_mem_ok_in_insn): New.
+	* targhooks.h (default_volatile_mem_ok_in_insn): Likewise.
+	* config/i386/i386.cc (ix86_volatile_mem_ok_in_insn): Likewise.
+	(TARGET_VOLATILE_MEM_OK_IN_INSN): Likewise.
+	* doc/invoke.texi: Document -mfuse-ops-with-volatile-access.
+	* doc/tm.texi: Regenerated.
+	* doc/tm.texi.in: Add TARGET_VOLATILE_MEM_OK_IN_INSN.
+
+gcc/testsuite/
+
+	PR target/122343
+	* gcc.target/i386/avx-ne-convert-1.c: Compile with
+	-mno-fuse-ops-with-volatile-access.
+	* gcc.target/i386/avx10_2-bf16-1.c: Likewise.
+	* gcc.target/i386/avx10_2-convert-1.c: Likewise.
+	* gcc.target/i386/avx10_2-satcvt-1.c: Likewise.
+	* gcc.target/i386/avx512bf16-vcvtneps2bf16-1.c: Likewise.
+	* gcc.target/i386/avx512bf16vl-vcvtneps2bf16-1a.c: Likewise.
+	* gcc.target/i386/avx512bf16vl-vcvtneps2bf16-1b.c: Likewise.
+	* gcc.target/i386/avx512dq-vcvtps2qq-1.c: Likewise.
+	* gcc.target/i386/avx512dq-vcvtps2uqq-1.c: Likewise.
+	* gcc.target/i386/avx512dq-vcvtqq2pd-1.c: Likewise.
+	* gcc.target/i386/avx512dq-vcvtqq2ps-1.c: Likewise.
+	* gcc.target/i386/avx512dq-vcvttps2qq-1.c: Likewise.
+	* gcc.target/i386/avx512dq-vcvttps2uqq-1.c: Likewise.
+	* gcc.target/i386/avx512dq-vcvtuqq2pd-1.c: Likewise.
+	* gcc.target/i386/avx512dq-vcvtuqq2ps-1.c: Likewise.
+	* gcc.target/i386/avx512dq-vfpclasspd-1.c: Likewise.
+	* gcc.target/i386/avx512dq-vfpclassps-1.c: Likewise.
+	* gcc.target/i386/avx512dq-vfpclasssd-1.c: Likewise.
+	* gcc.target/i386/avx512dq-vfpclassss-1.c: Likewise.
+	* gcc.target/i386/avx512dq-vpmullq-1.c: Likewise.
+	* gcc.target/i386/avx512dq-vpmullq-3.c: Likewise.
+	* gcc.target/i386/avx512f-pr100267-1.c: Likewise.
+	* gcc.target/i386/avx512f-vcvtps2pd-1.c: Likewise.
+	* gcc.target/i386/avx512f-vcvtsd2si-1.c: Likewise.
+	* gcc.target/i386/avx512f-vcvtsd2si64-1.c: Likewise.
+	* gcc.target/i386/avx512f-vcvtsd2usi-1.c: Likewise.
+	* gcc.target/i386/avx512f-vcvtsd2usi64-1.c: Likewise.
+	* gcc.target/i386/avx512f-vcvtss2si-1.c: Likewise.
+	* gcc.target/i386/avx512f-vcvtss2si64-1.c: Likewise.
+	* gcc.target/i386/avx512f-vcvtss2usi-1.c: Likewise.
+	* gcc.target/i386/avx512f-vcvtss2usi64-1.c: Likewise.
+	* gcc.target/i386/avx512f-vcvttsd2si-1.c: Likewise.
+	* gcc.target/i386/avx512f-vcvttsd2si64-1.c: Likewise.
+	* gcc.target/i386/avx512f-vcvttsd2usi-1.c: Likewise.
+	* gcc.target/i386/avx512f-vcvttsd2usi64-1.c: Likewise.
+	* gcc.target/i386/avx512f-vcvttss2si-1.c: Likewise.
+	* gcc.target/i386/avx512f-vcvttss2si64-1.c: Likewise.
+	* gcc.target/i386/avx512f-vcvttss2usi-1.c: Likewise.
+	* gcc.target/i386/avx512f-vcvttss2usi64-1.c: Likewise.
+	* gcc.target/i386/avx512f-vmovapd-1.c: Likewise.
+	* gcc.target/i386/avx512f-vmovaps-1.c: Likewise.
+	* gcc.target/i386/avx512f-vmovdqa64-1.c: Likewise.
+	* gcc.target/i386/avx512f-vpandnq-1.c: Likewise.
+	* gcc.target/i386/avx512f-vpbroadcastd-1.c: Likewise.
+	* gcc.target/i386/avx512f-vpbroadcastq-1.c: Likewise.
+	* gcc.target/i386/avx512f-vpcmpeqq-1.c: Likewise.
+	* gcc.target/i386/avx512f-vpcmpequq-1.c: Likewise.
+	* gcc.target/i386/avx512f-vrndscalepd-1.c: Likewise.
+	* gcc.target/i386/avx512f-vrndscaleps-1.c: Likewise.
+	* gcc.target/i386/avx512fp16-complex-fma.c: Likewise.
+	* gcc.target/i386/avx512fp16-vaddph-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16-vcvtpd2ph-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16-vcvtph2dq-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16-vcvtph2pd-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16-vcvtph2psx-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16-vcvtph2qq-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16-vcvtph2udq-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16-vcvtph2uqq-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16-vcvtph2uw-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16-vcvtph2w-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16-vcvtps2ph-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16-vcvtqq2ph-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16-vcvttph2dq-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16-vcvttph2qq-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16-vcvttph2udq-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16-vcvttph2uqq-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16-vcvttph2uw-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16-vcvttph2w-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16-vcvtuqq2ph-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16-vfcmaddcph-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16-vfcmulcph-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16-vfmaddcph-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16-vfmulcph-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16-vfpclassph-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16-vfpclasssh-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16-vmulph-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16-vrcpph-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16-vrsqrtph-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16-vsqrtph-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16vl-vaddph-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16vl-vcvtpd2ph-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16vl-vcvtph2dq-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16vl-vcvtph2psx-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16vl-vcvtph2qq-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16vl-vcvtph2udq-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16vl-vcvtph2uqq-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16vl-vcvtph2uw-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16vl-vcvtph2w-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16vl-vcvtps2ph-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16vl-vcvtqq2ph-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16vl-vcvttph2dq-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16vl-vcvttph2udq-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16vl-vcvttph2uw-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16vl-vcvttph2w-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16vl-vcvtuqq2ph-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16vl-vfcmaddcph-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16vl-vfcmulcph-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16vl-vfmaddcph-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16vl-vfmulcph-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16vl-vfpclassph-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16vl-vmulph-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16vl-vrcpph-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16vl-vrsqrtph-1a.c: Likewise.
+	* gcc.target/i386/avx512fp16vl-vsqrtph-1a.c: Likewise.
+	* gcc.target/i386/avx512vl-pr100267-1.c: Likewise.
+	* gcc.target/i386/avx512vl-vcvtpd2ps-1.c: Likewise.
+	* gcc.target/i386/avx512vl-vcvtpd2udq-1.c: Likewise.
+	* gcc.target/i386/avx512vl-vcvttpd2udq-1.c: Likewise.
+	* gcc.target/i386/avx512vl-vcvttps2udq-1.c: Likewise.
+	* gcc.target/i386/avx512vl-vmovapd-1.c: Likewise.
+	* gcc.target/i386/avx512vl-vmovaps-1.c: Likewise.
+	* gcc.target/i386/avx512vl-vmovdqa64-1.c: Likewise.
+	* gcc.target/i386/avx512vl-vpcmpeqq-1.c: Likewise.
+	* gcc.target/i386/avx512vl-vpcmpequq-1.c: Likewise.
+	* gcc.target/i386/avx512vl-vpcmpuq-1.c: Likewise.
+	* gcc.target/i386/pr122343-1a.c: New test.
+	* gcc.target/i386/pr122343-1b.c: Likewise.
+	* gcc.target/i386/pr122343-2a.c: Likewise.
+	* gcc.target/i386/pr122343-2b.c: Likewise.
+	* gcc.target/i386/pr122343-3.c: Likewise.
+	* gcc.target/i386/pr122343-4a.c: Likewise.
+	* gcc.target/i386/pr122343-4b.c: Likewise.
+
+Signed-off-by: H.J. Lu <hjl.tools@gmail.com>
+---
+ gcc/combine.cc                                |  3 ++
+ gcc/config/i386/i386.cc                       | 22 +++++++++++++
+ gcc/config/i386/i386.opt                      |  4 +++
+ gcc/doc/invoke.texi                           |  8 ++++-
+ gcc/doc/tm.texi                               |  8 +++++
+ gcc/doc/tm.texi.in                            |  2 ++
+ gcc/recog.cc                                  |  3 +-
+ gcc/recog.h                                   |  4 +++
+ gcc/target.def                                | 12 +++++++
+ gcc/targhooks.cc                              |  8 +++++
+ gcc/targhooks.h                               |  1 +
+ .../gcc.target/i386/avx-ne-convert-1.c        |  2 +-
+ .../gcc.target/i386/avx10_2-bf16-1.c          |  2 +-
+ .../gcc.target/i386/avx10_2-convert-1.c       |  2 +-
+ .../gcc.target/i386/avx10_2-satcvt-1.c        |  2 +-
+ .../i386/avx512bf16-vcvtneps2bf16-1.c         |  2 +-
+ .../i386/avx512bf16vl-vcvtneps2bf16-1a.c      |  2 +-
+ .../i386/avx512bf16vl-vcvtneps2bf16-1b.c      |  2 +-
+ .../gcc.target/i386/avx512dq-vcvtps2qq-1.c    |  2 +-
+ .../gcc.target/i386/avx512dq-vcvtps2uqq-1.c   |  2 +-
+ .../gcc.target/i386/avx512dq-vcvtqq2pd-1.c    |  2 +-
+ .../gcc.target/i386/avx512dq-vcvtqq2ps-1.c    |  2 +-
+ .../gcc.target/i386/avx512dq-vcvttps2qq-1.c   |  2 +-
+ .../gcc.target/i386/avx512dq-vcvttps2uqq-1.c  |  2 +-
+ .../gcc.target/i386/avx512dq-vcvtuqq2pd-1.c   |  2 +-
+ .../gcc.target/i386/avx512dq-vcvtuqq2ps-1.c   |  2 +-
+ .../gcc.target/i386/avx512dq-vfpclasspd-1.c   |  2 +-
+ .../gcc.target/i386/avx512dq-vfpclassps-1.c   |  2 +-
+ .../gcc.target/i386/avx512dq-vfpclasssd-1.c   |  2 +-
+ .../gcc.target/i386/avx512dq-vfpclassss-1.c   |  2 +-
+ .../gcc.target/i386/avx512dq-vpmullq-1.c      |  2 +-
+ .../gcc.target/i386/avx512dq-vpmullq-3.c      |  2 +-
+ .../gcc.target/i386/avx512f-pr100267-1.c      |  2 +-
+ .../gcc.target/i386/avx512f-vcvtps2pd-1.c     |  2 +-
+ .../gcc.target/i386/avx512f-vcvtsd2si-1.c     |  2 +-
+ .../gcc.target/i386/avx512f-vcvtsd2si64-1.c   |  2 +-
+ .../gcc.target/i386/avx512f-vcvtsd2usi-1.c    |  2 +-
+ .../gcc.target/i386/avx512f-vcvtsd2usi64-1.c  |  2 +-
+ .../gcc.target/i386/avx512f-vcvtss2si-1.c     |  2 +-
+ .../gcc.target/i386/avx512f-vcvtss2si64-1.c   |  2 +-
+ .../gcc.target/i386/avx512f-vcvtss2usi-1.c    |  2 +-
+ .../gcc.target/i386/avx512f-vcvtss2usi64-1.c  |  2 +-
+ .../gcc.target/i386/avx512f-vcvttsd2si-1.c    |  2 +-
+ .../gcc.target/i386/avx512f-vcvttsd2si64-1.c  |  2 +-
+ .../gcc.target/i386/avx512f-vcvttsd2usi-1.c   |  2 +-
+ .../gcc.target/i386/avx512f-vcvttsd2usi64-1.c |  2 +-
+ .../gcc.target/i386/avx512f-vcvttss2si-1.c    |  2 +-
+ .../gcc.target/i386/avx512f-vcvttss2si64-1.c  |  2 +-
+ .../gcc.target/i386/avx512f-vcvttss2usi-1.c   |  2 +-
+ .../gcc.target/i386/avx512f-vcvttss2usi64-1.c |  2 +-
+ .../gcc.target/i386/avx512f-vmovapd-1.c       |  2 +-
+ .../gcc.target/i386/avx512f-vmovaps-1.c       |  2 +-
+ .../gcc.target/i386/avx512f-vmovdqa64-1.c     |  2 +-
+ .../gcc.target/i386/avx512f-vpandnq-1.c       |  2 +-
+ .../gcc.target/i386/avx512f-vpbroadcastd-1.c  |  2 +-
+ .../gcc.target/i386/avx512f-vpbroadcastq-1.c  |  2 +-
+ .../gcc.target/i386/avx512f-vpcmpeqq-1.c      |  2 +-
+ .../gcc.target/i386/avx512f-vpcmpequq-1.c     |  2 +-
+ .../gcc.target/i386/avx512f-vrndscalepd-1.c   |  2 +-
+ .../gcc.target/i386/avx512f-vrndscaleps-1.c   |  2 +-
+ .../gcc.target/i386/avx512fp16-complex-fma.c  |  2 +-
+ .../gcc.target/i386/avx512fp16-vaddph-1a.c    |  2 +-
+ .../gcc.target/i386/avx512fp16-vcvtpd2ph-1a.c |  2 +-
+ .../gcc.target/i386/avx512fp16-vcvtph2dq-1a.c |  2 +-
+ .../gcc.target/i386/avx512fp16-vcvtph2pd-1a.c |  2 +-
+ .../i386/avx512fp16-vcvtph2psx-1a.c           |  2 +-
+ .../gcc.target/i386/avx512fp16-vcvtph2qq-1a.c |  2 +-
+ .../i386/avx512fp16-vcvtph2udq-1a.c           |  2 +-
+ .../i386/avx512fp16-vcvtph2uqq-1a.c           |  2 +-
+ .../gcc.target/i386/avx512fp16-vcvtph2uw-1a.c |  2 +-
+ .../gcc.target/i386/avx512fp16-vcvtph2w-1a.c  |  2 +-
+ .../gcc.target/i386/avx512fp16-vcvtps2ph-1a.c |  2 +-
+ .../gcc.target/i386/avx512fp16-vcvtqq2ph-1a.c |  2 +-
+ .../i386/avx512fp16-vcvttph2dq-1a.c           |  2 +-
+ .../i386/avx512fp16-vcvttph2qq-1a.c           |  2 +-
+ .../i386/avx512fp16-vcvttph2udq-1a.c          |  2 +-
+ .../i386/avx512fp16-vcvttph2uqq-1a.c          |  2 +-
+ .../i386/avx512fp16-vcvttph2uw-1a.c           |  2 +-
+ .../gcc.target/i386/avx512fp16-vcvttph2w-1a.c |  2 +-
+ .../i386/avx512fp16-vcvtuqq2ph-1a.c           |  2 +-
+ .../i386/avx512fp16-vfcmaddcph-1a.c           |  2 +-
+ .../gcc.target/i386/avx512fp16-vfcmulcph-1a.c |  2 +-
+ .../gcc.target/i386/avx512fp16-vfmaddcph-1a.c |  2 +-
+ .../gcc.target/i386/avx512fp16-vfmulcph-1a.c  |  2 +-
+ .../i386/avx512fp16-vfpclassph-1a.c           |  2 +-
+ .../i386/avx512fp16-vfpclasssh-1a.c           |  2 +-
+ .../gcc.target/i386/avx512fp16-vmulph-1a.c    |  2 +-
+ .../gcc.target/i386/avx512fp16-vrcpph-1a.c    |  2 +-
+ .../gcc.target/i386/avx512fp16-vrsqrtph-1a.c  |  2 +-
+ .../gcc.target/i386/avx512fp16-vsqrtph-1a.c   |  2 +-
+ .../gcc.target/i386/avx512fp16vl-vaddph-1a.c  |  2 +-
+ .../i386/avx512fp16vl-vcvtpd2ph-1a.c          |  2 +-
+ .../i386/avx512fp16vl-vcvtph2dq-1a.c          |  2 +-
+ .../i386/avx512fp16vl-vcvtph2psx-1a.c         |  2 +-
+ .../i386/avx512fp16vl-vcvtph2qq-1a.c          |  2 +-
+ .../i386/avx512fp16vl-vcvtph2udq-1a.c         |  2 +-
+ .../i386/avx512fp16vl-vcvtph2uqq-1a.c         |  2 +-
+ .../i386/avx512fp16vl-vcvtph2uw-1a.c          |  2 +-
+ .../i386/avx512fp16vl-vcvtph2w-1a.c           |  2 +-
+ .../i386/avx512fp16vl-vcvtps2ph-1a.c          |  2 +-
+ .../i386/avx512fp16vl-vcvtqq2ph-1a.c          |  2 +-
+ .../i386/avx512fp16vl-vcvttph2dq-1a.c         |  2 +-
+ .../i386/avx512fp16vl-vcvttph2udq-1a.c        |  2 +-
+ .../i386/avx512fp16vl-vcvttph2uw-1a.c         |  2 +-
+ .../i386/avx512fp16vl-vcvttph2w-1a.c          |  2 +-
+ .../i386/avx512fp16vl-vcvtuqq2ph-1a.c         |  2 +-
+ .../i386/avx512fp16vl-vfcmaddcph-1a.c         |  2 +-
+ .../i386/avx512fp16vl-vfcmulcph-1a.c          |  2 +-
+ .../i386/avx512fp16vl-vfmaddcph-1a.c          |  2 +-
+ .../i386/avx512fp16vl-vfmulcph-1a.c           |  2 +-
+ .../i386/avx512fp16vl-vfpclassph-1a.c         |  2 +-
+ .../gcc.target/i386/avx512fp16vl-vmulph-1a.c  |  2 +-
+ .../gcc.target/i386/avx512fp16vl-vrcpph-1a.c  |  2 +-
+ .../i386/avx512fp16vl-vrsqrtph-1a.c           |  2 +-
+ .../gcc.target/i386/avx512fp16vl-vsqrtph-1a.c |  2 +-
+ .../gcc.target/i386/avx512vl-pr100267-1.c     |  2 +-
+ .../gcc.target/i386/avx512vl-vcvtpd2ps-1.c    |  2 +-
+ .../gcc.target/i386/avx512vl-vcvtpd2udq-1.c   |  2 +-
+ .../gcc.target/i386/avx512vl-vcvttpd2udq-1.c  |  2 +-
+ .../gcc.target/i386/avx512vl-vcvttps2udq-1.c  |  2 +-
+ .../gcc.target/i386/avx512vl-vmovapd-1.c      |  2 +-
+ .../gcc.target/i386/avx512vl-vmovaps-1.c      |  2 +-
+ .../gcc.target/i386/avx512vl-vmovdqa64-1.c    |  2 +-
+ .../gcc.target/i386/avx512vl-vpcmpeqq-1.c     |  2 +-
+ .../gcc.target/i386/avx512vl-vpcmpequq-1.c    |  2 +-
+ .../gcc.target/i386/avx512vl-vpcmpuq-1.c      |  2 +-
+ gcc/testsuite/gcc.target/i386/pr122343-1a.c   | 25 ++++++++++++++
+ gcc/testsuite/gcc.target/i386/pr122343-1b.c   | 19 +++++++++++
+ gcc/testsuite/gcc.target/i386/pr122343-2a.c   | 23 +++++++++++++
+ gcc/testsuite/gcc.target/i386/pr122343-2b.c   | 18 ++++++++++
+ gcc/testsuite/gcc.target/i386/pr122343-3.c    | 24 ++++++++++++++
+ gcc/testsuite/gcc.target/i386/pr122343-4a.c   | 33 +++++++++++++++++++
+ gcc/testsuite/gcc.target/i386/pr122343-4b.c   | 24 ++++++++++++++
+ 133 files changed, 354 insertions(+), 117 deletions(-)
+ create mode 100644 gcc/testsuite/gcc.target/i386/pr122343-1a.c
+ create mode 100644 gcc/testsuite/gcc.target/i386/pr122343-1b.c
+ create mode 100644 gcc/testsuite/gcc.target/i386/pr122343-2a.c
+ create mode 100644 gcc/testsuite/gcc.target/i386/pr122343-2b.c
+ create mode 100644 gcc/testsuite/gcc.target/i386/pr122343-3.c
+ create mode 100644 gcc/testsuite/gcc.target/i386/pr122343-4a.c
+ create mode 100644 gcc/testsuite/gcc.target/i386/pr122343-4b.c
+
+diff --git a/gcc/combine.cc b/gcc/combine.cc
+index 66963222efc..61afc674bbb 100644
+--- a/gcc/combine.cc
++++ b/gcc/combine.cc
+@@ -11469,7 +11469,10 @@ recog_for_combine_1 (rtx *pnewpat, rtx_insn *insn, rtx *pnotes,
+   PATTERN (insn) = pat;
+   REG_NOTES (insn) = NULL_RTX;
+ 
++  /* Set for TARGET_VOLATILE_MEM_OK_IN_INSN.  */
++  recog_data.try_combine_insn = insn;
+   insn_code_number = recog (pat, insn, &num_clobbers_to_add);
++  recog_data.try_combine_insn = nullptr;
+   if (dump_file && (dump_flags & TDF_DETAILS))
+     {
+       if (insn_code_number < 0)
+diff --git a/gcc/config/i386/i386.cc b/gcc/config/i386/i386.cc
+index 587b2bd0c1d..b877eda7e72 100644
+--- a/gcc/config/i386/i386.cc
++++ b/gcc/config/i386/i386.cc
+@@ -11582,6 +11582,25 @@ ix86_cannot_force_const_mem (machine_mode mode, rtx x)
+   return !ix86_legitimate_constant_p (mode, x);
+ }
+ 
++/* Implementation of TARGET_VOLATILE_MEM_OK_IN_INSN.  */
++
++static bool
++ix86_volatile_mem_ok_in_insn (rtx memref, rtx_insn *insn)
++{
++  if (volatile_ok || !MEM_VOLATILE_P (memref))
++    return true;
++  /* If -mfuse-ops-with-volatile-access is enabled, allow operations
++     with volatile memory load when INSN isn't NULL and is a load
++     instruction.  */
++  if (!insn || !ix86_flag_fuse_ops_with_volatile_access)
++    return false;
++  rtx set = single_set (insn);
++ /* Only allow volatile memory load.  TODO: Add the LOCK prefix for
++    volatile memory store.  */
++ return (set && register_operand (SET_DEST (set),
++				  GET_MODE (SET_DEST (set))));
++}
++
+ /* Return a unique alias set for the GOT.  */
+ 
+ alias_set_type
+@@ -27978,6 +27997,9 @@ static const scoped_attribute_specs *const ix86_attribute_table[] =
+ #undef TARGET_USE_BLOCKS_FOR_CONSTANT_P
+ #define TARGET_USE_BLOCKS_FOR_CONSTANT_P hook_bool_mode_const_rtx_true
+ 
++#undef TARGET_VOLATILE_MEM_OK_IN_INSN
++#define TARGET_VOLATILE_MEM_OK_IN_INSN ix86_volatile_mem_ok_in_insn
++
+ #undef TARGET_DELEGITIMIZE_ADDRESS
+ #define TARGET_DELEGITIMIZE_ADDRESS ix86_delegitimize_address
+ 
+diff --git a/gcc/config/i386/i386.opt b/gcc/config/i386/i386.opt
+index 84494502345..89c5e02efc0 100644
+--- a/gcc/config/i386/i386.opt
++++ b/gcc/config/i386/i386.opt
+@@ -1143,6 +1143,10 @@ Enum(harden_sls) String(indirect-jmp) Value(harden_sls_indirect_jmp)
+ EnumValue
+ Enum(harden_sls) String(all) Value(harden_sls_all)
+ 
++mfuse-ops-with-volatile-access
++Target Var(ix86_flag_fuse_ops_with_volatile_access) Init(1)
++Allow operations with volatile memory access in the combine pass.
++
+ mavx512bf16
+ Target Mask(ISA2_AVX512BF16) Var(ix86_isa_flags2) Save
+ Support MMX, SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, AVX, AVX2, AVX512F and
+diff --git a/gcc/doc/invoke.texi b/gcc/doc/invoke.texi
+index b40fc892fa0..e77d67479c8 100644
+--- a/gcc/doc/invoke.texi
++++ b/gcc/doc/invoke.texi
+@@ -1531,7 +1531,8 @@ See RS/6000 and PowerPC Options.
+ -mindirect-branch=@var{choice}  -mfunction-return=@var{choice}
+ -mindirect-branch-register -mharden-sls=@var{choice}
+ -mindirect-branch-cs-prefix -mneeded -mno-direct-extern-access
+--munroll-only-small-loops -mlam=@var{choice}}
++-munroll-only-small-loops -mlam=@var{choice}
++-mfuse-ops-with-volatile-access}
+ 
+ @emph{x86 Windows Options}
+ See Cygwin and MinGW Options.
+@@ -37068,6 +37069,11 @@ O2, and unrolls loop with less than 4 insns by 1 time. Explicit
+ -f[no-]unroll-[all-]loops would disable this flag to avoid any
+ unintended unrolling behavior that user does not want.
+ 
++@opindex mfuse-ops-with-volatile-access
++@opindex mno-fuse-ops-with-volatile-access
++@item -mfuse-ops-with-volatile-access
++Allow operations with volatile memory load in the combine pass.
++
+ @opindex mlam
+ @item -mlam=@var{choice}
+ LAM(linear-address masking) allows special bits in the pointer to be used
+diff --git a/gcc/doc/tm.texi b/gcc/doc/tm.texi
+index fd208f53844..6833b0398c5 100644
+--- a/gcc/doc/tm.texi
++++ b/gcc/doc/tm.texi
+@@ -7439,6 +7439,14 @@ scheduler from undoing address optimizations.  The instruction containing the
+ memref is @var{insn}.  The default implementation returns @code{true}.
+ @end deftypefn
+ 
++@deftypefn {Target Hook} bool TARGET_VOLATILE_MEM_OK_IN_INSN (rtx @var{memref}, rtx_insn *@var{insn})
++Return @code{true} if @var{memref} with @var{insn} is OK even when it
++is a volatile memory reference.  This allows targets to combine volatile
++memory load with operations.  The default implementation returns
++@code{true} only if volatile memory is OK or @var{memref} is not a
++volatile memory reference.
++@end deftypefn
++
+ @deftypefn {Target Hook} bool TARGET_NO_SPECULATION_IN_DELAY_SLOTS_P (void)
+ This predicate controls the use of the eager delay slot filler to disallow
+ speculatively executed instructions being placed in delay slots.  Targets
+diff --git a/gcc/doc/tm.texi.in b/gcc/doc/tm.texi.in
+index 14315dd5080..8fecf3b3b3f 100644
+--- a/gcc/doc/tm.texi.in
++++ b/gcc/doc/tm.texi.in
+@@ -4775,6 +4775,8 @@ Define this macro if a non-short-circuit operation produced by
+ 
+ @hook TARGET_NEW_ADDRESS_PROFITABLE_P
+ 
++@hook TARGET_VOLATILE_MEM_OK_IN_INSN
++
+ @hook TARGET_NO_SPECULATION_IN_DELAY_SLOTS_P
+ 
+ @hook TARGET_ESTIMATED_POLY_VALUE
+diff --git a/gcc/recog.cc b/gcc/recog.cc
+index 67d7fa63069..fc411842859 100644
+--- a/gcc/recog.cc
++++ b/gcc/recog.cc
+@@ -1596,7 +1596,8 @@ general_operand (rtx op, machine_mode mode)
+     {
+       rtx y = XEXP (op, 0);
+ 
+-      if (! volatile_ok && MEM_VOLATILE_P (op))
++      if (!targetm.volatile_mem_ok_in_insn (op,
++					    recog_data.try_combine_insn))
+ 	return false;
+ 
+       /* Use the mem's mode, since it will be reloaded thus.  LRA can
+diff --git a/gcc/recog.h b/gcc/recog.h
+index ec3415370e5..340cc7aaab6 100644
+--- a/gcc/recog.h
++++ b/gcc/recog.h
+@@ -425,6 +425,10 @@ struct recog_data_d
+ 
+   /* In case we are caching, hold insn data was generated for.  */
+   rtx_insn *insn;
++
++/* Set for verifying operand constraint before calling recog and cleared
++   afterward in recog_for_combine_1.  */
++  rtx_insn *try_combine_insn;
+ };
+ 
+ extern struct recog_data_d recog_data;
+diff --git a/gcc/target.def b/gcc/target.def
+index f288329ffca..0f2c1d89948 100644
+--- a/gcc/target.def
++++ b/gcc/target.def
+@@ -4189,6 +4189,18 @@ memref is @var{insn}.  The default implementation returns @code{true}.",
+ bool, (rtx memref, rtx_insn * insn, rtx new_addr),
+ default_new_address_profitable_p)
+ 
++/* Return true if memref in insn is OK even when it is a volatile memory
++   reference.  */
++DEFHOOK
++(volatile_mem_ok_in_insn,
++ "Return @code{true} if @var{memref} with @var{insn} is OK even when it\n\
++is a volatile memory reference.  This allows targets to combine volatile\n\
++memory load with operations.  The default implementation returns\n\
++@code{true} only if volatile memory is OK or @var{memref} is not a\n\
++volatile memory reference.",
++ bool, (rtx memref, rtx_insn *insn),
++ default_volatile_mem_ok_in_insn)
++
+ DEFHOOK
+ (estimated_poly_value,
+  "Return an estimate of the runtime value of @var{val}, for use in\n\
+diff --git a/gcc/targhooks.cc b/gcc/targhooks.cc
+index 1873d572ba3..ece1f496571 100644
+--- a/gcc/targhooks.cc
++++ b/gcc/targhooks.cc
+@@ -1839,6 +1839,14 @@ default_new_address_profitable_p (rtx memref ATTRIBUTE_UNUSED,
+   return true;
+ }
+ 
++/* The default implementation of TARGET_VOLATILE_MEM_OK_IN_INSN.  */
++
++bool
++default_volatile_mem_ok_in_insn (rtx memref, rtx_insn *)
++{
++  return volatile_ok || !MEM_VOLATILE_P (memref);
++}
++
+ bool
+ default_target_option_valid_attribute_p (tree ARG_UNUSED (fndecl),
+ 					 tree ARG_UNUSED (name),
+diff --git a/gcc/targhooks.h b/gcc/targhooks.h
+index 92e7a4cb10f..f6957eab108 100644
+--- a/gcc/targhooks.h
++++ b/gcc/targhooks.h
+@@ -194,6 +194,7 @@ extern unsigned int default_hard_regno_nregs (unsigned int, machine_mode);
+ extern bool default_hard_regno_scratch_ok (unsigned int);
+ extern bool default_mode_dependent_address_p (const_rtx, addr_space_t);
+ extern bool default_new_address_profitable_p (rtx, rtx_insn *, rtx);
++extern bool default_volatile_mem_ok_in_insn (rtx, rtx_insn *);
+ extern bool default_target_option_valid_attribute_p (tree, tree, tree, int);
+ extern bool default_target_option_valid_version_attribute_p (tree, tree, tree, int);
+ extern bool default_target_option_pragma_parse (tree, tree);
+diff --git a/gcc/testsuite/gcc.target/i386/avx-ne-convert-1.c b/gcc/testsuite/gcc.target/i386/avx-ne-convert-1.c
+index 27188a65fa9..28bc15db527 100644
+--- a/gcc/testsuite/gcc.target/i386/avx-ne-convert-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx-ne-convert-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavxneconvert -O2" } */
++/* { dg-options "-mavxneconvert -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vbcstnebf162ps\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vbcstnebf162ps\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vbcstnesh2ps\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx10_2-bf16-1.c b/gcc/testsuite/gcc.target/i386/avx10_2-bf16-1.c
+index f5a29bf72c7..db3a25180fc 100644
+--- a/gcc/testsuite/gcc.target/i386/avx10_2-bf16-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx10_2-bf16-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-march=x86-64-v3 -mavx10.2 -O2" } */
++/* { dg-options "-march=x86-64-v3 -mavx10.2 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vaddbf16\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vaddbf16\[ \\t\]+%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vaddbf16\[ \\t\]+%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx10_2-convert-1.c b/gcc/testsuite/gcc.target/i386/avx10_2-convert-1.c
+index c5a2d6f4d2c..5e31c1b5908 100644
+--- a/gcc/testsuite/gcc.target/i386/avx10_2-convert-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx10_2-convert-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-march=x86-64-v3 -mavx10.2 -O2" } */
++/* { dg-options "-march=x86-64-v3 -mavx10.2 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvt2ps2phx\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvt2ps2phx\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[0-9\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvt2ps2phx\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx10_2-satcvt-1.c b/gcc/testsuite/gcc.target/i386/avx10_2-satcvt-1.c
+index 7b1c2477a16..ae2b172e3e0 100644
+--- a/gcc/testsuite/gcc.target/i386/avx10_2-satcvt-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx10_2-satcvt-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-O2 -march=x86-64-v3 -mavx10.2" } */
++/* { dg-options "-O2 -mno-fuse-ops-with-volatile-access -march=x86-64-v3 -mavx10.2" } */
+ /* { dg-final { scan-assembler-times "vcvtph2ibs\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)" 2  }  } */
+ /* { dg-final { scan-assembler-times "vcvtph2ibs\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\[^\{\n\r]*(?:\n|\[ \\t\]+#)" 1  }  } */
+ /* { dg-final { scan-assembler-times "vcvtph2ibs\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1  }  } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512bf16-vcvtneps2bf16-1.c b/gcc/testsuite/gcc.target/i386/avx512bf16-vcvtneps2bf16-1.c
+index 99ba4ee57f7..d17363ae7ed 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512bf16-vcvtneps2bf16-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512bf16-vcvtneps2bf16-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512bf16 -O2" } */
++/* { dg-options "-mavx512bf16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtneps2bf16\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtneps2bf16\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vcvtneps2bf16\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512bf16vl-vcvtneps2bf16-1a.c b/gcc/testsuite/gcc.target/i386/avx512bf16vl-vcvtneps2bf16-1a.c
+index d3a9bdf8c34..c145f98ac63 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512bf16vl-vcvtneps2bf16-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512bf16vl-vcvtneps2bf16-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512bf16 -mavx512vl -O2" } */
++/* { dg-options "-mavx512bf16 -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtneps2bf16y\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtneps2bf16y\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[0-9\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtneps2bf16y\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512bf16vl-vcvtneps2bf16-1b.c b/gcc/testsuite/gcc.target/i386/avx512bf16vl-vcvtneps2bf16-1b.c
+index e0687fa41a1..8e6c7b246a2 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512bf16vl-vcvtneps2bf16-1b.c
++++ b/gcc/testsuite/gcc.target/i386/avx512bf16vl-vcvtneps2bf16-1b.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512bf16 -mavx512vl -mavxneconvert -O2" } */
++/* { dg-options "-mavx512bf16 -mavx512vl -mavxneconvert -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "\{vex\} vcvtneps2bf16y\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtneps2bf16y\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[0-9\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtneps2bf16y\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512dq-vcvtps2qq-1.c b/gcc/testsuite/gcc.target/i386/avx512dq-vcvtps2qq-1.c
+index b6ed96fca86..f37b9efaecb 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512dq-vcvtps2qq-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512dq-vcvtps2qq-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512dq -mavx512vl -O2" } */
++/* { dg-options "-mavx512dq -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtps2qq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtps2qq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtps2qq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+\{%k\[1-7\]\}\{z\}(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512dq-vcvtps2uqq-1.c b/gcc/testsuite/gcc.target/i386/avx512dq-vcvtps2uqq-1.c
+index 33090a58b7a..e3d462e5a86 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512dq-vcvtps2uqq-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512dq-vcvtps2uqq-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512dq -mavx512vl -O2" } */
++/* { dg-options "-mavx512dq -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtps2uqq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtps2uqq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtps2uqq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+\{%k\[1-7\]\}\{z\}(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512dq-vcvtqq2pd-1.c b/gcc/testsuite/gcc.target/i386/avx512dq-vcvtqq2pd-1.c
+index 1d51abdb117..c59bee0c6db 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512dq-vcvtqq2pd-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512dq-vcvtqq2pd-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512dq -mavx512vl -O2" } */
++/* { dg-options "-mavx512dq -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtqq2pd\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtqq2pd\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtqq2pd\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+\{%k\[1-7\]\}\{z\}(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512dq-vcvtqq2ps-1.c b/gcc/testsuite/gcc.target/i386/avx512dq-vcvtqq2ps-1.c
+index d5d7bbc492a..0475ca59ee9 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512dq-vcvtqq2ps-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512dq-vcvtqq2ps-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512dq -mavx512vl -O2" } */
++/* { dg-options "-mavx512dq -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtqq2psx\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtqq2psx\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtqq2psx\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+\{%k\[1-7\]\}\{z\}(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512dq-vcvttps2qq-1.c b/gcc/testsuite/gcc.target/i386/avx512dq-vcvttps2qq-1.c
+index e99bb3b7a5b..3afc792f5d5 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512dq-vcvttps2qq-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512dq-vcvttps2qq-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512dq -mavx512vl -O2" } */
++/* { dg-options "-mavx512dq -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvttps2qq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttps2qq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttps2qq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+\{%k\[1-7\]\}\{z\}(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512dq-vcvttps2uqq-1.c b/gcc/testsuite/gcc.target/i386/avx512dq-vcvttps2uqq-1.c
+index 9b34e4314ca..29129901022 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512dq-vcvttps2uqq-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512dq-vcvttps2uqq-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512dq -mavx512vl -O2" } */
++/* { dg-options "-mavx512dq -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvttps2uqq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttps2uqq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttps2uqq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+\{%k\[1-7\]\}\{z\}(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512dq-vcvtuqq2pd-1.c b/gcc/testsuite/gcc.target/i386/avx512dq-vcvtuqq2pd-1.c
+index 11b89102ce2..acbbb3f4b12 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512dq-vcvtuqq2pd-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512dq-vcvtuqq2pd-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512dq -mavx512vl -O2" } */
++/* { dg-options "-mavx512dq -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtuqq2pd\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtuqq2pd\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtuqq2pd\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+\{%k\[1-7\]\}\{z\}(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512dq-vcvtuqq2ps-1.c b/gcc/testsuite/gcc.target/i386/avx512dq-vcvtuqq2ps-1.c
+index 0ae94c61c02..6f517f41c7e 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512dq-vcvtuqq2ps-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512dq-vcvtuqq2ps-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512dq -mavx512vl -O2" } */
++/* { dg-options "-mavx512dq -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtuqq2psx\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtuqq2psx\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtuqq2psx\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+\{%k\[1-7\]\}\{z\}(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512dq-vfpclasspd-1.c b/gcc/testsuite/gcc.target/i386/avx512dq-vfpclasspd-1.c
+index 932f103b3ef..1869379ad8e 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512dq-vfpclasspd-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512dq-vfpclasspd-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512dq -mavx512vl -O2" } */
++/* { dg-options "-mavx512dq -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vfpclasspdz\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n^k\]*%k\[0-7\](?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vfpclasspdy\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n^k\]*%k\[0-7\](?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vfpclasspdx\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n^k\]*%k\[0-7\](?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512dq-vfpclassps-1.c b/gcc/testsuite/gcc.target/i386/avx512dq-vfpclassps-1.c
+index f826e89155c..ba5b0f87dac 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512dq-vfpclassps-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512dq-vfpclassps-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512dq -mavx512vl -O2" } */
++/* { dg-options "-mavx512dq -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vfpclasspsz\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n^k\]*%k\[0-7\](?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vfpclasspsy\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n^k\]*%k\[0-7\](?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vfpclasspsx\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n^k\]*%k\[0-7\](?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512dq-vfpclasssd-1.c b/gcc/testsuite/gcc.target/i386/avx512dq-vfpclasssd-1.c
+index fb5c1d57035..7379fad331e 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512dq-vfpclasssd-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512dq-vfpclasssd-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512dq -O2" } */
++/* { dg-options "-mavx512dq -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vfpclasssd\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n^k\]*%k\[0-7\](?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vfpclasssd\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n^k\]*%k\[0-7\]\{%k\[0-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ 
+diff --git a/gcc/testsuite/gcc.target/i386/avx512dq-vfpclassss-1.c b/gcc/testsuite/gcc.target/i386/avx512dq-vfpclassss-1.c
+index 4822441afa4..ca959575b1d 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512dq-vfpclassss-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512dq-vfpclassss-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512dq -O2" } */
++/* { dg-options "-mavx512dq -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vfpclassss\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n^k\]*%k\[0-7\](?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vfpclassss\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n^k\]*%k\[0-7\]\{%k\[0-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ 
+diff --git a/gcc/testsuite/gcc.target/i386/avx512dq-vpmullq-1.c b/gcc/testsuite/gcc.target/i386/avx512dq-vpmullq-1.c
+index ad0de265d08..c6957431c23 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512dq-vpmullq-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512dq-vpmullq-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512dq -mavx512vl -O2" } */
++/* { dg-options "-mavx512dq -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vpmullq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)"  1 } } */
+ /* { dg-final { scan-assembler-times "vpmullq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vpmullq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+\{%k\[1-7\]\}\{z\}(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512dq-vpmullq-3.c b/gcc/testsuite/gcc.target/i386/avx512dq-vpmullq-3.c
+index 920087bc3d4..56cca773558 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512dq-vpmullq-3.c
++++ b/gcc/testsuite/gcc.target/i386/avx512dq-vpmullq-3.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512dq -O2" } */
++/* { dg-options "-mavx512dq -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vpmullq\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\]*%zmm\[0-9\]+\[^\n\]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)"  1 } } */
+ /* { dg-final { scan-assembler-times "vpmullq\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\]*%zmm\[0-9\]+\[^\n\]*%zmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ 
+diff --git a/gcc/testsuite/gcc.target/i386/avx512f-pr100267-1.c b/gcc/testsuite/gcc.target/i386/avx512f-pr100267-1.c
+index 5eb6de531c2..84b7d4a7184 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512f-pr100267-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512f-pr100267-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512f -O2" } */
++/* { dg-options "-mavx512f -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vpexpandd\[ \\t\]+\[^\{\n\]*\\(\[^\n\]*%zmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)"  1 } } */
+ /* { dg-final { scan-assembler-times "vpexpandd\[ \\t\]+\[^\{\n\(]*%zmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)"  1 } } */
+ /* { dg-final { scan-assembler-times "vpexpandq\[ \\t\]+\[^\{\n\]*\\(\[^\n\]*%zmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)"  1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512f-vcvtps2pd-1.c b/gcc/testsuite/gcc.target/i386/avx512f-vcvtps2pd-1.c
+index 05c1bc22cee..a1404206555 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512f-vcvtps2pd-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512f-vcvtps2pd-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512f -O2" } */
++/* { dg-options "-mavx512f -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtps2pd\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)"  1 } } */
+ /* { dg-final { scan-assembler-times "vcvtps2pd\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\]*%zmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)"  1 } } */
+ /* { dg-final { scan-assembler-times "vcvtps2pd\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\]*%zmm\[0-9\]+\{%k\[1-7\]\}\{z\}(?:\n|\[ \\t\]+#)"  1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512f-vcvtsd2si-1.c b/gcc/testsuite/gcc.target/i386/avx512f-vcvtsd2si-1.c
+index 402af5048f6..14f1accf98c 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512f-vcvtsd2si-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512f-vcvtsd2si-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-O2 -mavx512f" } */
++/* { dg-options "-O2 -mno-fuse-ops-with-volatile-access -mavx512f" } */
+ /* { dg-final { scan-assembler-times "vcvtsd2sil?\[ \\t\]+\[^\n\]*\{rn-sae\}\[^\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtsd2sil?\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ #include <immintrin.h>
+diff --git a/gcc/testsuite/gcc.target/i386/avx512f-vcvtsd2si64-1.c b/gcc/testsuite/gcc.target/i386/avx512f-vcvtsd2si64-1.c
+index dad26e4b729..357a435bc90 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512f-vcvtsd2si64-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512f-vcvtsd2si64-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile { target { ! ia32 } } } */
+-/* { dg-options "-O2 -mavx512f" } */
++/* { dg-options "-O2 -mno-fuse-ops-with-volatile-access -mavx512f" } */
+ /* { dg-final { scan-assembler-times "vcvtsd2siq\[ \\t\]+\[^\n\]*\{rz-sae\}\[^\{\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtsd2siq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ 
+diff --git a/gcc/testsuite/gcc.target/i386/avx512f-vcvtsd2usi-1.c b/gcc/testsuite/gcc.target/i386/avx512f-vcvtsd2usi-1.c
+index 5b2572f2e6e..9597538bab0 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512f-vcvtsd2usi-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512f-vcvtsd2usi-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-O2 -mavx512f" } */
++/* { dg-options "-O2 -mno-fuse-ops-with-volatile-access -mavx512f" } */
+ /* { dg-final { scan-assembler-times "vcvtsd2usi\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtsd2usi\[ \\t\]+\[^\n\]*\{rd-sae\}\[^\{\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ #include <immintrin.h>
+diff --git a/gcc/testsuite/gcc.target/i386/avx512f-vcvtsd2usi64-1.c b/gcc/testsuite/gcc.target/i386/avx512f-vcvtsd2usi64-1.c
+index a0c503d88d1..e0efadbe977 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512f-vcvtsd2usi64-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512f-vcvtsd2usi64-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile { target { ! ia32 } } } */
+-/* { dg-options "-O2 -mavx512f" } */
++/* { dg-options "-O2 -mno-fuse-ops-with-volatile-access -mavx512f" } */
+ /* { dg-final { scan-assembler-times "vcvtsd2usi\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtsd2usi\[ \\t\]+\[^\n\]*\{ru-sae\}\[^\{\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ 
+diff --git a/gcc/testsuite/gcc.target/i386/avx512f-vcvtss2si-1.c b/gcc/testsuite/gcc.target/i386/avx512f-vcvtss2si-1.c
+index e3f42238097..53e47b57188 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512f-vcvtss2si-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512f-vcvtss2si-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-O2 -mavx512f" } */
++/* { dg-options "-O2 -mno-fuse-ops-with-volatile-access -mavx512f" } */
+ /* { dg-final { scan-assembler-times "vcvtss2sil?\[ \\t\]+\[^\n\]*\{rn-sae\}\[^\{\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtss2sil?\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ #include <immintrin.h>
+diff --git a/gcc/testsuite/gcc.target/i386/avx512f-vcvtss2si64-1.c b/gcc/testsuite/gcc.target/i386/avx512f-vcvtss2si64-1.c
+index 86ef95a64fd..45ee4919cfa 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512f-vcvtss2si64-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512f-vcvtss2si64-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile { target { ! ia32 } } } */
+-/* { dg-options "-O2 -mavx512f" } */
++/* { dg-options "-O2 -mno-fuse-ops-with-volatile-access -mavx512f" } */
+ /* { dg-final { scan-assembler-times "vcvtss2siq\[ \\t\]+\[^\n\]*\{rz-sae\}\[^\{\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtss2siq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ 
+diff --git a/gcc/testsuite/gcc.target/i386/avx512f-vcvtss2usi-1.c b/gcc/testsuite/gcc.target/i386/avx512f-vcvtss2usi-1.c
+index e17a191dd43..014bba1ef49 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512f-vcvtss2usi-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512f-vcvtss2usi-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-O2 -mavx512f" } */
++/* { dg-options "-O2 -mno-fuse-ops-with-volatile-access -mavx512f" } */
+ /* { dg-final { scan-assembler-times "vcvtss2usi\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } }*/
+ /* { dg-final { scan-assembler-times "vcvtss2usi\[ \\t\]+\[^\n\]*\{rd-sae\}\[^\{\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ #include <immintrin.h>
+diff --git a/gcc/testsuite/gcc.target/i386/avx512f-vcvtss2usi64-1.c b/gcc/testsuite/gcc.target/i386/avx512f-vcvtss2usi64-1.c
+index a55e4115a2c..74187740cec 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512f-vcvtss2usi64-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512f-vcvtss2usi64-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile { target { ! ia32 } } } */
+-/* { dg-options "-O2 -mavx512f" } */
++/* { dg-options "-O2 -mno-fuse-ops-with-volatile-access -mavx512f" } */
+ /* { dg-final { scan-assembler-times "vcvtss2usi\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtss2usi\[ \\t\]+\[^\n\]*\{ru-sae\}\[^\{\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ 
+diff --git a/gcc/testsuite/gcc.target/i386/avx512f-vcvttsd2si-1.c b/gcc/testsuite/gcc.target/i386/avx512f-vcvttsd2si-1.c
+index e7f23aa7e50..a7b7694d199 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512f-vcvttsd2si-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512f-vcvttsd2si-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-O2 -mavx512f" } */
++/* { dg-options "-O2 -mno-fuse-ops-with-volatile-access -mavx512f" } */
+ /* { dg-final { scan-assembler-times "vcvttsd2sil?\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttsd2sil?\[ \\t\]+\[^\{\n\]*\{sae\}\[^\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ #include <immintrin.h>
+diff --git a/gcc/testsuite/gcc.target/i386/avx512f-vcvttsd2si64-1.c b/gcc/testsuite/gcc.target/i386/avx512f-vcvttsd2si64-1.c
+index dd06e381a96..e68c1bca681 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512f-vcvttsd2si64-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512f-vcvttsd2si64-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile { target { ! ia32 } } } */
+-/* { dg-options "-O2 -mavx512f" } */
++/* { dg-options "-O2 -mno-fuse-ops-with-volatile-access -mavx512f" } */
+ /* { dg-final { scan-assembler-times "vcvttsd2siq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttsd2siq\[ \\t\]+\[^\{\n\]*\{sae\}\[^\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ 
+diff --git a/gcc/testsuite/gcc.target/i386/avx512f-vcvttsd2usi-1.c b/gcc/testsuite/gcc.target/i386/avx512f-vcvttsd2usi-1.c
+index 474acca5f18..acd49aaeb1a 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512f-vcvttsd2usi-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512f-vcvttsd2usi-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-O2 -mavx512f" } */
++/* { dg-options "-O2 -mno-fuse-ops-with-volatile-access -mavx512f" } */
+ /* { dg-final { scan-assembler-times "vcvttsd2usi\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttsd2usi\[ \\t\]+\[^\{\n\]*\{sae\}\[^\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ #include <immintrin.h>
+diff --git a/gcc/testsuite/gcc.target/i386/avx512f-vcvttsd2usi64-1.c b/gcc/testsuite/gcc.target/i386/avx512f-vcvttsd2usi64-1.c
+index 5f68508d352..fcd9ff36717 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512f-vcvttsd2usi64-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512f-vcvttsd2usi64-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile { target { ! ia32 } } } */
+-/* { dg-options "-O2 -mavx512f" } */
++/* { dg-options "-O2 -mno-fuse-ops-with-volatile-access -mavx512f" } */
+ /* { dg-final { scan-assembler-times "vcvttsd2usi\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttsd2usi\[ \\t\]+\[^\{\n\]*\{sae\}\[^\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ 
+diff --git a/gcc/testsuite/gcc.target/i386/avx512f-vcvttss2si-1.c b/gcc/testsuite/gcc.target/i386/avx512f-vcvttss2si-1.c
+index 859848201a4..674852f060b 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512f-vcvttss2si-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512f-vcvttss2si-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-O2 -mavx512f" } */
++/* { dg-options "-O2 -mno-fuse-ops-with-volatile-access -mavx512f" } */
+ /* { dg-final { scan-assembler-times "vcvttss2sil?\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttss2sil?\[ \\t\]+\[^\{\n\]*\{sae\}\[^\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ #include <immintrin.h>
+diff --git a/gcc/testsuite/gcc.target/i386/avx512f-vcvttss2si64-1.c b/gcc/testsuite/gcc.target/i386/avx512f-vcvttss2si64-1.c
+index 85d5837b1f3..59b5775986a 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512f-vcvttss2si64-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512f-vcvttss2si64-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile { target { ! ia32 } } } */
+-/* { dg-options "-O2 -mavx512f" } */
++/* { dg-options "-O2 -mno-fuse-ops-with-volatile-access -mavx512f" } */
+ /* { dg-final { scan-assembler-times "vcvttss2siq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttss2siq\[ \\t\]+\[^\{\n\]*\{sae\}\[^\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ 
+diff --git a/gcc/testsuite/gcc.target/i386/avx512f-vcvttss2usi-1.c b/gcc/testsuite/gcc.target/i386/avx512f-vcvttss2usi-1.c
+index a45b3eeb888..2a2ae4eaf1b 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512f-vcvttss2usi-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512f-vcvttss2usi-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-O2 -mavx512f" } */
++/* { dg-options "-O2 -mno-fuse-ops-with-volatile-access -mavx512f" } */
+ /* { dg-final { scan-assembler-times "vcvttss2usi\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttss2usi\[ \\t\]+\[^\{\n\]*\{sae\}\[^\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ #include <immintrin.h>
+diff --git a/gcc/testsuite/gcc.target/i386/avx512f-vcvttss2usi64-1.c b/gcc/testsuite/gcc.target/i386/avx512f-vcvttss2usi64-1.c
+index b8c3980af4f..4eba6becaad 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512f-vcvttss2usi64-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512f-vcvttss2usi64-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile { target { ! ia32 } } } */
+-/* { dg-options "-O2 -mavx512f" } */
++/* { dg-options "-O2 -mno-fuse-ops-with-volatile-access -mavx512f" } */
+ /* { dg-final { scan-assembler-times "vcvttss2usi\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttss2usi\[ \\t\]+\[^\{\n\]*\{sae\}\[^\n\]*%xmm\[0-9\]+.{6}(?:\n|\[ \\t\]+#)" 1 } } */
+ 
+diff --git a/gcc/testsuite/gcc.target/i386/avx512f-vmovapd-1.c b/gcc/testsuite/gcc.target/i386/avx512f-vmovapd-1.c
+index e869f70665a..a542266a741 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512f-vmovapd-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512f-vmovapd-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512f -O2" } */
++/* { dg-options "-mavx512f -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vmovapd\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\]*%zmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vmovapd\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\]*%zmm\[0-9\]+\{%k\[1-7\]\}\{z\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vmovapd\[ \\t\]+\[^\{\n\]*\\)\[^\n\]*%zmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512f-vmovaps-1.c b/gcc/testsuite/gcc.target/i386/avx512f-vmovaps-1.c
+index a7635a3ebf2..3e24e8a79c2 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512f-vmovaps-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512f-vmovaps-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512f -O2" } */
++/* { dg-options "-mavx512f -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vmovaps\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\]*%zmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vmovaps\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\]*%zmm\[0-9\]+\{%k\[1-7\]\}\{z\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vmovaps\[ \\t\]+\[^\{\n\]*\\)\[^\n\]*%zmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512f-vmovdqa64-1.c b/gcc/testsuite/gcc.target/i386/avx512f-vmovdqa64-1.c
+index 1c372c4f92a..2fd7c442487 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512f-vmovdqa64-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512f-vmovdqa64-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512f -O2" } */
++/* { dg-options "-mavx512f -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vmovdqa64\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\]*%zmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vmovdqa64\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\]*%zmm\[0-9\]+\{%k\[1-7\]\}\{z\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vmovdqa64\[ \\t\]+\[^\{\n\]*\\)\[^\n\]*%zmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512f-vpandnq-1.c b/gcc/testsuite/gcc.target/i386/avx512f-vpandnq-1.c
+index 83aaca89355..ac0c7d2d914 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512f-vpandnq-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512f-vpandnq-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512f -O2" } */
++/* { dg-options "-mavx512f -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vpandnq\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)"  1 } } */
+ /* { dg-final { scan-assembler-times "vpandnq\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vpandnq\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\{%k\[1-7\]\}\{z\}(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512f-vpbroadcastd-1.c b/gcc/testsuite/gcc.target/i386/avx512f-vpbroadcastd-1.c
+index bd111b0b563..faafe472b82 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512f-vpbroadcastd-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512f-vpbroadcastd-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512f -O2" } */
++/* { dg-options "-mavx512f -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vpbroadcastd\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vpbroadcastd\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vpbroadcastd\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\{%k\[1-7\]\}\{z\}(?:\n|\[ \\t\]+#)" 2 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512f-vpbroadcastq-1.c b/gcc/testsuite/gcc.target/i386/avx512f-vpbroadcastq-1.c
+index 5da582cf17c..3a8a8d55542 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512f-vpbroadcastq-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512f-vpbroadcastq-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512f -O2" } */
++/* { dg-options "-mavx512f -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vpbroadcastq\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)" 2  } } */
+ /* { dg-final { scan-assembler-times "vpbroadcastq\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vpbroadcastq\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\{%k\[1-7\]\}\{z\}(?:\n|\[ \\t\]+#)" 2 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512f-vpcmpeqq-1.c b/gcc/testsuite/gcc.target/i386/avx512f-vpcmpeqq-1.c
+index 595ba552703..8b58ea298a6 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512f-vpcmpeqq-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512f-vpcmpeqq-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512f -O2" } */
++/* { dg-options "-mavx512f -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "(?:vpcmpeqq\[ \\t\]+|vpcmpq\[ \\t\]+\\\$0)\[^\{\n\]*%zmm\[0-9\]+\[^\n^k\]*%k\[0-7\](?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "(?:vpcmpeqq\[ \\t\]+|vpcmpq\[ \\t\]+\\\$0)\[^\{\n\]*%zmm\[0-9\]+\[^\n^k\]*%k\[0-7\]\{%k\[0-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ 
+diff --git a/gcc/testsuite/gcc.target/i386/avx512f-vpcmpequq-1.c b/gcc/testsuite/gcc.target/i386/avx512f-vpcmpequq-1.c
+index f3f35ec62ec..b75fd8f64f9 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512f-vpcmpequq-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512f-vpcmpequq-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512f -O2" } */
++/* { dg-options "-mavx512f -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "(?:vpcmpuq|vpcmpeqq)\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n^k\]*%k\[0-7\](?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "(?:vpcmpuq|vpcmpeqq)\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n^k\]*%k\[0-7\]\{%k\[0-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ 
+diff --git a/gcc/testsuite/gcc.target/i386/avx512f-vrndscalepd-1.c b/gcc/testsuite/gcc.target/i386/avx512f-vrndscalepd-1.c
+index f4467a5a663..a2447e68a0e 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512f-vrndscalepd-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512f-vrndscalepd-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512f -O2" } */
++/* { dg-options "-mavx512f -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vrndscalepd\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)"  3 } } */
+ /* { dg-final { scan-assembler-times "vrndscalepd\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)"  3 } } */
+ /* { dg-final { scan-assembler-times "vrndscalepd\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\{%k\[1-7\]\}\{z\}(?:\n|\[ \\t\]+#)"  1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512f-vrndscaleps-1.c b/gcc/testsuite/gcc.target/i386/avx512f-vrndscaleps-1.c
+index cbb469c5ded..3368524b0f5 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512f-vrndscaleps-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512f-vrndscaleps-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512f -O2" } */
++/* { dg-options "-mavx512f -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vrndscaleps\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)"  3 } } */
+ /* { dg-final { scan-assembler-times "vrndscaleps\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)"  3 } } */
+ /* { dg-final { scan-assembler-times "vrndscaleps\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\{%k\[1-7\]\}\{z\}(?:\n|\[ \\t\]+#)"  1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-complex-fma.c b/gcc/testsuite/gcc.target/i386/avx512fp16-complex-fma.c
+index 2dfd369e785..84165de32e9 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-complex-fma.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-complex-fma.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2 -Ofast" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access -Ofast" } */
+ /* { dg-final { scan-assembler-times "vfmaddcph\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-not "vaddph\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)"} } */
+ /* { dg-final { scan-assembler-not "vfmulcph\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)"} } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vaddph-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vaddph-1a.c
+index 0590c34cebf..c2cca98ddee 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vaddph-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vaddph-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vaddph\[ \\t\]+%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vaddph\[ \\t\]+%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vaddph\[ \\t\]+%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtpd2ph-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtpd2ph-1a.c
+index 8f74405873f..8c40ee659a2 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtpd2ph-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtpd2ph-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtpd2phz\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vcvtpd2phz\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[0-9\]\}\[^\{\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtpd2phz\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2dq-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2dq-1a.c
+index 31a56393f0e..a5e831ff4df 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2dq-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2dq-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtph2dq\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2dq\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\[^\{\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2dq\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2pd-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2pd-1a.c
+index b7bb3b7840f..a389238d47f 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2pd-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2pd-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtph2pd\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2pd\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\[^\{\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2pd\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2psx-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2psx-1a.c
+index c79549f67c5..1306a9ecaa1 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2psx-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2psx-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtph2psx\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2psx\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\[^\{\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2psx\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2qq-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2qq-1a.c
+index d80ee611f3c..1cfdfbff840 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2qq-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2qq-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtph2qq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2qq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\[^\{\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2qq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2udq-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2udq-1a.c
+index b4a833afdab..6dc99cb32ab 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2udq-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2udq-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtph2udq\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2udq\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\[^\{\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2udq\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2uqq-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2uqq-1a.c
+index b4087798be9..db9d58134df 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2uqq-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2uqq-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtph2uqq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2uqq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\[^\{\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2uqq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2uw-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2uw-1a.c
+index 262274526b1..75e7b7d5c5e 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2uw-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2uw-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtph2uw\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2uw\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\[^\{\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2uw\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2w-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2w-1a.c
+index bcaa7446d34..972efa3e7af 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2w-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtph2w-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtph2w\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2w\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\[^\{\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2w\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtps2ph-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtps2ph-1a.c
+index cb957f86920..6b35536e7b0 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtps2ph-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtps2ph-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtps2phx\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vcvtps2phx\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}\[^\{\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtps2phx\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtqq2ph-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtqq2ph-1a.c
+index 4e8515e9a3d..345cf8207cc 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtqq2ph-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtqq2ph-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtqq2phz\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vcvtqq2phz\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[0-9\]\}\[^\{\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtqq2phz\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvttph2dq-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvttph2dq-1a.c
+index 0e44aaf1bb5..ec9f2104ba8 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvttph2dq-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvttph2dq-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvttph2dq\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vcvttph2dq\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\[^\{\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttph2dq\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvttph2qq-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvttph2qq-1a.c
+index 124169467ee..fe2ac588be7 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvttph2qq-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvttph2qq-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvttph2qq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vcvttph2qq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\[^\{\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttph2qq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvttph2udq-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvttph2udq-1a.c
+index 0fd60f56777..5f36dd076e0 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvttph2udq-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvttph2udq-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvttph2udq\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vcvttph2udq\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\[^\{\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttph2udq\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvttph2uqq-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvttph2uqq-1a.c
+index 04fee2936c8..abca87dc087 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvttph2uqq-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvttph2uqq-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvttph2uqq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vcvttph2uqq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\[^\{\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttph2uqq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvttph2uw-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvttph2uw-1a.c
+index b31af8441a9..42a39256afe 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvttph2uw-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvttph2uw-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvttph2uw\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vcvttph2uw\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\[^\{\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttph2uw\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvttph2w-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvttph2w-1a.c
+index a918594d0d8..3f29413b6b6 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvttph2w-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvttph2w-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvttph2w\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vcvttph2w\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\[^\{\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttph2w\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtuqq2ph-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtuqq2ph-1a.c
+index a234bb50482..9aaa07fd321 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtuqq2ph-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vcvtuqq2ph-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtuqq2phz\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vcvtuqq2phz\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[0-9\]\}\[^\{\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtuqq2phz\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vfcmaddcph-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vfcmaddcph-1a.c
+index 851561ad416..af9654f7ea4 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vfcmaddcph-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vfcmaddcph-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vfcmaddcph\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vfcmaddcph\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\[^\{\n\r]*(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vfcmaddcph\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vfcmulcph-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vfcmulcph-1a.c
+index e228393b5f0..0e61ec04e8f 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vfcmulcph-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vfcmulcph-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vfcmulcph\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vfcmulcph\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\[^\{\n\r]*(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vfcmulcph\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 2 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vfmaddcph-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vfmaddcph-1a.c
+index dfcc6e5f93c..93e7780df66 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vfmaddcph-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vfmaddcph-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vfmaddcph\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vfmaddcph\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\[^\{\n\r]*(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vfmaddcph\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vfmulcph-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vfmulcph-1a.c
+index 4135cd25070..b3f8ff80c53 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vfmulcph-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vfmulcph-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vfmulcph\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vfmulcph\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\[^\{\n\r]*(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vfmulcph\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 2 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vfpclassph-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vfpclassph-1a.c
+index a97dddf6110..2260864faab 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vfpclassph-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vfpclassph-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vfpclassphz\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n^k\]*%k\[0-7\](?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vfpclassphz\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n^k\]*%k\[0-7\]\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ 
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vfpclasssh-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vfpclasssh-1a.c
+index 7a31fd8b47d..b120a36ec36 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vfpclasssh-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vfpclasssh-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vfpclasssh\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n^k\]*%k\[0-7\](?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vfpclasssh\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n^k\]*%k\[0-7\]\{%k\[0-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ 
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vmulph-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vmulph-1a.c
+index 1088e255786..b0ed69a624f 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vmulph-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vmulph-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vmulph\[ \\t\]+%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vmulph\[ \\t\]+%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vmulph\[ \\t\]+%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vrcpph-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vrcpph-1a.c
+index 6a5c642d7d8..fc37bc46758 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vrcpph-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vrcpph-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vrcpph\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vrcpph\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vrcpph\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vrsqrtph-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vrsqrtph-1a.c
+index c9671e8ed0a..ef47d639172 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vrsqrtph-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vrsqrtph-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vrsqrtph\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vrsqrtph\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vrsqrtph\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16-vsqrtph-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16-vsqrtph-1a.c
+index 497b5bab1db..ea2ca17fda8 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16-vsqrtph-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16-vsqrtph-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -O2" } */
++/* { dg-options "-mavx512fp16 -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vsqrtph\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vsqrtph\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\[^\{\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vsqrtph\[ \\t\]+\[^\{\n\]*%zmm\[0-9\]+\[^\n\r]*%zmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vaddph-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vaddph-1a.c
+index 354d897dd9e..91dbbb8e323 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vaddph-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vaddph-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -mavx512vl -O2" } */
++/* { dg-options "-mavx512fp16 -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vaddph\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vaddph\[ \\t\]+%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vaddph\[ \\t\]+%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtpd2ph-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtpd2ph-1a.c
+index 57604a91334..6fb484c52ef 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtpd2ph-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtpd2ph-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -mavx512vl -O2" } */
++/* { dg-options "-mavx512fp16 -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtpd2phy\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtpd2phy\[ \\t\]+%ymm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[0-9\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtpd2phy\[ \\t\]+%ymm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtph2dq-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtph2dq-1a.c
+index df653b0b2c7..a539730c13a 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtph2dq-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtph2dq-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -mavx512vl -O2" } */
++/* { dg-options "-mavx512fp16 -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtph2dq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2dq\[ \\t\]+%xmm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2dq\[ \\t\]+%xmm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtph2psx-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtph2psx-1a.c
+index e8c4c8c70d7..aae4540fceb 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtph2psx-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtph2psx-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -mavx512vl -O2" } */
++/* { dg-options "-mavx512fp16 -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtph2psx\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2psx\[ \\t\]+%xmm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2psx\[ \\t\]+%xmm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtph2qq-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtph2qq-1a.c
+index ddc6f2a702e..7c3e99b1654 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtph2qq-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtph2qq-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -mavx512vl -O2" } */
++/* { dg-options "-mavx512fp16 -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtph2qq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2qq\[ \\t\]+%xmm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2qq\[ \\t\]+%xmm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtph2udq-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtph2udq-1a.c
+index d07d76647a7..a79124e86d9 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtph2udq-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtph2udq-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -mavx512vl -O2" } */
++/* { dg-options "-mavx512fp16 -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtph2udq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2udq\[ \\t\]+%xmm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2udq\[ \\t\]+%xmm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtph2uqq-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtph2uqq-1a.c
+index 26dbf227d81..e931c53ec86 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtph2uqq-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtph2uqq-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -mavx512vl -O2" } */
++/* { dg-options "-mavx512fp16 -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtph2uqq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2uqq\[ \\t\]+%xmm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2uqq\[ \\t\]+%xmm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtph2uw-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtph2uw-1a.c
+index 0f9fd27881c..25e69d84ecc 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtph2uw-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtph2uw-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -mavx512vl -O2" } */
++/* { dg-options "-mavx512fp16 -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtph2uw\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2uw\[ \\t\]+%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2uw\[ \\t\]+%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtph2w-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtph2w-1a.c
+index 8dee4ee25d0..6a3037de48b 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtph2w-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtph2w-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -mavx512vl -O2" } */
++/* { dg-options "-mavx512fp16 -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtph2w\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2w\[ \\t\]+%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtph2w\[ \\t\]+%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtps2ph-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtps2ph-1a.c
+index a89f8c4fe87..5f413e8a42a 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtps2ph-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtps2ph-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -mavx512vl -O2" } */
++/* { dg-options "-mavx512fp16 -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtps2phxy\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtps2phxy\[ \\t\]+%ymm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[0-9\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtps2phxy\[ \\t\]+%ymm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtqq2ph-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtqq2ph-1a.c
+index 8e42a4b29f7..f453c618b31 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtqq2ph-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtqq2ph-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -mavx512vl -O2" } */
++/* { dg-options "-mavx512fp16 -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtqq2phy\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtqq2phy\[ \\t\]+%ymm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[0-9\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtqq2phy\[ \\t\]+%ymm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvttph2dq-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvttph2dq-1a.c
+index b4c084020ac..64f379d120c 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvttph2dq-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvttph2dq-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -mavx512vl -O2" } */
++/* { dg-options "-mavx512fp16 -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvttph2dq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttph2dq\[ \\t\]+%xmm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttph2dq\[ \\t\]+%xmm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvttph2udq-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvttph2udq-1a.c
+index 60f43189d61..ea170355692 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvttph2udq-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvttph2udq-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -mavx512vl -O2" } */
++/* { dg-options "-mavx512fp16 -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvttph2udq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttph2udq\[ \\t\]+%xmm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttph2udq\[ \\t\]+%xmm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvttph2uw-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvttph2uw-1a.c
+index eafa31a786b..3c31590d3b6 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvttph2uw-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvttph2uw-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -mavx512vl -O2" } */
++/* { dg-options "-mavx512fp16 -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvttph2uw\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttph2uw\[ \\t\]+%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttph2uw\[ \\t\]+%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvttph2w-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvttph2w-1a.c
+index 7476d3c1160..8e9c0f53d26 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvttph2w-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvttph2w-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -mavx512vl -O2" } */
++/* { dg-options "-mavx512fp16 -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvttph2w\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttph2w\[ \\t\]+%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttph2w\[ \\t\]+%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtuqq2ph-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtuqq2ph-1a.c
+index a3ee951d4c5..990a9f2b792 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtuqq2ph-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vcvtuqq2ph-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -mavx512vl -O2" } */
++/* { dg-options "-mavx512fp16 -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtuqq2phy\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtuqq2phy\[ \\t\]+%ymm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[0-9\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtuqq2phy\[ \\t\]+%ymm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vfcmaddcph-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vfcmaddcph-1a.c
+index 93edb92984e..ec319f72631 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vfcmaddcph-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vfcmaddcph-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -mavx512vl -O2" } */
++/* { dg-options "-mavx512fp16 -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vfcmaddcph\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vfcmaddcph\[ \\t\]+%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vfcmaddcph\[ \\t\]+%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vfcmulcph-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vfcmulcph-1a.c
+index 370f9ee76de..ba86aad8981 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vfcmulcph-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vfcmulcph-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512f -mavx512fp16 -mavx512vl -O2" } */
++/* { dg-options "-mavx512f -mavx512fp16 -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vfcmulcph\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vfcmulcph\[ \\t\]+%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vfcmulcph\[ \\t\]+%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 2 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vfmaddcph-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vfmaddcph-1a.c
+index 7dfbb3e1e19..0a9e5e2ca70 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vfmaddcph-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vfmaddcph-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -mavx512vl -O2" } */
++/* { dg-options "-mavx512fp16 -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vfmaddcph\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vfmaddcph\[ \\t\]+%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vfmaddcph\[ \\t\]+%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vfmulcph-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vfmulcph-1a.c
+index dce9088b748..d517db09e68 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vfmulcph-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vfmulcph-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512f -mavx512fp16 -mavx512vl -O2" } */
++/* { dg-options "-mavx512f -mavx512fp16 -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vfmulcph\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vfmulcph\[ \\t\]+%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vfmulcph\[ \\t\]+%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 2 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vfpclassph-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vfpclassph-1a.c
+index 897a3c83692..a18d0d2853b 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vfpclassph-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vfpclassph-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -mavx512vl -O2" } */
++/* { dg-options "-mavx512fp16 -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vfpclassphy\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n^k\]*%k\[0-7\](?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vfpclassphx\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n^k\]*%k\[0-7\](?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vfpclassphy\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n^k\]*%k\[0-7\]\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vmulph-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vmulph-1a.c
+index 26663c5ca8d..b5247834fcb 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vmulph-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vmulph-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -mavx512vl -O2" } */
++/* { dg-options "-mavx512fp16 -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vmulph\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vmulph\[ \\t\]+%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vmulph\[ \\t\]+%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\[^\n\r]*%ymm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vrcpph-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vrcpph-1a.c
+index 5894dbc679f..255fe708ea0 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vrcpph-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vrcpph-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -mavx512vl -O2" } */
++/* { dg-options "-mavx512fp16 -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vrcpph\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vrcpph\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[0-9\]\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vrcpph\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vrsqrtph-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vrsqrtph-1a.c
+index a5edc176b63..61e11deed9c 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vrsqrtph-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vrsqrtph-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -mavx512vl -O2" } */
++/* { dg-options "-mavx512fp16 -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vrsqrtph\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vrsqrtph\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[0-9\]\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vrsqrtph\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vsqrtph-1a.c b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vsqrtph-1a.c
+index 4acb137e6b8..7401e68fafa 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512fp16vl-vsqrtph-1a.c
++++ b/gcc/testsuite/gcc.target/i386/avx512fp16vl-vsqrtph-1a.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512fp16 -mavx512vl -O2" } */
++/* { dg-options "-mavx512fp16 -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vsqrtph\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vsqrtph\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[0-9\]\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 2 } } */
+ /* { dg-final { scan-assembler-times "vsqrtph\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[0-9\]\}\{z\}\[^\n\r]*(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512vl-pr100267-1.c b/gcc/testsuite/gcc.target/i386/avx512vl-pr100267-1.c
+index 9ffd381f6c4..185dda4137c 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512vl-pr100267-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512vl-pr100267-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512f -mavx512vl -O2" } */
++/* { dg-options "-mavx512f -mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vpexpandd\[ \\t\]+\[^\{\n\]*\\(\[^\n\]*%ymm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)"  1 } } */
+ /* { dg-final { scan-assembler-times "vpexpandd\[ \\t\]+\[^\{\n\(]*%ymm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)"  1 } } */
+ /* { dg-final { scan-assembler-times "vpexpandq\[ \\t\]+\[^\{\n\]*\\(\[^\n\]*%ymm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)"  1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512vl-vcvtpd2ps-1.c b/gcc/testsuite/gcc.target/i386/avx512vl-vcvtpd2ps-1.c
+index b0cd6e4f1a5..13453da97c5 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512vl-vcvtpd2ps-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512vl-vcvtpd2ps-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-O2 -mavx512vl" } */
++/* { dg-options "-O2 -mno-fuse-ops-with-volatile-access -mavx512vl" } */
+ /* { dg-final { scan-assembler-times "vcvtpd2psy\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtpd2psy\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[1-7\]\}\{z\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtpd2psx\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\r]*%xmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512vl-vcvtpd2udq-1.c b/gcc/testsuite/gcc.target/i386/avx512vl-vcvtpd2udq-1.c
+index 465a819a69d..fd73658a58c 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512vl-vcvtpd2udq-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512vl-vcvtpd2udq-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512vl -O2" } */
++/* { dg-options "-mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvtpd2udqy\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtpd2udqx\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvtpd2udqy\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\]*%xmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512vl-vcvttpd2udq-1.c b/gcc/testsuite/gcc.target/i386/avx512vl-vcvttpd2udq-1.c
+index cc7a2d5f420..54caeb83248 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512vl-vcvttpd2udq-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512vl-vcvttpd2udq-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512vl -O2" } */
++/* { dg-options "-mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvttpd2udqy\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttpd2udqx\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttpd2udqy\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\]*%xmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512vl-vcvttps2udq-1.c b/gcc/testsuite/gcc.target/i386/avx512vl-vcvttps2udq-1.c
+index 652f18a5fb5..78f26f94915 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512vl-vcvttps2udq-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512vl-vcvttps2udq-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512vl -O2" } */
++/* { dg-options "-mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vcvttps2udq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttps2udq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vcvttps2udq\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+\{%k\[1-7\]\}\{z\}(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512vl-vmovapd-1.c b/gcc/testsuite/gcc.target/i386/avx512vl-vmovapd-1.c
+index 89c3ebefe35..8895ac5c29f 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512vl-vmovapd-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512vl-vmovapd-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512vl -O2" } */
++/* { dg-options "-mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vmovapd\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\]*%ymm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vmovapd\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vmovapd\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\]*%ymm\[0-9\]+\{%k\[1-7\]\}\{z\}(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512vl-vmovaps-1.c b/gcc/testsuite/gcc.target/i386/avx512vl-vmovaps-1.c
+index 2196ebb55d9..9680e588a77 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512vl-vmovaps-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512vl-vmovaps-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512vl -O2" } */
++/* { dg-options "-mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vmovaps\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\]*%ymm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vmovaps\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vmovaps\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\]*%ymm\[0-9\]+\{%k\[1-7\]\}\{z\}(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512vl-vmovdqa64-1.c b/gcc/testsuite/gcc.target/i386/avx512vl-vmovdqa64-1.c
+index d20b4a7b997..020f40df530 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512vl-vmovdqa64-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512vl-vmovdqa64-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512vl -O2" } */
++/* { dg-options "-mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "vmovdqa64\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\]*%ymm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vmovdqa64\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%xmm\[0-9\]+\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vmovdqa64\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\]*%ymm\[0-9\]+\{%k\[1-7\]\}\{z\}(?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512vl-vpcmpeqq-1.c b/gcc/testsuite/gcc.target/i386/avx512vl-vpcmpeqq-1.c
+index a798d062953..a6612230034 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512vl-vpcmpeqq-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512vl-vpcmpeqq-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512vl -O2" } */
++/* { dg-options "-mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "(?:vpcmpeqq\[ \\t\]+|vpcmpq\[ \\t\]+\\\$0)\[^\{\n\]*%ymm\[0-9\]+\[^\n\]*%k\[0-7\]\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "(?:vpcmpeqq\[ \\t\]+|vpcmpq\[ \\t\]+\\\$0)\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%k\[0-7\]\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "(?:vpcmpeqq\[ \\t\]+|vpcmpq\[ \\t\]+\\\$0)\[^\{\n\]*%ymm\[0-9\]+\[^\n\]*%k\[0-7\](?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512vl-vpcmpequq-1.c b/gcc/testsuite/gcc.target/i386/avx512vl-vpcmpequq-1.c
+index 736763f121e..1484f947d35 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512vl-vpcmpequq-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512vl-vpcmpequq-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-mavx512vl -O2" } */
++/* { dg-options "-mavx512vl -O2 -mno-fuse-ops-with-volatile-access" } */
+ /* { dg-final { scan-assembler-times "(?:vpcmpuq|vpcmpeqq)\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\]*%k\[0-7\]\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "(?:vpcmpuq|vpcmpeqq)\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n\]*%k\[0-7\]\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "(?:vpcmpuq|vpcmpeqq)\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n\]*%k\[0-7\](?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/avx512vl-vpcmpuq-1.c b/gcc/testsuite/gcc.target/i386/avx512vl-vpcmpuq-1.c
+index f93fca2b655..c7115d06d72 100644
+--- a/gcc/testsuite/gcc.target/i386/avx512vl-vpcmpuq-1.c
++++ b/gcc/testsuite/gcc.target/i386/avx512vl-vpcmpuq-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-O2 -mavx512vl" } */
++/* { dg-options "-O2 -mno-fuse-ops-with-volatile-access -mavx512vl" } */
+ /* { dg-final { scan-assembler-times "vpcmpuq\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n^k\]*%k\[0-7\](?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "vpcmpuq\[ \\t\]+\[^\{\n\]*%ymm\[0-9\]+\[^\n^k\]*%k\[0-7\]\{%k\[1-7\]\}(?:\n|\[ \\t\]+#)" 1 } } */
+ /* { dg-final { scan-assembler-times "(?:vpcmpuq|vpcmpeqq)\[ \\t\]+\[^\{\n\]*%xmm\[0-9\]+\[^\n^k\]*%k\[0-7\](?:\n|\[ \\t\]+#)" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/i386/pr122343-1a.c b/gcc/testsuite/gcc.target/i386/pr122343-1a.c
+new file mode 100644
+index 00000000000..91b40a2b535
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/i386/pr122343-1a.c
+@@ -0,0 +1,25 @@
++/* { dg-do compile } */
++/* { dg-options "-O2" } */
++/* { dg-additional-options "-mregparm=1" { target ia32 } } */
++/* Keep labels and directives ('.cfi_startproc', '.cfi_endproc').  */
++/* { dg-final { check-function-bodies "**" "" "" { target *-*-* } {^\t?\.} } } */
++
++/*
++**foo:
++**.LFB0:
++**	.cfi_startproc
++**	imull	\$123, %e(di|ax), %eax
++**	addl	bar(|\(%rip\)), %eax
++**	ret
++**	.cfi_endproc
++**...
++*/
++
++extern volatile int bar;
++
++int
++foo (int z)
++{
++  z *= 123;
++  return bar + z;
++}
+diff --git a/gcc/testsuite/gcc.target/i386/pr122343-1b.c b/gcc/testsuite/gcc.target/i386/pr122343-1b.c
+new file mode 100644
+index 00000000000..094f16d5d42
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/i386/pr122343-1b.c
+@@ -0,0 +1,19 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -mno-fuse-ops-with-volatile-access" } */
++/* { dg-additional-options "-mregparm=1" { target ia32 } } */
++/* Keep labels and directives ('.cfi_startproc', '.cfi_endproc').  */
++/* { dg-final { check-function-bodies "**" "" "" { target *-*-* } {^\t?\.} } } */
++
++/*
++**foo:
++**.LFB0:
++**	.cfi_startproc
++**	imull	\$123, %e(di|ax), %eax
++**	movl	bar(|\(%rip\)), %edx
++**	addl	%edx, %eax
++**	ret
++**	.cfi_endproc
++**...
++*/
++
++#include "pr122343-1a.c"
+diff --git a/gcc/testsuite/gcc.target/i386/pr122343-2a.c b/gcc/testsuite/gcc.target/i386/pr122343-2a.c
+new file mode 100644
+index 00000000000..e271bb6f9b6
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/i386/pr122343-2a.c
+@@ -0,0 +1,23 @@
++/* { dg-do compile } */
++/* { dg-options "-O2" } */
++/* Keep labels and directives ('.cfi_startproc', '.cfi_endproc').  */
++/* { dg-final { check-function-bodies "**" "" "" { target *-*-* } {^\t?\.} } } */
++
++/*
++**foo:
++**.LFB0:
++**	.cfi_startproc
++**	movl	bar1(|\(%rip\)), %eax
++**	addl	bar2(|\(%rip\)), %eax
++**	ret
++**	.cfi_endproc
++**...
++*/
++
++extern volatile int bar1, bar2;
++
++int
++foo (void)
++{
++  return bar1 + bar2;
++}
+diff --git a/gcc/testsuite/gcc.target/i386/pr122343-2b.c b/gcc/testsuite/gcc.target/i386/pr122343-2b.c
+new file mode 100644
+index 00000000000..927ef327e41
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/i386/pr122343-2b.c
+@@ -0,0 +1,18 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -mno-fuse-ops-with-volatile-access" } */
++/* Keep labels and directives ('.cfi_startproc', '.cfi_endproc').  */
++/* { dg-final { check-function-bodies "**" "" "" { target *-*-* } {^\t?\.} } } */
++
++/*
++**foo:
++**.LFB0:
++**	.cfi_startproc
++**	movl	bar1(|\(%rip\)), %eax
++**	movl	bar2(|\(%rip\)), %edx
++**	addl	%edx, %eax
++**	ret
++**	.cfi_endproc
++**...
++*/
++
++#include "pr122343-2a.c"
+diff --git a/gcc/testsuite/gcc.target/i386/pr122343-3.c b/gcc/testsuite/gcc.target/i386/pr122343-3.c
+new file mode 100644
+index 00000000000..4880453a8a5
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/i386/pr122343-3.c
+@@ -0,0 +1,24 @@
++/* { dg-do compile } */
++/* { dg-options "-O2" } */
++/* Keep labels and directives ('.cfi_startproc', '.cfi_endproc').  */
++/* { dg-final { check-function-bodies "**" "" "" { target *-*-* } {^\t?\.} } } */
++
++/*
++**foo:
++**.LFB0:
++**	.cfi_startproc
++**	movl	bar(|\(%rip\)), %eax
++**	addl	\$123, %eax
++**	movl	%eax, bar(|\(%rip\))
++**	ret
++**	.cfi_endproc
++**...
++*/
++
++extern volatile int bar;
++
++void
++foo (void)
++{
++  bar += 123;
++}
+diff --git a/gcc/testsuite/gcc.target/i386/pr122343-4a.c b/gcc/testsuite/gcc.target/i386/pr122343-4a.c
+new file mode 100644
+index 00000000000..93c9e1ea27a
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/i386/pr122343-4a.c
+@@ -0,0 +1,33 @@
++/* { dg-do compile } */
++/* { dg-options "-O2" } */
++/* Keep labels and directives ('.cfi_startproc', '.cfi_endproc').  */
++/* { dg-final { check-function-bodies "**" "" "" { target { ! ia32 } } {^\t?\.} } } */
++
++/*
++**foo:
++**.LFB0:
++**	.cfi_startproc
++**	movl	bar\(%rip\), %eax
++**	movl	bar\(%rip\), %eax
++**...
++**	barrier
++**...
++**	addl	bar\(%rip\), %eax
++**	subl	bar\(%rip\), %eax
++**	ret
++**	.cfi_endproc
++**...
++*/
++
++extern volatile int bar;
++
++int
++foo (void)
++{
++  int h = bar;
++  int r = bar;
++  asm volatile ("barrier" ::: "memory");
++  int p = bar;
++  p = p + r;
++  return p - bar;
++}
+diff --git a/gcc/testsuite/gcc.target/i386/pr122343-4b.c b/gcc/testsuite/gcc.target/i386/pr122343-4b.c
+new file mode 100644
+index 00000000000..77502b64039
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/i386/pr122343-4b.c
+@@ -0,0 +1,24 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -mno-fuse-ops-with-volatile-access" } */
++/* Keep labels and directives ('.cfi_startproc', '.cfi_endproc').  */
++/* { dg-final { check-function-bodies "**" "" "" { target { ! ia32 } } {^\t?\.} } } */
++
++/*
++**foo:
++**.LFB0:
++**	.cfi_startproc
++**	movl	bar\(%rip\), %eax
++**	movl	bar\(%rip\), %eax
++**...
++**	barrier
++**...
++**	movl	bar\(%rip\), %ecx
++**	movl	bar\(%rip\), %edx
++**	addl	%ecx, %eax
++**	subl	%edx, %eax
++**	ret
++**	.cfi_endproc
++**...
++*/
++
++#include "pr122343-4a.c"
+-- 
+2.51.1
+
+
