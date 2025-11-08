@@ -1,0 +1,108 @@
+diff --git a/gcc/config/riscv/predicates.md b/gcc/config/riscv/predicates.md
+index f811a4e40ca7..87e151232156 100644
+--- a/gcc/config/riscv/predicates.md
++++ b/gcc/config/riscv/predicates.md
+@@ -231,6 +231,10 @@ (define_predicate "zcmp_mv_sreg_operand"
+                     : IN_RANGE (REGNO (op), S0_REGNUM, S1_REGNUM)
+                     || IN_RANGE (REGNO (op), S2_REGNUM, S7_REGNUM)")))
+ 
++(define_predicate "dimode_shift_operand"
++  (and (match_code "const_int")
++       (match_test "IN_RANGE (INTVAL (op), 1, GET_MODE_BITSIZE (DImode) - 1)")))
++
+ ;; Only use branch-on-bit sequences when the mask is not an ANDI immediate.
+ (define_predicate "branch_on_bit_operand"
+   (and (match_code "const_int")
+diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
+index 1ec15da2e77e..eb3a34f0a117 100644
+--- a/gcc/config/riscv/riscv.md
++++ b/gcc/config/riscv/riscv.md
+@@ -3175,24 +3175,25 @@ (define_split
+ ;; Handle SImode to DImode zero-extend combined with a left shift.  This can
+ ;; occur when unsigned int is used for array indexing.  Split this into two
+ ;; shifts.  Otherwise we can get 3 shifts.
++(define_split
++  [(set (match_operand:DI 0 "register_operand")
++	(and:DI (ashift:DI (match_operand:DI 1 "register_operand")
++			   (match_operand:QI 2 "dimode_shift_operand"))
++		(match_operand:DI 3 "consecutive_bits_operand")))
++   (clobber (match_operand:DI 4 "register_operand"))]
++  "TARGET_64BIT
++   && riscv_shamt_matches_mask_p (INTVAL (operands[2]), INTVAL (operands[3]))
++   && !(TARGET_ZBA && clz_hwi (INTVAL (operands[3])) <= 32)"
++  [(set (match_dup 4) (ashift:DI (match_dup 1) (match_dup 5)))
++   (set (match_dup 0) (lshiftrt:DI (match_dup 4) (match_dup 6)))]
++{
++  unsigned HOST_WIDE_INT mask = INTVAL (operands[3]);
++  int leading  = clz_hwi (mask);
++  int trailing = ctz_hwi (mask);
+ 
+-(define_insn_and_split "zero_extendsidi2_shifted"
+-  [(set (match_operand:DI 0 "register_operand" "=r")
+-	(and:DI (ashift:DI (match_operand:DI 1 "register_operand" "r")
+-			   (match_operand:QI 2 "immediate_operand" "I"))
+-		(match_operand 3 "immediate_operand" "")))
+-   (clobber (match_scratch:DI 4 "=&r"))]
+-  "TARGET_64BIT && !TARGET_ZBA
+-   && ((INTVAL (operands[3]) >> INTVAL (operands[2])) == 0xffffffff)"
+-  "#"
+-  "&& reload_completed"
+-  [(set (match_dup 4)
+-	(ashift:DI (match_dup 1) (const_int 32)))
+-   (set (match_dup 0)
+-	(lshiftrt:DI (match_dup 4) (match_dup 5)))]
+-  "operands[5] = GEN_INT (32 - (INTVAL (operands [2])));"
+-  [(set_attr "type" "shift")
+-   (set_attr "mode" "DI")])
++  operands[5] = GEN_INT (leading + trailing);
++  operands[6] = GEN_INT (leading);
++})
+ 
+ ;;
+ ;;  ....................
+diff --git a/gcc/testsuite/gcc.target/riscv/shift-shift-6.c b/gcc/testsuite/gcc.target/riscv/shift-shift-6.c
+new file mode 100644
+index 000000000000..083f5c4688c3
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/shift-shift-6.c
+@@ -0,0 +1,14 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc -mabi=lp64" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++/* Test for zero_extendsidi2_shifted handling arbitrary mask widths
++   (not just 32 bits). */
++unsigned sub1(unsigned a, unsigned b)
++{
++  b = (b << 2) >> 2;
++  return a + (b << 1);
++}
++
++/* { dg-final { scan-assembler-times "slli" 1 } } */
++/* { dg-final { scan-assembler-times "srli" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/shift-shift-8.c b/gcc/testsuite/gcc.target/riscv/shift-shift-8.c
+new file mode 100644
+index 000000000000..e6dcfcce0e34
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/shift-shift-8.c
+@@ -0,0 +1,20 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc_zba -mabi=lp64" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++/* Tests for andi + sh[123]add */
++unsigned long sub1(unsigned long a, unsigned long b)
++{
++  return b + ((a << 55) >> 53);
++}
++
++unsigned long sub2(unsigned long a, unsigned long b)
++{
++  return b + ((a & 1023) << 3);
++}
++
++/* { dg-final { scan-assembler-times "andi" 2 } } */
++/* { dg-final { scan-assembler-times "sh2add" 1 } } */
++/* { dg-final { scan-assembler-times "sh3add" 1 } } */
++/* { dg-final { scan-assembler-not "slli" } } */
++/* { dg-final { scan-assembler-not "srli" } } */
