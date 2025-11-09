@@ -13,6 +13,40 @@ index f811a4e40ca7..87e151232156 100644
  ;; Only use branch-on-bit sequences when the mask is not an ANDI immediate.
  (define_predicate "branch_on_bit_operand"
    (and (match_code "const_int")
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index 7d723fc4d695..1cd09bae0fd7 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -14189,8 +14189,11 @@ riscv_extend_to_xmode_reg (rtx x, machine_mode mode, enum rtx_code rcode)
+ {
+   gcc_assert (rcode == ZERO_EXTEND || rcode == SIGN_EXTEND);
+ 
++  return convert_modes (Xmode, mode, x, rcode == ZERO_EXTEND);
++#if 0
+   rtx xmode_reg = gen_reg_rtx (Xmode);
+ 
++
+   if (CONST_INT_P (x))
+     {
+       if (mode == Xmode)
+@@ -14219,9 +14222,16 @@ riscv_extend_to_xmode_reg (rtx x, machine_mode mode, enum rtx_code rcode)
+   else if (mode == Xmode)
+     return x;
+   else
+-    riscv_emit_unary (rcode, xmode_reg, x);
++    {
++      /* We really shouldn't have been emit_unary here as the target
++	 may not have the proper insns.  Instead we should be using the
++	 expander.  */
++      
++      riscv_emit_unary (rcode, xmode_reg, x);
++    }
+ 
+   return xmode_reg;
++#endif
+ }
+ 
+ /* Implements the unsigned saturation add standard name usadd for int mode.
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
 index 1ec15da2e77e..af53cd9e80cf 100644
 --- a/gcc/config/riscv/riscv.md
