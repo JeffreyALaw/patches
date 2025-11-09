@@ -14,7 +14,7 @@ index f811a4e40ca7..87e151232156 100644
  (define_predicate "branch_on_bit_operand"
    (and (match_code "const_int")
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index 1ec15da2e77e..a26da4f1ff49 100644
+index 1ec15da2e77e..af53cd9e80cf 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
 @@ -1880,33 +1880,42 @@ (define_expand "zero_extendsidi2"
@@ -41,10 +41,10 @@ index 1ec15da2e77e..a26da4f1ff49 100644
 +      rtx ireg = gen_reg_rtx (DImode);
 +
 +      operands[1] = gen_lowpart (DImode, operands[1]);
-+      operands[2] = GEN_INT (32);
-+      rtx t = gen_rtx_ASHIFT (DImode, operands[1], operands[2]);
++      rtx shiftval = GEN_INT (32);
++      rtx t = gen_rtx_ASHIFT (DImode, operands[1], shiftval);
 +      emit_move_insn (ireg, t);
-+      t = gen_rtx_LSHIFTRT (DImode, ireg, operands[2]);
++      t = gen_rtx_LSHIFTRT (DImode, ireg, shiftval);
 +      emit_move_insn (operands[0], t);
 +      DONE;
 +    }
@@ -109,10 +109,10 @@ index 1ec15da2e77e..a26da4f1ff49 100644
 +      rtx ireg = gen_reg_rtx (<GPR:MODE>mode);
 +
 +      operands[1] = gen_lowpart (<GPR:MODE>mode, operands[1]);
-+      operands[2] = GEN_INT (GET_MODE_BITSIZE (<GPR:MODE>mode) - 16);
-+      rtx t = gen_rtx_ASHIFT (DImode, operands[1], operands[2]);
++      rtx shiftval = GEN_INT (GET_MODE_BITSIZE (<GPR:MODE>mode) - 16);
++      rtx t = gen_rtx_ASHIFT (<GPR:MODE>mode, operands[1], shiftval);
 +      emit_move_insn (ireg, t);
-+      t = gen_rtx_LSHIFTRT (DImode, ireg, operands[2]);
++      t = gen_rtx_LSHIFTRT (<GPR:MODE>mode, ireg, shiftval);
 +      emit_move_insn (operands[0], t);
 +      DONE;
 +    }
@@ -120,7 +120,7 @@ index 1ec15da2e77e..a26da4f1ff49 100644
 +
 +(define_insn "*zero_extendhi<GPR:mode>2"
 +  [(set (match_operand:GPR    0 "register_operand"     "=r")
-+	(zero_extend:GPR (match_operand:HI 1 "nonimmediate_operand" "m")))]
++	(zero_extend:GPR (match_operand:HI 1 "memory_operand" "m")))]
    "!TARGET_ZBB && !TARGET_XTHEADBB && !TARGET_XTHEADMEMIDX
     && !TARGET_XANDESPERF"
 -  "@
@@ -187,6 +187,23 @@ index 1ec15da2e77e..a26da4f1ff49 100644
  
  ;;
  ;;  ....................
+diff --git a/gcc/match.pd b/gcc/match.pd
+index 3cd9ab1e9b04..6f0d3acd2bc9 100644
+--- a/gcc/match.pd
++++ b/gcc/match.pd
+@@ -11994,3 +11994,12 @@ and,
+ (simplify
+  (IFN_VEC_SHL_INSERT (vec_duplicate@1 @0) @0)
+   @1)
++
++(simplify
++  (bit_ior:c (lshift @0 INTEGER_CST@1)
++             (bit_xor (rshift @2 INTEGER_CST@3) INTEGER_CST@4))
++  (if (((~((HOST_WIDE_INT_1U << tree_to_uhwi (@1)) - 1)) & tree_to_uhwi (@4)) == 0
++      && (tree_to_uhwi (@1) + tree_to_uhwi (@3)) == TYPE_PRECISION (type)
++      && TYPE_UNSIGNED (type)
++      && @0 == @2)
++    (bit_xor (bit_ior (lshift @0 @1) (rshift @2 @3)) @4)))
 diff --git a/gcc/testsuite/gcc.target/riscv/shift-shift-6.c b/gcc/testsuite/gcc.target/riscv/shift-shift-6.c
 new file mode 100644
 index 000000000000..083f5c4688c3
