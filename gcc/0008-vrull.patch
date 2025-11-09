@@ -14,7 +14,7 @@ index f811a4e40ca7..87e151232156 100644
  (define_predicate "branch_on_bit_operand"
    (and (match_code "const_int")
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index 1ec15da2e77e..5b1c35848688 100644
+index 1ec15da2e77e..a26da4f1ff49 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
 @@ -1880,33 +1880,42 @@ (define_expand "zero_extendsidi2"
@@ -183,7 +183,7 @@ index 1ec15da2e77e..5b1c35848688 100644
 +  
 +  operands[5] = GEN_INT (leading + trailing);
 +  operands[6] = GEN_INT (leading);
-+}
++})
  
  ;;
  ;;  ....................
