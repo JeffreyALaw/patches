@@ -1,282 +1,155 @@
-diff --git a/gcc/config/riscv/predicates.md b/gcc/config/riscv/predicates.md
-index f811a4e40ca7..87e151232156 100644
---- a/gcc/config/riscv/predicates.md
-+++ b/gcc/config/riscv/predicates.md
-@@ -231,6 +231,10 @@ (define_predicate "zcmp_mv_sreg_operand"
-                     : IN_RANGE (REGNO (op), S0_REGNUM, S1_REGNUM)
-                     || IN_RANGE (REGNO (op), S2_REGNUM, S7_REGNUM)")))
- 
-+(define_predicate "dimode_shift_operand"
-+  (and (match_code "const_int")
-+       (match_test "IN_RANGE (INTVAL (op), 1, GET_MODE_BITSIZE (DImode) - 1)")))
-+
- ;; Only use branch-on-bit sequences when the mask is not an ANDI immediate.
- (define_predicate "branch_on_bit_operand"
-   (and (match_code "const_int")
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 7d723fc4d695..1cd09bae0fd7 100644
+index 7d723fc4d695..b6fb901a4f00 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
-@@ -14189,8 +14189,11 @@ riscv_extend_to_xmode_reg (rtx x, machine_mode mode, enum rtx_code rcode)
- {
-   gcc_assert (rcode == ZERO_EXTEND || rcode == SIGN_EXTEND);
- 
-+  return convert_modes (Xmode, mode, x, rcode == ZERO_EXTEND);
-+#if 0
-   rtx xmode_reg = gen_reg_rtx (Xmode);
- 
-+
-   if (CONST_INT_P (x))
-     {
-       if (mode == Xmode)
-@@ -14219,9 +14222,16 @@ riscv_extend_to_xmode_reg (rtx x, machine_mode mode, enum rtx_code rcode)
-   else if (mode == Xmode)
-     return x;
-   else
--    riscv_emit_unary (rcode, xmode_reg, x);
-+    {
-+      /* We really shouldn't have been emit_unary here as the target
-+	 may not have the proper insns.  Instead we should be using the
-+	 expander.  */
-+      
-+      riscv_emit_unary (rcode, xmode_reg, x);
-+    }
- 
-   return xmode_reg;
-+#endif
+@@ -14144,86 +14144,6 @@ riscv_get_raw_result_mode (int regno)
+   return default_get_reg_raw_mode (regno);
  }
  
- /* Implements the unsigned saturation add standard name usadd for int mode.
-diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index 1ec15da2e77e..af53cd9e80cf 100644
---- a/gcc/config/riscv/riscv.md
-+++ b/gcc/config/riscv/riscv.md
-@@ -1880,33 +1880,42 @@ (define_expand "zero_extendsidi2"
- 	(zero_extend:DI (match_operand:SI 1 "nonimmediate_operand")))]
-   "TARGET_64BIT"
- {
-+  /* If the source is a suitably extended subreg, then this is just
-+     a simple move.  */
-   if (SUBREG_P (operands[1]) && SUBREG_PROMOTED_VAR_P (operands[1])
-       && SUBREG_PROMOTED_UNSIGNED_P (operands[1]))
-     {
-       emit_insn (gen_movdi (operands[0], SUBREG_REG (operands[1])));
-       DONE;
-     }
-+
-+  /* If the source is a register and we do not have ZBA or similar
-+     extensions with similar capabilities, then emit the two
-+     shifts now.  */
-+  if (!TARGET_ZBA && !TARGET_XTHEADBB
-+      && !TARGET_XTHEADMEMIDX && !TARGET_XANDESPERF
-+      && register_operand (operands[1], SImode))
-+    {
-+      /* Intermediate register.  */
-+      rtx ireg = gen_reg_rtx (DImode);
-+
-+      operands[1] = gen_lowpart (DImode, operands[1]);
-+      rtx shiftval = GEN_INT (32);
-+      rtx t = gen_rtx_ASHIFT (DImode, operands[1], shiftval);
-+      emit_move_insn (ireg, t);
-+      t = gen_rtx_LSHIFTRT (DImode, ireg, shiftval);
-+      emit_move_insn (operands[0], t);
-+      DONE;
-+    }
- })
- 
--(define_insn_and_split "*zero_extendsidi2_internal"
--  [(set (match_operand:DI     0 "register_operand"     "=r,r")
--	(zero_extend:DI
--	    (match_operand:SI 1 "nonimmediate_operand" " r,m")))]
-+(define_insn "*zero_extendsidi2_internal"
-+  [(set (match_operand:DI     0 "register_operand"     "=r")
-+	(zero_extend:DI (match_operand:SI 1 "memory_operand" "m")))]
-   "TARGET_64BIT && !TARGET_ZBA && !TARGET_XTHEADBB && !TARGET_XTHEADMEMIDX
--   && !TARGET_XANDESPERF
--   && !(REG_P (operands[1]) && VL_REG_P (REGNO (operands[1])))"
--  "@
--   #
--   lwu\t%0,%1"
--  "&& reload_completed
--   && REG_P (operands[1])
--   && !paradoxical_subreg_p (operands[0])"
--  [(set (match_dup 0)
--	(ashift:DI (match_dup 1) (const_int 32)))
--   (set (match_dup 0)
--	(lshiftrt:DI (match_dup 0) (const_int 32)))]
--  { operands[1] = gen_lowpart (DImode, operands[1]); }
--  [(set_attr "move_type" "shift_shift,load")
-+   && !TARGET_XANDESPERF"
-+  "lwu\t%0,%1"
-+  [(set_attr "move_type" "load")
-    (set_attr "type" "load")
-    (set_attr "mode" "DI")])
- 
-@@ -1914,29 +1923,44 @@ (define_expand "zero_extendhi<GPR:mode>2"
-   [(set (match_operand:GPR    0 "register_operand")
- 	(zero_extend:GPR
- 	    (match_operand:HI 1 "nonimmediate_operand")))]
--  "")
-+  ""
-+{
-+  /* If the source is a suitably extended subreg, then this is just
-+     a simple move.  */
-+  if (SUBREG_P (operands[1]) && SUBREG_PROMOTED_VAR_P (operands[1])
-+      && SUBREG_PROMOTED_UNSIGNED_P (operands[1]))
-+    {
-+      emit_insn (gen_mov<GPR:mode> (operands[0], SUBREG_REG (operands[1])));
-+      DONE;
-+    }
- 
--(define_insn_and_split "*zero_extendhi<GPR:mode>2"
--  [(set (match_operand:GPR    0 "register_operand"     "=r,r")
--	(zero_extend:GPR
--	    (match_operand:HI 1 "nonimmediate_operand" " r,m")))]
-+  /* If the source is a register and we do not have ZBA or similar
-+     extensions with similar capabilities, then emit the two
-+     shifts now.  */
-+  if (!TARGET_ZBA && !TARGET_XTHEADBB
-+      && !TARGET_XTHEADMEMIDX && !TARGET_XANDESPERF
-+      && register_operand (operands[1], HImode))
-+    {
-+      /* Intermediate register.  */
-+      rtx ireg = gen_reg_rtx (<GPR:MODE>mode);
-+
-+      operands[1] = gen_lowpart (<GPR:MODE>mode, operands[1]);
-+      rtx shiftval = GEN_INT (GET_MODE_BITSIZE (<GPR:MODE>mode) - 16);
-+      rtx t = gen_rtx_ASHIFT (<GPR:MODE>mode, operands[1], shiftval);
-+      emit_move_insn (ireg, t);
-+      t = gen_rtx_LSHIFTRT (<GPR:MODE>mode, ireg, shiftval);
-+      emit_move_insn (operands[0], t);
-+      DONE;
-+    }
-+})
-+
-+(define_insn "*zero_extendhi<GPR:mode>2"
-+  [(set (match_operand:GPR    0 "register_operand"     "=r")
-+	(zero_extend:GPR (match_operand:HI 1 "memory_operand" "m")))]
-   "!TARGET_ZBB && !TARGET_XTHEADBB && !TARGET_XTHEADMEMIDX
-    && !TARGET_XANDESPERF"
--  "@
--   #
--   lhu\t%0,%1"
--  "&& reload_completed
--   && REG_P (operands[1])
--   && !paradoxical_subreg_p (operands[0])"
--  [(set (match_dup 0)
--	(ashift:GPR (match_dup 1) (match_dup 2)))
--   (set (match_dup 0)
--	(lshiftrt:GPR (match_dup 0) (match_dup 2)))]
--  {
--    operands[1] = gen_lowpart (<GPR:MODE>mode, operands[1]);
--    operands[2] = GEN_INT(GET_MODE_BITSIZE(<GPR:MODE>mode) - 16);
--  }
--  [(set_attr "move_type" "shift_shift,load")
-+  "lhu\t%0,%1"
-+  [(set_attr "move_type" "load")
-    (set_attr "type" "load")
-    (set_attr "mode" "<GPR:MODE>")])
- 
-@@ -3175,24 +3199,25 @@ (define_split
- ;; Handle SImode to DImode zero-extend combined with a left shift.  This can
- ;; occur when unsigned int is used for array indexing.  Split this into two
- ;; shifts.  Otherwise we can get 3 shifts.
+-/* Generate a REG rtx of Xmode from the given rtx and mode.
+-   The rtx x can be REG (QI/HI/SI/DI) or const_int.
+-   The machine_mode mode is the original mode from define pattern.
+-   The rtx_code can be ZERO_EXTEND or SIGN_EXTEND.
 -
--(define_insn_and_split "zero_extendsidi2_shifted"
--  [(set (match_operand:DI 0 "register_operand" "=r")
--	(and:DI (ashift:DI (match_operand:DI 1 "register_operand" "r")
--			   (match_operand:QI 2 "immediate_operand" "I"))
--		(match_operand 3 "immediate_operand" "")))
--   (clobber (match_scratch:DI 4 "=&r"))]
--  "TARGET_64BIT && !TARGET_ZBA
--   && ((INTVAL (operands[3]) >> INTVAL (operands[2])) == 0xffffffff)"
--  "#"
--  "&& reload_completed"
--  [(set (match_dup 4)
--	(ashift:DI (match_dup 1) (const_int 32)))
--   (set (match_dup 0)
--	(lshiftrt:DI (match_dup 4) (match_dup 5)))]
--  "operands[5] = GEN_INT (32 - (INTVAL (operands [2])));"
--  [(set_attr "type" "shift")
--   (set_attr "mode" "DI")])
-+(define_split
-+  [(set (match_operand:DI 0 "register_operand")
-+	(and:DI (ashift:DI (match_operand:DI 1 "register_operand")
-+			   (match_operand:QI 2 "dimode_shift_operand"))
-+		(match_operand 3 "consecutive_bits_operand")))
-+   (clobber (match_operand:DI 4 "register_operand"))]
-+  "TARGET_64BIT
-+   && riscv_shamt_matches_mask_p (INTVAL (operands[2]), INTVAL (operands[3]))
-+   && !(TARGET_ZBA && clz_hwi (INTVAL (operands[3])) <= 32)"
-+  [(set (match_dup 4) (ashift:DI (match_dup 1) (match_dup 5)))
-+   (set (match_dup 0) (lshiftrt:DI (match_dup 4) (match_dup 6)))]
-+{
-+  unsigned HOST_WIDE_INT mask = INTVAL (operands[3]);
-+  int leading  = clz_hwi (mask);
-+  int trailing = ctz_hwi (mask);
-+  
-+  operands[5] = GEN_INT (leading + trailing);
-+  operands[6] = GEN_INT (leading);
-+})
+-   If rtx is REG:
+-
+-   1.  If rtx Xmode, the RTX x will be returned directly.
+-   2.  If rtx non-Xmode, the value extended into a new REG of Xmode will be
+-       returned.
+-
+-   The scalar ALU like add don't support non-Xmode like QI/HI.  Then the
+-   gen_lowpart will have problem here.  For example, when we would like
+-   to add -1 (0xff if QImode) and 2 (0x2 if QImode).  The 0xff and 0x2 will
+-   be loaded to register for adding.  Aka:
+-
+-   0xff + 0x2 = 0x101 instead of -1 + 2 = 1.
+-
+-   Thus we need to sign extend 0xff to 0xffffffffffffffff if Xmode is DImode
+-   for correctness.  Similar the unsigned also need zero extend.
+-
+-   If rtx is const_int:
+-
+-   1.  A new REG rtx will be created to hold the value of const_int.
+-
+-   According to the gccint doc, the constants generated for modes with fewer
+-   bits than in HOST_WIDE_INT must be sign extended to full width.  Thus there
+-   will be two cases here, take QImode as example.
+-
+-   For .SAT_SUB (127, y) in QImode, we have (const_int 127) and one simple
+-   mov from const_int to the new REG rtx is good enough here.
+-
+-   For .SAT_SUB (254, y) in QImode, we have (const_int -2) after define_expand.
+-   Aka 0xfffffffffffffffe in Xmode of RV64 but we actually need 0xfe in Xmode
+-   of RV64.  So we need to cleanup the highest 56 bits of the new REG rtx moved
+-   from the (const_int -2).
+-
+-   Then the underlying expanding can perform the code generation based on
+-   the REG rtx of Xmode, instead of taking care of these in expand func.  */
+-
+-static rtx
+-riscv_extend_to_xmode_reg (rtx x, machine_mode mode, enum rtx_code rcode)
+-{
+-  gcc_assert (rcode == ZERO_EXTEND || rcode == SIGN_EXTEND);
+-
+-  rtx xmode_reg = gen_reg_rtx (Xmode);
+-
+-  if (CONST_INT_P (x))
+-    {
+-      if (mode == Xmode)
+-	emit_move_insn (xmode_reg, x);
+-      else if (rcode == ZERO_EXTEND)
+-	{
+-	  /* Combine deliberately does not simplify extensions of constants
+-	     (long story).  So try to generate the zero extended constant
+-	     efficiently.
+-
+-	     First extract the constant and mask off all the bits not in
+-	     MODE.  */
+-	  HOST_WIDE_INT val = INTVAL (x);
+-	  val &= GET_MODE_MASK (mode);
+-
+-	  /* X may need synthesis, so do not blindly copy it.  */
+-	  xmode_reg = force_reg (Xmode, gen_int_mode (val, Xmode));
+-	}
+-      else /* SIGN_EXTEND.  */
+-	{
+-	  rtx x_reg = gen_reg_rtx (mode);
+-	  emit_move_insn (x_reg, x);
+-	  riscv_emit_unary (rcode, xmode_reg, x_reg);
+-	}
+-    }
+-  else if (mode == Xmode)
+-    return x;
+-  else
+-    riscv_emit_unary (rcode, xmode_reg, x);
+-
+-  return xmode_reg;
+-}
+-
+ /* Implements the unsigned saturation add standard name usadd for int mode.
  
- ;;
- ;;  ....................
-diff --git a/gcc/match.pd b/gcc/match.pd
-index 3cd9ab1e9b04..6f0d3acd2bc9 100644
---- a/gcc/match.pd
-+++ b/gcc/match.pd
-@@ -11994,3 +11994,12 @@ and,
- (simplify
-  (IFN_VEC_SHL_INSERT (vec_duplicate@1 @0) @0)
-   @1)
-+
-+(simplify
-+  (bit_ior:c (lshift @0 INTEGER_CST@1)
-+             (bit_xor (rshift @2 INTEGER_CST@3) INTEGER_CST@4))
-+  (if (((~((HOST_WIDE_INT_1U << tree_to_uhwi (@1)) - 1)) & tree_to_uhwi (@4)) == 0
-+      && (tree_to_uhwi (@1) + tree_to_uhwi (@3)) == TYPE_PRECISION (type)
-+      && TYPE_UNSIGNED (type)
-+      && @0 == @2)
-+    (bit_xor (bit_ior (lshift @0 @1) (rshift @2 @3)) @4)))
-diff --git a/gcc/testsuite/gcc.target/riscv/shift-shift-6.c b/gcc/testsuite/gcc.target/riscv/shift-shift-6.c
-new file mode 100644
-index 000000000000..083f5c4688c3
---- /dev/null
-+++ b/gcc/testsuite/gcc.target/riscv/shift-shift-6.c
-@@ -0,0 +1,14 @@
-+/* { dg-do compile } */
-+/* { dg-options "-march=rv64gc -mabi=lp64" } */
-+/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
-+
-+/* Test for zero_extendsidi2_shifted handling arbitrary mask widths
-+   (not just 32 bits). */
-+unsigned sub1(unsigned a, unsigned b)
-+{
-+  b = (b << 2) >> 2;
-+  return a + (b << 1);
-+}
-+
-+/* { dg-final { scan-assembler-times "slli" 1 } } */
-+/* { dg-final { scan-assembler-times "srli" 1 } } */
-diff --git a/gcc/testsuite/gcc.target/riscv/shift-shift-7.c b/gcc/testsuite/gcc.target/riscv/shift-shift-7.c
-new file mode 100644
-index 000000000000..3ecd9ebdc39c
---- /dev/null
-+++ b/gcc/testsuite/gcc.target/riscv/shift-shift-7.c
-@@ -0,0 +1,16 @@
-+/* { dg-do compile } */
-+/* { dg-options "-march=rv64gc -mabi=lp64" } */
-+/* { dg-skip-if "" { *-*-* } { "-O0" } } */
-+
-+/* Test for zero_extendsidi2_shifted handling arbitrary mask widths
-+   (not just 32 bits). */
-+unsigned long f(unsigned int a, unsigned long b)
-+{
-+  a = a << 1;
-+  unsigned long c = (unsigned long) a;
-+  c = b + (c<<4);
-+  return c;
-+}
-+
-+/* { dg-final { scan-assembler-times "slli" 1 } } */
-+/* { dg-final { scan-assembler-times "srli" 1 } } */
+    z = SAT_ADD(x, y).
+@@ -14240,8 +14160,8 @@ riscv_expand_usadd (rtx dest, rtx x, rtx y)
+   machine_mode mode = GET_MODE (dest);
+   rtx xmode_sum = gen_reg_rtx (Xmode);
+   rtx xmode_lt = gen_reg_rtx (Xmode);
+-  rtx xmode_x = riscv_extend_to_xmode_reg (x, mode, ZERO_EXTEND);
+-  rtx xmode_y = riscv_extend_to_xmode_reg (y, mode, ZERO_EXTEND);
++  rtx xmode_x = convert_modes (Xmode, mode, x, true);
++  rtx xmode_y = convert_modes (Xmode, mode, y, true);
+   rtx xmode_dest = gen_reg_rtx (Xmode);
+ 
+   /* Step-1: sum = x + y  */
+@@ -14319,8 +14239,8 @@ riscv_expand_ssadd (rtx dest, rtx x, rtx y)
+   machine_mode mode = GET_MODE (dest);
+   unsigned bitsize = GET_MODE_BITSIZE (mode).to_constant ();
+   rtx shift_bits = GEN_INT (bitsize - 1);
+-  rtx xmode_x = riscv_extend_to_xmode_reg (x, mode, SIGN_EXTEND);
+-  rtx xmode_y = riscv_extend_to_xmode_reg (y, mode, SIGN_EXTEND);
++  rtx xmode_x = convert_modes (Xmode, mode, x, false);
++  rtx xmode_y = convert_modes (Xmode, mode, y, false);
+   rtx xmode_sum = gen_reg_rtx (Xmode);
+   rtx xmode_dest = gen_reg_rtx (Xmode);
+   rtx xmode_xor_0 = gen_reg_rtx (Xmode);
+@@ -14375,8 +14295,8 @@ void
+ riscv_expand_ussub (rtx dest, rtx x, rtx y)
+ {
+   machine_mode mode = GET_MODE (dest);
+-  rtx xmode_x = riscv_extend_to_xmode_reg (x, mode, ZERO_EXTEND);
+-  rtx xmode_y = riscv_extend_to_xmode_reg (y, mode, ZERO_EXTEND);
++  rtx xmode_x = convert_modes (Xmode, mode, x, true);
++  rtx xmode_y = convert_modes (Xmode, mode, y, true);
+   rtx xmode_lt = gen_reg_rtx (Xmode);
+   rtx xmode_minus = gen_reg_rtx (Xmode);
+   rtx xmode_dest = gen_reg_rtx (Xmode);
+@@ -14423,8 +14343,8 @@ riscv_expand_sssub (rtx dest, rtx x, rtx y)
+   machine_mode mode = GET_MODE (dest);
+   unsigned bitsize = GET_MODE_BITSIZE (mode).to_constant ();
+   rtx shift_bits = GEN_INT (bitsize - 1);
+-  rtx xmode_x = riscv_extend_to_xmode_reg (x, mode, SIGN_EXTEND);
+-  rtx xmode_y = riscv_extend_to_xmode_reg (y, mode, SIGN_EXTEND);
++  rtx xmode_x = convert_modes (Xmode, mode, x, false);
++  rtx xmode_y = convert_modes (Xmode, mode, y, false);
+   rtx xmode_minus = gen_reg_rtx (Xmode);
+   rtx xmode_xor_0 = gen_reg_rtx (Xmode);
+   rtx xmode_xor_1 = gen_reg_rtx (Xmode);
+@@ -14519,8 +14439,8 @@ riscv_expand_non_xmode_usmul (rtx dest, rtx x, rtx y)
+ 
+   gcc_assert (mode != Xmode);
+ 
+-  rtx xmode_x = riscv_extend_to_xmode_reg (x, mode, ZERO_EXTEND);
+-  rtx xmode_y = riscv_extend_to_xmode_reg (y, mode, ZERO_EXTEND);
++  rtx xmode_x = convert_modes (Xmode, mode, x, true);
++  rtx xmode_y = convert_modes (Xmode, mode, y, true);
+   rtx xmode_mul = gen_reg_rtx (Xmode);
+   rtx mul_max = gen_reg_rtx (Xmode);
+   rtx overflow_p = gen_reg_rtx (Xmode);
+@@ -14616,7 +14536,7 @@ riscv_expand_sstrunc (rtx dest, rtx src)
+   rtx xmode_narrow_min = gen_reg_rtx (Xmode);
+   rtx xmode_lt = gen_reg_rtx (Xmode);
+   rtx xmode_gt = gen_reg_rtx (Xmode);
+-  rtx xmode_src = riscv_extend_to_xmode_reg (src, GET_MODE (src), SIGN_EXTEND);
++  rtx xmode_src = convert_modes (Xmode, GET_MODE (src), src, false);
+   rtx xmode_dest = gen_reg_rtx (Xmode);
+   rtx xmode_mask = gen_reg_rtx (Xmode);
+   rtx xmode_sat = gen_reg_rtx (Xmode);
