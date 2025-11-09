@@ -14,7 +14,7 @@ index f811a4e40ca7..87e151232156 100644
  (define_predicate "branch_on_bit_operand"
    (and (match_code "const_int")
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index 1ec15da2e77e..54842bbb84f0 100644
+index 1ec15da2e77e..f8bac2cf178b 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
 @@ -1880,33 +1880,42 @@ (define_expand "zero_extendsidi2"
@@ -30,10 +30,10 @@ index 1ec15da2e77e..54842bbb84f0 100644
        DONE;
      }
 +
-+  /* If the source is a register and we do not have ZBA or similar
++  /* If the source is a register and we do not have ZBB or similar
 +     extensions with similar capabilities, then emit the two
 +     shifts now.  */
-+  if (!TARGET_ZBA && !TARGET_XTHEADBB
++  if (!TARGET_ZBB && !TARGET_XTHEADBB
 +      && !TARGET_XTHEADMEMIDX && !TARGET_XANDESPERF
 +      && register_operand (operands[1], SImode))
 +    {
@@ -54,10 +54,7 @@ index 1ec15da2e77e..54842bbb84f0 100644
 -  [(set (match_operand:DI     0 "register_operand"     "=r,r")
 -	(zero_extend:DI
 -	    (match_operand:SI 1 "nonimmediate_operand" " r,m")))]
-+(define_insn "*zero_extendsidi2_internal"
-+  [(set (match_operand:DI     0 "register_operand"     "=r")
-+	(zero_extend:DI (match_operand:SI 1 "memory_operand" "m")))]
-   "TARGET_64BIT && !TARGET_ZBA && !TARGET_XTHEADBB && !TARGET_XTHEADMEMIDX
+-  "TARGET_64BIT && !TARGET_ZBA && !TARGET_XTHEADBB && !TARGET_XTHEADMEMIDX
 -   && !TARGET_XANDESPERF
 -   && !(REG_P (operands[1]) && VL_REG_P (REGNO (operands[1])))"
 -  "@
@@ -72,6 +69,10 @@ index 1ec15da2e77e..54842bbb84f0 100644
 -	(lshiftrt:DI (match_dup 0) (const_int 32)))]
 -  { operands[1] = gen_lowpart (DImode, operands[1]); }
 -  [(set_attr "move_type" "shift_shift,load")
++(define_insn "*zero_extendsidi2_internal"
++  [(set (match_operand:DI     0 "register_operand"     "=r")
++	(zero_extend:DI (match_operand:SI 1 "memory_operand" "m")))]
++  "TARGET_64BIT && !TARGET_ZBB && !TARGET_XTHEADBB && !TARGET_XTHEADMEMIDX
 +   && !TARGET_XANDESPERF"
 +  "lwu\t%0,%1"
 +  [(set_attr "move_type" "load")
@@ -98,7 +99,7 @@ index 1ec15da2e77e..54842bbb84f0 100644
 -  [(set (match_operand:GPR    0 "register_operand"     "=r,r")
 -	(zero_extend:GPR
 -	    (match_operand:HI 1 "nonimmediate_operand" " r,m")))]
-+  /* If the source is a register and we do not have ZBA or similar
++  /* If the source is a register and we do not have ZBB or similar
 +     extensions with similar capabilities, then emit the two
 +     shifts now.  */
 +  if (!TARGET_ZBA && !TARGET_XTHEADBB
@@ -143,6 +144,15 @@ index 1ec15da2e77e..54842bbb84f0 100644
     (set_attr "type" "load")
     (set_attr "mode" "<GPR:MODE>")])
  
+@@ -3182,7 +3206,7 @@ (define_insn_and_split "zero_extendsidi2_shifted"
+ 			   (match_operand:QI 2 "immediate_operand" "I"))
+ 		(match_operand 3 "immediate_operand" "")))
+    (clobber (match_scratch:DI 4 "=&r"))]
+-  "TARGET_64BIT && !TARGET_ZBA
++  "TARGET_64BIT && !TARGET_ZBB
+    && ((INTVAL (operands[3]) >> INTVAL (operands[2])) == 0xffffffff)"
+   "#"
+   "&& reload_completed"
 diff --git a/gcc/testsuite/gcc.target/riscv/shift-shift-6.c b/gcc/testsuite/gcc.target/riscv/shift-shift-6.c
 new file mode 100644
 index 000000000000..083f5c4688c3
