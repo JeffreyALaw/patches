@@ -102,7 +102,7 @@ index 1ec15da2e77e..f8bac2cf178b 100644
 +  /* If the source is a register and we do not have ZBB or similar
 +     extensions with similar capabilities, then emit the two
 +     shifts now.  */
-+  if (!TARGET_ZBA && !TARGET_XTHEADBB
++  if (!TARGET_ZBB && !TARGET_XTHEADBB
 +      && !TARGET_XTHEADMEMIDX && !TARGET_XANDESPERF
 +      && register_operand (operands[1], HImode))
 +    {
