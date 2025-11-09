@@ -1,3 +1,16 @@
+diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
+index 166ddd9db9e6..1b9f130633e2 100644
+--- a/gcc/config/riscv/bitmanip.md
++++ b/gcc/config/riscv/bitmanip.md
+@@ -22,7 +22,7 @@
+ (define_insn "*zero_extendsidi2_bitmanip"
+   [(set (match_operand:DI 0 "register_operand" "=r,r")
+ 	(zero_extend:DI (match_operand:SI 1 "nonimmediate_operand" "r,m")))]
+-  "TARGET_64BIT && TARGET_ZBA && !TARGET_XTHEADMEMIDX"
++  "TARGET_64BIT && TARGET_ZBB && !TARGET_XTHEADMEMIDX"
+   "@
+    zext.w\t%0,%1
+    lwu\t%0,%1"
 diff --git a/gcc/config/riscv/predicates.md b/gcc/config/riscv/predicates.md
 index f811a4e40ca7..87e151232156 100644
 --- a/gcc/config/riscv/predicates.md
@@ -14,7 +27,7 @@ index f811a4e40ca7..87e151232156 100644
  (define_predicate "branch_on_bit_operand"
    (and (match_code "const_int")
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index 1ec15da2e77e..f8bac2cf178b 100644
+index 1ec15da2e77e..75ae6d2e0e2c 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
 @@ -1880,33 +1880,42 @@ (define_expand "zero_extendsidi2"
@@ -153,6 +166,17 @@ index 1ec15da2e77e..f8bac2cf178b 100644
     && ((INTVAL (operands[3]) >> INTVAL (operands[2])) == 0xffffffff)"
    "#"
    "&& reload_completed"
+diff --git a/gcc/testsuite/gcc.target/riscv/packh32.c b/gcc/testsuite/gcc.target/riscv/packh32.c
+index 803224189d50..cdcdee70d2e4 100644
+--- a/gcc/testsuite/gcc.target/riscv/packh32.c
++++ b/gcc/testsuite/gcc.target/riscv/packh32.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-O2 -march=rv32gc_zbkb -mabi=ilp32" } */
++/* { dg-options "-O2 -march=rv32gc_zbb_zbkb -mabi=ilp32" } */
+ /* { dg-skip-if "" { *-*-* } { "-g" "-flto" "-O0" } } */
+ 
+ #include <stdint-gcc.h>
 diff --git a/gcc/testsuite/gcc.target/riscv/shift-shift-6.c b/gcc/testsuite/gcc.target/riscv/shift-shift-6.c
 new file mode 100644
 index 000000000000..083f5c4688c3
@@ -195,3 +219,14 @@ index 000000000000..3ecd9ebdc39c
 +
 +/* { dg-final { scan-assembler-times "slli" 1 } } */
 +/* { dg-final { scan-assembler-times "srli" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/zbs-zext.c b/gcc/testsuite/gcc.target/riscv/zbs-zext.c
+index 5773b15d2987..335e4ca25ade 100644
+--- a/gcc/testsuite/gcc.target/riscv/zbs-zext.c
++++ b/gcc/testsuite/gcc.target/riscv/zbs-zext.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-march=rv64gc_zbs -mabi=lp64" } */
++/* { dg-options "-march=rv64gc_zbb_zbs -mabi=lp64" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-Og" "-O1" } } */
+ typedef unsigned long uint64_t;
+ typedef unsigned int uint32_t;
