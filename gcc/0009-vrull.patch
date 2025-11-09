@@ -1,0 +1,187 @@
+diff --git a/gcc/config/riscv/predicates.md b/gcc/config/riscv/predicates.md
+index f811a4e40ca7..87e151232156 100644
+--- a/gcc/config/riscv/predicates.md
++++ b/gcc/config/riscv/predicates.md
+@@ -231,6 +231,10 @@ (define_predicate "zcmp_mv_sreg_operand"
+                     : IN_RANGE (REGNO (op), S0_REGNUM, S1_REGNUM)
+                     || IN_RANGE (REGNO (op), S2_REGNUM, S7_REGNUM)")))
+ 
++(define_predicate "dimode_shift_operand"
++  (and (match_code "const_int")
++       (match_test "IN_RANGE (INTVAL (op), 1, GET_MODE_BITSIZE (DImode) - 1)")))
++
+ ;; Only use branch-on-bit sequences when the mask is not an ANDI immediate.
+ (define_predicate "branch_on_bit_operand"
+   (and (match_code "const_int")
+diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
+index 1ec15da2e77e..54842bbb84f0 100644
+--- a/gcc/config/riscv/riscv.md
++++ b/gcc/config/riscv/riscv.md
+@@ -1880,33 +1880,42 @@ (define_expand "zero_extendsidi2"
+ 	(zero_extend:DI (match_operand:SI 1 "nonimmediate_operand")))]
+   "TARGET_64BIT"
+ {
++  /* If the source is a suitably extended subreg, then this is just
++     a simple move.  */
+   if (SUBREG_P (operands[1]) && SUBREG_PROMOTED_VAR_P (operands[1])
+       && SUBREG_PROMOTED_UNSIGNED_P (operands[1]))
+     {
+       emit_insn (gen_movdi (operands[0], SUBREG_REG (operands[1])));
+       DONE;
+     }
++
++  /* If the source is a register and we do not have ZBA or similar
++     extensions with similar capabilities, then emit the two
++     shifts now.  */
++  if (!TARGET_ZBA && !TARGET_XTHEADBB
++      && !TARGET_XTHEADMEMIDX && !TARGET_XANDESPERF
++      && register_operand (operands[1], SImode))
++    {
++      /* Intermediate register.  */
++      rtx ireg = gen_reg_rtx (DImode);
++
++      operands[1] = gen_lowpart (DImode, operands[1]);
++      rtx shiftval = GEN_INT (32);
++      rtx t = gen_rtx_ASHIFT (DImode, operands[1], shiftval);
++      emit_move_insn (ireg, t);
++      t = gen_rtx_LSHIFTRT (DImode, ireg, shiftval);
++      emit_move_insn (operands[0], t);
++      DONE;
++    }
+ })
+ 
+-(define_insn_and_split "*zero_extendsidi2_internal"
+-  [(set (match_operand:DI     0 "register_operand"     "=r,r")
+-	(zero_extend:DI
+-	    (match_operand:SI 1 "nonimmediate_operand" " r,m")))]
++(define_insn "*zero_extendsidi2_internal"
++  [(set (match_operand:DI     0 "register_operand"     "=r")
++	(zero_extend:DI (match_operand:SI 1 "memory_operand" "m")))]
+   "TARGET_64BIT && !TARGET_ZBA && !TARGET_XTHEADBB && !TARGET_XTHEADMEMIDX
+-   && !TARGET_XANDESPERF
+-   && !(REG_P (operands[1]) && VL_REG_P (REGNO (operands[1])))"
+-  "@
+-   #
+-   lwu\t%0,%1"
+-  "&& reload_completed
+-   && REG_P (operands[1])
+-   && !paradoxical_subreg_p (operands[0])"
+-  [(set (match_dup 0)
+-	(ashift:DI (match_dup 1) (const_int 32)))
+-   (set (match_dup 0)
+-	(lshiftrt:DI (match_dup 0) (const_int 32)))]
+-  { operands[1] = gen_lowpart (DImode, operands[1]); }
+-  [(set_attr "move_type" "shift_shift,load")
++   && !TARGET_XANDESPERF"
++  "lwu\t%0,%1"
++  [(set_attr "move_type" "load")
+    (set_attr "type" "load")
+    (set_attr "mode" "DI")])
+ 
+@@ -1914,29 +1923,44 @@ (define_expand "zero_extendhi<GPR:mode>2"
+   [(set (match_operand:GPR    0 "register_operand")
+ 	(zero_extend:GPR
+ 	    (match_operand:HI 1 "nonimmediate_operand")))]
+-  "")
++  ""
++{
++  /* If the source is a suitably extended subreg, then this is just
++     a simple move.  */
++  if (SUBREG_P (operands[1]) && SUBREG_PROMOTED_VAR_P (operands[1])
++      && SUBREG_PROMOTED_UNSIGNED_P (operands[1]))
++    {
++      emit_insn (gen_mov<GPR:mode> (operands[0], SUBREG_REG (operands[1])));
++      DONE;
++    }
+ 
+-(define_insn_and_split "*zero_extendhi<GPR:mode>2"
+-  [(set (match_operand:GPR    0 "register_operand"     "=r,r")
+-	(zero_extend:GPR
+-	    (match_operand:HI 1 "nonimmediate_operand" " r,m")))]
++  /* If the source is a register and we do not have ZBA or similar
++     extensions with similar capabilities, then emit the two
++     shifts now.  */
++  if (!TARGET_ZBA && !TARGET_XTHEADBB
++      && !TARGET_XTHEADMEMIDX && !TARGET_XANDESPERF
++      && register_operand (operands[1], HImode))
++    {
++      /* Intermediate register.  */
++      rtx ireg = gen_reg_rtx (<GPR:MODE>mode);
++
++      operands[1] = gen_lowpart (<GPR:MODE>mode, operands[1]);
++      rtx shiftval = GEN_INT (GET_MODE_BITSIZE (<GPR:MODE>mode) - 16);
++      rtx t = gen_rtx_ASHIFT (<GPR:MODE>mode, operands[1], shiftval);
++      emit_move_insn (ireg, t);
++      t = gen_rtx_LSHIFTRT (<GPR:MODE>mode, ireg, shiftval);
++      emit_move_insn (operands[0], t);
++      DONE;
++    }
++})
++
++(define_insn "*zero_extendhi<GPR:mode>2"
++  [(set (match_operand:GPR    0 "register_operand"     "=r")
++	(zero_extend:GPR (match_operand:HI 1 "memory_operand" "m")))]
+   "!TARGET_ZBB && !TARGET_XTHEADBB && !TARGET_XTHEADMEMIDX
+    && !TARGET_XANDESPERF"
+-  "@
+-   #
+-   lhu\t%0,%1"
+-  "&& reload_completed
+-   && REG_P (operands[1])
+-   && !paradoxical_subreg_p (operands[0])"
+-  [(set (match_dup 0)
+-	(ashift:GPR (match_dup 1) (match_dup 2)))
+-   (set (match_dup 0)
+-	(lshiftrt:GPR (match_dup 0) (match_dup 2)))]
+-  {
+-    operands[1] = gen_lowpart (<GPR:MODE>mode, operands[1]);
+-    operands[2] = GEN_INT(GET_MODE_BITSIZE(<GPR:MODE>mode) - 16);
+-  }
+-  [(set_attr "move_type" "shift_shift,load")
++  "lhu\t%0,%1"
++  [(set_attr "move_type" "load")
+    (set_attr "type" "load")
+    (set_attr "mode" "<GPR:MODE>")])
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/shift-shift-6.c b/gcc/testsuite/gcc.target/riscv/shift-shift-6.c
+new file mode 100644
+index 000000000000..083f5c4688c3
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/shift-shift-6.c
+@@ -0,0 +1,14 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc -mabi=lp64" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++/* Test for zero_extendsidi2_shifted handling arbitrary mask widths
++   (not just 32 bits). */
++unsigned sub1(unsigned a, unsigned b)
++{
++  b = (b << 2) >> 2;
++  return a + (b << 1);
++}
++
++/* { dg-final { scan-assembler-times "slli" 1 } } */
++/* { dg-final { scan-assembler-times "srli" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/shift-shift-7.c b/gcc/testsuite/gcc.target/riscv/shift-shift-7.c
+new file mode 100644
+index 000000000000..3ecd9ebdc39c
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/shift-shift-7.c
+@@ -0,0 +1,16 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc -mabi=lp64" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" } } */
++
++/* Test for zero_extendsidi2_shifted handling arbitrary mask widths
++   (not just 32 bits). */
++unsigned long f(unsigned int a, unsigned long b)
++{
++  a = a << 1;
++  unsigned long c = (unsigned long) a;
++  c = b + (c<<4);
++  return c;
++}
++
++/* { dg-final { scan-assembler-times "slli" 1 } } */
++/* { dg-final { scan-assembler-times "srli" 1 } } */
