@@ -1,5 +1,5 @@
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 7d723fc4d695..d21140abe8e7 100644
+index 7d723fc4d695..7d53d3ac0104 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
 @@ -14189,6 +14189,7 @@ riscv_extend_to_xmode_reg (rtx x, machine_mode mode, enum rtx_code rcode)
@@ -10,14 +10,18 @@ index 7d723fc4d695..d21140abe8e7 100644
    rtx xmode_reg = gen_reg_rtx (Xmode);
  
    if (CONST_INT_P (x))
-@@ -14219,7 +14220,9 @@ riscv_extend_to_xmode_reg (rtx x, machine_mode mode, enum rtx_code rcode)
+@@ -14219,9 +14220,13 @@ riscv_extend_to_xmode_reg (rtx x, machine_mode mode, enum rtx_code rcode)
    else if (mode == Xmode)
      return x;
    else
 -    riscv_emit_unary (rcode, xmode_reg, x);
 +#endif
-+  rtx x = convert_modes (Xmode, mode, x, rcode == ZERO_EXTEND);
-+  return force_reg (Xmode, x);
++  rtx t = convert_modes (Xmode, mode, x, rcode == ZERO_EXTEND);
++  return force_reg (Xmode, t);
  
++#if 0
    return xmode_reg;
++#endif
  }
+ 
+ /* Implements the unsigned saturation add standard name usadd for int mode.
