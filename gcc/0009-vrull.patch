@@ -210,7 +210,7 @@ index 1ec15da2e77e..75ae6d2e0e2c 100644
    "#"
    "&& reload_completed"
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
-index 67ec92a42878..e01fce0b6050 100644
+index 67ec92a42878..1e1901a16d58 100644
 --- a/gcc/ext-dce.cc
 +++ b/gcc/ext-dce.cc
 @@ -384,11 +384,66 @@ ext_dce_process_sets (rtx_insn *insn, rtx obj, bitmap live_tmp)
@@ -300,7 +300,7 @@ index 67ec92a42878..e01fce0b6050 100644
  
  		  /* Stripping the extension here just seems wrong on multiple
  		     levels.  It's source side handling, so it seems like it
-@@ -725,6 +780,49 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj,
+@@ -725,6 +780,51 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj,
  		  code = GET_CODE (src);
  		}
  
@@ -330,6 +330,8 @@ index 67ec92a42878..e01fce0b6050 100644
 +		      /* The destination of the left shift must be the
 +			 source of the right shift.  */
 +		      && SET_DEST (prev_set) == XEXP (src, 0)
++		      && GET_CODE (SET_SRC (prev_set)) == ASHIFT
++		      && CONST_INT_P (XEXP (SET_SRC (prev_set), 1))
 +		      /* The counts must match.  */
 +		      && (INTVAL (XEXP (src, 1))
 +			  == INTVAL (XEXP (SET_SRC (prev_set), 1))))
