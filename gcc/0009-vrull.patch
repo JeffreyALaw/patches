@@ -1,5 +1,5 @@
 diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
-index 166ddd9db9e6..1b9f130633e2 100644
+index 166ddd9db9e6..450376b12d2a 100644
 --- a/gcc/config/riscv/bitmanip.md
 +++ b/gcc/config/riscv/bitmanip.md
 @@ -22,7 +22,7 @@
@@ -11,6 +11,24 @@ index 166ddd9db9e6..1b9f130633e2 100644
    "@
     zext.w\t%0,%1
     lwu\t%0,%1"
+@@ -1085,7 +1085,7 @@ (define_split
+   operands[5] = GEN_INT (~topbit);
+ })
+ 
+-;; If we have the ZBA extension, then we can clear the upper half of a 64
++;; If we have the ZBB extension, then we can clear the upper half of a 64
+ ;; bit object with a zext.w.  So if we have AND where the constant would
+ ;; require synthesis of two or more instructions, but 32->64 sign extension
+ ;; of the constant is a simm12, then we can use zext.w+andi.  If the adjusted
+@@ -1098,7 +1098,7 @@ (define_insn_and_split ""
+ 	(and:DI (match_operand:DI 1 "register_operand" "r")
+ 		(match_operand 2 "const_int_operand" "n")))]
+   "TARGET_64BIT
+-   && TARGET_ZBA
++   && TARGET_ZBB
+    && !paradoxical_subreg_p (operands[1])
+    /* Only profitable if synthesis takes more than one insn.  */
+    && riscv_const_insns (operands[2], false) != 1
 diff --git a/gcc/config/riscv/predicates.md b/gcc/config/riscv/predicates.md
 index f811a4e40ca7..87e151232156 100644
 --- a/gcc/config/riscv/predicates.md
@@ -26,6 +44,31 @@ index f811a4e40ca7..87e151232156 100644
  ;; Only use branch-on-bit sequences when the mask is not an ANDI immediate.
  (define_predicate "branch_on_bit_operand"
    (and (match_code "const_int")
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index 2b2fada592f0..1991b7cf212b 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -4210,6 +4210,20 @@ riscv_rtx_costs (rtx x, machine_mode mode, int outer_code, int opno ATTRIBUTE_UN
+ 	    *total = COSTS_N_INSNS (1);
+ 	    return true;
+ 	}
++
++      /* zbkb pack patterns.  */
++      if (TARGET_ZBKB
++	  && CONST_INT_P (XEXP (x, 1))
++	  && INTVAL (XEXP (x, 1)) == 0xff00
++	  && GET_CODE (XEXP (x, 0)) == ASHIFT
++	  && CONST_INT_P (XEXP (XEXP (x, 0), 1))
++	  && INTVAL (XEXP (XEXP (x, 0), 1)) == 8
++	  && register_operand (XEXP (XEXP (x, 0), 0), word_mode))
++	{
++	  *total = COSTS_N_INSNS (1);
++	  return true;
++	}
++
+       /* bclri pattern for zbs.  */
+       if (TARGET_ZBS
+ 	  && not_single_bit_mask_operand (XEXP (x, 1), VOIDmode))
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
 index 1ec15da2e77e..75ae6d2e0e2c 100644
 --- a/gcc/config/riscv/riscv.md
@@ -177,6 +220,28 @@ index 803224189d50..cdcdee70d2e4 100644
  /* { dg-skip-if "" { *-*-* } { "-g" "-flto" "-O0" } } */
  
  #include <stdint-gcc.h>
+diff --git a/gcc/testsuite/gcc.target/riscv/packw.c b/gcc/testsuite/gcc.target/riscv/packw.c
+index c178738a43b7..a4b7e0122d20 100644
+--- a/gcc/testsuite/gcc.target/riscv/packw.c
++++ b/gcc/testsuite/gcc.target/riscv/packw.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-O2 -march=rv64gc_zbkb -mabi=lp64" } */
++/* { dg-options "-O2 -march=rv64gc_zbb_zbkb -mabi=lp64" } */
+ /* { dg-skip-if "" { *-*-* } { "-g" "-flto" "-O0" } } */
+ #include <stdint-gcc.h>
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/pr106602-rv64i_zba.c b/gcc/testsuite/gcc.target/riscv/pr106602-rv64i_zba.c
+index 23b9f1e60f63..425abe27d9ad 100644
+--- a/gcc/testsuite/gcc.target/riscv/pr106602-rv64i_zba.c
++++ b/gcc/testsuite/gcc.target/riscv/pr106602-rv64i_zba.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile { target { riscv64*-*-* } } } */
+-/* { dg-options "-O2 -march=rv64i_zba -mabi=lp64" } */
++/* { dg-options "-O2 -march=rv64i_zba_zbb -mabi=lp64" } */
+ 
+ unsigned long
+ foo2 (unsigned long a)
 diff --git a/gcc/testsuite/gcc.target/riscv/shift-shift-6.c b/gcc/testsuite/gcc.target/riscv/shift-shift-6.c
 new file mode 100644
 index 000000000000..083f5c4688c3
@@ -219,6 +284,62 @@ index 000000000000..3ecd9ebdc39c
 +
 +/* { dg-final { scan-assembler-times "slli" 1 } } */
 +/* { dg-final { scan-assembler-times "srli" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/slt-1.c b/gcc/testsuite/gcc.target/riscv/slt-1.c
+index 29a640660810..7a1eaf51f43d 100644
+--- a/gcc/testsuite/gcc.target/riscv/slt-1.c
++++ b/gcc/testsuite/gcc.target/riscv/slt-1.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv64gc -mabi=lp64d" } */
+-/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" "-Os" "-Oz" } } */
+ 
+ #include <stdint.h>
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/zba-adduw.c b/gcc/testsuite/gcc.target/riscv/zba-adduw.c
+index a15ad7f9a55e..de7a9293acd2 100644
+--- a/gcc/testsuite/gcc.target/riscv/zba-adduw.c
++++ b/gcc/testsuite/gcc.target/riscv/zba-adduw.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-march=rv64gc_zba_zbs -mabi=lp64" } */
++/* { dg-options "-march=rv64gc_zba_zbb_zbs -mabi=lp64" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" } } */
+ 
+ int foo(int n, unsigned char *arr, unsigned y){
+diff --git a/gcc/testsuite/gcc.target/riscv/zba-shNadd-04.c b/gcc/testsuite/gcc.target/riscv/zba-shNadd-04.c
+index 48e225d3f1e7..ca80e874e8d1 100644
+--- a/gcc/testsuite/gcc.target/riscv/zba-shNadd-04.c
++++ b/gcc/testsuite/gcc.target/riscv/zba-shNadd-04.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-march=rv64gc_zba -mabi=lp64" } */
++/* { dg-options "-march=rv64gc_zba_zbb -mabi=lp64" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
+ 
+ long long sub1(unsigned long long a, unsigned long long b)
+diff --git a/gcc/testsuite/gcc.target/riscv/zba-slliuw.c b/gcc/testsuite/gcc.target/riscv/zba-slliuw.c
+index 69914db95a2c..1e100b555c2e 100644
+--- a/gcc/testsuite/gcc.target/riscv/zba-slliuw.c
++++ b/gcc/testsuite/gcc.target/riscv/zba-slliuw.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-march=rv64gc_zba_zbs -mabi=lp64" } */
++/* { dg-options "-march=rv64gc_zba_zbb_zbs -mabi=lp64" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
+ 
+ long
+diff --git a/gcc/testsuite/gcc.target/riscv/zba-zextw.c b/gcc/testsuite/gcc.target/riscv/zba-zextw.c
+index 7da2a943b85b..737333785e28 100644
+--- a/gcc/testsuite/gcc.target/riscv/zba-zextw.c
++++ b/gcc/testsuite/gcc.target/riscv/zba-zextw.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-march=rv64gc_zba_zbs -mabi=lp64" } */
++/* { dg-options "-march=rv64gc_zbb_zbs -mabi=lp64" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" } } */
+ 
+ long
 diff --git a/gcc/testsuite/gcc.target/riscv/zbs-zext.c b/gcc/testsuite/gcc.target/riscv/zbs-zext.c
 index 5773b15d2987..335e4ca25ade 100644
 --- a/gcc/testsuite/gcc.target/riscv/zbs-zext.c
