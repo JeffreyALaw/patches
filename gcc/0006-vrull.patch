@@ -1,0 +1,399 @@
+diff --git a/gcc/config/riscv/predicates.md b/gcc/config/riscv/predicates.md
+index f811a4e40ca7..87e151232156 100644
+--- a/gcc/config/riscv/predicates.md
++++ b/gcc/config/riscv/predicates.md
+@@ -231,6 +231,10 @@ (define_predicate "zcmp_mv_sreg_operand"
+                     : IN_RANGE (REGNO (op), S0_REGNUM, S1_REGNUM)
+                     || IN_RANGE (REGNO (op), S2_REGNUM, S7_REGNUM)")))
+ 
++(define_predicate "dimode_shift_operand"
++  (and (match_code "const_int")
++       (match_test "IN_RANGE (INTVAL (op), 1, GET_MODE_BITSIZE (DImode) - 1)")))
++
+ ;; Only use branch-on-bit sequences when the mask is not an ANDI immediate.
+ (define_predicate "branch_on_bit_operand"
+   (and (match_code "const_int")
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index 2b2fada592f0..70a9bbe12b41 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -4210,6 +4210,7 @@ riscv_rtx_costs (rtx x, machine_mode mode, int outer_code, int opno ATTRIBUTE_UN
+ 	    *total = COSTS_N_INSNS (1);
+ 	    return true;
+ 	}
++
+       /* bclri pattern for zbs.  */
+       if (TARGET_ZBS
+ 	  && not_single_bit_mask_operand (XEXP (x, 1), VOIDmode))
+diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
+index 1ec15da2e77e..74dc625cab1d 100644
+--- a/gcc/config/riscv/riscv.md
++++ b/gcc/config/riscv/riscv.md
+@@ -1880,33 +1880,41 @@ (define_expand "zero_extendsidi2"
+ 	(zero_extend:DI (match_operand:SI 1 "nonimmediate_operand")))]
+   "TARGET_64BIT"
+ {
++  /* If the source is a suitably extended subreg, then this is just
++     a simple move.  */
+   if (SUBREG_P (operands[1]) && SUBREG_PROMOTED_VAR_P (operands[1])
+       && SUBREG_PROMOTED_UNSIGNED_P (operands[1]))
+     {
+       emit_insn (gen_movdi (operands[0], SUBREG_REG (operands[1])));
+       DONE;
+     }
++
++  /* If the source is a register and we do not have ZBA or similar
++     extensions with similar capabilities, then emit the two
++     shifts now.  */
++  if (!TARGET_ZBA && !TARGET_XTHEADBB
++      && !TARGET_XTHEADMEMIDX && !TARGET_XANDESPERF
++      && register_operand (operands[1], SImode))
++    {
++      /* Intermediate register.  */
++      rtx ireg = gen_reg_rtx (DImode);
++      operands[1] = gen_lowpart (DImode, operands[1]);
++      rtx shiftval = GEN_INT (32);
++      rtx t = gen_rtx_ASHIFT (DImode, operands[1], shiftval);
++      emit_move_insn (ireg, t);
++      t = gen_rtx_LSHIFTRT (DImode, ireg, shiftval);
++      rtx_insn *insn = emit_move_insn (operands[0], t);
++      DONE;
++    }
+ })
+ 
+-(define_insn_and_split "*zero_extendsidi2_internal"
+-  [(set (match_operand:DI     0 "register_operand"     "=r,r")
+-	(zero_extend:DI
+-	    (match_operand:SI 1 "nonimmediate_operand" " r,m")))]
++(define_insn "*zero_extendsidi2_internal"
++  [(set (match_operand:DI     0 "register_operand"     "=r")
++	(zero_extend:DI (match_operand:SI 1 "memory_operand" "m")))]
+   "TARGET_64BIT && !TARGET_ZBA && !TARGET_XTHEADBB && !TARGET_XTHEADMEMIDX
+-   && !TARGET_XANDESPERF
+-   && !(REG_P (operands[1]) && VL_REG_P (REGNO (operands[1])))"
+-  "@
+-   #
+-   lwu\t%0,%1"
+-  "&& reload_completed
+-   && REG_P (operands[1])
+-   && !paradoxical_subreg_p (operands[0])"
+-  [(set (match_dup 0)
+-	(ashift:DI (match_dup 1) (const_int 32)))
+-   (set (match_dup 0)
+-	(lshiftrt:DI (match_dup 0) (const_int 32)))]
+-  { operands[1] = gen_lowpart (DImode, operands[1]); }
+-  [(set_attr "move_type" "shift_shift,load")
++   && !TARGET_XANDESPERF"
++  "lwu\t%0,%1"
++  [(set_attr "move_type" "load")
+    (set_attr "type" "load")
+    (set_attr "mode" "DI")])
+ 
+@@ -1914,29 +1922,43 @@ (define_expand "zero_extendhi<GPR:mode>2"
+   [(set (match_operand:GPR    0 "register_operand")
+ 	(zero_extend:GPR
+ 	    (match_operand:HI 1 "nonimmediate_operand")))]
+-  "")
++  ""
++{
++  /* If the source is a suitably extended subreg, then this is just
++     a simple move.  */
++  if (SUBREG_P (operands[1]) && SUBREG_PROMOTED_VAR_P (operands[1])
++      && SUBREG_PROMOTED_UNSIGNED_P (operands[1]))
++    {
++      emit_insn (gen_mov<GPR:mode> (operands[0], SUBREG_REG (operands[1])));
++      DONE;
++    }
+ 
+-(define_insn_and_split "*zero_extendhi<GPR:mode>2"
+-  [(set (match_operand:GPR    0 "register_operand"     "=r,r")
+-	(zero_extend:GPR
+-	    (match_operand:HI 1 "nonimmediate_operand" " r,m")))]
++  /* If the source is a register and we do not have ZBB or similar
++     extensions with similar capabilities, then emit the two
++     shifts now.  */
++  if (!TARGET_ZBB && !TARGET_XTHEADBB
++      && !TARGET_XTHEADMEMIDX && !TARGET_XANDESPERF
++      && register_operand (operands[1], HImode))
++    {
++      /* Intermediate register.  */
++      rtx ireg = gen_reg_rtx (<GPR:MODE>mode);
++      operands[1] = gen_lowpart (<GPR:MODE>mode, operands[1]);
++      rtx shiftval = GEN_INT (GET_MODE_BITSIZE (<GPR:MODE>mode) - 16);
++      rtx t = gen_rtx_ASHIFT (<GPR:MODE>mode, operands[1], shiftval);
++      emit_move_insn (ireg, t);
++      t = gen_rtx_LSHIFTRT (<GPR:MODE>mode, ireg, shiftval);
++      rtx_insn *insn = emit_move_insn (operands[0], t);
++      DONE;
++    }
++})
++
++(define_insn "*zero_extendhi<GPR:mode>2"
++  [(set (match_operand:GPR    0 "register_operand"     "=r")
++	(zero_extend:GPR (match_operand:HI 1 "memory_operand" "m")))]
+   "!TARGET_ZBB && !TARGET_XTHEADBB && !TARGET_XTHEADMEMIDX
+    && !TARGET_XANDESPERF"
+-  "@
+-   #
+-   lhu\t%0,%1"
+-  "&& reload_completed
+-   && REG_P (operands[1])
+-   && !paradoxical_subreg_p (operands[0])"
+-  [(set (match_dup 0)
+-	(ashift:GPR (match_dup 1) (match_dup 2)))
+-   (set (match_dup 0)
+-	(lshiftrt:GPR (match_dup 0) (match_dup 2)))]
+-  {
+-    operands[1] = gen_lowpart (<GPR:MODE>mode, operands[1]);
+-    operands[2] = GEN_INT(GET_MODE_BITSIZE(<GPR:MODE>mode) - 16);
+-  }
+-  [(set_attr "move_type" "shift_shift,load")
++  "lhu\t%0,%1"
++  [(set_attr "move_type" "load")
+    (set_attr "type" "load")
+    (set_attr "mode" "<GPR:MODE>")])
+ 
+diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
+index 67ec92a42878..10034ebaecb6 100644
+--- a/gcc/ext-dce.cc
++++ b/gcc/ext-dce.cc
+@@ -385,10 +385,78 @@ ext_dce_process_sets (rtx_insn *insn, rtx obj, bitmap live_tmp)
+   return skipped_dest;
+ }
+ 
++/* INSN is a right shift and the second insn in a shift pair that is a
++   sign or zero extension (SET is the single set associated with INSN).  
++
++   Replace the source of SET with NEW_SRC which is a source register
++   from NEW_SRC_INSN (the left shift in the pair).  This is effectively
++   the same as the replacement we do for ZERO/SIGN extends on targets
++   that support those insns.  */
++static void
++ext_dce_try_optimize_rshift (rtx_insn *insn, rtx set, rtx new_src, rtx_insn *new_src_insn)
++{
++  /* If the modes are not the same or one is a hard register, then
++     conservatively do nothing.  */
++  if (GET_MODE (SET_SRC (set)) != GET_MODE (new_src)
++      || !REG_P (XEXP (SET_SRC (set), 0))
++      || !REG_P (new_src)
++      || REGNO (XEXP (SET_SRC (set), 0)) < FIRST_PSEUDO_REGISTER
++      || REGNO (new_src) < FIRST_PSEUDO_REGISTER)
++    return;
++
++  if (dump_file)
++    {
++      fprintf (dump_file, "Processing insn:\n");
++      dump_insn_slim (dump_file, insn);
++      fprintf (dump_file, "Trying to simplify pattern:\n");
++      print_rtl_single (dump_file, SET_SRC (set));
++    }
++
++  /* We decided to turn do the optimization but allow it to be rejected for
++     bisection purposes.  */
++  if (!dbg_cnt (::ext_dce))
++    {
++      if (dump_file)
++	fprintf (dump_file, "Rejected due to debug counter.\n");
++      return;
++    }
++
++  /* Replace SET_SRC (set) with NEW_SRC.  This changes the form of INSN, so
++     force rerecognition.  We also need to force DF to rescan INSN.  */
++  SET_SRC (set) = new_src;
++  INSN_CODE (insn) = -1;
++  df_insn_rescan (insn);
++
++  rtx new_pattern = PATTERN (insn);
++  if (dump_file)
++    {
++      fprintf (dump_file, "Successfully transformed to:\n");
++      print_rtl_single (dump_file, new_pattern);
++      fprintf (dump_file, "\n");
++    }
++
++  /* INSN may have a REG_EQUAL note indicating that the value was
++     sign or zero extended.  That note is no longer valid since we've
++     just removed the extension.  Just wipe the notes.  */
++  remove_reg_equal_equiv_notes (insn, false);
++
++  /* If NEW_SRC died in its prior location, then we need to remove the
++     death note and move it to the new location.  */
++  rtx note = find_regno_note (new_src_insn, REG_DEAD, REGNO (new_src));
++  if (note)
++    {
++      remove_note (new_src_insn, note);
++      add_reg_note (insn, REG_DEAD, new_src);
++    }
++}
++
++
+ /* INSN has a sign/zero extended source inside SET that we will
+-   try to turn into a SUBREG.  */
++   try to turn into a SUBREG.  If NEW_SRC is non-null, use that
++   for the new source of INSN's set.  That scenario only happens
++   when we're optimizing a shift pair.  */
+ static void
+-ext_dce_try_optimize_insn (rtx_insn *insn, rtx set)
++ext_dce_try_optimize_extension (rtx_insn *insn, rtx set)
+ {
+   rtx src = SET_SRC (set);
+   rtx inner = XEXP (src, 0);
+@@ -712,7 +780,7 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj,
+ 		  /* DST_MASK could be zero if we had something in the SET
+ 		     that we couldn't handle.  */
+ 		  if (modify && !skipped_dest && (dst_mask & ~src_mask) == 0)
+-		    ext_dce_try_optimize_insn (insn, x);
++		    ext_dce_try_optimize_extension (insn, x);
+ 
+ 		  /* Stripping the extension here just seems wrong on multiple
+ 		     levels.  It's source side handling, so it seems like it
+@@ -725,6 +793,62 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj,
+ 		  code = GET_CODE (src);
+ 		}
+ 
++	      /* Special case for (sub)targets that do not have extension
++		 insns (and thus use shifts).  We want to detect when we have
++		 a shift pair and treat the pair as-if was an extension.
++
++		 Key on the right shift and use (for now) simplistic tests
++		 to find the corresponding left shift.  */
++	      if ((code == LSHIFTRT || code == ASHIFTRT)
++		  && CONST_INT_P (XEXP (src, 1))
++		  && (INTVAL (XEXP (src, 1)) == 56
++		      || INTVAL (XEXP (src, 1)) == 48
++		      || INTVAL (XEXP (src, 1)) == 32))
++		{
++		  /* So we have a right shift that could correspond to
++		     the second in a pair impementing QI, HI or SI -> DI
++		     extension.  See if we can find the left shift.  For
++		     now, just look one real instruction back.  */
++		  rtx_insn *prev_insn = prev_nonnote_nondebug_insn_bb (insn);
++
++		  /* The previous insn must be a left shift by the same
++		     amount.  */
++		  rtx prev_set;
++		  if (prev_insn
++		      && (prev_set = single_set (prev_insn))
++		      /* The destination of the left shift must be the
++			 source of the right shift.  */
++		      && SET_DEST (prev_set) == XEXP (src, 0)
++		      && GET_CODE (SET_SRC (prev_set)) == ASHIFT
++		      && CONST_INT_P (XEXP (SET_SRC (prev_set), 1))
++		      /* The counts must match.  */
++		      && (INTVAL (XEXP (src, 1))
++			  == INTVAL (XEXP (SET_SRC (prev_set), 1))))
++		    {
++		      unsigned HOST_WIDE_INT src_mask = GET_MODE_BITSIZE (GET_MODE (src)).to_constant ();
++		      src_mask -= INTVAL (XEXP (src, 1));
++		      src_mask = (HOST_WIDE_INT_1U << src_mask) - 1;
++
++		      /* DST_MASK has been adjusted for INSN.  We need its original value.  */
++		      unsigned HOST_WIDE_INT tmp_mask = 0;
++		      for (int i = 0; i < 4; i++)
++			if (bitmap_bit_p (live_tmp, 4 * rn + i))
++			  tmp_mask |= mask_array[i];
++		      tmp_mask >>= bit;
++
++		      if (modify && !skipped_dest && (tmp_mask & ~src_mask) == 0)
++			{
++			  ext_dce_try_optimize_rshift (insn, x, XEXP (SET_SRC (prev_set), 0), prev_insn);
++
++			  /* These may not strictly be necessary, but we might as well try and be
++			     as accurate as possible.  The RHS is now a simple REG.  */
++			  dst_mask = src_mask;
++			  src = XEXP (SET_SRC (prev_set), 0);
++			  code = GET_CODE (src);
++			}
++		    }
++		}
++
+ 	      /* Optimization is done at this point.  We just want to make
+ 		 sure everything that should get marked as live is marked
+ 		 from here onward.  */
+diff --git a/gcc/testsuite/gcc.target/riscv/shift-shift-6.c b/gcc/testsuite/gcc.target/riscv/shift-shift-6.c
+new file mode 100644
+index 000000000000..083f5c4688c3
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/shift-shift-6.c
+@@ -0,0 +1,14 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc -mabi=lp64" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++/* Test for zero_extendsidi2_shifted handling arbitrary mask widths
++   (not just 32 bits). */
++unsigned sub1(unsigned a, unsigned b)
++{
++  b = (b << 2) >> 2;
++  return a + (b << 1);
++}
++
++/* { dg-final { scan-assembler-times "slli" 1 } } */
++/* { dg-final { scan-assembler-times "srli" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/shift-shift-7.c b/gcc/testsuite/gcc.target/riscv/shift-shift-7.c
+new file mode 100644
+index 000000000000..3ecd9ebdc39c
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/shift-shift-7.c
+@@ -0,0 +1,16 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc -mabi=lp64" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" } } */
++
++/* Test for zero_extendsidi2_shifted handling arbitrary mask widths
++   (not just 32 bits). */
++unsigned long f(unsigned int a, unsigned long b)
++{
++  a = a << 1;
++  unsigned long c = (unsigned long) a;
++  c = b + (c<<4);
++  return c;
++}
++
++/* { dg-final { scan-assembler-times "slli" 1 } } */
++/* { dg-final { scan-assembler-times "srli" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/slt-1.c b/gcc/testsuite/gcc.target/riscv/slt-1.c
+index 29a640660810..7a1eaf51f43d 100644
+--- a/gcc/testsuite/gcc.target/riscv/slt-1.c
++++ b/gcc/testsuite/gcc.target/riscv/slt-1.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv64gc -mabi=lp64d" } */
+-/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" "-Os" "-Oz" } } */
+ 
+ #include <stdint.h>
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/zba-shNadd-04.c b/gcc/testsuite/gcc.target/riscv/zba-shNadd-04.c
+index 48e225d3f1e7..ca80e874e8d1 100644
+--- a/gcc/testsuite/gcc.target/riscv/zba-shNadd-04.c
++++ b/gcc/testsuite/gcc.target/riscv/zba-shNadd-04.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-march=rv64gc_zba -mabi=lp64" } */
++/* { dg-options "-march=rv64gc_zba_zbb -mabi=lp64" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
+ 
+ long long sub1(unsigned long long a, unsigned long long b)
+diff --git a/gcc/testsuite/gcc.target/riscv/zba-slliuw.c b/gcc/testsuite/gcc.target/riscv/zba-slliuw.c
+index 69914db95a2c..1e100b555c2e 100644
+--- a/gcc/testsuite/gcc.target/riscv/zba-slliuw.c
++++ b/gcc/testsuite/gcc.target/riscv/zba-slliuw.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-march=rv64gc_zba_zbs -mabi=lp64" } */
++/* { dg-options "-march=rv64gc_zba_zbb_zbs -mabi=lp64" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
+ 
+ long
+diff --git a/gcc/testsuite/gcc.target/riscv/zbs-zext.c b/gcc/testsuite/gcc.target/riscv/zbs-zext.c
+index 5773b15d2987..1bebc36c31c8 100644
+--- a/gcc/testsuite/gcc.target/riscv/zbs-zext.c
++++ b/gcc/testsuite/gcc.target/riscv/zbs-zext.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-march=rv64gc_zbs -mabi=lp64" } */
++/* { dg-options "-march=rv64gc_zba_zbs -mabi=lp64" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-Og" "-O1" } } */
+ typedef unsigned long uint64_t;
+ typedef unsigned int uint32_t;
