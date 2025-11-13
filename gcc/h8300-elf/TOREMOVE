@@ -50,12 +50,12 @@ gcc/testsuite/gcc.dg/torture/ftrapv-1.c
 gcc/testsuite/gcc.dg/torture/ftrapv-2.c
 
 # Not enough memory, we end up with overlaps
-gcc.dg/torture/pr60183.c
-gcc.dg/tree-ssa/loop-interchange-1.c
-gcc.dg/tree-ssa/loop-interchange-1b.c
-gcc.dg/tree-ssa/loop-interchange-5.c
-gcc.dg/tree-ssa/loop-interchange-5.c
-gcc.dg/tree-ssa/loop-interchange-6.c
-gcc.dg/tree-ssa/loop-interchange-7.c
-gcc.dg/tree-ssa/loop-interchange-8.c
-gcc.dg/compat
+gcc/testsuite/gcc.dg/torture/pr60183.c
+gcc/testsuite/gcc.dg/tree-ssa/loop-interchange-1.c
+gcc/testsuite/gcc.dg/tree-ssa/loop-interchange-1b.c
+gcc/testsuite/gcc.dg/tree-ssa/loop-interchange-5.c
+gcc/testsuite/gcc.dg/tree-ssa/loop-interchange-5.c
+gcc/testsuite/gcc.dg/tree-ssa/loop-interchange-6.c
+gcc/testsuite/gcc.dg/tree-ssa/loop-interchange-7.c
+gcc/testsuite/gcc.dg/tree-ssa/loop-interchange-8.c
+gcc/testsuite/gcc.dg/compat
