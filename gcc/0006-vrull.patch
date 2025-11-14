@@ -1,5 +1,5 @@
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 5bb557faf657..0c85d5e06093 100644
+index 5bb557faf657..ff68f3d824b6 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
 @@ -3755,8 +3755,7 @@ riscv_legitimize_move (machine_mode mode, rtx dest, rtx src)
@@ -21,23 +21,25 @@ index 5bb557faf657..0c85d5e06093 100644
        emit_insn (gen_extend_insn (temp_reg, src, word_mode, mode,
  				  zero_extend_p));
        riscv_emit_move (dest, gen_lowpart (mode, temp_reg));
-@@ -3857,9 +3858,7 @@ riscv_legitimize_move (machine_mode mode, rtx dest, rtx src)
+@@ -3857,9 +3858,8 @@ riscv_legitimize_move (machine_mode mode, rtx dest, rtx src)
      {
        rtx mask = force_reg (word_mode, gen_int_mode (-65536, word_mode));
        rtx temp = gen_reg_rtx (word_mode);
 -      emit_insn (gen_extend_insn (temp,
 -				  gen_lowpart (HImode, src),
 -				  word_mode, HImode, 1));
-+      temp = convert_modes (word_mode, HImode, gen_lowpart (HImode, src), true);
++      temp = convert_modes (word_mode, HImode,
++			    gen_lowpart (HImode, src), true);
        if (word_mode == SImode)
  	emit_insn (gen_iorsi3 (temp, mask, temp));
        else
-@@ -15825,7 +15824,7 @@ synthesize_and (rtx operands[3])
+@@ -15825,7 +15825,8 @@ synthesize_and (rtx operands[3])
        if (tmode != VOIDmode)
  	{
  	  rtx tmp = gen_lowpart (tmode, operands[1]);
 -	  emit_insn (gen_extend_insn (operands[0], tmp, word_mode, tmode, 1));
-+	  operands[0] = convert_modes (word_mode, tmode, tmp, true);
++	  emit_move_insn (operands[0], convert_modes (word_mode, tmode,
++						      tmp, true));
  	  return true;
  	}
      }
