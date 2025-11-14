@@ -1,5 +1,5 @@
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 5bb557faf657..ff68f3d824b6 100644
+index 5bb557faf657..c59ad17eea6f 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
 @@ -3755,8 +3755,7 @@ riscv_legitimize_move (machine_mode mode, rtx dest, rtx src)
@@ -145,7 +145,7 @@ index d179f1f49c89..fced2da2e604 100644
        emit_insn (gen_ashldi3 (t5, t3, GEN_INT (32)));
        emit_insn (gen_ashldi3 (t6, t4, GEN_INT (32)));
 diff --git a/gcc/config/riscv/sync.md b/gcc/config/riscv/sync.md
-index 37f15d816595..d8bd62ec80ca 100644
+index 37f15d816595..01eab1a1ef36 100644
 --- a/gcc/config/riscv/sync.md
 +++ b/gcc/config/riscv/sync.md
 @@ -603,8 +603,7 @@ (define_expand "atomic_compare_and_swap<mode>"
@@ -174,7 +174,7 @@ index 37f15d816595..d8bd62ec80ca 100644
 -  else
 -    emit_move_insn (exp, const0_rtx);
 +  rtx val = convert_modes (SImode, <SHORT:MODE>mode, operands[1], false);
-+  rtx exp = convert_modes (SImode, <SHORT:MODE>mode, operands[2], false);
++  rtx exp = convert_modes (SImode, <SHORT:MODE>mode, operands[3], false);
  
    rtx compare = val;
    if (exp != const0_rtx)
