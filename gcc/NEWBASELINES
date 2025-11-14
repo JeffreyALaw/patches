@@ -4,3 +4,4 @@
 sh3-linux-gnu
 sh3eb-linux-gnu
 microblaze-linux
+iq2000-elf
