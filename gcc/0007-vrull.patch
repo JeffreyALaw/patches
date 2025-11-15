@@ -220,7 +220,7 @@ index 3c994a0cd55e..fbf419dde5a3 100644
        if (TARGET_ZBB
  	  && GET_CODE (XEXP (x, 0)) == NOT)
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index fced2da2e604..15b17573faa1 100644
+index fced2da2e604..de898d707d13 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
 @@ -1851,33 +1851,41 @@ (define_expand "zero_extendsidi2"
@@ -347,11 +347,17 @@ index fced2da2e604..15b17573faa1 100644
     (set_attr "type" "load")
     (set_attr "mode" "<GPR:MODE>")])
  
-@@ -1965,29 +1987,45 @@ (define_insn "*extendsidi2_internal"
- (define_expand "extend<SHORT:mode><SUPERQI:mode>2"
-   [(set (match_operand:SUPERQI 0 "register_operand")
- 	(sign_extend:SUPERQI (match_operand:SHORT 1 "nonimmediate_operand")))]
+@@ -1962,32 +1984,48 @@ (define_insn "*extendsidi2_internal"
+    (set_attr "type" "move,load")
+    (set_attr "mode" "DI")])
+ 
+-(define_expand "extend<SHORT:mode><SUPERQI:mode>2"
+-  [(set (match_operand:SUPERQI 0 "register_operand")
+-	(sign_extend:SUPERQI (match_operand:SHORT 1 "nonimmediate_operand")))]
 -  "")
++(define_expand "extend<SHORT:mode><GPR:mode>2"
++  [(set (match_operand:GPR 0 "register_operand")
++	(sign_extend:GPR (match_operand:SHORT 1 "nonimmediate_operand")))]
 +  ""
 +{
 +  /* If the source is a suitably extended subreg, then this is just
@@ -359,10 +365,12 @@ index fced2da2e604..15b17573faa1 100644
 +  if (SUBREG_P (operands[1]) && SUBREG_PROMOTED_VAR_P (operands[1])
 +      && SUBREG_PROMOTED_SIGNED_P (operands[1]))
 +    {
-+      emit_insn (gen_mov<SUPERQI:mode> (operands[0], SUBREG_REG (operands[1])));
++      emit_insn (gen_mov<GPR:mode> (operands[0], SUBREG_REG (operands[1])));
 +      DONE;
 +    }
-+
+ 
+-(define_insn_and_split "*extend<SHORT:mode><SUPERQI:mode>2"
+-  [(set (match_operand:SUPERQI   0 "register_operand"     "=r,r")
 +  /* If the source is a register and we do not have ZBB or similar
 +     extensions with similar capabilities, then emit the two
 +     shifts now.  */
@@ -371,20 +379,18 @@ index fced2da2e604..15b17573faa1 100644
 +      && register_operand (operands[1], <SHORT:MODE>mode))
 +    {
 +      /* Intermediate register.  */
-+      rtx ireg = gen_reg_rtx (<SUPERQI:MODE>mode);
-+      operands[1] = gen_lowpart (<SUPERQI:MODE>mode, operands[1]);
-+      rtx shiftval = GEN_INT (GET_MODE_BITSIZE (<SUPERQI:MODE>mode)
++      rtx ireg = gen_reg_rtx (<GPR:MODE>mode);
++      operands[1] = gen_lowpart (<GPR:MODE>mode, operands[1]);
++      rtx shiftval = GEN_INT (GET_MODE_BITSIZE (<GPR:MODE>mode)
 +			      - GET_MODE_BITSIZE (<SHORT:MODE>mode));
-+      rtx t = gen_rtx_ASHIFT (<SUPERQI:MODE>mode, operands[1], shiftval);
++      rtx t = gen_rtx_ASHIFT (<GPR:MODE>mode, operands[1], shiftval);
 +      emit_move_insn (ireg, t);
-+      t = gen_rtx_ASHIFTRT (<SUPERQI:MODE>mode, ireg, shiftval);
++      t = gen_rtx_ASHIFTRT (<GPR:MODE>mode, ireg, shiftval);
 +      emit_move_insn (operands[0], t);
 +      DONE;
 +    }
 +})
- 
--(define_insn_and_split "*extend<SHORT:mode><SUPERQI:mode>2"
--  [(set (match_operand:SUPERQI   0 "register_operand"     "=r,r")
++
 +(define_insn "*extend<SHORT:mode><SUPERQI:mode>2"
 +  [(set (match_operand:SUPERQI   0 "register_operand"     "=r")
  	(sign_extend:SUPERQI
