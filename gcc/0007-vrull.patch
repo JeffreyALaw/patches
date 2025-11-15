@@ -1,0 +1,598 @@
+diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
+index 166ddd9db9e6..4e2123a2c03f 100644
+--- a/gcc/config/riscv/bitmanip.md
++++ b/gcc/config/riscv/bitmanip.md
+@@ -645,20 +645,18 @@ (define_insn "*bsetdi_2"
+ ;; shift constant.  With the limited range we know the SImode sign
+ ;; bit is never set, thus we can treat this as zero extending and
+ ;; generate the bsetdi_2 pattern.
+-(define_insn_and_split ""
+-  [(set (match_operand:DI 0 "register_operand" "=r")
++(define_split
++  [(set (match_operand:DI 0 "register_operand")
+ 	(any_extend:DI
+ 	 (ashift:SI (const_int 1)
+ 		    (subreg:QI
+-		      (and:DI (not:DI (match_operand:DI 1 "register_operand" "r"))
++		      (and:DI (not:DI (match_operand:DI 1 "register_operand"))
+ 			      (match_operand 2 "const_int_operand")) 0))))
+-   (clobber (match_scratch:X 3 "=&r"))]
++   (clobber (match_operand:X 3 "register_operand"))]
+   "TARGET_64BIT
+    && TARGET_ZBS
+    && (TARGET_ZBB || TARGET_ZBKB)
+    && (INTVAL (operands[2]) & 0x1f) != 0x1f"
+-  "#"
+-  "&& reload_completed"
+    [(set (match_dup 3) (match_dup 2))
+     (set (match_dup 3) (and:DI (not:DI (match_dup 1)) (match_dup 3)))
+     (set (match_dup 0) (zero_extend:DI
+@@ -666,131 +664,115 @@ (define_insn_and_split ""
+ {
+   operands[4] = gen_lowpart (QImode, operands[3]);
+   operands[2] = GEN_INT (INTVAL (operands[2]) & 0x1f);
+-}
+-  [(set_attr "type" "bitmanip")])
++})
+ 
+-(define_insn_and_split ""
+-  [(set (match_operand:DI 0 "register_operand" "=r")
++(define_split
++  [(set (match_operand:DI 0 "register_operand")
+         (any_extend:DI
+ 	 (ashift:SI (const_int 1)
+ 		    (subreg:QI
+-		      (and:DI (match_operand:DI 1 "register_operand" "r")
++		      (and:DI (match_operand:DI 1 "register_operand")
+ 			      (match_operand 2 "const_int_operand")) 0))))]
+   "TARGET_64BIT
+    && TARGET_ZBS
+    && (INTVAL (operands[2]) & 0x1f) != 0x1f"
+-  "#"
+-  "&& 1"
+   [(set (match_dup 0) (and:DI (match_dup 1) (match_dup 2)))
+    (set (match_dup 0) (zero_extend:DI (ashift:SI
+ 				     (const_int 1)
+ 				     (subreg:QI (match_dup 0) 0))))]
+-  { operands[2] = GEN_INT (INTVAL (operands[2]) & 0x1f); }
+-  [(set_attr "type" "bitmanip")])
++  { operands[2] = GEN_INT (INTVAL (operands[2]) & 0x1f); })
+ 
+ ;; Similarly two patterns for IOR/XOR generating bset/binv to
+ ;; manipulate a bit in a register
+-(define_insn_and_split ""
+-  [(set (match_operand:DI 0 "register_operand" "=r")
++(define_split
++  [(set (match_operand:DI 0 "register_operand")
+ 	(any_or:DI
+ 	  (any_extend:DI
+ 	    (ashift:SI
+ 	      (const_int 1)
+ 	      (subreg:QI
+-		(and:DI (not:DI (match_operand:DI 1 "register_operand" "r"))
++		(and:DI (not:DI (match_operand:DI 1 "register_operand"))
+ 			(match_operand 2 "const_int_operand")) 0)))
+-	  (match_operand:DI 3 "register_operand" "r")))
+-   (clobber (match_scratch:X 4 "=&r"))]
++	  (match_operand:DI 3 "register_operand")))
++   (clobber (match_operand:X 4 "register_operand"))]
+   "TARGET_64BIT
+    && TARGET_ZBS
+    && (TARGET_ZBB || TARGET_ZBKB)
+    && (INTVAL (operands[2]) & 0x1f) != 0x1f"
+-  "#"
+-  "&& reload_completed"
+    [(set (match_dup 4) (match_dup 2))
+     (set (match_dup 4) (and:DI (not:DI (match_dup 1)) (match_dup 4)))
+     (set (match_dup 0) (any_or:DI (ashift:DI (const_int 1) (match_dup 5)) (match_dup 3)))]
+ {
+   operands[5] = gen_lowpart (QImode, operands[4]);
+   operands[2] = GEN_INT (INTVAL (operands[2]) & 0x1f);
+-}
+-  [(set_attr "type" "bitmanip")])
++})
+ 
+-(define_insn_and_split ""
+-  [(set (match_operand:DI 0 "register_operand" "=r")
++(define_split
++  [(set (match_operand:DI 0 "register_operand")
+ 	(any_or:DI
+ 	  (any_extend:DI
+ 	    (ashift:SI
+ 	      (const_int 1)
+ 	      (subreg:QI
+-		(and:DI (match_operand:DI 1 "register_operand" "r")
++		(and:DI (match_operand:DI 1 "register_operand")
+ 			(match_operand 2 "const_int_operand")) 0)))
+-	  (match_operand:DI 3 "register_operand" "r")))
+-   (clobber (match_scratch:X 4 "=&r"))]
++	  (match_operand:DI 3 "register_operand")))
++   (clobber (match_operand:X 4 "register_operand"))]
+   "TARGET_64BIT
+    && TARGET_ZBS
+    && (INTVAL (operands[2]) & 0x1f) != 0x1f"
+-  "#"
+-  "&& reload_completed"
+    [(set (match_dup 4) (and:DI (match_dup 1) (match_dup 2)))
+     (set (match_dup 0) (any_or:DI (ashift:DI (const_int 1) (subreg:QI (match_dup 4) 0)) (match_dup 3)))]
+-  { operands[2] = GEN_INT (INTVAL (operands[2]) & 0x1f); }
+-  [(set_attr "type" "bitmanip")])
++  { operands[2] = GEN_INT (INTVAL (operands[2]) & 0x1f); })
+ 
+ ;; Similarly two patterns for AND generating bclr to
+ ;; manipulate a bit in a register
+-(define_insn_and_split ""
+-  [(set (match_operand:DI 0 "register_operand" "=r")
++(define_split
++  [(set (match_operand:DI 0 "register_operand")
+ 	(and:DI
+ 	  (not:DI
+ 	    (any_extend:DI
+ 	      (ashift:SI
+ 	        (const_int 1)
+ 	        (subreg:QI
+-		  (and:DI (not:DI (match_operand:DI 1 "register_operand" "r"))
++		  (and:DI (not:DI (match_operand:DI 1 "register_operand"))
+ 			  (match_operand 2 "const_int_operand")) 0))))
+-	  (match_operand:DI 3 "register_operand" "r")))
+-   (clobber (match_scratch:X 4 "=&r"))]
++	  (match_operand:DI 3 "register_operand")))
++   (clobber (match_operand:X 4 "register_operand"))]
+   "TARGET_64BIT
+    && TARGET_ZBS
+    && (TARGET_ZBB || TARGET_ZBKB)
+    && (INTVAL (operands[2]) & 0x1f) != 0x1f"
+-  "#"
+-  "&& reload_completed"
+    [(set (match_dup 4) (match_dup 2))
+     (set (match_dup 4) (and:DI (not:DI (match_dup 1)) (match_dup 4)))
+     (set (match_dup 0) (and:DI (rotate:DI (const_int -2) (match_dup 5)) (match_dup 3)))]
+ {
+   operands[5] = gen_lowpart (QImode, operands[4]);
+   operands[2] = GEN_INT (INTVAL (operands[2]) & 0x1f);
+-}
+-  [(set_attr "type" "bitmanip")])
++})
+ 
+ 
+-(define_insn_and_split ""
+-  [(set (match_operand:DI 0 "register_operand" "=r")
++(define_split
++  [(set (match_operand:DI 0 "register_operand")
+ 	(and:DI
+ 	  (not:DI
+ 	    (any_extend:DI
+ 	      (ashift:SI
+ 	        (const_int 1)
+ 	        (subreg:QI
+-		  (and:DI (match_operand:DI 1 "register_operand" "r")
++		  (and:DI (match_operand:DI 1 "register_operand")
+ 			  (match_operand 2 "const_int_operand")) 0))))
+-	  (match_operand:DI 3 "register_operand" "r")))
+-   (clobber (match_scratch:X 4 "=&r"))]
++	  (match_operand:DI 3 "register_operand")))
++   (clobber (match_operand:X 4 "register_operand"))]
+   "TARGET_64BIT
+    && TARGET_ZBS
+    && (INTVAL (operands[2]) & 0x1f) != 0x1f"
+-  "#"
+-  "&& reload_completed"
+    [(set (match_dup 4) (and:DI (match_dup 1) (match_dup 2)))
+     (set (match_dup 0) (and:DI (rotate:DI (const_int -2) (match_dup 5)) (match_dup 3)))]
+ {
+   operands[5] = gen_lowpart (QImode, operands[4]);
+   operands[2] = GEN_INT (INTVAL (operands[2]) & 0x1f);
+-}
+-  [(set_attr "type" "bitmanip")])
++})
+ 
+ (define_insn "*bset<mode>_1_mask"
+   [(set (match_operand:X 0 "register_operand" "=r")
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index 3c994a0cd55e..fbf419dde5a3 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -4256,6 +4256,26 @@ riscv_rtx_costs (rtx x, machine_mode mode, int outer_code, int opno ATTRIBUTE_UN
+       gcc_fallthrough ();
+     case IOR:
+     case XOR:
++      /* packh for zbkb.  Alternate forms haven't shown up as a
++	 costing problem.  Obviously we can add the additional
++	 variants if needed.  */
++      if (TARGET_ZBKB
++	  && GET_CODE (x) == IOR
++	  && GET_CODE (XEXP (x, 0)) == AND
++	  && GET_CODE (XEXP (XEXP (x, 0), 0)) == ASHIFT
++	  && register_operand (XEXP (XEXP (XEXP (x, 0), 0), 0), word_mode)
++	  && CONST_INT_P (XEXP (XEXP (XEXP (x, 0), 0), 1))
++	  && INTVAL (XEXP (XEXP (XEXP (x, 0), 0), 1)) == 8
++	  && CONST_INT_P (XEXP (XEXP (x, 0), 1))
++	  && INTVAL (XEXP (XEXP (x, 0), 1)) == 0xff00
++	  && GET_CODE (XEXP (x, 1)) == ZERO_EXTEND
++	  && GET_MODE (XEXP (x, 1)) == word_mode
++	  && GET_MODE (XEXP (XEXP (x, 1), 0)) == QImode)
++	{
++	  *total = COSTS_N_INSNS (1);
++	  return true;
++	}
++
+       /* orn, andn and xorn pattern for zbb.  */
+       if (TARGET_ZBB
+ 	  && GET_CODE (XEXP (x, 0)) == NOT)
+diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
+index fced2da2e604..15b17573faa1 100644
+--- a/gcc/config/riscv/riscv.md
++++ b/gcc/config/riscv/riscv.md
+@@ -1851,33 +1851,41 @@ (define_expand "zero_extendsidi2"
+ 	(zero_extend:DI (match_operand:SI 1 "nonimmediate_operand")))]
+   "TARGET_64BIT"
+ {
++  /* If the source is a suitably extended subreg, then this is just
++     a simple move.  */
+   if (SUBREG_P (operands[1]) && SUBREG_PROMOTED_VAR_P (operands[1])
+       && SUBREG_PROMOTED_UNSIGNED_P (operands[1]))
+     {
+       emit_insn (gen_movdi (operands[0], SUBREG_REG (operands[1])));
+       DONE;
+     }
++
++  /* If the source is a register and we do not have ZBA or similar
++     extensions with similar capabilities, then emit the two
++     shifts now.  */
++  if (!TARGET_ZBA && !TARGET_XTHEADBB
++      && !TARGET_XTHEADMEMIDX && !TARGET_XANDESPERF
++      && register_operand (operands[1], SImode))
++    {
++      /* Intermediate register.  */
++      rtx ireg = gen_reg_rtx (DImode);
++      operands[1] = gen_lowpart (DImode, operands[1]);
++      rtx shiftval = GEN_INT (32);
++      rtx t = gen_rtx_ASHIFT (DImode, operands[1], shiftval);
++      emit_move_insn (ireg, t);
++      t = gen_rtx_LSHIFTRT (DImode, ireg, shiftval);
++      emit_move_insn (operands[0], t);
++      DONE;
++    }
+ })
+ 
+-(define_insn_and_split "*zero_extendsidi2_internal"
+-  [(set (match_operand:DI     0 "register_operand"     "=r,r")
+-	(zero_extend:DI
+-	    (match_operand:SI 1 "nonimmediate_operand" " r,m")))]
++(define_insn "*zero_extendsidi2_internal"
++  [(set (match_operand:DI     0 "register_operand"     "=r")
++	(zero_extend:DI (match_operand:SI 1 "memory_operand" "m")))]
+   "TARGET_64BIT && !TARGET_ZBA && !TARGET_XTHEADBB && !TARGET_XTHEADMEMIDX
+-   && !TARGET_XANDESPERF
+-   && !(REG_P (operands[1]) && VL_REG_P (REGNO (operands[1])))"
+-  "@
+-   #
+-   lwu\t%0,%1"
+-  "&& reload_completed
+-   && REG_P (operands[1])
+-   && !paradoxical_subreg_p (operands[0])"
+-  [(set (match_dup 0)
+-	(ashift:DI (match_dup 1) (const_int 32)))
+-   (set (match_dup 0)
+-	(lshiftrt:DI (match_dup 0) (const_int 32)))]
+-  { operands[1] = gen_lowpart (DImode, operands[1]); }
+-  [(set_attr "move_type" "shift_shift,load")
++   && !TARGET_XANDESPERF"
++  "lwu\t%0,%1"
++  [(set_attr "move_type" "load")
+    (set_attr "type" "load")
+    (set_attr "mode" "DI")])
+ 
+@@ -1885,29 +1893,43 @@ (define_expand "zero_extendhi<GPR:mode>2"
+   [(set (match_operand:GPR    0 "register_operand")
+ 	(zero_extend:GPR
+ 	    (match_operand:HI 1 "nonimmediate_operand")))]
+-  "")
++  ""
++{
++  /* If the source is a suitably extended subreg, then this is just
++     a simple move.  */
++  if (SUBREG_P (operands[1]) && SUBREG_PROMOTED_VAR_P (operands[1])
++      && SUBREG_PROMOTED_UNSIGNED_P (operands[1]))
++    {
++      emit_insn (gen_mov<GPR:mode> (operands[0], SUBREG_REG (operands[1])));
++      DONE;
++    }
+ 
+-(define_insn_and_split "*zero_extendhi<GPR:mode>2"
+-  [(set (match_operand:GPR    0 "register_operand"     "=r,r")
+-	(zero_extend:GPR
+-	    (match_operand:HI 1 "nonimmediate_operand" " r,m")))]
++  /* If the source is a register and we do not have ZBB or similar
++     extensions with similar capabilities, then emit the two
++     shifts now.  */
++  if (!TARGET_ZBB && !TARGET_XTHEADBB
++      && !TARGET_XTHEADMEMIDX && !TARGET_XANDESPERF
++      && register_operand (operands[1], HImode))
++    {
++      /* Intermediate register.  */
++      rtx ireg = gen_reg_rtx (<GPR:MODE>mode);
++      operands[1] = gen_lowpart (<GPR:MODE>mode, operands[1]);
++      rtx shiftval = GEN_INT (GET_MODE_BITSIZE (<GPR:MODE>mode) - 16);
++      rtx t = gen_rtx_ASHIFT (<GPR:MODE>mode, operands[1], shiftval);
++      emit_move_insn (ireg, t);
++      t = gen_rtx_LSHIFTRT (<GPR:MODE>mode, ireg, shiftval);
++      emit_move_insn (operands[0], t);
++      DONE;
++    }
++})
++
++(define_insn "*zero_extendhi<GPR:mode>2"
++  [(set (match_operand:GPR    0 "register_operand"     "=r")
++	(zero_extend:GPR (match_operand:HI 1 "memory_operand" "m")))]
+   "!TARGET_ZBB && !TARGET_XTHEADBB && !TARGET_XTHEADMEMIDX
+    && !TARGET_XANDESPERF"
+-  "@
+-   #
+-   lhu\t%0,%1"
+-  "&& reload_completed
+-   && REG_P (operands[1])
+-   && !paradoxical_subreg_p (operands[0])"
+-  [(set (match_dup 0)
+-	(ashift:GPR (match_dup 1) (match_dup 2)))
+-   (set (match_dup 0)
+-	(lshiftrt:GPR (match_dup 0) (match_dup 2)))]
+-  {
+-    operands[1] = gen_lowpart (<GPR:MODE>mode, operands[1]);
+-    operands[2] = GEN_INT(GET_MODE_BITSIZE(<GPR:MODE>mode) - 16);
+-  }
+-  [(set_attr "move_type" "shift_shift,load")
++  "lhu\t%0,%1"
++  [(set_attr "move_type" "load")
+    (set_attr "type" "load")
+    (set_attr "mode" "<GPR:MODE>")])
+ 
+@@ -1965,29 +1987,45 @@ (define_insn "*extendsidi2_internal"
+ (define_expand "extend<SHORT:mode><SUPERQI:mode>2"
+   [(set (match_operand:SUPERQI 0 "register_operand")
+ 	(sign_extend:SUPERQI (match_operand:SHORT 1 "nonimmediate_operand")))]
+-  "")
++  ""
++{
++  /* If the source is a suitably extended subreg, then this is just
++     a simple move.  */
++  if (SUBREG_P (operands[1]) && SUBREG_PROMOTED_VAR_P (operands[1])
++      && SUBREG_PROMOTED_SIGNED_P (operands[1]))
++    {
++      emit_insn (gen_mov<SUPERQI:mode> (operands[0], SUBREG_REG (operands[1])));
++      DONE;
++    }
++
++  /* If the source is a register and we do not have ZBB or similar
++     extensions with similar capabilities, then emit the two
++     shifts now.  */
++  if (!TARGET_ZBB && !TARGET_XTHEADBB
++      && !TARGET_XTHEADMEMIDX && !TARGET_XANDESPERF
++      && register_operand (operands[1], <SHORT:MODE>mode))
++    {
++      /* Intermediate register.  */
++      rtx ireg = gen_reg_rtx (<SUPERQI:MODE>mode);
++      operands[1] = gen_lowpart (<SUPERQI:MODE>mode, operands[1]);
++      rtx shiftval = GEN_INT (GET_MODE_BITSIZE (<SUPERQI:MODE>mode)
++			      - GET_MODE_BITSIZE (<SHORT:MODE>mode));
++      rtx t = gen_rtx_ASHIFT (<SUPERQI:MODE>mode, operands[1], shiftval);
++      emit_move_insn (ireg, t);
++      t = gen_rtx_ASHIFTRT (<SUPERQI:MODE>mode, ireg, shiftval);
++      emit_move_insn (operands[0], t);
++      DONE;
++    }
++})
+ 
+-(define_insn_and_split "*extend<SHORT:mode><SUPERQI:mode>2"
+-  [(set (match_operand:SUPERQI   0 "register_operand"     "=r,r")
++(define_insn "*extend<SHORT:mode><SUPERQI:mode>2"
++  [(set (match_operand:SUPERQI   0 "register_operand"     "=r")
+ 	(sign_extend:SUPERQI
+-	    (match_operand:SHORT 1 "nonimmediate_operand" " r,m")))]
++	    (match_operand:SHORT 1 "memory_operand" "m")))]
+   "!TARGET_ZBB && !TARGET_XTHEADBB && !TARGET_XTHEADMEMIDX
+    && !TARGET_XANDESPERF"
+-  "@
+-   #
+-   l<SHORT:size>\t%0,%1"
+-  "&& reload_completed
+-   && REG_P (operands[1])
+-   && !paradoxical_subreg_p (operands[0])"
+-  [(set (match_dup 0) (ashift:SI (match_dup 1) (match_dup 2)))
+-   (set (match_dup 0) (ashiftrt:SI (match_dup 0) (match_dup 2)))]
+-{
+-  operands[0] = gen_lowpart (SImode, operands[0]);
+-  operands[1] = gen_lowpart (SImode, operands[1]);
+-  operands[2] = GEN_INT (GET_MODE_BITSIZE (SImode)
+-			 - GET_MODE_BITSIZE (<SHORT:MODE>mode));
+-}
+-  [(set_attr "move_type" "shift_shift,load")
++  "l<SHORT:size>\t%0,%1"
++  [(set_attr "move_type" "load")
+    (set_attr "type" "load")
+    (set_attr "mode" "SI")])
+ 
+@@ -3147,23 +3185,19 @@ (define_split
+ ;; occur when unsigned int is used for array indexing.  Split this into two
+ ;; shifts.  Otherwise we can get 3 shifts.
+ 
+-(define_insn_and_split "zero_extendsidi2_shifted"
+-  [(set (match_operand:DI 0 "register_operand" "=r")
+-	(and:DI (ashift:DI (match_operand:DI 1 "register_operand" "r")
+-			   (match_operand:QI 2 "immediate_operand" "I"))
+-		(match_operand 3 "immediate_operand" "")))
+-   (clobber (match_scratch:DI 4 "=&r"))]
++(define_split
++  [(set (match_operand:DI 0 "register_operand")
++	(and:DI (ashift:DI (match_operand:DI 1 "register_operand")
++			   (match_operand:QI 2 "immediate_operand"))
++		(match_operand 3 "immediate_operand")))
++   (clobber (match_operand:DI 4 "register_operand"))]
+   "TARGET_64BIT && !TARGET_ZBA
+    && ((INTVAL (operands[3]) >> INTVAL (operands[2])) == 0xffffffff)"
+-  "#"
+-  "&& reload_completed"
+   [(set (match_dup 4)
+ 	(ashift:DI (match_dup 1) (const_int 32)))
+    (set (match_dup 0)
+ 	(lshiftrt:DI (match_dup 4) (match_dup 5)))]
+-  "operands[5] = GEN_INT (32 - (INTVAL (operands [2])));"
+-  [(set_attr "type" "shift")
+-   (set_attr "mode" "DI")])
++  "operands[5] = GEN_INT (32 - (INTVAL (operands [2])));")
+ 
+ ;;
+ ;;  ....................
+@@ -4659,24 +4693,21 @@ (define_insn "*large_load_address"
+ ;;
+ ;; One could argue combine should have realized this and simplified what it
+ ;; presented to the backend.  But we can obviously cope with what it gave us.
+-(define_insn_and_split ""
+-  [(set (match_operand:DI 0 "register_operand" "=r")
++(define_split
++  [(set (match_operand:DI 0 "register_operand")
+ 	(sign_extend:DI
+ 	  (plus:SI (subreg:SI
+ 		     (and:DI
+-		       (ashift:DI (match_operand:DI 1 "register_operand" "r")
+-				  (match_operand 2 "const_int_operand" "n"))
+-		       (match_operand 3 "const_int_operand" "n")) 0)
+-		   (match_operand:SI 4 "register_operand" "r"))))
+-   (clobber (match_scratch:DI 5 "=&r"))]
++		       (ashift:DI (match_operand:DI 1 "register_operand")
++				  (match_operand 2 "const_int_operand"))
++		       (match_operand 3 "const_int_operand")) 0)
++		   (match_operand:SI 4 "register_operand"))))
++   (clobber (match_operand:DI 5 "register_operand"))]
+   "TARGET_64BIT
+    && (INTVAL (operands[3]) | ((1 << INTVAL (operands[2])) - 1)) == 0xffffffff"
+-  "#"
+-  "&& reload_completed"
+   [(set (match_dup 5) (ashift:DI (match_dup 1) (match_dup 2)))
+    (set (match_dup 0) (sign_extend:DI (plus:SI (match_dup 6) (match_dup 4))))]
+-  "{ operands[6] = gen_lowpart (SImode, operands[5]); }"
+-  [(set_attr "type" "arith")])
++  "{ operands[6] = gen_lowpart (SImode, operands[5]); }")
+ 
+ (define_expand "usadd<mode>3"
+   [(match_operand:ANYI 0 "register_operand")
+@@ -4847,16 +4878,14 @@ (define_insn_and_split ""
+    }"
+   [(set_attr "type" "arith")])
+ 
+-(define_insn_and_split ""
+-  [(set (match_operand:DI 0 "register_operand" "=r")
++(define_split
++  [(set (match_operand:DI 0 "register_operand")
+ 	(sign_extend:DI (plus:SI (ashift:SI
+-				   (match_operand:SI 1 "register_operand" "r")
+-				   (match_operand 2 "const_int_operand" "n"))
+-				 (match_operand 3 "const_int_operand" "n"))))
+-   (clobber (match_scratch:DI 4 "=&r"))]
++				   (match_operand:SI 1 "register_operand")
++				   (match_operand 2 "const_int_operand"))
++				 (match_operand 3 "const_int_operand"))))
++   (clobber (match_operand:DI 4 "register_operand"))]
+   "(TARGET_64BIT && riscv_const_insns (operands[3], false) == 1)"
+-  "#"
+-  "&& reload_completed"
+   [(const_int 0)]
+   "{
+      operands[1] = gen_lowpart (DImode, operands[1]);
+@@ -4877,8 +4906,7 @@ (define_insn_and_split ""
+      x = gen_rtx_SIGN_EXTEND (DImode, x);
+      emit_insn (gen_rtx_SET (operands[0], x));
+      DONE;
+-   }"
+-  [(set_attr "type" "arith")])
++   }")
+ 
+ ;; Shadow stack
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/shift-shift-6.c b/gcc/testsuite/gcc.target/riscv/shift-shift-6.c
+new file mode 100644
+index 000000000000..083f5c4688c3
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/shift-shift-6.c
+@@ -0,0 +1,14 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc -mabi=lp64" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++/* Test for zero_extendsidi2_shifted handling arbitrary mask widths
++   (not just 32 bits). */
++unsigned sub1(unsigned a, unsigned b)
++{
++  b = (b << 2) >> 2;
++  return a + (b << 1);
++}
++
++/* { dg-final { scan-assembler-times "slli" 1 } } */
++/* { dg-final { scan-assembler-times "srli" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/shift-shift-7.c b/gcc/testsuite/gcc.target/riscv/shift-shift-7.c
+new file mode 100644
+index 000000000000..3ecd9ebdc39c
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/shift-shift-7.c
+@@ -0,0 +1,16 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc -mabi=lp64" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" } } */
++
++/* Test for zero_extendsidi2_shifted handling arbitrary mask widths
++   (not just 32 bits). */
++unsigned long f(unsigned int a, unsigned long b)
++{
++  a = a << 1;
++  unsigned long c = (unsigned long) a;
++  c = b + (c<<4);
++  return c;
++}
++
++/* { dg-final { scan-assembler-times "slli" 1 } } */
++/* { dg-final { scan-assembler-times "srli" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/slt-1.c b/gcc/testsuite/gcc.target/riscv/slt-1.c
+index 29a640660810..7a1eaf51f43d 100644
+--- a/gcc/testsuite/gcc.target/riscv/slt-1.c
++++ b/gcc/testsuite/gcc.target/riscv/slt-1.c
+@@ -1,6 +1,6 @@
+ /* { dg-do compile } */
+ /* { dg-options "-march=rv64gc -mabi=lp64d" } */
+-/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" "-Os" "-Oz" } } */
+ 
+ #include <stdint.h>
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/zba-shNadd-04.c b/gcc/testsuite/gcc.target/riscv/zba-shNadd-04.c
+index 48e225d3f1e7..ca80e874e8d1 100644
+--- a/gcc/testsuite/gcc.target/riscv/zba-shNadd-04.c
++++ b/gcc/testsuite/gcc.target/riscv/zba-shNadd-04.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-march=rv64gc_zba -mabi=lp64" } */
++/* { dg-options "-march=rv64gc_zba_zbb -mabi=lp64" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
+ 
+ long long sub1(unsigned long long a, unsigned long long b)
+diff --git a/gcc/testsuite/gcc.target/riscv/zba-slliuw.c b/gcc/testsuite/gcc.target/riscv/zba-slliuw.c
+index 69914db95a2c..1e100b555c2e 100644
+--- a/gcc/testsuite/gcc.target/riscv/zba-slliuw.c
++++ b/gcc/testsuite/gcc.target/riscv/zba-slliuw.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-march=rv64gc_zba_zbs -mabi=lp64" } */
++/* { dg-options "-march=rv64gc_zba_zbb_zbs -mabi=lp64" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
+ 
+ long
+diff --git a/gcc/testsuite/gcc.target/riscv/zbs-zext.c b/gcc/testsuite/gcc.target/riscv/zbs-zext.c
+index 5773b15d2987..1bebc36c31c8 100644
+--- a/gcc/testsuite/gcc.target/riscv/zbs-zext.c
++++ b/gcc/testsuite/gcc.target/riscv/zbs-zext.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-march=rv64gc_zbs -mabi=lp64" } */
++/* { dg-options "-march=rv64gc_zba_zbs -mabi=lp64" } */
+ /* { dg-skip-if "" { *-*-* } { "-O0" "-Og" "-O1" } } */
+ typedef unsigned long uint64_t;
+ typedef unsigned int uint32_t;
