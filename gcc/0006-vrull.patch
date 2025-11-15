@@ -1,3 +1,11 @@
+gcc/
+	* config/riscv/riscv.cc (risc_legitimize_move): Use convert_modes
+	rather than gen_extend_insn for most cases.
+	* config/riscv/ricsc.md (addv<mode>4): Likewise.
+	(uaddv<mode>4, subv<mode>4, usubv<mode>4): Likewise.
+	(mulv<mode>4, umulv<mode>4): Likewise.
+	* config/riscv/sync.md (atomic_compare_and_swap<mode>): Likewise.
+
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
 index 5bb557faf657..c59ad17eea6f 100644
 --- a/gcc/config/riscv/riscv.cc
