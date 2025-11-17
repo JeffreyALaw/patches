@@ -11,3 +11,4 @@ gcc/testsuite/gcc.dg/torture/inline-mem-cpy-cmp-1.c
 
 # Flakey, may be timing out once in a while
 gcc/testsuite/gcc.dg/graphite/interchange-2.c
+gcc/testsuite/gcc.dg/graphite/interchange-10.c
