@@ -49,25 +49,3 @@ index 8f7e5373fdf..195821139e0 100644
 +[(set (match_dup 0) (and:SI (match_dup 1) (match_dup 3)))
    (set (match_dup 0) (xor:SI (match_dup 0) (match_dup 4)))
    (set (match_dup 0) (minus:SI (match_dup 0) (match_dup 4)))]This seems wrong.  >   {
-diff --git a/gcc/testsuite/gcc.target/arc/extvsi-3.c b/gcc/testsuite/gcc.target/arc/extvsi-3.c
-new file mode 100644
-index 00000000000..2a466f90ed0
---- /dev/null
-+++ b/gcc/testsuite/gcc.target/arc/extvsi-3.c
-@@ -0,0 +1,14 @@
-+/* { dg-do compile } */
-+/* { dg-skip-if "avoid conflicts with -mcpu options" { *-*-* } { "-mcpu=*" } { "-mcpu=em" } } */
-+/* { dg-options "-O2 -mcpu=em" } */
-+struct S { int a : 5; };
-+
-+/* An extra parameter is added to ensure a different register is used for input and output. */
-+int foo (int unused, struct S p)
-+{
-+  return p.a;
-+}
-+
-+/* { dg-final { scan-assembler "and\\s+r0,r1,31" } } */
-+/* { dg-final { scan-assembler "xor\\s+r0,r0,16" } } */
-+/* { dg-final { scan-assembler "sub\\s+r0,r0,16" } } */
-
-
