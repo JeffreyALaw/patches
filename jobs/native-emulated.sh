@@ -16,8 +16,9 @@ if [ "$BRANCH" == "" ]; then
   BRANCH=master
 fi
 
+# ccache may not be available, but if it is, use it
 PATH=/usr/lib/ccache:$PATH
-ccache -M 100G
+ccache -M 100G || true
 
 patches/jobs/setupsources.sh $TARGET $BRANCH binutils-gdb gcc glibc linux > $LOGFILE 2>&1
 
