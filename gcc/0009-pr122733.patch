@@ -16,3 +16,16 @@ index 86baeb06ad48..3aaabdc9b055 100644
  		  && CONST_INT_P (XEXP (XEXP (op0, 0), 1))
  		  && INTVAL (XEXP (XEXP (op0, 0), 1)) >= 0
  		  && INTVAL (XEXP (XEXP (op0, 0), 1)) < HOST_BITS_PER_WIDE_INT
+diff --git a/gcc/testsuite/gcc.dg/torture/pr122735.c b/gcc/testsuite/gcc.dg/torture/pr122735.c
+new file mode 100644
+index 000000000000..9499ce4607b0
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/torture/pr122735.c
+@@ -0,0 +1,7 @@
++/* { dg-do compile } */
++int a;
++void b() {
++  int c;
++  unsigned d = c + 19;
++  a = d >> 32 + 19 + d + 255 - 293;
++}
