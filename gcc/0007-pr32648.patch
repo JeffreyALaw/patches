@@ -1,11 +1,11 @@
 diff --git a/gcc/match.pd b/gcc/match.pd
-index 6aaf80eee7d5..90a4442fea80 100644
+index 11cd3ec8f9f0..92e8ff83246b 100644
 --- a/gcc/match.pd
 +++ b/gcc/match.pd
-@@ -12028,3 +12028,17 @@ and,
- (simplify
-  (IFN_VEC_SHL_INSERT (vec_duplicate@1 @0) @0)
-   @1)
+@@ -12086,3 +12086,17 @@ and,
+         && TYPE_UNSIGNED (type)
+         && @0 == @3)
+     (bit_xor (rrotate @0 @4) @2)))
 +
 +/* Be extra careful with the shift count.  Don't transform a negative count
 +   or a count larger than the object's size.  */
