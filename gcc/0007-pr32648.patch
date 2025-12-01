@@ -1,16 +1,17 @@
 diff --git a/gcc/match.pd b/gcc/match.pd
-index 11cd3ec8f9f0..92e8ff83246b 100644
+index 11cd3ec8f9f0..3d96e67af7e5 100644
 --- a/gcc/match.pd
 +++ b/gcc/match.pd
-@@ -12086,3 +12086,18 @@ and,
+@@ -12086,3 +12086,112 @@ and,
          && TYPE_UNSIGNED (type)
          && @0 == @3)
      (bit_xor (rrotate @0 @4) @2)))
 +
-+/* Be extra careful with the shift count.  Don't transform a negative count
-+   or a count larger than the object's size.  */
++/* If we mask a right shift with 0x1, then we really just have a single bit
++   bitfield extraction.  We could probably any mask 2^n-1 here as a general
++   bitfield extraction.  */
 +(simplify
-+ (bit_and (rshift SSA_NAME@0 INTEGER_CST@1) integer_onep)
++ (bit_and (convert? (rshift SSA_NAME@0 INTEGER_CST@1)) integer_onep)
 + (if (INTEGRAL_TYPE_P (type)
 +      && tree_int_cst_sgn (@1) >= 0
 +      && wi::ltu_p (wi::to_wide (@1), TYPE_PRECISION (TREE_TYPE (@0)))
@@ -21,6 +22,99 @@ index 11cd3ec8f9f0..92e8ff83246b 100644
 +  (convert (BIT_FIELD_REF:boolean_type_node @0
 +	    { build_one_cst (bitsizetype); }
 +	    (convert:bitsizetype @1)))))
++
++/* In this case the masking is applied to the result of a logical
++   operation.  We can use bitfield extractions and elide the final
++   mask to a single bit.  */
++(for logical (bit_and bit_ior bit_xor)
++ (simplify
++  (bit_and (logical (convert? (rshift SSA_NAME@0 INTEGER_CST@1))
++		    (convert? (rshift SSA_NAME@2 INTEGER_CST@3)))
++	   integer_onep)
++  (if (INTEGRAL_TYPE_P (type)
++       && tree_int_cst_sgn (@1) >= 0
++       && tree_int_cst_sgn (@3) >= 0
++       && wi::ltu_p (wi::to_wide (@1), TYPE_PRECISION (TREE_TYPE (@0)))
++       && wi::ltu_p (wi::to_wide (@3), TYPE_PRECISION (TREE_TYPE (@2)))
++       && (fold_before_rtl_expansion_p ()
++           || !flag_tree_vrp
++           || optimize_debug)
++       && !BYTES_BIG_ENDIAN)
++   (logical (convert (BIT_FIELD_REF:boolean_type_node @0
++		      { build_one_cst (bitsizetype); }
++		      (convert:bitsizetype @1)))
++	    (convert  (BIT_FIELD_REF:boolean_type_node @2
++		      { build_one_cst (bitsizetype); }
++		      (convert:bitsizetype @3)))))))
++
++/* In this case we have an AND where one operand can only have its
++   LSB on as it's a single bit bitfield.  If the other operand is a
++   right shift, then we can turn it into a bitfield extraction.  */
++(simplify
++ (bit_and:c (convert? (rshift SSA_NAME@0 INTEGER_CST@1))
++	    (convert? (BIT_FIELD_REF @2 integer_onep INTEGER_CST@3)))
++  (if (INTEGRAL_TYPE_P (type)
++       && tree_int_cst_sgn (@1) >= 0
++       && tree_int_cst_sgn (@3) >= 0
++       && wi::ltu_p (wi::to_wide (@1), TYPE_PRECISION (TREE_TYPE (@0)))
++       && wi::ltu_p (wi::to_wide (@3), TYPE_PRECISION (TREE_TYPE (@2)))
++       && (fold_before_rtl_expansion_p ()
++           || !flag_tree_vrp
++           || optimize_debug)
++       && !BYTES_BIG_ENDIAN)
++   (bit_and (convert (BIT_FIELD_REF:boolean_type_node @0
++		      { build_one_cst (bitsizetype); }
++		      (convert:bitsizetype @1)))
++	    (convert  (BIT_FIELD_REF:boolean_type_node @2
++		      { build_one_cst (bitsizetype); }
++		      (convert:bitsizetype @3))))))
++
++/* Another case where we can elide the final mask, but also turn a
++   right shift into a BIT_FIELD_REF.  */
++(for logical (bit_and bit_ior bit_xor)
++ (simplify
++  (bit_and (logical:c (convert? (rshift SSA_NAME@0 INTEGER_CST@1))
++		      (bit_not (convert? (BIT_FIELD_REF @2 integer_onep INTEGER_CST@3))))
++	   integer_onep)
++  (if (INTEGRAL_TYPE_P (type)
++       && tree_int_cst_sgn (@1) >= 0
++       && tree_int_cst_sgn (@3) >= 0
++       && wi::ltu_p (wi::to_wide (@1), TYPE_PRECISION (TREE_TYPE (@0)))
++       && wi::ltu_p (wi::to_wide (@3), TYPE_PRECISION (TREE_TYPE (@2)))
++       && (fold_before_rtl_expansion_p ()
++           || !flag_tree_vrp
++           || optimize_debug)
++       && !BYTES_BIG_ENDIAN)
++   (logical (convert (BIT_FIELD_REF:boolean_type_node @0
++		      { build_one_cst (bitsizetype); }
++		      (convert:bitsizetype @1)))
++	    (bit_not (convert (BIT_FIELD_REF:boolean_type_node @2
++		      { build_one_cst (bitsizetype); }
++		      (convert:bitsizetype @3))))))))
++
++/* This one has an embedded bitwise not of the logical operation, then
++   masks off all but the LSB.  We can elide that final mask and turn
++   the operands into BIT_FIELD_REFs.  */
++(for logical (bit_and bit_ior bit_xor)
++ (simplify
++  (bit_and (bit_not (logical (convert? (rshift SSA_NAME@0 INTEGER_CST@1))
++			     (convert? (rshift SSA_NAME@2 INTEGER_CST@3))))
++	   integer_onep)
++  (if (INTEGRAL_TYPE_P (type)
++       && tree_int_cst_sgn (@1) >= 0
++       && tree_int_cst_sgn (@3) >= 0
++       && wi::ltu_p (wi::to_wide (@1), TYPE_PRECISION (TREE_TYPE (@0)))
++       && wi::ltu_p (wi::to_wide (@3), TYPE_PRECISION (TREE_TYPE (@2)))
++       && (fold_before_rtl_expansion_p ()
++           || !flag_tree_vrp
++           || optimize_debug)
++       && !BYTES_BIG_ENDIAN)
++   (bit_not (logical (convert (BIT_FIELD_REF:boolean_type_node @0
++		               { build_one_cst (bitsizetype); }
++		               (convert:bitsizetype @1)))
++		     (convert  (BIT_FIELD_REF:boolean_type_node @2
++			        { build_one_cst (bitsizetype); }
++				(convert:bitsizetype @3))))))))
 diff --git a/gcc/testsuite/gcc.target/riscv/pr32648.c b/gcc/testsuite/gcc.target/riscv/pr32648.c
 new file mode 100644
 index 000000000000..f4f5975bde5a
