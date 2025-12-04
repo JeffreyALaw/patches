@@ -213,3 +213,15 @@ index 8ca4e2411ee9..adda82003ce5 100644
  /* { dg-final { scan-assembler-times "\\tsrli" 2 } } */
  /* { dg-final { scan-assembler-times "\\tandi" 2 } } */
  /* { dg-final { scan-assembler-times "\\tsub" 2 } } */
+diff --git a/gcc/testsuite/gcc.target/pru/ashiftrt.c b/gcc/testsuite/gcc.target/pru/ashiftrt.c
+index fb8e4759a0e1..d355ca9efe23 100644
+--- a/gcc/testsuite/gcc.target/pru/ashiftrt.c
++++ b/gcc/testsuite/gcc.target/pru/ashiftrt.c
+@@ -8,6 +8,6 @@ extern void func2(unsigned char);
+ 
+ void test(unsigned char v)
+ {
+-    /* { dg-final { scan-assembler "lsr\tr14(.b0)?, r14.b0, .\+\n\tand\tr14.b0, r14.b0" } } */
++    /* { dg-final { scan-assembler "lsl\tr14(.b0)?, r14.b0, .\+\n\tlsr\tr14.b0, r14.b0" } } */
+     func2((v & 2) ? 1 : 0);
+ }
