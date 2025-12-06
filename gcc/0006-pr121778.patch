@@ -1,3 +1,14 @@
+PR target/121778
+gcc/
+	* match.pd: Add pattern to recognize rotate with one or more
+	bits flipped via xor.
+	* config/sh/sh.md (*rotcl): Another version for a rotate by one
+	position with a flip of the LSB.
+
+gcc/testsuite/
+	* gcc.target/riscv/pr121778.c: New test.
+	
+
 diff --git a/gcc/config/sh/sh.md b/gcc/config/sh/sh.md
 index 65b353da56e1..32d3d1a8fb65 100644
 --- a/gcc/config/sh/sh.md
