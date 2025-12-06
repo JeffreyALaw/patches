@@ -104,3 +104,4 @@ gcc/testsuite/g++.dg/torture/pr58552.C
 
 # Sporadic failures across multiple platforms.  Believed to be timeouts
 gcc/testsuite/gcc.dg/torture/inline-mem-cmp-1.c
+gcc/testsuite/gcc.dg/torture/inline-mem-cpy-cmp-1.c
