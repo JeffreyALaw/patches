@@ -13,3 +13,7 @@ gcc/testsuite/g++.dg/tree-ssa/pr90078.C
 gcc/testsuite/g++.dg/tree-ssa/pr96979.C
 gcc/testsuite/g++.dg/warn/uninit-pr105562.C
 gcc/testsuite/g++.dg/warn/Wsequence-point-5.C
+
+gcc.testsuite/g++modules/xtreme-header-7_a.H
+gcc.testsuite/g++modules/xtreme-header-7_b.C
+
