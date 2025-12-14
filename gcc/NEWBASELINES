@@ -4,3 +4,4 @@
 sh4-linux-gnu
 sh4eb-linux-gnu
 bfin-elf
+arm-linux-gnueabihf
