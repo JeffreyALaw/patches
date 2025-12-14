@@ -1,0 +1,159 @@
+
+
+So it turns out creating a forwarder block in some cases causes a regression.
+The rtl ifcvt does like the case were the middle bb does not have a single predecessor.
+So in some cases ifcvt does not happen any more. So the way to fix this
+is not to create a forwarder block for those edges which causes out of ssa to
+create a middle bb which has the constant or the copy in it.
+
+I tried to do a simple ifcvt on the gimple level with the last phiopt but
+that introduces regressions as then `v += cmp - 43;` is not optimized
+and produces an extra subtraction. This is the best workaround I could come up
+with until that is fixed. I filed PR 123116 for that issue.
+
+Bootstrapped and tested on x86_64-linux-gnu.
+
+gcc/ChangeLog:
+
+	* tree-cfg.cc (ifconvertable_edge): New function.
+	(make_forwarders_with_degenerate_phis):	Add skip_ifcvtable argument,
+	check ifconvertable_edge if skip_ifcvtable is true.
+	* tree-cfg.h (make_forwarders_with_degenerate_phis): New argument
+	with default of false.
+	* tree-cfgcleanup.cc (execute_cleanup_cfg_post_optimizing): Update
+	argument to make_forwarders_with_degenerate_phis.
+
+Signed-off-by: Andrew Pinski <andrew.pinski@oss.qualcomm.com>
+---
+ gcc/tree-cfg.cc        | 73 +++++++++++++++++++++++++++++++++++++++++-
+ gcc/tree-cfg.h         |  2 +-
+ gcc/tree-cfgcleanup.cc |  2 +-
+ 3 files changed, 74 insertions(+), 3 deletions(-)
+
+diff --git a/gcc/tree-cfg.cc b/gcc/tree-cfg.cc
+index 8ee208b3032..ec3be8125f0 100644
+--- a/gcc/tree-cfg.cc
++++ b/gcc/tree-cfg.cc
+@@ -10195,13 +10195,77 @@ sort_phi_args (const void *a_, const void *b_)
+     return 0;
+ }
+ 
++/* Returns true if edge E comes from a possible ifconvertable branch.
++   That is:
++   ```
++   BB0:
++   if (a) goto BB1; else goto BB2;
++   BB1:
++   BB2:
++   ```
++   Returns true for the edge from BB0->BB2 or BB1->BB2.
++   This function assumes we only have one middle block.
++   And the middle block is empty. */
++
++static bool
++ifconvertable_edge (edge e)
++{
++  basic_block bb2 = e->dest;
++  basic_block bb0 = e->src;
++  basic_block bb1 = nullptr, rbb1;
++  if (e->src == e->dest)
++    return false;
++  if (EDGE_COUNT (bb0->succs) > 2)
++    return false;
++  if (single_succ_p (bb0))
++    {
++      if (!single_pred_p (bb0))
++	return false;
++      /* The middle block can only be empty,
++	 otherwise the phis will be
++	 different anyways. */
++      if (!empty_block_p (bb0))
++	return false;
++      bb1 = bb0;
++      bb0 = single_pred (bb0);
++      if (EDGE_COUNT (bb0->succs) != 2)
++	return false;
++    }
++
++  /* If convertables are only for conditionals. */
++  if (!is_a<gcond*>(*gsi_last_nondebug_bb (bb0)))
++    return false;
++
++  /* Find the other basic block.  */
++  if (EDGE_SUCC (bb0, 0)->dest == bb2)
++    rbb1 = EDGE_SUCC (bb0, 1)->dest;
++  else if (EDGE_SUCC (bb0, 1)->dest == bb2)
++    rbb1 = EDGE_SUCC (bb0, 0)->dest;
++  else
++    return false;
++
++  /* If we already know bb1, then just test it. */
++  if (bb1)
++    return rbb1 == bb1;
++
++  if (!single_succ_p (rbb1) || !single_pred_p (rbb1))
++    return false;
++  /* The middle block can only be empty,
++     otherwise the phis will be
++     different anyways. */
++  if (!empty_block_p (rbb1))
++    return false;
++
++  return single_succ (rbb1) == bb2;
++}
++
+ /* Look for a non-virtual PHIs and make a forwarder block when all PHIs
+    have the same argument on a set of edges.  This is to not consider
+    control dependences of individual edges for same values but only for
+    the common set.  Returns true if changed the CFG.  */
+ 
+ bool
+-make_forwarders_with_degenerate_phis (function *fn)
++make_forwarders_with_degenerate_phis (function *fn, bool skip_ifcvtable)
+ {
+   bool didsomething = false;
+ 
+@@ -10245,6 +10309,13 @@ make_forwarders_with_degenerate_phis (function *fn)
+ 	      && loop_exit_edge_p (e->src->loop_father, e))
+ 	    continue;
+ 
++	  /* Skip ifconvertable edges when asked as we want the
++	     copy/constant on that edge still when going out of ssa.
++	     FIXME: phiopt should produce COND_EXPR but there
++	     are regressions with that.  */
++	  if (skip_ifcvtable && ifconvertable_edge (e))
++	    continue;
++
+ 	  tree arg = gimple_phi_arg_def (phi, i);
+ 	  if (!CONSTANT_CLASS_P (arg) && TREE_CODE (arg) != SSA_NAME)
+ 	    need_resort = true;
+diff --git a/gcc/tree-cfg.h b/gcc/tree-cfg.h
+index 2e01762f04b..56d40406d1f 100644
+--- a/gcc/tree-cfg.h
++++ b/gcc/tree-cfg.h
+@@ -114,7 +114,7 @@ extern edge gimple_switch_edge (function *, gswitch *, unsigned);
+ extern edge gimple_switch_default_edge (function *, gswitch *);
+ extern bool cond_only_block_p (basic_block);
+ extern void copy_phi_arg_into_existing_phi (edge, edge, bool = false);
+-extern bool make_forwarders_with_degenerate_phis (function *);
++extern bool make_forwarders_with_degenerate_phis (function *, bool = false);
+ 
+ /* Return true if the LHS of a call should be removed.  */
+ 
+diff --git a/gcc/tree-cfgcleanup.cc b/gcc/tree-cfgcleanup.cc
+index 2521e6d09fd..8060e90be79 100644
+--- a/gcc/tree-cfgcleanup.cc
++++ b/gcc/tree-cfgcleanup.cc
+@@ -1418,7 +1418,7 @@ execute_cleanup_cfg_post_optimizing (void)
+   /* When optimizing undo the merging of forwarder blocks
+      that phis for better out of ssa expansion.  */
+   if (optimize)
+-    make_forwarders_with_degenerate_phis (cfun);
++    make_forwarders_with_degenerate_phis (cfun, true);
+ 
+   /* Make sure todo does not have cleanup cfg as we don't want
+      remove the forwarder blocks we just created. cleanup cfg
+-- 
+2.43.0
+
+
