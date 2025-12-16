@@ -3,5 +3,4 @@
 # reset.  
 sh4-linux-gnu
 sh4eb-linux-gnu
-sh3-linux-gnu
-sh3eb-linux-gnu
+x86_64-linux-gnu
