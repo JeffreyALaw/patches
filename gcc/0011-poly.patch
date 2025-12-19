@@ -97,3 +97,833 @@ index 96519c96a2b4..88711064e4fa 100644
    HOST_WIDE_INT constant = offset - factor;
  
    if (constant == 0)
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/base/spill-1.c b/gcc/testsuite/gcc.target/riscv/rvv/base/spill-1.c
+index 3b11e5562d4a..141769cfe182 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/base/spill-1.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/base/spill-1.c
+@@ -7,8 +7,8 @@
+ 
+ /*
+ ** spill_1:
+-**  csrr\tt0,vlenb
+-**  sub\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  sub\tsp,sp,[a-x0-9]+
+ **  ...
+ **  csrr\t[a-x0-9]+,vlenb
+ **  srli\t[a-x0-9]+,[a-x0-9]+,3
+@@ -24,8 +24,8 @@
+ **  add\t[a-x0-9]+,[a-x0-9]+,sp
+ **  vle8.v\tv[0-9]+,0\([a-x0-9]+\)
+ **  vse8.v\tv[0-9]+,0\([a-x0-9]+\)
+-**  csrr\tt0,vlenb
+-**  add\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  add\tsp,sp,[a-x0-9]+
+ **  ...
+ **  jr\tra
+ */
+@@ -39,8 +39,8 @@ spill_1 (int8_t *in, int8_t *out)
+ 
+ /*
+ ** spill_2:
+-**  csrr\tt0,vlenb
+-**  sub\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  sub\tsp,sp,[a-x0-9]+
+ **  vsetvli\ta5,zero,e8,mf4,ta,ma
+ **  vle8.v\tv[0-9]+,0\(a0\)
+ **  csrr\t[a-x0-9]+,vlenb
+@@ -57,8 +57,8 @@ spill_1 (int8_t *in, int8_t *out)
+ **  add\t[a-x0-9]+,[a-x0-9]+,sp
+ **  vle8.v\tv[0-9]+,0\([a-x0-9]+\)
+ **  vse8.v\tv[0-9]+,0\([a-x0-9]+\)
+-**  csrr\tt0,vlenb
+-**  add\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  add\tsp,sp,[a-x0-9]+
+ **  ...
+ **  jr\tra
+ */
+@@ -72,8 +72,8 @@ spill_2 (int8_t *in, int8_t *out)
+ 
+ /*
+ ** spill_3:
+-** csrr\tt0,vlenb
+-** sub\tsp,sp,t0
++** csrr\t[a-x0-9]+,vlenb
++** sub\tsp,sp,[a-x0-9]+
+ ** vsetvli\ta5,zero,e8,mf2,ta,ma
+ ** vle8.v\tv[0-9]+,0\(a0\)
+ ** csrr\t[a-x0-9]+,vlenb
+@@ -81,13 +81,12 @@ spill_2 (int8_t *in, int8_t *out)
+ ** add\t[a-x0-9]+,[a-x0-9]+,sp
+ ** vse8.v\tv[0-9]+,0\([a-x0-9]+\)
+ **  ...
+-** csrr\t[a-x0-9]+,vlenb
+ ** srli\t[a-x0-9]+,[a-x0-9]+,1
+ ** add\t[a-x0-9]+,[a-x0-9]+,sp
+ ** vle8.v\tv[0-9]+,0\([a-x0-9]+\)
+ ** vse8.v\tv[0-9]+,0\([a-x0-9]+\)
+-** csrr\tt0,vlenb
+-** add\tsp,sp,t0
++** csrr\t[a-x0-9]+,vlenb
++** add\tsp,sp,[a-x0-9]+
+ **  ...
+ **  jr\tra
+ */
+@@ -101,8 +100,8 @@ spill_3 (int8_t *in, int8_t *out)
+ 
+ /*
+ ** spill_4:
+-**  csrr\tt0,vlenb
+-**  sub\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  sub\tsp,sp,[a-x0-9]+
+ **  ...
+ **  vs1r.v\tv[0-9]+,0\(sp\)
+ **  ...
+@@ -124,8 +123,8 @@ spill_4 (int8_t *in, int8_t *out)
+ 
+ /*
+ ** spill_5:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,1
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,1
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs2r.v\tv[0-9]+,0\(sp\)
+@@ -148,8 +147,8 @@ spill_5 (int8_t *in, int8_t *out)
+ 
+ /*
+ ** spill_6:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,2
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,2
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs4r.v\tv[0-9]+,0\(sp\)
+@@ -172,8 +171,8 @@ spill_6 (int8_t *in, int8_t *out)
+ 
+ /*
+ ** spill_7:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,3
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,3
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs8r.v\tv[0-9]+,0\(sp\)
+@@ -196,8 +195,8 @@ spill_7 (int8_t *in, int8_t *out)
+ 
+ /*
+ ** spill_8:
+-** csrr\tt0,vlenb
+-** sub\tsp,sp,t0
++** csrr\t[a-x0-9]+,vlenb
++** sub\tsp,sp,[a-x0-9]+
+ ** vsetvli\ta5,zero,e8,mf8,ta,ma
+ ** vle8.v\tv[0-9]+,0\(a0\)
+ ** csrr\t[a-x0-9]+,vlenb
+@@ -214,8 +213,8 @@ spill_7 (int8_t *in, int8_t *out)
+ **  add\t[a-x0-9]+,[a-x0-9]+,sp
+ **  vle8.v\tv[0-9]+,0\([a-x0-9]+\)
+ **  vse8.v\tv[0-9]+,0\([a-x0-9]+\)
+-**  csrr\tt0,vlenb
+-**  add\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  add\tsp,sp,[a-x0-9]+
+ **  ...
+ **  jr\tra
+ */
+@@ -229,8 +228,8 @@ spill_8 (uint8_t *in, uint8_t *out)
+ 
+ /*
+ ** spill_9:
+-**  csrr\tt0,vlenb
+-**  sub\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  sub\tsp,sp,[a-x0-9]+
+ **  vsetvli\ta5,zero,e8,mf4,ta,ma
+ **  vle8.v\tv[0-9]+,0\(a0\)
+ **  csrr\t[a-x0-9]+,vlenb
+@@ -247,8 +246,8 @@ spill_8 (uint8_t *in, uint8_t *out)
+ **  add\t[a-x0-9]+,[a-x0-9]+,sp
+ **  vle8.v\tv[0-9]+,0\([a-x0-9]+\)
+ **  vse8.v\tv[0-9]+,0\([a-x0-9]+\)
+-**  csrr\tt0,vlenb
+-**  add\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  add\tsp,sp,[a-x0-9]+
+ **  ...
+ **  jr\tra
+ */
+@@ -262,8 +261,8 @@ spill_9 (uint8_t *in, uint8_t *out)
+ 
+ /*
+ ** spill_10:
+-** csrr\tt0,vlenb
+-** sub\tsp,sp,t0
++** csrr\t[a-x0-9]+,vlenb
++** sub\tsp,sp,[a-x0-9]+
+ ** vsetvli\ta5,zero,e8,mf2,ta,ma
+ ** vle8.v\tv[0-9]+,0\(a0\)
+ ** csrr\t[a-x0-9]+,vlenb
+@@ -271,13 +270,12 @@ spill_9 (uint8_t *in, uint8_t *out)
+ ** add\t[a-x0-9]+,[a-x0-9]+,sp
+ ** vse8.v\tv[0-9]+,0\([a-x0-9]+\)
+ **  ...
+-**  csrr\t[a-x0-9]+,vlenb
+ **  srli\t[a-x0-9]+,[a-x0-9]+,1
+ **  add\t[a-x0-9]+,[a-x0-9]+,sp
+ **  vle8.v\tv[0-9]+,0\([a-x0-9]+\)
+ **  vse8.v\tv[0-9]+,0\([a-x0-9]+\)
+-**  csrr\tt0,vlenb
+-**  add\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  add\tsp,sp,[a-x0-9]+
+ **  ...
+ **  jr\tra
+ */
+@@ -291,8 +289,8 @@ spill_10 (uint8_t *in, uint8_t *out)
+ 
+ /*
+ ** spill_11:
+-**  csrr\tt0,vlenb
+-**  sub\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  sub\tsp,sp,[a-x0-9]+
+ **  ...
+ **  vs1r.v\tv[0-9]+,0\(sp\)
+ **  ...
+@@ -314,8 +312,8 @@ spill_11 (uint8_t *in, uint8_t *out)
+ 
+ /*
+ ** spill_12:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,1
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,1
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs2r.v\tv[0-9]+,0\(sp\)
+@@ -338,8 +336,8 @@ spill_12 (uint8_t *in, uint8_t *out)
+ 
+ /*
+ ** spill_13:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,2
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,2
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs4r.v\tv[0-9]+,0\(sp\)
+@@ -362,8 +360,8 @@ spill_13 (uint8_t *in, uint8_t *out)
+ 
+ /*
+ ** spill_14:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,3
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,3
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs8r.v\tv[0-9]+,0\(sp\)
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/base/spill-2.c b/gcc/testsuite/gcc.target/riscv/rvv/base/spill-2.c
+index 567aa56d9826..5c44cc3051c3 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/base/spill-2.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/base/spill-2.c
+@@ -7,8 +7,8 @@
+ 
+ /*
+ ** spill_2:
+-**  csrr\tt0,vlenb
+-**  sub\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  sub\tsp,sp,[a-x0-9]+
+ **  vsetvli\ta5,zero,e16,mf4,ta,ma
+ **  vle16.v\tv[0-9]+,0\(a0\)
+ **  csrr\t[a-x0-9]+,vlenb
+@@ -25,8 +25,8 @@
+ **  add\t[a-x0-9]+,[a-x0-9]+,sp
+ **  vle16.v\tv[0-9]+,0\([a-x0-9]+\)
+ **  vse16.v\tv[0-9]+,0\([a-x0-9]+\)
+-**  csrr\tt0,vlenb
+-**  add\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  add\tsp,sp,[a-x0-9]+
+ **  ...
+ **  jr\tra
+ */
+@@ -40,8 +40,8 @@ spill_2 (int16_t *in, int16_t *out)
+ 
+ /*
+ ** spill_3:
+-**  csrr\tt0,vlenb
+-**  sub\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  sub\tsp,sp,[a-x0-9]+
+ **  vsetvli\ta5,zero,e16,mf2,ta,ma
+ **  vle16.v\tv[0-9]+,0\(a0\)
+ **  csrr\t[a-x0-9]+,vlenb
+@@ -49,13 +49,12 @@ spill_2 (int16_t *in, int16_t *out)
+ **  add\t[a-x0-9]+,[a-x0-9]+,sp
+ **  vse16.v\tv[0-9]+,0\([a-x0-9]+\)
+ **  ...
+-**  csrr\t[a-x0-9]+,vlenb
+ **  srli\t[a-x0-9]+,[a-x0-9]+,1
+ **  add\t[a-x0-9]+,[a-x0-9]+,sp
+ **  vle16.v\tv[0-9]+,0\([a-x0-9]+\)
+ **  vse16.v\tv[0-9]+,0\([a-x0-9]+\)
+-**  csrr\tt0,vlenb
+-**  add\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  add\tsp,sp,[a-x0-9]+
+ **  ...
+ **  jr\tra
+ */
+@@ -69,8 +68,8 @@ spill_3 (int16_t *in, int16_t *out)
+ 
+ /*
+ ** spill_4:
+-**  csrr\tt0,vlenb
+-**  sub\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  sub\tsp,sp,[a-x0-9]+
+ **  ...
+ **  vs1r.v\tv[0-9]+,0\(sp\)
+ **  ...
+@@ -92,8 +91,8 @@ spill_4 (int16_t *in, int16_t *out)
+ 
+ /*
+ ** spill_5:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,1
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,1
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs2r.v\tv[0-9]+,0\(sp\)
+@@ -116,8 +115,8 @@ spill_5 (int16_t *in, int16_t *out)
+ 
+ /*
+ ** spill_6:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,2
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,2
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs4r.v\tv[0-9]+,0\(sp\)
+@@ -140,8 +139,8 @@ spill_6 (int16_t *in, int16_t *out)
+ 
+ /*
+ ** spill_7:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,3
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,3
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs8r.v\tv[0-9]+,0\(sp\)
+@@ -164,8 +163,8 @@ spill_7 (int16_t *in, int16_t *out)
+ 
+ /*
+ ** spill_9:
+-**  csrr\tt0,vlenb
+-**  sub\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  sub\tsp,sp,[a-x0-9]+
+ **  vsetvli\ta5,zero,e16,mf4,ta,ma
+ **  vle16.v\tv[0-9]+,0\(a0\)
+ **  csrr\t[a-x0-9]+,vlenb
+@@ -182,8 +181,8 @@ spill_7 (int16_t *in, int16_t *out)
+ **  add\t[a-x0-9]+,[a-x0-9]+,sp
+ **  vle16.v\tv[0-9]+,0\([a-x0-9]+\)
+ **  vse16.v\tv[0-9]+,0\([a-x0-9]+\)
+-**  csrr\tt0,vlenb
+-**  add\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  add\tsp,sp,[a-x0-9]+
+ **  ...
+ **  jr\tra
+ */
+@@ -197,8 +196,8 @@ spill_9 (uint16_t *in, uint16_t *out)
+ 
+ /*
+ ** spill_10:
+-**  csrr\tt0,vlenb
+-**  sub\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  sub\tsp,sp,[a-x0-9]+
+ **  vsetvli\ta5,zero,e16,mf2,ta,ma
+ **  vle16.v\tv[0-9]+,0\(a0\)
+ **  csrr\t[a-x0-9]+,vlenb
+@@ -206,13 +205,12 @@ spill_9 (uint16_t *in, uint16_t *out)
+ **  add\t[a-x0-9]+,[a-x0-9]+,sp
+ **  vse16.v\tv[0-9]+,0\([a-x0-9]+\)
+ **  ...
+-**  csrr\t[a-x0-9]+,vlenb
+ **  srli\t[a-x0-9]+,[a-x0-9]+,1
+ **  add\t[a-x0-9]+,[a-x0-9]+,sp
+ **  vle16.v\tv[0-9]+,0\([a-x0-9]+\)
+ **  vse16.v\tv[0-9]+,0\([a-x0-9]+\)
+-**  csrr\tt0,vlenb
+-**  add\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  add\tsp,sp,[a-x0-9]+
+ **  ...
+ **  jr\tra
+ */
+@@ -226,8 +224,8 @@ spill_10 (uint16_t *in, uint16_t *out)
+ 
+ /*
+ ** spill_11:
+-**  csrr\tt0,vlenb
+-**  sub\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  sub\tsp,sp,[a-x0-9]+
+ **  ...
+ **  vs1r.v\tv[0-9]+,0\(sp\)
+ **  ...
+@@ -249,8 +247,8 @@ spill_11 (uint16_t *in, uint16_t *out)
+ 
+ /*
+ ** spill_12:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,1
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,1
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs2r.v\tv[0-9]+,0\(sp\)
+@@ -273,8 +271,8 @@ spill_12 (uint16_t *in, uint16_t *out)
+ 
+ /*
+ ** spill_13:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,2
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,2
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs4r.v\tv[0-9]+,0\(sp\)
+@@ -297,8 +295,8 @@ spill_13 (uint16_t *in, uint16_t *out)
+ 
+ /*
+ ** spill_14:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,3
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,3
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs8r.v\tv[0-9]+,0\(sp\)
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/base/spill-3.c b/gcc/testsuite/gcc.target/riscv/rvv/base/spill-3.c
+index 2c1213b0f78a..d6fa3a630cd4 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/base/spill-3.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/base/spill-3.c
+@@ -7,8 +7,8 @@
+ 
+ /*
+ ** spill_3:
+-**  csrr\tt0,vlenb
+-**  sub\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  sub\tsp,sp,[a-x0-9]+
+ **  vsetvli\ta5,zero,e32,mf2,ta,ma
+ **  vle32.v\tv[0-9]+,0\(a0\)
+ **  csrr\t[a-x0-9]+,vlenb
+@@ -16,13 +16,12 @@
+ **  add\t[a-x0-9]+,[a-x0-9]+,sp
+ **  vse32.v\tv[0-9]+,0\([a-x0-9]+\)
+ **  ...
+-**  csrr\t[a-x0-9]+,vlenb
+ **  srli\t[a-x0-9]+,[a-x0-9]+,1
+ **  add\t[a-x0-9]+,[a-x0-9]+,sp
+ **  vle32.v\tv[0-9]+,0\([a-x0-9]+\)
+ **  vse32.v\tv[0-9]+,0\([a-x0-9]+\)
+-**  csrr\tt0,vlenb
+-**  add\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  add\tsp,sp,[a-x0-9]+
+ **  ...
+ **  jr\tra
+ */
+@@ -36,8 +35,8 @@ spill_3 (int32_t *in, int32_t *out)
+ 
+ /*
+ ** spill_4:
+-**  csrr\tt0,vlenb
+-**  sub\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  sub\tsp,sp,[a-x0-9]+
+ **  ...
+ **  vs1r.v\tv[0-9]+,0\(sp\)
+ **  ...
+@@ -59,8 +58,8 @@ spill_4 (int32_t *in, int32_t *out)
+ 
+ /*
+ ** spill_5:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,1
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,1
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs2r.v\tv[0-9]+,0\(sp\)
+@@ -83,8 +82,8 @@ spill_5 (int32_t *in, int32_t *out)
+ 
+ /*
+ ** spill_6:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,2
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,2
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs4r.v\tv[0-9]+,0\(sp\)
+@@ -107,8 +106,8 @@ spill_6 (int32_t *in, int32_t *out)
+ 
+ /*
+ ** spill_7:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,3
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,3
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs8r.v\tv[0-9]+,0\(sp\)
+@@ -131,8 +130,8 @@ spill_7 (int32_t *in, int32_t *out)
+ 
+ /*
+ ** spill_10:
+-**  csrr\tt0,vlenb
+-**  sub\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  sub\tsp,sp,[a-x0-9]+
+ **  vsetvli\ta5,zero,e32,mf2,ta,ma
+ **  vle32.v\tv[0-9]+,0\(a0\)
+ **  csrr\t[a-x0-9]+,vlenb
+@@ -140,13 +139,12 @@ spill_7 (int32_t *in, int32_t *out)
+ **  add\t[a-x0-9]+,[a-x0-9]+,sp
+ **  vse32.v\tv[0-9]+,0\([a-x0-9]+\)
+ **  ...
+-**  csrr\t[a-x0-9]+,vlenb
+ **  srli\t[a-x0-9]+,[a-x0-9]+,1
+ **  add\t[a-x0-9]+,[a-x0-9]+,sp
+ **  vle32.v\tv[0-9]+,0\([a-x0-9]+\)
+ **  vse32.v\tv[0-9]+,0\([a-x0-9]+\)
+-**  csrr\tt0,vlenb
+-**  add\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  add\tsp,sp,[a-x0-9]+
+ **  ...
+ **  jr\tra
+ */
+@@ -160,8 +158,8 @@ spill_10 (uint32_t *in, uint32_t *out)
+ 
+ /*
+ ** spill_11:
+-**  csrr\tt0,vlenb
+-**  sub\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  sub\tsp,sp,[a-x0-9]+
+ **  ...
+ **  vs1r.v\tv[0-9]+,0\(sp\)
+ **  ...
+@@ -183,8 +181,8 @@ spill_11 (uint32_t *in, uint32_t *out)
+ 
+ /*
+ ** spill_12:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,1
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,1
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs2r.v\tv[0-9]+,0\(sp\)
+@@ -207,8 +205,8 @@ spill_12 (uint32_t *in, uint32_t *out)
+ 
+ /*
+ ** spill_13:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,2
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,2
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs4r.v\tv[0-9]+,0\(sp\)
+@@ -231,8 +229,8 @@ spill_13 (uint32_t *in, uint32_t *out)
+ 
+ /*
+ ** spill_14:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,3
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,3
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs8r.v\tv[0-9]+,0\(sp\)
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/base/spill-4.c b/gcc/testsuite/gcc.target/riscv/rvv/base/spill-4.c
+index ad7592f30bc7..f636f2d9cc3b 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/base/spill-4.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/base/spill-4.c
+@@ -7,8 +7,8 @@
+ 
+ /*
+ ** spill_4:
+-**  csrr\tt0,vlenb
+-**  sub\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  sub\tsp,sp,[a-x0-9]+
+ **  ...
+ **  vs1r.v\tv[0-9]+,0\(sp\)
+ **  ...
+@@ -30,8 +30,8 @@ spill_4 (int64_t *in, int64_t *out)
+ 
+ /*
+ ** spill_5:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,1
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,1
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs2r.v\tv[0-9]+,0\(sp\)
+@@ -54,8 +54,8 @@ spill_5 (int64_t *in, int64_t *out)
+ 
+ /*
+ ** spill_6:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,2
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,2
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs4r.v\tv[0-9]+,0\(sp\)
+@@ -78,8 +78,8 @@ spill_6 (int64_t *in, int64_t *out)
+ 
+ /*
+ ** spill_7:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,3
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,3
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs8r.v\tv[0-9]+,0\(sp\)
+@@ -102,8 +102,8 @@ spill_7 (int64_t *in, int64_t *out)
+ 
+ /*
+ ** spill_11:
+-**  csrr\tt0,vlenb
+-**  sub\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  sub\tsp,sp,[a-x0-9]+
+ **  ...
+ **  vs1r.v\tv[0-9]+,0\(sp\)
+ **  ...
+@@ -125,8 +125,8 @@ spill_11 (uint64_t *in, uint64_t *out)
+ 
+ /*
+ ** spill_12:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,1
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,1
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs2r.v\tv[0-9]+,0\(sp\)
+@@ -149,8 +149,8 @@ spill_12 (uint64_t *in, uint64_t *out)
+ 
+ /*
+ ** spill_13:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,2
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,2
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs4r.v\tv[0-9]+,0\(sp\)
+@@ -173,8 +173,8 @@ spill_13 (uint64_t *in, uint64_t *out)
+ 
+ /*
+ ** spill_14:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,3
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,3
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs8r.v\tv[0-9]+,0\(sp\)
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/base/spill-5.c b/gcc/testsuite/gcc.target/riscv/rvv/base/spill-5.c
+index a6874067e762..2324a91dd50f 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/base/spill-5.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/base/spill-5.c
+@@ -7,8 +7,8 @@
+ 
+ /*
+ ** spill_3:
+-**  csrr\tt0,vlenb
+-**  sub\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  sub\tsp,sp,[a-x0-9]+
+ **  vsetvli\ta5,zero,e32,mf2,ta,ma
+ **  vle32.v\tv[0-9]+,0\(a0\)
+ **  csrr\t[a-x0-9]+,vlenb
+@@ -16,13 +16,12 @@
+ **  add\t[a-x0-9]+,[a-x0-9]+,sp
+ **  vse32.v\tv[0-9]+,0\([a-x0-9]+\)
+ **  ...
+-**  csrr\t[a-x0-9]+,vlenb
+ **  srli\t[a-x0-9]+,[a-x0-9]+,1
+ **  add\t[a-x0-9]+,[a-x0-9]+,sp
+ **  vle32.v\tv[0-9]+,0\([a-x0-9]+\)
+ **  vse32.v\tv[0-9]+,0\([a-x0-9]+\)
+-**  csrr\tt0,vlenb
+-**  add\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  add\tsp,sp,[a-x0-9]+
+ **  ...
+ **  jr\tra
+ */
+@@ -36,8 +35,8 @@ spill_3 (float *in, float *out)
+ 
+ /*
+ ** spill_4:
+-**  csrr\tt0,vlenb
+-**  sub\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  sub\tsp,sp,[a-x0-9]+
+ **  ...
+ **  vs1r.v\tv[0-9]+,0\(sp\)
+ **  ...
+@@ -59,8 +58,8 @@ spill_4 (float *in, float *out)
+ 
+ /*
+ ** spill_5:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,1
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,1
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs2r.v\tv[0-9]+,0\(sp\)
+@@ -83,8 +82,8 @@ spill_5 (float *in, float *out)
+ 
+ /*
+ ** spill_6:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,2
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,2
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs4r.v\tv[0-9]+,0\(sp\)
+@@ -107,8 +106,8 @@ spill_6 (float *in, float *out)
+ 
+ /*
+ ** spill_7:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,3
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,3
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs8r.v\tv[0-9]+,0\(sp\)
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/base/spill-6.c b/gcc/testsuite/gcc.target/riscv/rvv/base/spill-6.c
+index 07eee61baa37..a6f23372139d 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/base/spill-6.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/base/spill-6.c
+@@ -7,8 +7,8 @@
+ 
+ /*
+ ** spill_4:
+-**  csrr\tt0,vlenb
+-**  sub\tsp,sp,t0
++**  csrr\t[a-x0-9]+,vlenb
++**  sub\tsp,sp,[a-x0-9]+
+ **  ...
+ **  vs1r.v\tv[0-9]+,0\(sp\)
+ **  ...
+@@ -30,8 +30,8 @@ spill_4 (double *in, double *out)
+ 
+ /*
+ ** spill_5:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,1
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,1
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs2r.v\tv[0-9]+,0\(sp\)
+@@ -54,8 +54,8 @@ spill_5 (double *in, double *out)
+ 
+ /*
+ ** spill_6:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,2
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,2
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs4r.v\tv[0-9]+,0\(sp\)
+@@ -78,8 +78,8 @@ spill_6 (double *in, double *out)
+ 
+ /*
+ ** spill_7:
+-**  csrr\tt0,vlenb
+-**  slli\tt1,t0,3
++**  csrr\t[a-x0-9]+,vlenb
++**  slli\tt1,[a-x0-9]+,3
+ **  sub\tsp,sp,t1
+ **  ...
+ **  vs8r.v\tv[0-9]+,0\(sp\)
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/base/spill-7.c b/gcc/testsuite/gcc.target/riscv/rvv/base/spill-7.c
+index 2bc54557deec..865a95a0fb97 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/base/spill-7.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/base/spill-7.c
+@@ -19,31 +19,26 @@
+ **  addi\t[a-x0-9]+,[a-x0-9]+,1
+ **  vsetvli\t[a-x0-9]+,zero,e8,mf4,ta,ma
+ **  vle8.v\tv[0-9]+,0\([a-x0-9]+\)
+-**  csrr\t[a-x0-9]+,vlenb
+ **  srli\t[a-x0-9]+,[a-x0-9]+,2
+ **  add\t[a-x0-9]+,[a-x0-9]+,[a-x0-9]+
+ **  vse8.v\tv[0-9]+,0\([a-x0-9]+\)
+ **  addi\t[a-x0-9]+,[a-x0-9]+,2
+ **  vsetvli\t[a-x0-9]+,zero,e8,mf2,ta,ma
+ **  vle8.v\tv[0-9]+,0\([a-x0-9]+\)
+-**  csrr\t[a-x0-9]+,vlenb
+ **  srli\t[a-x0-9]+,[a-x0-9]+,1
+ **  add\t[a-x0-9]+,[a-x0-9]+,[a-x0-9]+
+ **  vse8.v\tv[0-9]+,0\([a-x0-9]+\)
+ **  addi\t[a-x0-9]+,[a-x0-9]+,3
+ **  vl1re8.v\tv[0-9]+,0\([a-x0-9]+\)
+-**  csrr\t[a-x0-9]+,vlenb
+ **  add\t[a-x0-9]+,[a-x0-9]+,[a-x0-9]+
+ **  vs1r.v\tv[0-9]+,0\([a-x0-9]+\)
+ **  addi\t[a-x0-9]+,[a-x0-9]+,4
+ **  vl2re8.v\tv[0-9]+,0\([a-x0-9]+\)
+-**  csrr\t[a-x0-9]+,vlenb
+ **  slli\t[a-x0-9]+,[a-x0-9]+,1
+ **  add\t[a-x0-9]+,[a-x0-9]+,[a-x0-9]+
+ **  vs2r.v\tv[0-9]+,0\([a-x0-9]+\)
+ **  addi\t[a-x0-9]+,[a-x0-9]+,5
+ **  vl4re8.v\tv[0-9]+,0\([a-x0-9]+\)
+-**  mv\t[a-x0-9]+,[a-x0-9]+
+ **  slli\t[a-x0-9]+,[a-x0-9]+,2
+ **  add\t[a-x0-9]+,[a-x0-9]+,[a-x0-9]+
+ **  vs4r.v\tv[0-9]+,0\([a-x0-9]+\)
+@@ -66,8 +61,6 @@
+ **  vle8.v\tv[0-9]+,0\([a-x0-9]+\)
+ **  vse8.v\tv[0-9]+,0\([a-x0-9]+\)
+ **  addi\t[a-x0-9]+,[a-x0-9]+,2
+-**  srli\t[a-x0-9]+,[a-x0-9]+,1
+-**  add\t[a-x0-9]+,[a-x0-9]+,[a-x0-9]+
+ **  ...
+ **  vle8.v\tv[0-9]+,0\([a-x0-9]+\)
+ **  vse8.v\tv[0-9]+,0\([a-x0-9]+\)
