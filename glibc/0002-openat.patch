@@ -1,0 +1,1322 @@
+commit dce70e8e507d3dff6ed10abe32cf5956380330fc
+Author: Jeff Law <jlaw@ventanamicro.com>
+Date:   Sat Dec 20 11:12:10 2025 -0700
+
+    Revert "linux: Update kernel version to 6.17 in tst-openat2-consts.py"
+    
+    This reverts commit fcd88791e991f3eeb9d36845fbaf2f9f1db0f07d.
+
+diff --git a/NEWS b/NEWS
+index 2f266f2534..2d4069d54e 100644
+--- a/NEWS
++++ b/NEWS
+@@ -54,10 +54,6 @@ Major new features:
+   targets, and libgcc compatible runtime (including libgcc_s.so for
+   pthread cancellation and backtrace runtime support).
+ 
+-* On Linux, the openat2 function has been added.  It is an extension of
+-  openat and provides a superset of its functionality.  It is supported only
+-  in LFS mode and it is a cancellable entrypoint.
+-
+ Deprecated and removed features, and other changes affecting compatibility:
+ 
+ * Support for dumped heaps has been removed - malloc_set_state() now always
+diff --git a/manual/llio.texi b/manual/llio.texi
+index 7094ff4145..806ff0a27d 100644
+--- a/manual/llio.texi
++++ b/manual/llio.texi
+@@ -218,104 +218,6 @@ new, extended API using 64 bit file sizes and offsets transparently
+ replaces the old API.
+ @end deftypefun
+ 
+-@deftp {Data Type} {struct open_how}
+-@standards{Linux, fcntl.h}
+-The @code{open_how} structure describes how to open a file using @code{openat2}.
+-
+-@strong{Portability note:} In the future, additional fields can be added
+-to @code{struct open_how}, so that the size of this data type increases.
+-Do not use it in places where this matters, such as structure fields in
+-installed header files, where such a change could affect the application
+-binary interface (ABI).
+-
+-The following generic fields are available.
+-
+-@table @code
+-@item flags
+-This field specifies the file creation and file status flags to use when
+-opening the file.
+-All of the @code{O_*} flags defined for @code{openat} are valid.
+-The @code{openat2} is stricter than @code{openat} in rejecting unknown or
+-conflicting values. For example, @code{openat2} rejects a mode that
+-exceeds 07777, whereas @code{openat} silently ignores
+-excess high-order bits.
+-
+-@item mode
+-This field specifies the mode for the new file, similar to @code{mode}
+-argument of @code{openat}. It should be in the range 0..07777.
+-
+-@item resolve
+-This is a bitmask of flags that affect the resolution of file name components.
+-Unlike @code{O_NOFOLLOW}, it affects all file name components, not just the
+-last one. The following flags are available.
+-
+-@table @code
+-@item RESOLVE_NO_XDEV
+-Disallow traversal of mount points during path resolution (including all
+-bind mounts).
+-
+-@item RESOLVE_NO_MAGICLINKS
+-Disallow all @strong{magic-link} resolution during path resolution. Magic
+-links are symbolic link-like objects that are found in @strong{procfs};
+-for example the @code{/proc/pid/exe}.
+-
+-@item RESOLVE_NO_SYMLINKS
+-Disallow resolution of symbolic links during path resolution.
+-This option implies @code{RESOLVE_NO_MAGICLINKS}.
+-
+-@item RESOLVE_BENEATH
+-This rejects absolute pathnames, pathnames containing @file{..}@:
+-components that would be resolved relative to @var{dfd},
+-and symbolic links that resolve to pathnames that would be rejected.
+-The rejection occurs even if @var{dfd} is the root directory.
+-
+-@item RESOLVE_IN_ROOT
+-Treat absolute pathnames as being relative to @var{dfd},
+-treat a @file{..}@: component as being equivalent to @file{.}@:
+-if it is resolved relative to @var{dfd},
+-and treat symbolic link contents consistently with this.
+-@end table
+-
+-@end table
+-
+-@end deftp
+-
+-
+-@deftypefun int openat2 (int @var{dirfd}, const char *@var{pathname}, const struct open_how *@var{how}, size_t @var{size})
+-@standards{Linux, fcntl.h}
+-@safety{@mtsafe{}@assafe{}@acsafe{}}
+-This function is an extension of the @code{openat} and provides a superset of its
+-functionality.  @xref{Descriptor-Relative Access}.
+-
+-The @var{size} argument must equal @code{sizeof *@var{how}}. For portability
+-to future API versions that may extend @code{struct open_how}, @code{*@var{how}}
+-should be fully initialized e.g., by a struct initializer, by @code{memset} to zero,
+-or by having static storage duration.
+-
+-On failure, @code{openat2} returns @math{-1} and sets @code{errno}. It can
+-fail for any of the reasons @code{openat} fails, plus the following reasons:
+-
+-@table @code
+-@item E2BIG
+-@var{size} is too large for any future extension, @code{*@var{how}} contains
+-non-zero members that are future extensions not supported by this kernel
+-
+-@item EINVAL
+-An unknown flag or invalid value was used on @code{*@var{how}}; or
+-@code{@var{how}->mode} is non-zero, but @code{@var{how}->flags} does not contain
+-@code{O_CREAT} or @code{O_TMPFILE}, or @var{size} is smaller than the ones supported
+-by the kernel.
+-@end table
+-
+-It can also return all the errors @code{openat} returns.
+-
+-Similar to @code{openat}, @code{openat2} is a cancellation point.
+-
+-Unlike other @code{open}-like functions, this function ignores
+-@code{_FILE_OFFSET_BITS} and always operates in large file mode.
+-@end deftypefun
+-
+-
+ @deftypefn {Obsolete function} int creat (const char *@var{filename}, mode_t @var{mode})
+ @standards{POSIX.1, fcntl.h}
+ @safety{@prelim{}@mtsafe{}@assafe{}@acsafe{@acsfd{}}}
+diff --git a/sysdeps/unix/sysv/linux/Makefile b/sysdeps/unix/sysv/linux/Makefile
+index 955d316362..f6b59d80dc 100644
+--- a/sysdeps/unix/sysv/linux/Makefile
++++ b/sysdeps/unix/sysv/linux/Makefile
+@@ -135,7 +135,6 @@ sysdep_headers += \
+   bits/mman-linux.h \
+   bits/mman-map-flags-generic.h \
+   bits/mman-shared.h \
+-  bits/openat2.h \
+   bits/procfs-extra.h \
+   bits/procfs-id.h \
+   bits/procfs-prregset.h \
+@@ -624,7 +623,6 @@ sysdep_routines += \
+   internal_statvfs \
+   open64_nocancel \
+   open_nocancel \
+-  openat2 \
+   openat64_nocancel \
+   openat_nocancel \
+   pread64_nocancel \
+@@ -636,12 +634,7 @@ sysdep_routines += \
+   xstatconv \
+   # sysdep_routines
+ 
+-routines_no_fortify += \
+-  openat2 \
+-  # routines_no_fortify
+-
+ sysdep_headers += \
+-  bits/fcntl-linux-fortify.h \
+   bits/fcntl-linux.h \
+   # sysdep_headers
+ 
+@@ -650,24 +643,7 @@ tests += \
+   tst-fallocate64 \
+   tst-getcwd-smallbuff \
+   tst-o_path-locks \
+-  tst-openat2 \
+-  tst-openat2-lfs \
+   # tests
+-
+-tests-special += \
+-  $(objpfx)tst-openat2-consts.out \
+-  # tests-special
+-$(objpfx)tst-openat2-consts.out: ../sysdeps/unix/sysv/linux/tst-openat2-consts.py
+-	$(sysdeps-linux-python) \
+-	  ../sysdeps/unix/sysv/linux/tst-openat2-consts.py \
+-	    $(sysdeps-linux-python-cc) \
+-	  < /dev/null > $@ 2>&1; $(evaluate-test)
+-$(objpfx)tst-openat2-consts.out: $(sysdeps-linux-python-deps)
+-
+-# openat2 only provides LFS support, the tests check if the interface is correctly
+-# provided regardless of the flags.
+-CFLAGS-tst-openat2-lfs.c += -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE
+-
+ endif
+ 
+ ifeq ($(subdir),elf)
+diff --git a/sysdeps/unix/sysv/linux/Versions b/sysdeps/unix/sysv/linux/Versions
+index c7f199f13f..8f4d71ad7f 100644
+--- a/sysdeps/unix/sysv/linux/Versions
++++ b/sysdeps/unix/sysv/linux/Versions
+@@ -341,7 +341,6 @@ libc {
+   }
+   GLIBC_2.43 {
+     mseal;
+-    openat2;
+   }
+   GLIBC_PRIVATE {
+     # functions used in other libraries
+diff --git a/sysdeps/unix/sysv/linux/aarch64/libc.abilist b/sysdeps/unix/sysv/linux/aarch64/libc.abilist
+index 3156688add..d161d268d9 100644
+--- a/sysdeps/unix/sysv/linux/aarch64/libc.abilist
++++ b/sysdeps/unix/sysv/linux/aarch64/libc.abilist
+@@ -2773,5 +2773,4 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+diff --git a/sysdeps/unix/sysv/linux/alpha/libc.abilist b/sysdeps/unix/sysv/linux/alpha/libc.abilist
+index 8af5b0b581..62879b6a08 100644
+--- a/sysdeps/unix/sysv/linux/alpha/libc.abilist
++++ b/sysdeps/unix/sysv/linux/alpha/libc.abilist
+@@ -3120,7 +3120,6 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+ GLIBC_2.5 __readlinkat_chk F
+ GLIBC_2.5 inet6_opt_append F
+diff --git a/sysdeps/unix/sysv/linux/arc/libc.abilist b/sysdeps/unix/sysv/linux/arc/libc.abilist
+index 35fcef2cc4..bd5fa65e93 100644
+--- a/sysdeps/unix/sysv/linux/arc/libc.abilist
++++ b/sysdeps/unix/sysv/linux/arc/libc.abilist
+@@ -2534,5 +2534,4 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+diff --git a/sysdeps/unix/sysv/linux/arm/be/libc.abilist b/sysdeps/unix/sysv/linux/arm/be/libc.abilist
+index a6c6b951bf..7d975dafab 100644
+--- a/sysdeps/unix/sysv/linux/arm/be/libc.abilist
++++ b/sysdeps/unix/sysv/linux/arm/be/libc.abilist
+@@ -2826,7 +2826,6 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+ GLIBC_2.5 __readlinkat_chk F
+ GLIBC_2.5 inet6_opt_append F
+diff --git a/sysdeps/unix/sysv/linux/arm/le/libc.abilist b/sysdeps/unix/sysv/linux/arm/le/libc.abilist
+index e76015fe66..c95bbfe6df 100644
+--- a/sysdeps/unix/sysv/linux/arm/le/libc.abilist
++++ b/sysdeps/unix/sysv/linux/arm/le/libc.abilist
+@@ -2823,7 +2823,6 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+ GLIBC_2.5 __readlinkat_chk F
+ GLIBC_2.5 inet6_opt_append F
+diff --git a/sysdeps/unix/sysv/linux/bits/fcntl-linux-fortify.h b/sysdeps/unix/sysv/linux/bits/fcntl-linux-fortify.h
+deleted file mode 100644
+index e6b414d7ef..0000000000
+--- a/sysdeps/unix/sysv/linux/bits/fcntl-linux-fortify.h
++++ /dev/null
+@@ -1,49 +0,0 @@
+-/* Checking macros for fcntl functions.  Linux version.
+-   Copyright (C) 2025 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <https://www.gnu.org/licenses/>.  */
+-
+-#ifndef	_FCNTL_H
+-# error "Never include <bits/fcntl-linux-fortify.h> directly; use <fcntl.h> instead."
+-#endif
+-
+-#ifdef __USE_GNU
+-
+-extern int __REDIRECT (__openat2_alias, (int __dfd, const char *__filename,
+-					 const struct open_how *__how,
+-					 size_t __usize), openat2)
+-     __nonnull ((2, 3));
+-
+-#if !__fortify_use_clang
+-__errordecl (__openat2_invalid_size,
+-	     "the specified size is larger than sizeof (struct open_how)");
+-#endif
+-
+-__fortify_function int
+-openat2 (int __dfd, const char *__filename, const struct open_how *__how,
+-	 size_t __usize)
+-     __fortify_clang_warning (__builtin_constant_p (__usize)
+-			      && __usize > sizeof (struct open_how),
+-			      "the specified size is larger than sizeof (struct open_how)")
+-{
+-#if !__fortify_use_clang
+-  if (__builtin_constant_p (__usize) && __usize > sizeof (struct open_how))
+-    __openat2_invalid_size ();
+-#endif
+-  return __openat2_alias (__dfd, __filename, __how, __usize);
+-}
+-
+-#endif /* use GNU */
+diff --git a/sysdeps/unix/sysv/linux/bits/fcntl-linux.h b/sysdeps/unix/sysv/linux/bits/fcntl-linux.h
+index bdab40f559..f9b3de11f4 100644
+--- a/sysdeps/unix/sysv/linux/bits/fcntl-linux.h
++++ b/sysdeps/unix/sysv/linux/bits/fcntl-linux.h
+@@ -463,33 +463,6 @@ extern int name_to_handle_at (int __dfd, const char *__name,
+ extern int open_by_handle_at (int __mountdirfd, struct file_handle *__handle,
+ 			      int __flags);
+ 
+-#ifdef __has_include
+-# if __has_include ("linux/openat2.h")
+-#  include "linux/openat2.h"
+-#  define __glibc_has_open_how 1
+-# endif
+-#endif
+-
+-#include <bits/openat2.h>
+-
+-/* Similar to `openat' but the arguments are packed on HOW with the size
+-   USIZE.  If flags and mode from HOW are non-zero, then openat2 operates
+-   like openat.
+-
+-   Unlike openat, unknown or invalid flags result in an error (EINVAL),
+-   rather than being ignored.  The mode must be zero unless one of O_CREAT
+-   or O_TMPFILE are set.
+-
+-   The kernel does not support legacy non-LFS interface.  */
+-extern int openat2 (int __dfd, const char * __filename,
+-		    const struct open_how * __how,
+-		    __SIZE_TYPE__ __usize)
+-     __nonnull ((2, 3));
+-
+ #endif	/* use GNU */
+ 
+-#if __USE_FORTIFY_LEVEL > 0 && defined __fortify_function
+-# include <bits/fcntl-linux-fortify.h>
+-#endif
+-
+ __END_DECLS
+diff --git a/sysdeps/unix/sysv/linux/bits/openat2.h b/sysdeps/unix/sysv/linux/bits/openat2.h
+deleted file mode 100644
+index a3fe858bc2..0000000000
+--- a/sysdeps/unix/sysv/linux/bits/openat2.h
++++ /dev/null
+@@ -1,60 +0,0 @@
+-/* openat2 definition.  Linux specific.
+-   Copyright (C) 2025 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <https://www.gnu.org/licenses/>.  */
+-
+-#ifndef _FCNTL_H
+-# error "Never use <bits/openat2.h> directly; include <fcntl.h> instead."
+-#endif
+-
+-#ifndef __glibc_has_open_how
+-/* Arguments for how openat2 should open the target path.  */
+-struct open_how
+-{
+-  __uint64_t flags;
+-  __uint64_t mode;
+-  __uint64_t resolve;
+-};
+-#endif
+-
+-/* how->resolve flags for openat2. */
+-#ifndef RESOLVE_NO_XDEV
+-# define RESOLVE_NO_XDEV	0x01 /* Block mount-point crossings
+-					(includes bind-mounts).  */
+-#endif
+-#ifndef RESOLVE_NO_MAGICLINKS
+-# define RESOLVE_NO_MAGICLINKS	0x02 /* Block traversal through procfs-style
+-					"magic-links".  */
+-#endif
+-#ifndef RESOLVE_NO_SYMLINKS
+-# define RESOLVE_NO_SYMLINKS	0x04 /* Block traversal through all symlinks.  */
+-#endif
+-#ifndef RESOLVE_BENEATH
+-# define RESOLVE_BENEATH	0x08 /* Block "lexical" trickery like
+-					"..", symlinks, and absolute
+-					paths which escape the dirfd.  */
+-#endif
+-#ifndef RESOLVE_IN_ROOT
+-# define RESOLVE_IN_ROOT	0x10 /* Make all jumps to "/" and ".."
+-					be scoped inside the dirfd
+-					(similar to chroot).  */
+-#endif
+-#ifndef RESOLVE_CACHED
+-# define RESOLVE_CACHED		0x20 /* Only complete if resolution can be
+-					completed through cached lookup. May
+-					return -EAGAIN if that's not
+-					possible.  */
+-#endif
+diff --git a/sysdeps/unix/sysv/linux/csky/libc.abilist b/sysdeps/unix/sysv/linux/csky/libc.abilist
+index 1fb7cdcad5..6fc91899ff 100644
+--- a/sysdeps/unix/sysv/linux/csky/libc.abilist
++++ b/sysdeps/unix/sysv/linux/csky/libc.abilist
+@@ -2810,5 +2810,4 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+diff --git a/sysdeps/unix/sysv/linux/hppa/libc.abilist b/sysdeps/unix/sysv/linux/hppa/libc.abilist
+index 0710ccecf9..8a83722bf5 100644
+--- a/sysdeps/unix/sysv/linux/hppa/libc.abilist
++++ b/sysdeps/unix/sysv/linux/hppa/libc.abilist
+@@ -2847,7 +2847,6 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+ GLIBC_2.5 __readlinkat_chk F
+ GLIBC_2.5 inet6_opt_append F
+diff --git a/sysdeps/unix/sysv/linux/i386/libc.abilist b/sysdeps/unix/sysv/linux/i386/libc.abilist
+index 3afe3a88eb..3b96177e1d 100644
+--- a/sysdeps/unix/sysv/linux/i386/libc.abilist
++++ b/sysdeps/unix/sysv/linux/i386/libc.abilist
+@@ -3030,7 +3030,6 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+ GLIBC_2.5 __readlinkat_chk F
+ GLIBC_2.5 inet6_opt_append F
+diff --git a/sysdeps/unix/sysv/linux/loongarch/lp64/libc.abilist b/sysdeps/unix/sysv/linux/loongarch/lp64/libc.abilist
+index c2b3a66d3a..bc39d18d6d 100644
+--- a/sysdeps/unix/sysv/linux/loongarch/lp64/libc.abilist
++++ b/sysdeps/unix/sysv/linux/loongarch/lp64/libc.abilist
+@@ -2294,5 +2294,4 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+diff --git a/sysdeps/unix/sysv/linux/m68k/coldfire/libc.abilist b/sysdeps/unix/sysv/linux/m68k/coldfire/libc.abilist
+index d6855131e8..b42b4fe920 100644
+--- a/sysdeps/unix/sysv/linux/m68k/coldfire/libc.abilist
++++ b/sysdeps/unix/sysv/linux/m68k/coldfire/libc.abilist
+@@ -2806,7 +2806,6 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+ GLIBC_2.5 __readlinkat_chk F
+ GLIBC_2.5 inet6_opt_append F
+diff --git a/sysdeps/unix/sysv/linux/m68k/m680x0/libc.abilist b/sysdeps/unix/sysv/linux/m68k/m680x0/libc.abilist
+index 4e3fe9c42f..854bf3c149 100644
+--- a/sysdeps/unix/sysv/linux/m68k/m680x0/libc.abilist
++++ b/sysdeps/unix/sysv/linux/m68k/m680x0/libc.abilist
+@@ -2973,7 +2973,6 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+ GLIBC_2.5 __readlinkat_chk F
+ GLIBC_2.5 inet6_opt_append F
+diff --git a/sysdeps/unix/sysv/linux/microblaze/be/libc.abilist b/sysdeps/unix/sysv/linux/microblaze/be/libc.abilist
+index 29f0c5f954..ab3d67bd60 100644
+--- a/sysdeps/unix/sysv/linux/microblaze/be/libc.abilist
++++ b/sysdeps/unix/sysv/linux/microblaze/be/libc.abilist
+@@ -2859,5 +2859,4 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+diff --git a/sysdeps/unix/sysv/linux/microblaze/le/libc.abilist b/sysdeps/unix/sysv/linux/microblaze/le/libc.abilist
+index 2ef62838f7..510b3a24d0 100644
+--- a/sysdeps/unix/sysv/linux/microblaze/le/libc.abilist
++++ b/sysdeps/unix/sysv/linux/microblaze/le/libc.abilist
+@@ -2856,5 +2856,4 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+diff --git a/sysdeps/unix/sysv/linux/mips/mips32/fpu/libc.abilist b/sysdeps/unix/sysv/linux/mips/mips32/fpu/libc.abilist
+index 031e8961ac..dd2baab3c9 100644
+--- a/sysdeps/unix/sysv/linux/mips/mips32/fpu/libc.abilist
++++ b/sysdeps/unix/sysv/linux/mips/mips32/fpu/libc.abilist
+@@ -2936,7 +2936,6 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+ GLIBC_2.5 __readlinkat_chk F
+ GLIBC_2.5 inet6_opt_append F
+diff --git a/sysdeps/unix/sysv/linux/mips/mips32/nofpu/libc.abilist b/sysdeps/unix/sysv/linux/mips/mips32/nofpu/libc.abilist
+index 8dc99d81b4..88fa8b9a97 100644
+--- a/sysdeps/unix/sysv/linux/mips/mips32/nofpu/libc.abilist
++++ b/sysdeps/unix/sysv/linux/mips/mips32/nofpu/libc.abilist
+@@ -2934,7 +2934,6 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+ GLIBC_2.5 __readlinkat_chk F
+ GLIBC_2.5 inet6_opt_append F
+diff --git a/sysdeps/unix/sysv/linux/mips/mips64/n32/libc.abilist b/sysdeps/unix/sysv/linux/mips/mips64/n32/libc.abilist
+index 054c5b6391..00993fef2b 100644
+--- a/sysdeps/unix/sysv/linux/mips/mips64/n32/libc.abilist
++++ b/sysdeps/unix/sysv/linux/mips/mips64/n32/libc.abilist
+@@ -2942,7 +2942,6 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+ GLIBC_2.5 __readlinkat_chk F
+ GLIBC_2.5 inet6_opt_append F
+diff --git a/sysdeps/unix/sysv/linux/mips/mips64/n64/libc.abilist b/sysdeps/unix/sysv/linux/mips/mips64/n64/libc.abilist
+index 13f0148bc0..136da09f71 100644
+--- a/sysdeps/unix/sysv/linux/mips/mips64/n64/libc.abilist
++++ b/sysdeps/unix/sysv/linux/mips/mips64/n64/libc.abilist
+@@ -2844,7 +2844,6 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+ GLIBC_2.5 __readlinkat_chk F
+ GLIBC_2.5 inet6_opt_append F
+diff --git a/sysdeps/unix/sysv/linux/openat2.c b/sysdeps/unix/sysv/linux/openat2.c
+deleted file mode 100644
+index d45eb05c32..0000000000
+--- a/sysdeps/unix/sysv/linux/openat2.c
++++ /dev/null
+@@ -1,29 +0,0 @@
+-/* Linux openat2 syscall implementation.
+-   Copyright (C) 2025 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <https://www.gnu.org/licenses/>.  */
+-
+-#include <fcntl.h>
+-#include <bits/openat2.h>
+-#include <sysdep-cancel.h>
+-
+-int
+-__openat2 (int dfd, const char *filename,
+-	   const struct open_how *how, size_t usize)
+-{
+-  return SYSCALL_CANCEL (openat2, dfd, filename, how, usize);
+-}
+-weak_alias (__openat2, openat2)
+diff --git a/sysdeps/unix/sysv/linux/or1k/libc.abilist b/sysdeps/unix/sysv/linux/or1k/libc.abilist
+index e7ffe07dd8..1a2a3673c7 100644
+--- a/sysdeps/unix/sysv/linux/or1k/libc.abilist
++++ b/sysdeps/unix/sysv/linux/or1k/libc.abilist
+@@ -2284,5 +2284,4 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+diff --git a/sysdeps/unix/sysv/linux/powerpc/powerpc32/fpu/libc.abilist b/sysdeps/unix/sysv/linux/powerpc/powerpc32/fpu/libc.abilist
+index dea4b20f05..f00901f956 100644
+--- a/sysdeps/unix/sysv/linux/powerpc/powerpc32/fpu/libc.abilist
++++ b/sysdeps/unix/sysv/linux/powerpc/powerpc32/fpu/libc.abilist
+@@ -3163,7 +3163,6 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+ GLIBC_2.5 __readlinkat_chk F
+ GLIBC_2.5 inet6_opt_append F
+diff --git a/sysdeps/unix/sysv/linux/powerpc/powerpc32/nofpu/libc.abilist b/sysdeps/unix/sysv/linux/powerpc/powerpc32/nofpu/libc.abilist
+index b45e127463..de23059026 100644
+--- a/sysdeps/unix/sysv/linux/powerpc/powerpc32/nofpu/libc.abilist
++++ b/sysdeps/unix/sysv/linux/powerpc/powerpc32/nofpu/libc.abilist
+@@ -3208,7 +3208,6 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+ GLIBC_2.5 __readlinkat_chk F
+ GLIBC_2.5 inet6_opt_append F
+diff --git a/sysdeps/unix/sysv/linux/powerpc/powerpc64/be/libc.abilist b/sysdeps/unix/sysv/linux/powerpc/powerpc64/be/libc.abilist
+index 942cf6a027..1ae78ec7ef 100644
+--- a/sysdeps/unix/sysv/linux/powerpc/powerpc64/be/libc.abilist
++++ b/sysdeps/unix/sysv/linux/powerpc/powerpc64/be/libc.abilist
+@@ -2917,7 +2917,6 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+ GLIBC_2.5 __readlinkat_chk F
+ GLIBC_2.5 inet6_opt_append F
+diff --git a/sysdeps/unix/sysv/linux/powerpc/powerpc64/le/libc.abilist b/sysdeps/unix/sysv/linux/powerpc/powerpc64/le/libc.abilist
+index 65d78e5076..53cb317a09 100644
+--- a/sysdeps/unix/sysv/linux/powerpc/powerpc64/le/libc.abilist
++++ b/sysdeps/unix/sysv/linux/powerpc/powerpc64/le/libc.abilist
+@@ -2993,5 +2993,4 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+diff --git a/sysdeps/unix/sysv/linux/riscv/rv32/libc.abilist b/sysdeps/unix/sysv/linux/riscv/rv32/libc.abilist
+index dcab30d72e..e6fd213d5c 100644
+--- a/sysdeps/unix/sysv/linux/riscv/rv32/libc.abilist
++++ b/sysdeps/unix/sysv/linux/riscv/rv32/libc.abilist
+@@ -2537,5 +2537,4 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+diff --git a/sysdeps/unix/sysv/linux/riscv/rv64/libc.abilist b/sysdeps/unix/sysv/linux/riscv/rv64/libc.abilist
+index 796ef35e26..905323b889 100644
+--- a/sysdeps/unix/sysv/linux/riscv/rv64/libc.abilist
++++ b/sysdeps/unix/sysv/linux/riscv/rv64/libc.abilist
+@@ -2737,5 +2737,4 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+diff --git a/sysdeps/unix/sysv/linux/s390/s390-32/libc.abilist b/sysdeps/unix/sysv/linux/s390/s390-32/libc.abilist
+index 9bd9f5eb78..c35e099d2c 100644
+--- a/sysdeps/unix/sysv/linux/s390/s390-32/libc.abilist
++++ b/sysdeps/unix/sysv/linux/s390/s390-32/libc.abilist
+@@ -3161,7 +3161,6 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+ GLIBC_2.5 __readlinkat_chk F
+ GLIBC_2.5 inet6_opt_append F
+diff --git a/sysdeps/unix/sysv/linux/s390/s390-64/libc.abilist b/sysdeps/unix/sysv/linux/s390/s390-64/libc.abilist
+index 8f2350ee0b..9f34c5fab3 100644
+--- a/sysdeps/unix/sysv/linux/s390/s390-64/libc.abilist
++++ b/sysdeps/unix/sysv/linux/s390/s390-64/libc.abilist
+@@ -2954,7 +2954,6 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+ GLIBC_2.5 __readlinkat_chk F
+ GLIBC_2.5 inet6_opt_append F
+diff --git a/sysdeps/unix/sysv/linux/sh/be/libc.abilist b/sysdeps/unix/sysv/linux/sh/be/libc.abilist
+index 7aa98c5aed..f26980c57c 100644
+--- a/sysdeps/unix/sysv/linux/sh/be/libc.abilist
++++ b/sysdeps/unix/sysv/linux/sh/be/libc.abilist
+@@ -2853,7 +2853,6 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+ GLIBC_2.5 __readlinkat_chk F
+ GLIBC_2.5 inet6_opt_append F
+diff --git a/sysdeps/unix/sysv/linux/sh/le/libc.abilist b/sysdeps/unix/sysv/linux/sh/le/libc.abilist
+index 6bd4f8f63a..e8ee581fa7 100644
+--- a/sysdeps/unix/sysv/linux/sh/le/libc.abilist
++++ b/sysdeps/unix/sysv/linux/sh/le/libc.abilist
+@@ -2850,7 +2850,6 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+ GLIBC_2.5 __readlinkat_chk F
+ GLIBC_2.5 inet6_opt_append F
+diff --git a/sysdeps/unix/sysv/linux/sparc/sparc32/libc.abilist b/sysdeps/unix/sysv/linux/sparc/sparc32/libc.abilist
+index b52cab2a35..3d0665d197 100644
+--- a/sysdeps/unix/sysv/linux/sparc/sparc32/libc.abilist
++++ b/sysdeps/unix/sysv/linux/sparc/sparc32/libc.abilist
+@@ -3184,7 +3184,6 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+ GLIBC_2.5 __readlinkat_chk F
+ GLIBC_2.5 inet6_opt_append F
+diff --git a/sysdeps/unix/sysv/linux/sparc/sparc64/libc.abilist b/sysdeps/unix/sysv/linux/sparc/sparc64/libc.abilist
+index ff99cd4f21..0b7644d8fe 100644
+--- a/sysdeps/unix/sysv/linux/sparc/sparc64/libc.abilist
++++ b/sysdeps/unix/sysv/linux/sparc/sparc64/libc.abilist
+@@ -2820,7 +2820,6 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+ GLIBC_2.5 __readlinkat_chk F
+ GLIBC_2.5 inet6_opt_append F
+diff --git a/sysdeps/unix/sysv/linux/tst-openat2-consts.py b/sysdeps/unix/sysv/linux/tst-openat2-consts.py
+deleted file mode 100755
+index f36c2f4ed1..0000000000
+--- a/sysdeps/unix/sysv/linux/tst-openat2-consts.py
++++ /dev/null
+@@ -1,63 +0,0 @@
+-#!/usr/bin/python3
+-# Test that glibc's sys/openat2.h constants match the kernel's.
+-# Copyright (C) 2025 Free Software Foundation, Inc.
+-# This file is part of the GNU C Library.
+-#
+-# The GNU C Library is free software; you can redistribute it and/or
+-# modify it under the terms of the GNU Lesser General Public
+-# License as published by the Free Software Foundation; either
+-# version 2.1 of the License, or (at your option) any later version.
+-#
+-# The GNU C Library is distributed in the hope that it will be useful,
+-# but WITHOUT ANY WARRANTY; without even the implied warranty of
+-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-# Lesser General Public License for more details.
+-#
+-# You should have received a copy of the GNU Lesser General Public
+-# License along with the GNU C Library; if not, see
+-# <https://www.gnu.org/licenses/>.
+-
+-import argparse
+-import sys
+-
+-import glibcextract
+-import glibcsyscalls
+-
+-
+-def main():
+-    """The main entry point."""
+-    parser = argparse.ArgumentParser(
+-        description="Test that glibc's sys/openat2.h constants "
+-        "match the kernel's.")
+-    parser.add_argument('--cc', metavar='CC',
+-                        help='C compiler (including options) to use')
+-    args = parser.parse_args()
+-
+-    if glibcextract.compile_c_snippet(
+-            '#include <linux/openat2.h>',
+-            args.cc).returncode != 0:
+-        sys.exit (77)
+-
+-    linux_version_headers = glibcsyscalls.linux_kernel_version(args.cc)
+-    # Constants in glibc were updated to match Linux v6.17.  When glibc
+-    # constants are updated this value should be updated to match the
+-    # released kernel version from which the constants were taken.
+-    linux_version_glibc = (6, 17)
+-    def check(cte, exclude=None):
+-        return glibcextract.compare_macro_consts(
+-                '#define _FCNTL_H\n'
+-                '#include <stdint.h>\n'
+-                '#include <bits/openat2.h>\n',
+-                '#include <asm/fcntl.h>\n'
+-                '#include <linux/openat2.h>\n',
+-                args.cc,
+-                cte,
+-                exclude,
+-                linux_version_glibc > linux_version_headers,
+-                linux_version_headers > linux_version_glibc)
+-
+-    status = check('RESOLVE.*')
+-    sys.exit(status)
+-
+-if __name__ == '__main__':
+-    main()
+diff --git a/sysdeps/unix/sysv/linux/tst-openat2-lfs.c b/sysdeps/unix/sysv/linux/tst-openat2-lfs.c
+deleted file mode 100644
+index 85962d30c1..0000000000
+--- a/sysdeps/unix/sysv/linux/tst-openat2-lfs.c
++++ /dev/null
+@@ -1 +0,0 @@
+-#include "tst-openat2.c"
+diff --git a/sysdeps/unix/sysv/linux/tst-openat2.c b/sysdeps/unix/sysv/linux/tst-openat2.c
+deleted file mode 100644
+index 0778b98b6c..0000000000
+--- a/sysdeps/unix/sysv/linux/tst-openat2.c
++++ /dev/null
+@@ -1,482 +0,0 @@
+-/* Linux openat2 tests.
+-   Copyright (C) 2025 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <https://www.gnu.org/licenses/>.  */
+-
+-#include <array_length.h>
+-#include <errno.h>
+-#include <fcntl.h>
+-#include <libgen.h>
+-#include <stdint.h>
+-
+-#include <support/check.h>
+-#include <support/support.h>
+-#include <support/temp_file.h>
+-#include <support/test-driver.h>
+-#include <support/xunistd.h>
+-
+-static int dir_fd;
+-static char *temp_dir;
+-static char *temp_subdir;
+-static char *temp_some_file;
+-
+-#define TEST_DIR_LINK    "test_dir_link"
+-#define TEST_DIR_LINK_2  "test_dir_link_2"
+-#define TEMP_DIR_LINK    "temp_dir_link"
+-#define INVALID_LINK     "invalid-link"
+-#define VALID_LINK       "valid-link"
+-
+-static void
+-create_symlink (const char *target, const char *linkpath)
+-{
+-  TEST_VERIFY_EXIT (symlinkat (target, dir_fd, linkpath) == 0);
+-  add_temp_file (xasprintf ("%s/%s", temp_dir, linkpath));
+-}
+-
+-static void
+-do_prepare (int argc, char *argv[])
+-{
+-  /*
+-     Construct a test directory with the following structure:
+-
+-     temp_dir/
+-     |- tst-openat2.xxxxxxx
+-        |- test_dir_link -> test_dir (/tmp)
+-        |- test_dir_link_2 -> test_dir_link
+-        |- temp_dir_link -> temp_dir/tst-openat2.xxxxxxx
+-        |- some-file.xxxxxxx
+-        |- invalid_link -> temp_dir/tst-openat2.xxxxxxx/some-file.xxxxxxx
+-        |- valid_link -> some-file.xxxxxxx
+-	|- subdir.xxxxxxx
+-	   |- some-file.xxxxxxx
+-  */
+-
+-  temp_dir = support_create_temp_directory ("tst-openat2.");
+-  dir_fd = xopen (temp_dir, O_RDONLY | O_DIRECTORY, 0);
+-
+-  create_symlink (test_dir, TEST_DIR_LINK);
+-  create_symlink (TEST_DIR_LINK, TEST_DIR_LINK_2);
+-  create_symlink (temp_dir, TEMP_DIR_LINK);
+-
+-  {
+-    char *filename;
+-    int fd = create_temp_file_in_dir ("some-file.", temp_dir, &filename);
+-    TEST_VERIFY_EXIT (fd != -1);
+-
+-    create_symlink (filename, INVALID_LINK);
+-
+-    create_symlink (basename (filename), VALID_LINK);
+-  }
+-
+-  temp_subdir = support_create_temp_directory (xasprintf ("%s/subdir.",
+-							  basename (temp_dir)));
+-  {
+-    int fd = create_temp_file_in_dir ("some-file.", temp_subdir,
+-				      &temp_some_file);
+-    TEST_VERIFY_EXIT (fd != -1);
+-  }
+-}
+-#define PREPARE do_prepare
+-
+-static int
+-do_test_struct (void)
+-{
+-  static struct struct_test
+-  {
+-    struct open_how_ext
+-    {
+-      struct open_how inner;
+-      int extra1;
+-      int extra2;
+-      int extra3;
+-    } arg;
+-    size_t size;
+-    int err;
+-  } tests[] =
+-  {
+-    {
+-      /* Zero size.  */
+-      .arg.inner.flags = O_RDONLY,
+-      .size = 0,
+-      .err = EINVAL,
+-    },
+-    {
+-      /* Normal struct.  */
+-      .arg.inner.flags = O_RDONLY,
+-      .size = sizeof (struct open_how),
+-    },
+-    {
+-      /* Larger struct, zeroed out the unused values.  */
+-      .arg.inner.flags = O_RDONLY,
+-      .size = sizeof (struct open_how_ext),
+-    },
+-    {
+-      /* Larger struct, non-zeroed out the unused values.  */
+-      .arg.inner.flags = O_RDONLY,
+-      .arg.extra1 = 0xdeadbeef,
+-      .size = sizeof (struct open_how_ext),
+-      .err = E2BIG,
+-    },
+-    {
+-      /* Larger struct, non-zeroed out the unused values.  */
+-      .arg.inner.flags = O_RDONLY,
+-      .arg.extra2 = 0xdeadbeef,
+-      .size = sizeof (struct open_how_ext),
+-      .err = E2BIG,
+-    },
+-  };
+-
+-  for (struct struct_test *t = tests; t != array_end (tests); t++)
+-    {
+-      int fd = openat2 (AT_FDCWD, ".", (struct open_how *) &t->arg, t->size);
+-      if (t->err != 0)
+-	{
+-	  TEST_COMPARE (fd, -1);
+-	  TEST_COMPARE (errno, t->err);
+-	}
+-      else
+-	TEST_VERIFY (fd >= 0);
+-    }
+-
+-  return 0;
+-}
+-
+-static int
+-do_test_flags (void)
+-{
+-  static struct flag_test
+-  {
+-    const char *path;
+-    struct open_how how;
+-    int err;
+-  } tests[] =
+-  {
+-    /* O_TMPFILE is incompatible with O_PATH and O_CREAT.  */
+-    {
+-      .how.flags = O_TMPFILE | O_PATH | O_RDWR,
+-      .err = EINVAL },
+-    {
+-      .how.flags = O_TMPFILE | O_CREAT | O_RDWR,
+-      .err = EINVAL },
+-
+-    /* O_PATH only permits certain other flags to be set ...  */
+-    {
+-      .how.flags = O_PATH | O_CLOEXEC
+-    },
+-    {
+-      .how.flags = O_PATH | O_DIRECTORY
+-    },
+-    {
+-      .how.flags = O_PATH | O_NOFOLLOW
+-    },
+-    /* ... and others are absolutely not permitted. */
+-    {
+-      .how.flags = O_PATH | O_RDWR,
+-      .err = EINVAL },
+-    {
+-      .how.flags = O_PATH | O_CREAT,
+-      .err = EINVAL },
+-    {
+-      .how.flags = O_PATH | O_EXCL,
+-      .err = EINVAL },
+-    {
+-      .how.flags = O_PATH | O_NOCTTY,
+-      .err = EINVAL },
+-    {
+-      .how.flags = O_PATH | O_DIRECT,
+-      .err = EINVAL },
+-
+-    /* ->mode must only be set with O_{CREAT,TMPFILE}. */
+-    {
+-      .how.flags = O_RDONLY,
+-      .how.mode = 0600,
+-      .err = EINVAL },
+-    {
+-      .how.flags = O_PATH,
+-      .how.mode = 0600,
+-      .err = EINVAL },
+-    {
+-      .how.flags = O_CREAT,
+-      .how.mode = 0600 },
+-    {
+-      .how.flags = O_TMPFILE | O_RDWR,
+-      .how.mode = 0600 },
+-    /* ->mode must only contain 0777 bits. */
+-    {
+-      .how.flags = O_CREAT, .how.mode = 0xFFFF, .err = EINVAL },
+-    {
+-      .how.flags = O_CREAT, .how.mode = 0xC000000000000000ULL,
+-      .err = EINVAL },
+-    {
+-      .how.flags = O_TMPFILE | O_RDWR, .how.mode = 0x1337,
+-      .err = EINVAL },
+-    {
+-      .how.flags = O_TMPFILE | O_RDWR,
+-      .how.mode = 0x0000A00000000000ULL,
+-      .err = EINVAL
+-    },
+-
+-    /* ->resolve flags must not conflict. */
+-    {
+-      .how.flags = O_RDONLY,
+-      .how.resolve = RESOLVE_BENEATH | RESOLVE_IN_ROOT,
+-      .err = EINVAL
+-    },
+-
+-    /* ->resolve must only contain RESOLVE_* flags.  */
+-    {
+-      .how.flags = O_RDONLY,
+-      .how.resolve = 0x1337,
+-      .err = EINVAL
+-    },
+-    {
+-      .how.flags = O_CREAT,
+-      .how.resolve = 0x1337,
+-      .err = EINVAL
+-    },
+-    {
+-      .how.flags = O_TMPFILE | O_RDWR,
+-      .how.resolve = 0x1337,
+-      .err = EINVAL
+-    },
+-    {
+-      .how.flags = O_PATH,
+-      .how.resolve = 0x1337,
+-      .err = EINVAL
+-    },
+-
+-    /* currently unknown upper 32 bit rejected.  */
+-    {
+-      .how.flags = O_RDONLY | (1ULL << 63),
+-      .how.resolve = 0,
+-      .err = EINVAL
+-    },
+-  };
+-
+-  for (struct flag_test *t = tests; t != array_end (tests); t++)
+-    {
+-      const char *path;
+-      if (t->how.flags & O_CREAT)
+-	{
+-	  char *newfile;
+-	  int temp_fd = create_temp_file ("tst-openat2.", &newfile);
+-	  TEST_VERIFY_EXIT (temp_fd != -1);
+-	  xunlink (newfile);
+-	  path = newfile;
+-	}
+-      else
+-	path = ".";
+-
+-      int fd = openat2 (AT_FDCWD, path, &t->how, sizeof (struct open_how));
+-      if (fd != 0 && errno == EOPNOTSUPP)
+-	{
+-	  /* Skip the testcase if FS does not support the operation (e.g.
+-	     valid O_TMPFILE on NFS).  */
+-	  continue;
+-	}
+-
+-      if (t->err != 0)
+-	{
+-	  TEST_COMPARE (fd, -1);
+-	  TEST_COMPARE (errno, t->err);
+-	}
+-      else
+-	TEST_VERIFY (fd >= 0);
+-    }
+-
+-  return 0;
+-}
+-
+-static void
+-do_test_resolve (void)
+-{
+-  int fd;
+-
+-  /* TEMP_DIR_LINK links to the absolute temp_dir, which escapes the temporary
+-     test directory.  */
+-  fd = openat2 (dir_fd,
+-		TEST_DIR_LINK,
+-		&(struct open_how)
+-		{
+-		  .resolve = RESOLVE_BENEATH,
+-		},
+-		sizeof (struct open_how));
+-  TEST_COMPARE (fd, -1);
+-  TEST_COMPARE (errno, EXDEV);
+-
+-  /* Same as before, TEMP_DIR_LINK_2 links to TEMP_DIR_LINK.  */
+-  fd = openat2 (dir_fd,
+-		TEST_DIR_LINK_2,
+-		&(struct open_how)
+-		{
+-		  .resolve = RESOLVE_BENEATH,
+-		},
+-		sizeof (struct open_how));
+-  TEST_COMPARE (fd, -1);
+-  TEST_COMPARE (errno, EXDEV);
+-
+-  /* TEMP_DIR_LINK links to the temporary directory itself (dir_fd).  */
+-  fd = openat2 (dir_fd,
+-		TEMP_DIR_LINK,
+-		&(struct open_how)
+-		{
+-		  .resolve = RESOLVE_BENEATH,
+-		},
+-		sizeof (struct open_how));
+-  TEST_COMPARE (fd, -1);
+-  TEST_COMPARE (errno, EXDEV);
+-
+-  /* Although it points to a valid file in same path, the link refers to
+-     an absolute path.  */
+-  fd = openat2 (dir_fd,
+-		INVALID_LINK,
+-		&(struct open_how)
+-		{
+-		  .resolve = RESOLVE_BENEATH,
+-		},
+-		sizeof (struct open_how));
+-  TEST_COMPARE (fd, -1);
+-  TEST_COMPARE (errno, EXDEV);
+-
+-  fd = openat2 (dir_fd,
+-		VALID_LINK,
+-		&(struct open_how)
+-		{
+-		  .resolve = RESOLVE_BENEATH,
+-		},
+-		sizeof (struct open_how));
+-  TEST_VERIFY (fd != -1);
+-  xclose (fd);
+-
+-  /* There is no such file in temp_dir/tst-openat2.xxxxxxx.  */
+-  fd = openat2 (dir_fd,
+-	       "should-not-work",
+-	       &(struct open_how)
+-	       {
+-	         .resolve = RESOLVE_IN_ROOT,
+-	       },
+-	       sizeof (struct open_how));
+-  TEST_COMPARE (fd, -1);
+-  TEST_COMPARE (errno, ENOENT);
+-
+-  {
+-    int subdir_fd = openat2 (dir_fd,
+-			     basename (temp_subdir),
+-			     &(struct open_how)
+-			     {
+-			       .flags = O_RDONLY | O_DIRECTORY,
+-			       .resolve = RESOLVE_IN_ROOT,
+-			     },
+-			     sizeof (struct open_how));
+-    TEST_VERIFY (subdir_fd != -1);
+-
+-    /* Open the file within the subdir.xxxxxx with both tst-openat2.xxxxxxx
+-       and tst-openat2.xxxxxxx/subdir.xxxxxxx file descriptors.  */
+-    fd = openat2 (subdir_fd,
+-		  basename (temp_some_file),
+-		  &(struct open_how)
+-		  {
+-		    .resolve = RESOLVE_IN_ROOT,
+-		  },
+-		  sizeof (struct open_how));
+-    TEST_VERIFY (fd != -1);
+-    xclose (fd);
+-
+-    fd = openat2 (dir_fd,
+-		  xasprintf ("%s/%s",
+-			     basename (temp_subdir),
+-			     basename (temp_some_file)),
+-		  &(struct open_how)
+-		  {
+-		    .resolve = RESOLVE_IN_ROOT,
+-		  },
+-		  sizeof (struct open_how));
+-    TEST_VERIFY (fd != -1);
+-    xclose (fd);
+-  }
+-}
+-
+-static int
+-do_test_basic (void)
+-{
+-  int fd;
+-
+-  fd = openat2 (dir_fd,
+-		"some-file",
+-		&(struct open_how)
+-		{
+-		  .flags = O_CREAT|O_RDWR|O_EXCL,
+-		  .mode = 0666,
+-		},
+-		sizeof (struct open_how));
+-  TEST_VERIFY (fd != -1);
+-
+-  xwrite (fd, "hello", 5);
+-
+-  /* Before closing the file, try using this file descriptor to open
+-     another file.  This must fail.  */
+-  {
+-    int fd2 = openat2 (fd,
+-		       "should-not-work",
+-		       &(struct open_how)
+-		       {
+-			 .flags = O_CREAT|O_RDWR|O_EXCL,
+-			 .mode = 0666,
+-		       },
+-		       sizeof (struct open_how));
+-    TEST_COMPARE (fd2, -1);
+-    TEST_COMPARE (errno, ENOTDIR);
+-  }
+-
+-  /* Remove the created file.  */
+-  int cwdfd = xopen (".", O_RDONLY | O_DIRECTORY, 0);
+-  TEST_COMPARE (fchdir (dir_fd), 0);
+-  xunlink ("some-file");
+-  TEST_COMPARE (fchdir (cwdfd), 0);
+-
+-  xclose (dir_fd);
+-  xclose (cwdfd);
+-
+-  fd = openat2 (dir_fd,
+-		"some-file",
+-		&(struct open_how)
+-		{
+-		  .flags = O_CREAT|O_RDWR|O_EXCL,
+-		  .mode = 0666,
+-		},
+-		sizeof (struct open_how));
+-  TEST_COMPARE (fd, -1);
+-  TEST_COMPARE (errno, EBADF);
+-
+-  return 0;
+-}
+-
+-static int
+-do_test (void)
+-{
+-  if (openat2 (AT_FDCWD, ".", &(struct open_how) {}, sizeof (struct open_how))
+-      == -1 && errno == ENOSYS)
+-    FAIL_UNSUPPORTED ("openat2 is not supported by the kernel");
+-
+-  do_test_struct ();
+-  do_test_flags ();
+-  do_test_resolve ();
+-  do_test_basic ();
+-
+-  return 0;
+-}
+-
+-#include <support/test-driver.c>
+diff --git a/sysdeps/unix/sysv/linux/x86_64/64/libc.abilist b/sysdeps/unix/sysv/linux/x86_64/64/libc.abilist
+index 306cd627fd..85533e9c07 100644
+--- a/sysdeps/unix/sysv/linux/x86_64/64/libc.abilist
++++ b/sysdeps/unix/sysv/linux/x86_64/64/libc.abilist
+@@ -2769,7 +2769,6 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
+ GLIBC_2.5 __readlinkat_chk F
+ GLIBC_2.5 inet6_opt_append F
+diff --git a/sysdeps/unix/sysv/linux/x86_64/x32/libc.abilist b/sysdeps/unix/sysv/linux/x86_64/x32/libc.abilist
+index 8b9c448742..2b2a351150 100644
+--- a/sysdeps/unix/sysv/linux/x86_64/x32/libc.abilist
++++ b/sysdeps/unix/sysv/linux/x86_64/x32/libc.abilist
+@@ -2788,5 +2788,4 @@ GLIBC_2.43 free_sized F
+ GLIBC_2.43 memalignment F
+ GLIBC_2.43 memset_explicit F
+ GLIBC_2.43 mseal F
+-GLIBC_2.43 openat2 F
+ GLIBC_2.43 umaxabs F
