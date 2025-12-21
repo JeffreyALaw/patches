@@ -1,5 +1,5 @@
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 96519c96a2b4..88711064e4fa 100644
+index 4fe2717a3f65..617b38ed6d06 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
 @@ -3497,14 +3497,14 @@ riscv_expand_op (enum rtx_code code, machine_mode mode, rtx op0, rtx op1,
@@ -51,7 +51,7 @@ index 96519c96a2b4..88711064e4fa 100644
  void
  riscv_legitimize_poly_move (machine_mode mode, rtx dest, rtx tmp, rtx src)
  {
-@@ -3655,8 +3666,43 @@ riscv_legitimize_poly_move (machine_mode mode, rtx dest, rtx tmp, rtx src)
+@@ -3655,8 +3666,42 @@ riscv_legitimize_poly_move (machine_mode mode, rtx dest, rtx tmp, rtx src)
      riscv_expand_op (LSHIFTRT, mode, tmp, tmp,
  		     gen_int_mode (exact_log2 (div_factor), QImode));
  
@@ -87,7 +87,6 @@ index 96519c96a2b4..88711064e4fa 100644
 +      if (set2 && SET_DEST (set2) == tmp)
 +	{
 +	  SET_DEST (set2) = dest;
-+	  tmp = dest;
 +	  /* Turn the prior insn into a NOP.  But don't delete.  */
 +	  SET_SRC (set) = SET_DEST (set);
 +	}
