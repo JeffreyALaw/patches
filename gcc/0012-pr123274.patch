@@ -1,0 +1,30 @@
+diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
+index 6f8cd26e5c95..a24ec95b2e48 100644
+--- a/gcc/config/riscv/riscv.md
++++ b/gcc/config/riscv/riscv.md
+@@ -4727,7 +4727,7 @@ (define_expand "usmul<mode>3"
+   [(match_operand:ANYI 0 "register_operand")
+    (match_operand:ANYI 1 "register_operand")
+    (match_operand:ANYI 2 "register_operand")]
+-  ""
++  "TARGET_ZMMUL || TARGET_MUL"
+   {
+     riscv_expand_usmul (operands[0], operands[1], operands[2]);
+     DONE;
+diff --git a/gcc/testsuite/gcc.target/riscv/pr123274.c b/gcc/testsuite/gcc.target/riscv/pr123274.c
+new file mode 100644
+index 000000000000..5f13e7c41fa6
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr123274.c
+@@ -0,0 +1,11 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -march=rv64id" { target rv64 } } */
++/* { dg-options "-O2 -march=rv32id" { target rv32 } } */
++unsigned a, b;
++
++void
++foo()
++{
++  if (__builtin_mul_overflow(a, b, &b))
++    b = 0xffffffff;
++}
