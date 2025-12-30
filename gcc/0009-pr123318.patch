@@ -1,0 +1,36 @@
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index 617b38ed6d06..4726ac506613 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -3440,8 +3440,11 @@ riscv_legitimize_const_move (machine_mode mode, rtx dest, rtx src)
+   src = force_const_mem (mode, src);
+ 
+   /* When using explicit relocs, constant pool references are sometimes
+-     not legitimate addresses.  */
+-  riscv_split_symbol (dest, XEXP (src, 0), mode, &XEXP (src, 0));
++     not legitimate addresses.   If DEST is not a suitable register (ie,
++     not a Pmode pseudo), then let RISCV_SPLIT_SYMBOL generate a fresh
++     temporary.  */
++  riscv_split_symbol (GET_MODE (dest) == Pmode ? dest : NULL_RTX,
++		      XEXP (src, 0), mode, &XEXP (src, 0));
+   riscv_emit_move (dest, src);
+ }
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/pr123318.c b/gcc/testsuite/gcc.target/riscv/pr123318.c
+new file mode 100644
+index 000000000000..3a1972c996c7
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr123318.c
+@@ -0,0 +1,12 @@
++/* { dg-do compile { target rv64 } } */
++/* { dg-options "-Ofast -mcmodel=medany -mexplicit-relocs -march=rv64gv" } */
++typedef _Complex _Float16 CF;
++_Complex int ci;
++CF cf;
++
++void
++foo()
++{
++  ci += cf;
++  ci -= (CF)0;
++}
