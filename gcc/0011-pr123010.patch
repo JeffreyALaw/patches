@@ -1,8 +1,198 @@
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index 3fe0ad0ccdf4..20f5d65fde16 100644
+index 3fe0ad0ccdf4..b3dee2155afe 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
-@@ -3072,13 +3072,13 @@ (define_insn "*lshrsi3_zero_extend_3"
+@@ -1852,33 +1852,41 @@ (define_expand "zero_extendsidi2"
+ 	(zero_extend:DI (match_operand:SI 1 "nonimmediate_operand")))]
+   "TARGET_64BIT"
+ {
++  /* If the source is a suitably extended subreg, then this is just
++     a simple move.  */
+   if (SUBREG_P (operands[1]) && SUBREG_PROMOTED_VAR_P (operands[1])
+       && SUBREG_PROMOTED_UNSIGNED_P (operands[1]))
+     {
+       emit_insn (gen_movdi (operands[0], SUBREG_REG (operands[1])));
+       DONE;
+     }
++
++  /* If the source is a register and we do not have ZBA or similar
++     extensions with similar capabilities, then emit the two
++     shifts now.  */
++  if (!TARGET_ZBA && !TARGET_XTHEADBB
++      && !TARGET_XTHEADMEMIDX && !TARGET_XANDESPERF
++      && register_operand (operands[1], SImode))
++    {
++      /* Intermediate register.  */
++      rtx ireg = gen_reg_rtx (DImode);
++      operands[1] = gen_lowpart (DImode, operands[1]);
++      rtx shiftval = GEN_INT (32);
++      rtx t = gen_rtx_ASHIFT (DImode, operands[1], shiftval);
++      emit_move_insn (ireg, t);
++      t = gen_rtx_LSHIFTRT (DImode, ireg, shiftval);
++      emit_move_insn (operands[0], t);
++      DONE;
++    }
+ })
+ 
+-(define_insn_and_split "*zero_extendsidi2_internal"
+-  [(set (match_operand:DI     0 "register_operand"     "=r,r")
+-	(zero_extend:DI
+-	    (match_operand:SI 1 "nonimmediate_operand" " r,m")))]
++(define_insn "*zero_extendsidi2_internal"
++  [(set (match_operand:DI     0 "register_operand"     "=r")
++	(zero_extend:DI (match_operand:SI 1 "memory_operand" "m")))]
+   "TARGET_64BIT && !TARGET_ZBA && !TARGET_XTHEADBB && !TARGET_XTHEADMEMIDX
+-   && !TARGET_XANDESPERF
+-   && !(REG_P (operands[1]) && VL_REG_P (REGNO (operands[1])))"
+-  "@
+-   #
+-   lwu\t%0,%1"
+-  "&& reload_completed
+-   && REG_P (operands[1])
+-   && !paradoxical_subreg_p (operands[0])"
+-  [(set (match_dup 0)
+-	(ashift:DI (match_dup 1) (const_int 32)))
+-   (set (match_dup 0)
+-	(lshiftrt:DI (match_dup 0) (const_int 32)))]
+-  { operands[1] = gen_lowpart (DImode, operands[1]); }
+-  [(set_attr "move_type" "shift_shift,load")
++   && !TARGET_XANDESPERF"
++  "lwu\t%0,%1"
++  [(set_attr "move_type" "load")
+    (set_attr "type" "load")
+    (set_attr "mode" "DI")])
+ 
+@@ -1886,29 +1894,43 @@ (define_expand "zero_extendhi<GPR:mode>2"
+   [(set (match_operand:GPR    0 "register_operand")
+ 	(zero_extend:GPR
+ 	    (match_operand:HI 1 "nonimmediate_operand")))]
+-  "")
++  ""
++{
++  /* If the source is a suitably extended subreg, then this is just
++     a simple move.  */
++  if (SUBREG_P (operands[1]) && SUBREG_PROMOTED_VAR_P (operands[1])
++      && SUBREG_PROMOTED_UNSIGNED_P (operands[1]))
++    {
++      emit_insn (gen_mov<GPR:mode> (operands[0], SUBREG_REG (operands[1])));
++      DONE;
++    }
+ 
+-(define_insn_and_split "*zero_extendhi<GPR:mode>2"
+-  [(set (match_operand:GPR    0 "register_operand"     "=r,r")
+-	(zero_extend:GPR
+-	    (match_operand:HI 1 "nonimmediate_operand" " r,m")))]
++  /* If the source is a register and we do not have ZBB or similar
++     extensions with similar capabilities, then emit the two
++     shifts now.  */
++  if (!TARGET_ZBB && !TARGET_XTHEADBB
++      && !TARGET_XTHEADMEMIDX && !TARGET_XANDESPERF
++      && register_operand (operands[1], HImode))
++    {
++      /* Intermediate register.  */
++      rtx ireg = gen_reg_rtx (<GPR:MODE>mode);
++      operands[1] = gen_lowpart (<GPR:MODE>mode, operands[1]);
++      rtx shiftval = GEN_INT (GET_MODE_BITSIZE (<GPR:MODE>mode) - 16);
++      rtx t = gen_rtx_ASHIFT (<GPR:MODE>mode, operands[1], shiftval);
++      emit_move_insn (ireg, t);
++      t = gen_rtx_LSHIFTRT (<GPR:MODE>mode, ireg, shiftval);
++      emit_move_insn (operands[0], t);
++      DONE;
++    }
++})
++
++(define_insn "*zero_extendhi<GPR:mode>2"
++  [(set (match_operand:GPR    0 "register_operand"     "=r")
++	(zero_extend:GPR (match_operand:HI 1 "memory_operand" "m")))]
+   "!TARGET_ZBB && !TARGET_XTHEADBB && !TARGET_XTHEADMEMIDX
+    && !TARGET_XANDESPERF"
+-  "@
+-   #
+-   lhu\t%0,%1"
+-  "&& reload_completed
+-   && REG_P (operands[1])
+-   && !paradoxical_subreg_p (operands[0])"
+-  [(set (match_dup 0)
+-	(ashift:GPR (match_dup 1) (match_dup 2)))
+-   (set (match_dup 0)
+-	(lshiftrt:GPR (match_dup 0) (match_dup 2)))]
+-  {
+-    operands[1] = gen_lowpart (<GPR:MODE>mode, operands[1]);
+-    operands[2] = GEN_INT(GET_MODE_BITSIZE(<GPR:MODE>mode) - 16);
+-  }
+-  [(set_attr "move_type" "shift_shift,load")
++  "lhu\t%0,%1"
++  [(set_attr "move_type" "load")
+    (set_attr "type" "load")
+    (set_attr "mode" "<GPR:MODE>")])
+ 
+@@ -1966,29 +1988,46 @@ (define_insn "*extendsidi2_internal"
+ (define_expand "extend<SHORT:mode><SUPERQI:mode>2"
+   [(set (match_operand:SUPERQI 0 "register_operand")
+ 	(sign_extend:SUPERQI (match_operand:SHORT 1 "nonimmediate_operand")))]
+-  "")
++ ""
++{
++  /* If the source is a suitably extended subreg, then this is just a
++     simple move.  */
++  if (SUBREG_P (operands[1])
++      && SUBREG_PROMOTED_VAR_P (operands[1])
++      && SUBREG_PROMOTED_SIGNED_P (operands[1]))
++    {
++      emit_insn (gen_mov<SUPERQI:mode> (operands[0],
++		 SUBREG_REG (operands[1])));
++      DONE;
++    }
+ 
+-(define_insn_and_split "*extend<SHORT:mode><SUPERQI:mode>2"
+-  [(set (match_operand:SUPERQI   0 "register_operand"     "=r,r")
++  /* If the source is a register and we do not have ZBB or similar extensions
++     with similar capabilities, then emit the two shifts now.  */
++  if (!TARGET_ZBB
++      && !TARGET_XTHEADBB
++      && !TARGET_XTHEADMEMIDX
++      && !TARGET_XANDESPERF
++      && register_operand (operands[1], <SHORT:MODE>mode))
++    {
++      operands[1] = gen_lowpart (<SUPERQI:MODE>mode, operands[1]);
++      rtx shiftval = GEN_INT (BITS_PER_WORD - GET_MODE_BITSIZE (<SHORT:MODE>mode));
++      rtx t = gen_rtx_ASHIFT (<SUPERQI:MODE>mode, operands[1], shiftval);
++      rtx ireg = gen_reg_rtx (<SUPERQI:MODE>mode);
++      emit_move_insn (ireg, t);
++      t = gen_rtx_ASHIFTRT (<SUPERQI:MODE>mode, ireg, shiftval);
++      emit_move_insn (operands[0], t);
++      DONE;
++    }
++})
++
++(define_insn "*extend<SHORT:mode><SUPERQI:mode>2"
++  [(set (match_operand:SUPERQI   0 "register_operand"     "=r")
+ 	(sign_extend:SUPERQI
+-	    (match_operand:SHORT 1 "nonimmediate_operand" " r,m")))]
++	    (match_operand:SHORT 1 "memory_operand" " m")))]
+   "!TARGET_ZBB && !TARGET_XTHEADBB && !TARGET_XTHEADMEMIDX
+    && !TARGET_XANDESPERF"
+-  "@
+-   #
+-   l<SHORT:size>\t%0,%1"
+-  "&& reload_completed
+-   && REG_P (operands[1])
+-   && !paradoxical_subreg_p (operands[0])"
+-  [(set (match_dup 0) (ashift:SI (match_dup 1) (match_dup 2)))
+-   (set (match_dup 0) (ashiftrt:SI (match_dup 0) (match_dup 2)))]
+-{
+-  operands[0] = gen_lowpart (SImode, operands[0]);
+-  operands[1] = gen_lowpart (SImode, operands[1]);
+-  operands[2] = GEN_INT (GET_MODE_BITSIZE (SImode)
+-			 - GET_MODE_BITSIZE (<SHORT:MODE>mode));
+-}
+-  [(set_attr "move_type" "shift_shift,load")
++  "l<SHORT:size>\t%0,%1"
++  [(set_attr "move_type" "load")
+    (set_attr "type" "load")
+    (set_attr "mode" "SI")])
+ 
+@@ -3072,13 +3111,13 @@ (define_insn "*lshrsi3_zero_extend_3"
  ;; * Single-bit extraction (SFB)
  ;; * Extraction instruction th.ext(u) (XTheadBb)
  ;; * lshrsi3_extend_2 (see above)
@@ -20,7 +210,7 @@ index 3fe0ad0ccdf4..20f5d65fde16 100644
    "!((TARGET_ZBS || TARGET_XTHEADBS || TARGET_ZICOND
        || TARGET_XVENTANACONDOPS || TARGET_SFB_ALU)
       && (INTVAL (operands[2]) == 1))
-@@ -3087,8 +3087,6 @@ (define_insn_and_split "*<any_extract:optab><GPR:mode>3"
+@@ -3087,8 +3126,6 @@ (define_insn_and_split "*<any_extract:optab><GPR:mode>3"
     && !(TARGET_64BIT
          && (INTVAL (operands[3]) > 0)
          && (INTVAL (operands[2]) + INTVAL (operands[3]) == 32))"
@@ -29,7 +219,7 @@ index 3fe0ad0ccdf4..20f5d65fde16 100644
    [(set (match_dup 4)
       (ashift:GPR (match_dup 1) (match_dup 2)))
     (set (match_dup 0)
-@@ -3101,9 +3099,7 @@ (define_insn_and_split "*<any_extract:optab><GPR:mode>3"
+@@ -3101,9 +3138,7 @@ (define_insn_and_split "*<any_extract:optab><GPR:mode>3"
    int rshamt = lshamt + startbits;
    operands[2] = GEN_INT (lshamt);
    operands[3] = GEN_INT (rshamt);
@@ -40,26 +230,17 @@ index 3fe0ad0ccdf4..20f5d65fde16 100644
  
  ;; Handle AND with 2^N-1 for N from 12 to XLEN.  This can be split into
  ;; two logical shifts.  Otherwise it requires 3 instructions: lui,
-diff --git a/gcc/testsuite/gcc.target/riscv/pr123010.c b/gcc/testsuite/gcc.target/riscv/pr123010.c
-new file mode 100644
-index 000000000000..f7fe5a4484d6
---- /dev/null
-+++ b/gcc/testsuite/gcc.target/riscv/pr123010.c
-@@ -0,0 +1,17 @@
-+/* { dg-do compile { target rv64 } } */
-+/* { dg-options "-O3 -march=rv64gc -mabi=lp64" { target rv64 } } */
-+#include <stdint-gcc.h>
-+
-+#define N 2
-+
-+uint32_t mulu(uint32_t a) {
-+    return a * N;
-+}
-+
-+int32_t muls(int32_t a) {
-+    return a * N;
-+}
-+
-+/* { dg-final { scan-assembler-times "slliw\t" 2 { target rv64 } } } */
-+/* { dg-final { scan-assembler-not "sr\[al\]i\t" } } */
-+
+diff --git a/gcc/testsuite/gcc.target/riscv/zero-extend-rshift.c b/gcc/testsuite/gcc.target/riscv/zero-extend-rshift.c
+index b143cc23225b..1075d8f503fa 100644
+--- a/gcc/testsuite/gcc.target/riscv/zero-extend-rshift.c
++++ b/gcc/testsuite/gcc.target/riscv/zero-extend-rshift.c
+@@ -110,6 +110,6 @@ ULONG_EXT_USHORT_RSHIFT_N_UINT(15)
+ /* { dg-final { scan-assembler-times "slli\t" 9 { target { rv32 } } } } */
+ /* { dg-final { scan-assembler-times "srli\t" 26 { target { rv32 } } } } */
+ 
+-/* { dg-final { scan-assembler-times "slli\t" 36 { target { rv64 } } } } */
+-/* { dg-final { scan-assembler-times "srli\t" 54 { target { rv64 } } } } */
+-/* { dg-final { scan-assembler-times "srliw\t" 7 { target { rv64 } } } } */
++/* { dg-final { scan-assembler-times "slli\t" 34 { target { rv64 } } } } */
++/* { dg-final { scan-assembler-times "srli\t" 52 { target { rv64 } } } } */
++/* { dg-final { scan-assembler-times "srliw\t" 9 { target { rv64 } } } } */
