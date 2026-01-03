@@ -8,7 +8,7 @@ index 3fe0ad0ccdf4..3e22d91c1e74 100644
  
 +;; Take advantage the implicit sign extension done by sllw when
 +;; the number of bits extracted + shift count == 32
-+(define_insn "sign_extract_vis_slliw"
++(define_insn "*sign_extract_vis_slliw"
 +  [(set (match_operand:DI 0 "register_operand" "=r")
 +	(ashift:DI
 +	  (sign_extract:DI (match_operand:GPR 1 "register_operand" "r")
