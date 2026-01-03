@@ -1,28 +1,51 @@
-diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index 3fe0ad0ccdf4..3e22d91c1e74 100644
---- a/gcc/config/riscv/riscv.md
-+++ b/gcc/config/riscv/riscv.md
-@@ -3065,6 +3065,20 @@ (define_insn "*lshrsi3_zero_extend_3"
-   [(set_attr "type" "shift")
-    (set_attr "mode" "SI")])
- 
-+;; Take advantage the implicit sign extension done by sllw when
-+;; the number of bits extracted + shift count == 32
-+(define_insn "*sign_extract_vis_slliw"
-+  [(set (match_operand:DI 0 "register_operand" "=r")
-+	(ashift:DI
-+	  (sign_extract:DI (match_operand:GPR 1 "register_operand" "r")
-+			   (match_operand 2 "const_int_operand")
-+			   (const_int 0))
-+	  (match_operand 3 "const_int_operand")))]
-+  "(TARGET_64BIT && INTVAL (operands[2]) + INTVAL (operands[3]) == 32)"
-+  "slliw %0,%1,%3"
-+  [(set_attr "type" "shift")
-+   (set_attr "mode" "SI")])
+diff --git a/gcc/simplify-rtx.cc b/gcc/simplify-rtx.cc
+index b9843bd30788..75655787202b 100644
+--- a/gcc/simplify-rtx.cc
++++ b/gcc/simplify-rtx.cc
+@@ -4793,6 +4793,43 @@ simplify_ashift:
+ 	  rtx new_op1 = immed_wide_int_const (c, int_mode);
+ 	  return simplify_gen_binary (MULT, int_mode, op0, new_op1);
+ 	}
 +
- ;; Canonical form for a extend of a logical shift right (sign/zero extraction).
- ;; Special cases, that are ignored (handled elsewhere):
- ;; * Single-bit extraction (Zbs/XTheadBs)
++      /* If we're shifting left a signed bitfield extraction and the
++	 shift count + bitfield size is a natural integral mode and
++	 the field starts at offset 0 (counting from the LSB), then
++	 this can be simplified to a sign extension of a left shift.
++
++	 Some ISAs (RISC-V 64-bit) have inherent support for such
++	 instructions and it's better for various optimizations to
++	 express as a SIGN_EXTEND rather than a shifted SIGN_EXTRACT.  */
++      if (GET_CODE (op0) == SIGN_EXTRACT
++	  && REG_P (XEXP (op0, 0))
++	  /* The size of the bitfield, the location of the bitfield and
++	     shift count must be CONST_INTs.  */
++	  && CONST_INT_P (op1)
++	  && CONST_INT_P (XEXP (op0, 1))
++	  && CONST_INT_P (XEXP (op0, 2)))
++	{
++	  int size = INTVAL (op1) + INTVAL (XEXP (op0, 1));
++	  machine_mode smaller_mode;
++	  /* Now we need to verify the size of the bitfield plus the shift
++	     count is an integral mode and smaller than MODE.  This is
++	     requirement for using SIGN_EXTEND.  We also need to verify the
++	     field starts at bit location 0 and that the subreg lowpart also
++	     starts at zero.  */
++	  if (int_mode_for_size (size, size).exists (&smaller_mode)
++	      && mode > smaller_mode
++	      && (subreg_lowpart_offset (smaller_mode, mode).to_constant ()
++		  == UINTVAL (XEXP (op0, 2)))
++	      && XEXP (op0, 2) == CONST0_RTX (mode))
++	    {
++	      /* Everything passed.  So we just need to get the subreg of the
++		 original input, shift it and sign extend the result.  */
++	      rtx op = gen_lowpart (smaller_mode, XEXP (op0, 0));
++	      rtx x = gen_rtx_ASHIFT (smaller_mode, op, op1);
++	      return gen_rtx_SIGN_EXTEND (mode, x);
++	    }
++	}
+       goto canonicalize_shift;
+ 
+     case LSHIFTRT:
 diff --git a/gcc/testsuite/gcc.target/riscv/pr123010.c b/gcc/testsuite/gcc.target/riscv/pr123010.c
 new file mode 100644
 index 000000000000..f7fe5a4484d6
