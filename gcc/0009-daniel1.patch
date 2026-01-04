@@ -34,17 +34,14 @@ gcc/testsuite/ChangeLog:
 Signed-off-by: Daniel Barboza <daniel.barboza@oss.qualcomm.com>
 ---
 
-Changes from v2:
-- do not use dg-output in pr110701.c
-- add __attribute__((noipa)) to skip interprocedural optimizations for
-  "foo()" in pr110701.c 
-- v2 link: https://gcc.gnu.org/pipermail/gcc-patches/2025-December/704603.html
+Changes from v3:
+- fixed multhighpart_tests to be compliant with 16 bit targets
+- v3 link: https://gcc.gnu.org/pipermail/gcc-patches/2025-December/704617.html
 
-
- gcc/match.pd                             |  17 +++
- gcc/testsuite/gcc.dg/torture/pr122608.c  | 178 +++++++++++++++++++++++
+ gcc/match.pd                             |  17 ++
+ gcc/testsuite/gcc.dg/torture/pr122608.c  | 189 +++++++++++++++++++++++
  gcc/testsuite/gcc.target/i386/pr110701.c |  14 +-
- 3 files changed, 206 insertions(+), 3 deletions(-)
+ 3 files changed, 217 insertions(+), 3 deletions(-)
  create mode 100644 gcc/testsuite/gcc.dg/torture/pr122608.c
 
 diff --git a/gcc/match.pd b/gcc/match.pd
@@ -77,10 +74,10 @@ index 45d96844673..9577224305f 100644
  /* Transform comparisons of the form (X & Y) CMP 0 to X CMP2 Z
 diff --git a/gcc/testsuite/gcc.dg/torture/pr122608.c b/gcc/testsuite/gcc.dg/torture/pr122608.c
 new file mode 100644
-index 00000000000..8129a129769
+index 00000000000..d42737387ef
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/torture/pr122608.c
-@@ -0,0 +1,178 @@
+@@ -0,0 +1,189 @@
 +/* { dg-do compile } */
 +/* { dg-options "-fgimple -fdump-tree-optimized" } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" "-fno-fat-lto-objects" } { "" } } */
@@ -223,22 +220,33 @@ index 00000000000..8129a129769
 +  return t;
 +}
 +
-+__GIMPLE int mulhighpart_test (int a)
++#if __INT_WIDTH__ == 8
++#define HIGH1 0x7f
++#define HIGH2 0x5f
++#elif __INT_WIDTH__ == 16
++#define HIGH1 0x7fff
++#define HIGH2 0x5fff
++#else
++#define HIGH1 0x7fffffff
++#define HIGH2 0x5fffffff
++#endif
++
++__GIMPLE int multhighpart_test (int a)
 +{
 +  _Bool b;
 +  int t;
 +  b = a > 0;
 +  t = b ? 30 : 40;
-+  t = t __MULT_HIGHPART 0x7fffffff;
++  t = t __MULT_HIGHPART HIGH1;
 +  return t;
 +}
 +
-+__GIMPLE int mulhighpart_test2 (int a)
++__GIMPLE int multhighpart_test2 (int a)
 +{
 +  _Bool b;
 +  int t;
 +  b = a > 0;
-+  t = b ? 0x5fffffff : 0x7fffffff;
++  t = b ? HIGH2 : HIGH1;
 +  t = 40 __MULT_HIGHPART t;
 +  return t;
 +}
@@ -289,5 +297,6 @@ index 3f2cea5c3df..9ec53f7a635 100644
 +}
 -- 
 2.43.0
+
 
 
