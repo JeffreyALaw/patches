@@ -72,12 +72,12 @@ case ${TARGET} in
     ;;
 esac
 
-echo Building glibc
-date
-pushd obj/glibc
-../../glibc/configure --disable-werror --prefix=$PREFIX --enable-add-ons ${TARGET} >> $LOGFILE 2>&1
-make -j $NPROC -l $NPROC >> $LOGFILE 2>&1
-popd
+#echo Building glibc
+#date
+#pushd obj/glibc
+#../../glibc/configure --disable-werror --prefix=$PREFIX --enable-add-ons ${TARGET} >> $LOGFILE 2>&1
+#make -j $NPROC -l $NPROC >> $LOGFILE 2>&1
+#popd
 
 # The binutils suite is run unconditionally
 #pushd obj/binutils-gdb
