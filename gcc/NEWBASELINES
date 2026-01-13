@@ -4,3 +4,4 @@
 arc-elf
 cris-elf
 pru-elf
+x86_64-linux-gnu
