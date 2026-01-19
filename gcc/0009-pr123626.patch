@@ -39,10 +39,13 @@ index 8e20aac9bb8e..6bf01338117c 100644
  ;; Defines rounding mode of an floating-point operation.
 diff --git a/gcc/testsuite/gcc.target/riscv/rvv/base/pr123626.c b/gcc/testsuite/gcc.target/riscv/rvv/base/pr123626.c
 new file mode 100644
-index 000000000000..4816f03c109a
+index 000000000000..ddf9b065d91e
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/rvv/base/pr123626.c
-@@ -0,0 +1,20 @@
+@@ -0,0 +1,23 @@
++/* { dg-do run } */
++/* { dg-options "-march=rv64gcv_zvl256b -mabi=lp64d -O3 -fsigned-char -fno-strict-aliasing -fwrapv -std=gnu99" { target rv64 } } */
++/* { dg-options "-march=rv32gcv_zvl256b -mabi=ilp32 -O3 -fsigned-char -fno-strict-aliasing -fwrapv -std=gnu99" { target rv32 } } */
 +short a;
 +long long b;
 +char c[3][3][17];
