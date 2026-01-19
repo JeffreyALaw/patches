@@ -1,0 +1,1980 @@
+
+
+This patch converts the fold-mem-offsets pass from DF to RTL-SSA.
+Along with this conversion, the way the pass collects information
+was completely reworked.  Instead of visiting each instruction multiple
+times, this is now down only once.
+
+Most significant changes are:
+* The pass operates mainly on insn_info objects from RTL-SSA.
+* Single iteration over all nondebug INSNs for identification
+  of fold-mem-roots.  Then walk of the fold-mem-roots' DEF-chain
+  to collect foldable constants.
+* The class fold_mem_info holds vectors for the DEF-chain of
+  the to-be-folded INSNs (fold_agnostic_insns, which don't need
+  to be adjusted, and fold_insns, which need their constant to
+  be set to zero).
+* Introduction of a single-USE mode, which only collects DEFs,
+  that have a single USE and therefore are safe to transform
+  (the fold-mem-root will be the final USE).  This mode is fast
+  and will always run (unless disabled via -fno-fold-mem-offsets).
+* Introduction of a multi-USE mode, which allows DEFs to have
+  multiple USEs, but all USEs must be part of any fold-mem-root's
+  DEF-chain.  The analysis of all USEs is expensive and therefore,
+  this mode is disabled for highly connected CFGs.  Note, that
+  multi-USE mode will miss some opportunities that the single-USE
+  mode finds (e.g. multi-USE mode fails for fold-mem-offsets-3.c).
+
+The following testing was done:
+* Bootstrapped and regtested on aarch64-linux, x86-64-linux and riscv64-linux.
+* SPEC CPU 2017 tested on aarch64.
+
+A compile time analysis with `/bin/time -v ./install/usr/local/bin/gcc -O2 all.i`
+(all.i from PR117922) shows:
+* -fno-fold-mem-offsets:  464 s (user time) / 26280384 kBytes (max resident set size)
+* -ffold-mem-offsets:     395 s (user time) / 26281388 kBytes (max resident set size)
+Adding -fexpensive-optimizations to enable multi-USE mode does not have
+an impact on the duration or the memory footprint.
+
+SPEC CPU 2017 showed no significant performance impact on aarch64-linux.
+
+gcc/ChangeLog:
+
+	PR rtl-optimization/117922
+	* fold-mem-offsets.cc (INCLUDE_ALGORITHM):  Added definition.
+	(INCLUDE_FUNCTIONAL): Likewise.
+	(INCLUDE_ARRAY): Likewise.
+	(class pass_fold_mem_offsets): Moved to bottom of file.
+	(class change_info): New.
+	(get_single_def_in_bb): Converted to RTL-SSA.
+	(get_fold_mem_offset_root): Converted to RTL-SSA.
+	(get_uses): New.
+	(fold_offsets): Converted to RTL-SSA.
+	(fold_offsets_1): Converted to RTL-SSA.
+	(has_foldable_uses_p): Converted to RTL-SSA.
+	(get_fold_mem_root): Removed.
+	(insn_uses_not_in_bitmap): New.
+	(drop_unsafe_candidates): New.
+	(do_commit_offset): Converted to RTL-SSA.
+	(do_analysis): Removed.
+	(do_commit_insn): Converted to RTL-SSA.
+	(do_fold_info_calculation): Removed.
+	(sort_changes): New.
+	(sort_pairs): New.
+	(do_check_validity): Removed.
+	(get_last_def): New.
+	(move_uses_to_prev_def): New.
+	(compute_validity_closure): Removed.
+	(change_in_vec_p): New.
+	(cancel_changes_for_group): New.
+	(find_keys_to_remove): New.
+	(update_insns): New.
+	(fold_mem_offsets_1): New.
+	(pass_fold_mem_offsets::execute): Moved to bottom of file.
+	(fold_mem_offsets): New.
+
+gcc/testsuite/ChangeLog:
+
+	* g++.target/aarch64/fold-mem-offsets.C: New test.
+	* gcc.target/aarch64/fold-mem-offsets.c: New test.
+
+Co-authored-by: Christoph Müllner <christoph.muellner@vrull.eu>
+
+Signed-off-by: Konstantinos Eleftheriou <konstantinos.eleftheriou@vrull.eu>
+---
+
+Changes in v3:
+- Re-enable on all targets.
+- Re-add RISC-V testcases.
+
+Changes in v2:
+- Use the RTL-SSA changes framework for the instruction changes.
+- Keep a hash map of the changes and try to cancel the minimum number
+of changes when something goes wrong.
+- Remove redundant code.
+- Add AArch64 testcases.
+- Remove RISC-V testcases.
+
+Changes in v1:
+- Convert the fold-mem-offsets pass from DF to RTL-SSA.
+
+ gcc/fold-mem-offsets.cc                       | 1450 +++++++++++------
+ .../g++.target/aarch64/fold-mem-offsets.C     |   86 +
+ .../gcc.target/aarch64/fold-mem-offsets.c     |   19 +
+ 3 files changed, 1016 insertions(+), 539 deletions(-)
+ create mode 100644 gcc/testsuite/g++.target/aarch64/fold-mem-offsets.C
+ create mode 100644 gcc/testsuite/gcc.target/aarch64/fold-mem-offsets.c
+
+diff --git a/gcc/fold-mem-offsets.cc b/gcc/fold-mem-offsets.cc
+index c1c94472a071..b3438a393101 100644
+--- a/gcc/fold-mem-offsets.cc
++++ b/gcc/fold-mem-offsets.cc
+@@ -17,24 +17,34 @@ You should have received a copy of the GNU General Public License
+ along with GCC; see the file COPYING3.  If not see
+ <http://www.gnu.org/licenses/>.  */
+ 
++#define INCLUDE_ALGORITHM
++#define INCLUDE_FUNCTIONAL
++#define INCLUDE_ARRAY
+ #include "config.h"
+ #include "system.h"
+ #include "coretypes.h"
+-#include "tm.h"
++#include "backend.h"
+ #include "rtl.h"
++#include "rtlanal.h"
++#include "df.h"
++#include "rtl-ssa.h"
++
++#include "predict.h"
++#include "cfgrtl.h"
++#include "cfgcleanup.h"
++#include "cgraph.h"
++#include "tree-pass.h"
++#include "target.h"
++
++#include "tm.h"
+ #include "tree.h"
+ #include "expr.h"
+ #include "backend.h"
+ #include "regs.h"
+-#include "target.h"
+ #include "memmodel.h"
+ #include "emit-rtl.h"
+ #include "insn-config.h"
+ #include "recog.h"
+-#include "predict.h"
+-#include "df.h"
+-#include "tree-pass.h"
+-#include "cfgrtl.h"
+ #include "diagnostic-core.h"
+ 
+ /* This pass tries to optimize memory offset calculations by moving constants
+@@ -69,214 +79,229 @@ along with GCC; see the file COPYING3.  If not see
+       allocated on the stack can result in unwanted add instructions that
+       cannot be eliminated easily.
+ 
+-   This pass works on a basic block level and consists of 4 phases:
+-
+-    - Phase 1 (Analysis): Find "foldable" instructions.
+-      Foldable instructions are those that we know how to propagate
+-      a constant addition through (add, shift, move, ...) and only have other
+-      foldable instructions for uses.  In that phase a DFS traversal on the
+-      definition tree is performed and foldable instructions are marked on
+-      a bitmap.  The add immediate instructions that are reachable in this
+-      DFS are candidates for folding since all the intermediate calculations
+-      affected by them are also foldable.
+-
+-    - Phase 2 (Validity): Traverse and calculate the offsets that would result
+-      from folding the add immediate instructions.  Check whether the
+-      calculated offsets result in a valid instruction for the target.
+-
+-    - Phase 3 (Commit offsets): Traverse again.  It is now known which folds
+-      are valid so at this point change the offsets in the memory instructions.
+-
+-    - Phase 4 (Commit instruction deletions): Scan all instructions and delete
+-      or simplify (reduce to move) all add immediate instructions that were
+-      folded.
++   The pass differentiates between the following instructions:
++
++   - fold-mem-offset root insn: loads/stores where constants will be folded into
++     the address offset.  E.g.:
++       (set (mem:DI (plus:DI (reg:DI sp) (const_int 40))) (reg:DI ra))
++   - fold-agnostic insns: instructions that may have an impact on the offset
++     calculation, but that don't require any fixup when folding.  E.g.:
++       (set (reg:DI a0) (ashift:DI (reg:DI s1) (const_int 1)))
++   - fold insns: instruction that provide constants, which will be forwarded
++     into the loads/stores as offset.  When folding, the constants will be
++     set to zero.  E.g.:
++       (set (reg:DI s0) (plus:DI (reg:DI sp) (const_int 8)))
++
++   The pass utilizes the RTL SSA framework to get the data dependencies
++   and operates in the following phases:
++
++   - Phase 1: Iterate over all instructions to identify fold-mem-offset roots.
++   - Phase 2: Walk back along the def-chain of fold-agnostic or fold insns.
++	      When successful a new offset of the fold-mem-offset is calculated
++	      and a vec of fold insns that need adjustments is created.
++   - Phase 3: Drop all fold-mem-offset roots that won't accept the updated
++	      offset.
++   - Phase 4: Ensure that the defs of all fold insns are used only by
++	      fold-mem-offsets insns (only needed if DEFs with multiple USESs
++	      are enabled via -fexpensive-optimizations).
++   - Phase 5: Update all fold-mem-offset roots and adjust the fold insns.
++
++   When we walk the DEF-chain we have two choices of operations:
++
++   - We only allow DEFs that have exactly one USE (in the instruction
++     that we come from). This greatly simplify the problem, but also misses
++     some cases.
++   - We allow DEFs to have multiple USEs.  E.g. a single ADDI may define a
++     value that is used by two LOADs.  In this case, we need to ensure that all
++     USE-chains remain correct after we apply our transformation.  We do this
++     by allowing only USEs that are part of any other fold-mem-offset chain in
++     phase 4 above (and only if -fexpensive-optimizations is enabled).
+ 
+    This pass should run before hard register propagation because it creates
+    register moves that we expect to be eliminated.  */
+ 
+-namespace {
+-
+-const pass_data pass_data_fold_mem =
+-{
+-  RTL_PASS, /* type */
+-  "fold_mem_offsets", /* name */
+-  OPTGROUP_NONE, /* optinfo_flags */
+-  TV_FOLD_MEM_OFFSETS, /* tv_id */
+-  0, /* properties_required */
+-  0, /* properties_provided */
+-  0, /* properties_destroyed */
+-  0, /* todo_flags_start */
+-  TODO_df_finish, /* todo_flags_finish */
+-};
+-
+-class pass_fold_mem_offsets : public rtl_opt_pass
+-{
+-public:
+-  pass_fold_mem_offsets (gcc::context *ctxt)
+-    : rtl_opt_pass (pass_data_fold_mem, ctxt)
+-  {}
+-
+-  /* opt_pass methods: */
+-  virtual bool gate (function *)
+-    {
+-      return flag_fold_mem_offsets && optimize >= 2;
+-    }
+-
+-  virtual unsigned int execute (function *);
+-}; // class pass_fold_mem_offsets
++using namespace rtl_ssa;
+ 
+ /* Class that holds in FOLD_INSNS the instructions that if folded the offset
+    of a memory instruction would increase by ADDED_OFFSET.  */
+ class fold_mem_info {
+ public:
+-  auto_bitmap fold_insns;
++  /* fold-mem-offset root details  */
++  insn_info *insn;
++  rtx mem;
++  rtx reg;
++  HOST_WIDE_INT offset;
++  /* Resulting offset if def-chain gets folded into fold-mem-offset root.  */
+   HOST_WIDE_INT added_offset;
+-};
+-
+-typedef hash_map<rtx_insn *, fold_mem_info *> fold_info_map;
+-
+-/* Tracks which instructions can be reached through instructions that can
+-   propagate offsets for folding.  */
+-static bitmap_head can_fold_insns;
+ 
+-/* Marks instructions that are currently eligible for folding.  */
+-static bitmap_head candidate_fold_insns;
+-
+-/* Tracks instructions that cannot be folded because it turned out that
+-   folding will result in creating an invalid memory instruction.
+-   An instruction can be in both CANDIDATE_FOLD_INSNS and CANNOT_FOLD_INSNS
+-   at the same time, in which case it is not legal to fold.  */
+-static bitmap_head cannot_fold_insns;
++  /* Def-chain for offset.  */
++  auto_vec<insn_info *> fold_agnostic_insns;
++  auto_vec<insn_info *> fold_insns;
++
++  fold_mem_info (insn_info *insn, rtx mem, rtx reg, HOST_WIDE_INT off)
++    : insn (insn),
++      mem (mem),
++      reg (reg),
++      offset (off),
++      added_offset (0)
++  {
++  }
++};
+ 
+-/* The number of instructions that were simplified or eliminated.  */
+-static int stats_fold_count;
++class change_info {
++public:
++  insn_change *change;
++  /* Index specifying the order in RTL SSA's instruction changes.  */
++  int change_index;
++
++  change_info (insn_change *change)
++    : change (change), change_index (0)
++  {
++  }
++
++  change_info (insn_change *change, int index)
++    : change (change), change_index (index)
++  {
++  }
++};
+ 
+-/* Get the single reaching definition of an instruction inside a BB.
+-   The definition is desired for REG used in INSN.
+-   Return the definition insn or NULL if there's no definition with
+-   the desired criteria.  */
+-static rtx_insn *
+-get_single_def_in_bb (rtx_insn *insn, rtx reg)
++/* Test if INSN is a memory load / store that can have an offset folded to it.
++   Return true iff INSN is such an instruction and return through MEM,
++   REG and OFFSET the RTX that has a MEM code, the register that is
++   used as a base address and the offset accordingly.  */
++bool
++get_fold_mem_offset_root (insn_info *insn, rtx *mem, rtx *reg,
++			  HOST_WIDE_INT *offset)
+ {
+-  df_ref use;
+-  struct df_link *ref_chain, *ref_link;
+-
+-  FOR_EACH_INSN_USE (use, insn)
++  rtx set = single_set (insn->rtl ());
++  if (set != NULL_RTX)
+     {
+-      if (GET_CODE (DF_REF_REG (use)) == SUBREG)
+-	return NULL;
+-      if (REGNO (DF_REF_REG (use)) == REGNO (reg))
+-	break;
+-    }
+-
+-  if (!use)
+-    return NULL;
++      rtx src = SET_SRC (set);
++      rtx dest = SET_DEST (set);
+ 
+-  ref_chain = DF_REF_CHAIN (use);
++      /* Don't fold when we have unspec / volatile.  */
++      if (GET_CODE (src) == UNSPEC
++	  || GET_CODE (src) == UNSPEC_VOLATILE)
++	return false;
+ 
+-  if (!ref_chain)
+-    return NULL;
++      if (MEM_P (src))
++	*mem = src;
++      else if (MEM_P (dest))
++	*mem = dest;
++      else if ((GET_CODE (src) == SIGN_EXTEND
++		|| GET_CODE (src) == ZERO_EXTEND)
++	       && MEM_P (XEXP (src, 0)))
++	*mem = XEXP (src, 0);
++      else
++	return false;
++    }
++  else
++    return false;
+ 
+-  for (ref_link = ref_chain; ref_link; ref_link = ref_link->next)
++  rtx mem_addr = XEXP (*mem, 0);
++  if (REG_P (mem_addr))
+     {
+-      /* Problem getting some definition for this instruction.  */
+-      if (ref_link->ref == NULL)
+-	return NULL;
+-      if (DF_REF_INSN_INFO (ref_link->ref) == NULL)
+-	return NULL;
+-      if (global_regs[REGNO (reg)]
+-	  && !set_of (reg, DF_REF_INSN (ref_link->ref)))
+-	return NULL;
++      *reg = mem_addr;
++      *offset = 0;
+     }
++  else if (GET_CODE (mem_addr) == PLUS
++	   && REG_P (XEXP (mem_addr, 0))
++	   && CONST_INT_P (XEXP (mem_addr, 1)))
++    {
++      *reg = XEXP (mem_addr, 0);
++      *offset = INTVAL (XEXP (mem_addr, 1));
++    }
++  else
++    return false;
+ 
+-  if (ref_chain->next)
+-    return NULL;
+-
+-  rtx_insn *def = DF_REF_INSN (ref_chain->ref);
+-
+-  if (BLOCK_FOR_INSN (def) != BLOCK_FOR_INSN (insn))
+-    return NULL;
+-
+-  if (DF_INSN_LUID (def) > DF_INSN_LUID (insn))
+-    return NULL;
+-
+-  return def;
++  return true;
+ }
+ 
+-/* Get all uses of REG which is set in INSN.  Return the use list or NULL if a
+-   use is missing / irregular.  If SUCCESS is not NULL then set it to false if
+-   there are missing / irregular uses and true otherwise.  */
+-static df_link *
+-get_uses (rtx_insn *insn, rtx reg, bool *success)
++/* Get the single reaching definition of an instruction inside a BB.
++   Return the definition or NULL if there's no definition with the desired
++   criteria.  If SINGLE_USE is set to true the DEF must have exactly one
++   USE resulting in a 1:1 DEF-USE relationship.  If set to false, then a
++   1:n DEF-USE relationship is accepted and the caller must take care to
++   ensure all USEs are safe folding.  */
++static set_info *
++get_single_def_in_bb (insn_info *insn, rtx reg, bool single_use)
+ {
+-  df_ref def;
+-
+-  if (success)
+-    *success = false;
++  /* Get the use_info of the base register.  */
++  for (use_info *use : insn->uses ())
++    {
++      /* Other USEs can be ignored and multiple equal USEs are fine.  */
++      if (use->regno () != REGNO (reg))
++	continue;
+ 
+-  FOR_EACH_INSN_DEF (def, insn)
+-    if (REGNO (DF_REF_REG (def)) == REGNO (reg))
+-      break;
++      /* Don't handle subregs for now.  */
++      if (use->includes_subregs ())
++	return NULL;
+ 
+-  if (!def)
+-    return NULL;
++      /* Get the DEF of the register.  */
++      set_info *def = use->def ();
++      if (!def)
++	return NULL;
+ 
+-  df_link *ref_chain = DF_REF_CHAIN (def);
+-  int insn_luid = DF_INSN_LUID (insn);
+-  basic_block insn_bb = BLOCK_FOR_INSN (insn);
++      /* Limit the amount of USEs of DEF to 1.  */
++      if (single_use && !def->single_nondebug_use ())
++	return NULL;
+ 
+-  for (df_link *ref_link = ref_chain; ref_link; ref_link = ref_link->next)
+-    {
+-      /* Problem getting a use for this instruction.  */
+-      if (ref_link->ref == NULL)
++      /* Don't handle multiregs for now.  */
++      if (def->includes_multiregs ())
+ 	return NULL;
+-      if (DF_REF_CLASS (ref_link->ref) != DF_REF_REGULAR)
++
++      /* Only consider uses whose definition comes from a real instruction
++	 and has no notes attached.  */
++      insn_info *def_insn = def->insn ();
++      rtx_insn *def_rtl = def_insn->rtl ();
++      if (def_insn->is_artificial ()
++	  || find_reg_note (def_rtl, REG_EQUIV, NULL_RTX)
++	  || find_reg_note (def_rtl, REG_EQUAL, NULL_RTX))
+ 	return NULL;
+ 
+-      rtx_insn *use = DF_REF_INSN (ref_link->ref);
+-      if (DEBUG_INSN_P (use))
+-	continue;
++      /* No parallel expressions or clobbers.  */
++      if (def_insn->num_defs () != 1)
++	return NULL;
+ 
+-      /* We do not handle REG_EQUIV/REG_EQ notes for now.  */
+-      if (DF_REF_FLAGS (ref_link->ref) & DF_REF_IN_NOTE)
++      if (!NONJUMP_INSN_P (def_rtl) || RTX_FRAME_RELATED_P (def_rtl))
+ 	return NULL;
+-      if (BLOCK_FOR_INSN (use) != insn_bb)
++
++      /* Check if the DEF is a SET of the expected form.  */
++      rtx def_set = simple_regno_set (PATTERN (def_rtl), def->regno ());
++      if (!def_set)
+ 	return NULL;
+-      /* Punt if use appears before def in the basic block.  See PR111601.  */
+-      if (DF_INSN_LUID (use) < insn_luid)
++
++      /* Ensure DEF and USE are in the same BB.  */
++      if (def->bb () != insn->bb ())
+ 	return NULL;
+-    }
+ 
+-  if (success)
+-    *success = true;
++      return def;
++    }
+ 
+-  return ref_chain;
++  return NULL;
+ }
+ 
+ static HOST_WIDE_INT
+-fold_offsets (rtx_insn *insn, rtx reg, bool analyze, bitmap foldable_insns);
+-
+-/*  Helper function for fold_offsets.
++fold_offsets (insn_info *insn, rtx reg, fold_mem_info *info, bool single_use);
+ 
+-    If DO_RECURSION is false and ANALYZE is true this function returns true iff
+-    it understands the structure of INSN and knows how to propagate constants
+-    through it.  In this case OFFSET_OUT and FOLDABLE_INSNS are unused.
++/* Helper function for fold_offsets () that analyses the given INSN.
+ 
+-    If DO_RECURSION is true then it also calls fold_offsets for each recognized
+-    part of INSN with the appropriate arguments.
++   For INSN with known pattern, we calculate the value of the propagated
++   constant and store that in OFFSET_OUT.  Foldable INSNs are added to
++   INFO->fold_insns and fold-agnostic INSNs are added to
++   INFO->fold_agnostic_insns.  It is possible that some INSNs are added to
++   both lists.  In this case the INSN is a fold INSN.
+ 
+-    If DO_RECURSION is true and ANALYZE is false then offset that would result
+-    from folding is computed and is returned through the pointer OFFSET_OUT.
+-    The instructions that can be folded are recorded in FOLDABLE_INSNS.  */
++   Returns true iff the analysis was successful and false otherwise.  */
+ static bool
+-fold_offsets_1 (rtx_insn *insn, bool analyze, bool do_recursion,
+-		HOST_WIDE_INT *offset_out, bitmap foldable_insns)
++fold_offsets_1 (insn_info *insn, HOST_WIDE_INT *offset_out,
++		fold_mem_info *info, bool single_use)
+ {
+-  /* Doesn't make sense if both DO_RECURSION and ANALYZE are false.  */
+-  gcc_checking_assert (do_recursion || analyze);
+-  gcc_checking_assert (GET_CODE (PATTERN (insn)) == SET);
++  bool fold_agnostic = true;
++  rtx_insn *insn_rtl = insn->rtl ();
++  gcc_checking_assert (GET_CODE (PATTERN (insn_rtl)) == SET);
+ 
+-  rtx src = SET_SRC (PATTERN (insn));
++  rtx src = SET_SRC (PATTERN (insn_rtl));
+   HOST_WIDE_INT offset = 0;
+ 
+   switch (GET_CODE (src))
+@@ -288,35 +313,31 @@ fold_offsets_1 (rtx_insn *insn, bool analyze, bool do_recursion,
+ 	rtx arg2 = XEXP (src, 1);
+ 
+ 	if (REG_P (arg1))
+-	  {
+-	    if (do_recursion)
+-	      offset += fold_offsets (insn, arg1, analyze, foldable_insns);
+-	  }
++	  offset += fold_offsets (insn, arg1, info, single_use);
+ 	else if (GET_CODE (arg1) == ASHIFT
+ 		 && REG_P (XEXP (arg1, 0))
+ 		 && CONST_INT_P (XEXP (arg1, 1)))
+ 	  {
+ 	    /* Handle R1 = (R2 << C) + ...  */
+-	    if (do_recursion)
+-	      {
+-		HOST_WIDE_INT scale
+-		  = (HOST_WIDE_INT_1U << INTVAL (XEXP (arg1, 1)));
+-		offset += scale * fold_offsets (insn, XEXP (arg1, 0), analyze,
+-						foldable_insns);
+-	      }
++	    rtx reg = XEXP (arg1, 0);
++	    rtx shamt = XEXP (arg1, 1);
++	    HOST_WIDE_INT scale = HOST_WIDE_INT_1U << INTVAL (shamt);
++	    offset += scale * fold_offsets (insn, reg, info, single_use);
+ 	  }
+ 	else if (GET_CODE (arg1) == PLUS
+ 		 && REG_P (XEXP (arg1, 0))
+ 		 && REG_P (XEXP (arg1, 1)))
+ 	  {
+ 	    /* Handle R1 = (R2 + R3) + ...  */
+-	    if (do_recursion)
++	    rtx reg1 = XEXP (arg1, 0);
++	    rtx reg2 = XEXP (arg1, 1);
++	    if (REGNO (reg1) != REGNO (reg2))
+ 	      {
+-		offset += fold_offsets (insn, XEXP (arg1, 0), analyze,
+-					foldable_insns);
+-		offset += fold_offsets (insn, XEXP (arg1, 1), analyze,
+-					foldable_insns);
++		offset += fold_offsets (insn, reg1, info, single_use);
++		offset += fold_offsets (insn, reg2, info, single_use);
+ 	      }
++	    else
++	      offset += 2 * fold_offsets (insn, reg1, info, single_use);
+ 	  }
+ 	else if (GET_CODE (arg1) == PLUS
+ 		 && GET_CODE (XEXP (arg1, 0)) == ASHIFT
+@@ -325,32 +346,32 @@ fold_offsets_1 (rtx_insn *insn, bool analyze, bool do_recursion,
+ 		 && REG_P (XEXP (arg1, 1)))
+ 	  {
+ 	    /* Handle R1 = ((R2 << C) + R3) + ...  */
+-	    if (do_recursion)
++	    rtx reg1 = XEXP (XEXP (arg1, 0), 0);
++	    rtx shamt = XEXP (XEXP (arg1, 0), 1);
++	    rtx reg2 = XEXP (arg1, 1);
++	    HOST_WIDE_INT scale = HOST_WIDE_INT_1U << INTVAL (shamt);
++	    if (REGNO (reg1) != REGNO (reg2))
+ 	      {
+-		HOST_WIDE_INT scale
+-		  = (HOST_WIDE_INT_1U << INTVAL (XEXP (XEXP (arg1, 0), 1)));
+-		offset += scale * fold_offsets (insn, XEXP (XEXP (arg1, 0), 0),
+-						analyze, foldable_insns);
+-		offset += fold_offsets (insn, XEXP (arg1, 1), analyze,
+-					foldable_insns);
++		offset += scale * fold_offsets (insn, reg1, info, single_use);
++		offset += fold_offsets (insn, reg2, info, single_use);
+ 	      }
++	    else
++	      offset += (scale + 1) * fold_offsets (insn, reg1, info,
++						    single_use);
+ 	  }
+ 	else
+ 	  return false;
+ 
+ 	if (REG_P (arg2))
+-	  {
+-	    if (do_recursion)
+-	      offset += fold_offsets (insn, arg2, analyze, foldable_insns);
+-	  }
++	  offset += fold_offsets (insn, arg2, info, single_use);
+ 	else if (CONST_INT_P (arg2))
+ 	  {
+ 	    if (REG_P (arg1))
+ 	      {
+ 		offset += INTVAL (arg2);
+-		/* This is a R1 = R2 + C instruction, candidate for folding.  */
+-		if (!analyze)
+-		  bitmap_set_bit (foldable_insns, INSN_UID (insn));
++		/* This is a R1 = R2 + C instruction, candidate for
++		   folding.  */
++		fold_agnostic = false;
+ 	      }
+ 	  }
+ 	else
+@@ -366,26 +387,20 @@ fold_offsets_1 (rtx_insn *insn, bool analyze, bool do_recursion,
+ 	rtx arg2 = XEXP (src, 1);
+ 
+ 	if (REG_P (arg1))
+-	  {
+-	    if (do_recursion)
+-	      offset += fold_offsets (insn, arg1, analyze, foldable_insns);
+-	  }
++	  offset += fold_offsets (insn, arg1, info, single_use);
+ 	else
+ 	  return false;
+ 
+ 	if (REG_P (arg2))
+-	  {
+-	    if (do_recursion)
+-	      offset -= fold_offsets (insn, arg2, analyze, foldable_insns);
+-	  }
++	  offset -= fold_offsets (insn, arg2, info, single_use);
+ 	else if (CONST_INT_P (arg2))
+ 	  {
+ 	    if (REG_P (arg1))
+ 	      {
+ 		offset -= INTVAL (arg2);
+-		/* This is a R1 = R2 - C instruction, candidate for folding.  */
+-		if (!analyze)
+-		  bitmap_set_bit (foldable_insns, INSN_UID (insn));
++		/* This is a R1 = R2 - C instruction, candidate for
++		   folding.  */
++		fold_agnostic = false;
+ 	      }
+ 	  }
+ 	else
+@@ -399,10 +414,7 @@ fold_offsets_1 (rtx_insn *insn, bool analyze, bool do_recursion,
+ 	/* Propagate through negation.  */
+ 	rtx arg1 = XEXP (src, 0);
+ 	if (REG_P (arg1))
+-	  {
+-	    if (do_recursion)
+-	      offset = -fold_offsets (insn, arg1, analyze, foldable_insns);
+-	  }
++	  offset = -fold_offsets (insn, arg1, info, single_use);
+ 	else
+ 	  return false;
+ 
+@@ -417,12 +429,8 @@ fold_offsets_1 (rtx_insn *insn, bool analyze, bool do_recursion,
+ 
+ 	if (REG_P (arg1) && CONST_INT_P (arg2))
+ 	  {
+-	    if (do_recursion)
+-	      {
+-		HOST_WIDE_INT scale = INTVAL (arg2);
+-		offset = scale * fold_offsets (insn, arg1, analyze,
+-					       foldable_insns);
+-	      }
++	    HOST_WIDE_INT scale = INTVAL (arg2);
++	    offset = scale * fold_offsets (insn, arg1, info, single_use);
+ 	  }
+ 	else
+ 	  return false;
+@@ -438,12 +446,8 @@ fold_offsets_1 (rtx_insn *insn, bool analyze, bool do_recursion,
+ 
+ 	if (REG_P (arg1) && CONST_INT_P (arg2))
+ 	  {
+-	    if (do_recursion)
+-	      {
+-		HOST_WIDE_INT scale = (HOST_WIDE_INT_1U << INTVAL (arg2));
+-		offset = scale * fold_offsets (insn, arg1, analyze,
+-					       foldable_insns);
+-	      }
++	    HOST_WIDE_INT scale = (HOST_WIDE_INT_1U << INTVAL (arg2));
++	    offset = scale * fold_offsets (insn, arg1, info, single_use);
+ 	  }
+ 	else
+ 	  return false;
+@@ -454,8 +458,7 @@ fold_offsets_1 (rtx_insn *insn, bool analyze, bool do_recursion,
+     case REG:
+       {
+ 	/* Propagate through register move.  */
+-	if (do_recursion)
+-	  offset = fold_offsets (insn, src, analyze, foldable_insns);
++	offset = fold_offsets (insn, src, info, single_use);
+ 
+ 	/* Pattern recognized for folding.  */
+ 	break;
+@@ -464,8 +467,7 @@ fold_offsets_1 (rtx_insn *insn, bool analyze, bool do_recursion,
+       {
+ 	offset = INTVAL (src);
+ 	/* R1 = C is candidate for folding.  */
+-	if (!analyze)
+-	  bitmap_set_bit (foldable_insns, INSN_UID (insn));
++	fold_agnostic = false;
+ 
+ 	/* Pattern recognized for folding.  */
+ 	break;
+@@ -475,373 +477,731 @@ fold_offsets_1 (rtx_insn *insn, bool analyze, bool do_recursion,
+       return false;
+     }
+ 
+-    if (do_recursion && !analyze)
++    if (offset_out)
+       *offset_out = offset;
+ 
++    if (fold_agnostic)
++      {
++	if (!single_use)
++	  info->fold_agnostic_insns.safe_push (insn);
++      }
++    else if (!info->fold_insns.contains (insn))
++      info->fold_insns.safe_push (insn);
++
+     return true;
+ }
+ 
+-/* Function that computes the offset that would have to be added to all uses
+-   of REG if the instructions marked in FOLDABLE_INSNS were to be eliminated.
+-
+-   If ANALYZE is true then mark in CAN_FOLD_INSNS which instructions
+-   transitively only affect other instructions found in CAN_FOLD_INSNS.
+-   If ANALYZE is false then compute the offset required for folding.  */
+-static HOST_WIDE_INT
+-fold_offsets (rtx_insn *insn, rtx reg, bool analyze, bitmap foldable_insns)
++/* Test if all USEs of DEF (which defines REG) meet certain criteria to be
++   foldable.  Returns true iff all USEs are fine or false otherwise.  */
++static bool
++has_foldable_uses_p (set_info *def, rtx reg)
+ {
+-  rtx_insn *def = get_single_def_in_bb (insn, reg);
+-
+-  if (!def || RTX_FRAME_RELATED_P (def) || GET_CODE (PATTERN (def)) != SET)
+-    return 0;
++  /* We only fold through instructions that are transitively used as
++     memory addresses and do not have other uses.  Use the same logic
++     from offset calculation to visit instructions that can propagate
++     offsets and keep track of them in CAN_FOLD_INSNS.  */
++  for (use_info *use : def->nondebug_insn_uses ())
++    {
++      insn_info *use_insn = use->insn ();
++      if (use_insn->is_artificial ())
++	return false;
+ 
+-  rtx dest = SET_DEST (PATTERN (def));
++      /* Punt if the use is anything more complicated than a set
++	 (clobber, use, etc).  */
++      rtx_insn *use_rtl = use_insn->rtl ();
++      if (!NONJUMP_INSN_P (use_rtl) || GET_CODE (PATTERN (use_rtl)) != SET)
++	return false;
+ 
+-  if (!REG_P (dest))
+-    return 0;
++      /* Special case: A foldable memory store is not foldable if it
++	 mentions DEST outside of the address calculation.  */
++      rtx use_set = PATTERN (use_rtl);
++      if (use_set && MEM_P (SET_DEST (use_set))
++	  && reg_mentioned_p (reg, SET_SRC (use_set)))
++	return false;
+ 
+-  /* We can only affect the values of GPR registers.  */
+-  unsigned int dest_regno = REGNO (dest);
+-  if (fixed_regs[dest_regno]
+-      || !TEST_HARD_REG_BIT (reg_class_contents[GENERAL_REGS], dest_regno))
+-    return 0;
++      if (use->bb () != def->bb ())
++	return false;
++    }
+ 
+-  if (analyze)
+-    {
+-      /* Check if we know how to handle DEF.  */
+-      if (!fold_offsets_1 (def, true, false, NULL, NULL))
+-	return 0;
++  return true;
++}
+ 
+-      /* We only fold through instructions that are transitively used as
+-	 memory addresses and do not have other uses.  Use the same logic
+-	 from offset calculation to visit instructions that can propagate
+-	 offsets and keep track of them in CAN_FOLD_INSNS.  */
+-      bool success;
+-      struct df_link *uses = get_uses (def, dest, &success), *ref_link;
+ 
+-      if (!success)
+-	return 0;
++/* Function that calculates the offset for INSN that would have to be added to
++   all its USEs of REG.  Foldable INSNs are added to INFO->fold_insns and
++   fold-agnostic INSNs are added to INFO->fold_agnostic_insns.
++   It is possible that some INSNs are added to both lists.  In this case the
++   INSN is a fold INSN.
+ 
+-      for (ref_link = uses; ref_link; ref_link = ref_link->next)
+-	{
+-	  rtx_insn *use = DF_REF_INSN (ref_link->ref);
++   Returns the offset on success or 0 if the calculation fails.  */
++static HOST_WIDE_INT
++fold_offsets (insn_info *insn, rtx reg, fold_mem_info *info,
++	      bool single_use = true)
++{
++  /* We can only affect the values of GPR registers.  */
++  unsigned int regno = REGNO (reg);
++  if (fixed_regs[regno]
++      || !TEST_HARD_REG_BIT (reg_class_contents[GENERAL_REGS], regno))
++    return 0;
+ 
+-	  if (DEBUG_INSN_P (use))
+-	    continue;
++  /* Get the DEF for REG in INSN.  */
++  set_info *def = get_single_def_in_bb (insn, reg, single_use);
++  if (!def)
++    return 0;
+ 
+-	  /* Punt if the use is anything more complicated than a set
+-	     (clobber, use, etc).  */
+-	  if (!NONJUMP_INSN_P (use) || GET_CODE (PATTERN (use)) != SET)
+-	    return 0;
++  insn_info *def_insn = def->insn ();
++  rtx_insn *def_rtl = def_insn->rtl ();
+ 
+-	  /* This use affects instructions outside of CAN_FOLD_INSNS.  */
+-	  if (!bitmap_bit_p (&can_fold_insns, INSN_UID (use)))
+-	    return 0;
++  if (dump_file && (dump_flags & TDF_DETAILS))
++    {
++      fprintf (dump_file, "For INSN: ");
++      print_rtl_single (dump_file, insn->rtl ());
++      fprintf (dump_file, "...found DEF: ");
++      print_rtl_single (dump_file, def_rtl);
++    }
+ 
+-	  rtx use_set = PATTERN (use);
++  gcc_assert (REGNO (reg) == REGNO (SET_DEST (PATTERN (def_rtl))));
+ 
+-	  /* Special case: A foldable memory store is not foldable if it
+-	     mentions DEST outside of the address calculation.  */
+-	  if (use_set && MEM_P (SET_DEST (use_set))
+-	      && reg_mentioned_p (dest, SET_SRC (use_set)))
+-	    return 0;
++  /* Check if all USEs of DEF are safe.  */
++  if (!has_foldable_uses_p (def, reg))
++    {
++      if (dump_file && (dump_flags & TDF_DETAILS))
++	{
++	  fprintf (dump_file, "has_foldable_uses_p failed for: ");
++	  print_rtl_single (dump_file, def_rtl);
+ 	}
++      return 0;
++    }
+ 
+-      bitmap_set_bit (&can_fold_insns, INSN_UID (def));
+-
++  /* Check if we know how to handle DEF.  */
++  HOST_WIDE_INT offset;
++  if (!fold_offsets_1 (def_insn, &offset, info, single_use))
++    {
+       if (dump_file && (dump_flags & TDF_DETAILS))
+ 	{
+-	  fprintf (dump_file, "Instruction marked for propagation: ");
+-	  print_rtl_single (dump_file, def);
++	  fprintf (dump_file, "fold_offsets_1 failed for: ");
++	  print_rtl_single (dump_file, def_rtl);
+ 	}
++      return 0;
+     }
+-  else
++
++  if (dump_file && (dump_flags & TDF_DETAILS))
+     {
+-      /* We cannot propagate through this instruction.  */
+-      if (!bitmap_bit_p (&can_fold_insns, INSN_UID (def)))
+-	return 0;
++      fprintf (dump_file, "Instruction marked for propagation: ");
++      print_rtl_single (dump_file, def_rtl);
+     }
+ 
+-  HOST_WIDE_INT offset = 0;
+-  bool recognized = fold_offsets_1 (def, analyze, true, &offset,
+-				    foldable_insns);
+-
+-  if (!recognized)
+-    return 0;
+-
+   return offset;
+ }
+ 
+-/* Test if INSN is a memory load / store that can have an offset folded to it.
+-   Return true iff INSN is such an instruction and return through MEM_OUT,
+-   REG_OUT and OFFSET_OUT the RTX that has a MEM code, the register that is
+-   used as a base address and the offset accordingly.
+-   All of the out pointers may be NULL in which case they will be ignored.  */
+-bool
+-get_fold_mem_root (rtx_insn *insn, rtx *mem_out, rtx *reg_out,
+-		   HOST_WIDE_INT *offset_out)
++/* Check if any of the the provided INSNs in INSN_LIST is not marked in the
++   given bitmap.  Return true if at least one INSN is not the bitmap and
++   false otherwise.  */
++static bool
++insn_uses_not_in_bitmap (vec<insn_info *> *insn_list, bitmap bm)
+ {
+-  rtx set = single_set (insn);
+-  rtx mem = NULL_RTX;
+-
+-  if (set != NULL_RTX)
++  for (insn_info *insn : *insn_list)
+     {
+-      rtx src = SET_SRC (set);
+-      rtx dest = SET_DEST (set);
+-
+-      /* Don't fold when we have unspec / volatile.  */
+-      if (GET_CODE (src) == UNSPEC
+-	  || GET_CODE (src) == UNSPEC_VOLATILE
+-	  || GET_CODE (dest) == UNSPEC
+-	  || GET_CODE (dest) == UNSPEC_VOLATILE)
+-	return false;
++      gcc_assert (insn->num_defs () == 1);
++      set_info *def = dyn_cast<set_info *>(insn->defs ()[0]);
++      for (use_info *use : def->nondebug_insn_uses ())
++	{
++	  if (!bitmap_bit_p (bm, use->insn ()->uid ()))
++	    {
++	      if (dump_file && (dump_flags & TDF_DETAILS))
++	      {
++		fprintf (dump_file, "Cannot ensure correct transformation as "
++			 "INSN %u has a USE INSN %u that was not analysed.\n",
++			 insn->uid (), use->insn ()->uid ());
++	      }
+ 
+-      if (MEM_P (src))
+-	mem = src;
+-      else if (MEM_P (dest))
+-	mem = dest;
+-      else if ((GET_CODE (src) == SIGN_EXTEND
+-		|| GET_CODE (src) == ZERO_EXTEND)
+-	       && MEM_P (XEXP (src, 0)))
+-	mem = XEXP (src, 0);
++	      return true;
++	    }
++	}
+     }
+ 
+-  if (mem == NULL_RTX)
+-    return false;
+-
+-  rtx mem_addr = XEXP (mem, 0);
+-  rtx reg;
+-  HOST_WIDE_INT offset;
++  return false;
++}
+ 
+-  if (REG_P (mem_addr))
++/* Check if all USEs of all instructions have been analysed.
++   If a fold_mem_info is found that has an unknown USE, then
++   drop it from the list.  When this function returns all
++   fold_mem_infos in the worklist reference instructions that
++   have been analysed before and can therefore be committed.  */
++static void
++drop_unsafe_candidates (vec<fold_mem_info *> *worklist)
++{
++  /* First mark all analysed INSNs in a bitmap.  */
++  auto_bitmap insn_closure;
++  for (fold_mem_info *info : worklist)
+     {
+-      reg = mem_addr;
+-      offset = 0;
++      bitmap_set_bit (insn_closure, info->insn->uid ());
++      for (insn_info *insn : info->fold_agnostic_insns)
++	bitmap_set_bit (insn_closure, insn->uid ());
++      for (insn_info *insn : info->fold_insns)
++	bitmap_set_bit (insn_closure, insn->uid ());
+     }
+-  else if (GET_CODE (mem_addr) == PLUS
+-	   && REG_P (XEXP (mem_addr, 0))
+-	   && CONST_INT_P (XEXP (mem_addr, 1)))
++
++  /* Now check if all uses of fold_insns are marked.  */
++  unsigned i;
++  fold_mem_info *info;
++  FOR_EACH_VEC_ELT (*worklist, i, info)
+     {
+-      reg = XEXP (mem_addr, 0);
+-      offset = INTVAL (XEXP (mem_addr, 1));
++      if (insn_uses_not_in_bitmap (&info->fold_agnostic_insns, insn_closure)
++	  || insn_uses_not_in_bitmap (&info->fold_insns, insn_closure))
++	{
++	  if (dump_file && (dump_flags & TDF_DETAILS))
++	    {
++	      fprintf (dump_file, "Dropping fold-mem-offset root INSN %u.\n",
++		       info->insn->uid ());
++	    }
++
++	  /* Drop INFO from worklist and start over.  */
++	  worklist->unordered_remove (i);
++	  delete info;
++	  drop_unsafe_candidates (worklist);
++	  return;
++	}
+     }
++}
++
++/* If INSN is a root memory instruction that was affected by any folding
++   then update its offset as necessary.  */
++static rtx
++do_commit_offset (fold_mem_info *info)
++{
++  rtx mem = info->mem;
++  rtx reg = info->reg;
++  HOST_WIDE_INT new_offset = info->offset + info->added_offset;
++
++  if (info->added_offset == 0)
++    return NULL_RTX;
++
++  rtx new_mem = copy_rtx (mem);
++
++  machine_mode mode = GET_MODE (XEXP (new_mem, 0));
++  if (new_offset != 0)
++    XEXP (new_mem, 0)
++      = gen_rtx_PLUS (mode, reg, gen_int_mode (new_offset, mode));
+   else
+-    return false;
++    XEXP (new_mem, 0) = reg;
+ 
+-  if (mem_out)
+-    *mem_out = mem;
+-  if (reg_out)
+-    *reg_out = reg;
+-  if (offset_out)
+-    *offset_out = offset;
++  rtx new_insn = simplify_replace_rtx (info->insn->rtl (), mem, new_mem);
+ 
+-  return true;
++  return new_insn;
+ }
+ 
+-/* If INSN is a root memory instruction then do a DFS traversal on its
+-   definitions and find folding candidates.  */
+-static void
+-do_analysis (rtx_insn *insn)
++/* If INSN is a move / add instruction that was folded then replace its
++   constant with zero.  */
++static rtx_insn*
++do_commit_insn (insn_info *insn, auto_vec<change_info *> *changes)
+ {
+-  rtx reg;
+-  if (!get_fold_mem_root (insn, NULL, &reg, NULL))
+-    return;
++  rtx_insn *insn_rtl = insn->rtl ();
++  rtx_insn *new_insn_rtl = (rtx_insn *) copy_rtx (insn_rtl);
+ 
+-  if (dump_file && (dump_flags & TDF_DETAILS))
++  /* If we deleted this INSNs before, then nothing left to do here.  */
++  if (insn_rtl->deleted ())
++    return NULL;
++
++  rtx set = single_set (new_insn_rtl);
++  rtx src = SET_SRC (set);
++
++  /* Emit a move and let subsequent passes eliminate it if possible.  */
++  if (GET_CODE (src) == CONST_INT)
+     {
+-      fprintf (dump_file, "Starting analysis from root: ");
+-      print_rtl_single (dump_file, insn);
++      /* Only change if necessary.  */
++      if (INTVAL (src))
++	{
++	  /* INSN is R1 = C.  Set C to 0 because it was folded.  */
++	  SET_SRC (set) = CONST0_RTX (GET_MODE (SET_SRC (set)));
++	  change_info *change = new change_info (
++				  new insn_change (insn),
++				  num_validated_changes ());
++	  changes->safe_push (change);
++
++	  return new_insn_rtl;
++	}
++    }
++  else
++    {
++      if (GET_RTX_LENGTH (GET_CODE (src)) < 2)
++	return NULL;
++
++      rtx sec_src_op = XEXP (src, 1);
++
++      /* Only change if necessary.  */
++      if (INTVAL (sec_src_op))
++	{
++	  /* Mark self-assignments for deletion.  */
++	  rtx dest = SET_DEST (set);
++	  change_info *change = nullptr;
++	  if (REGNO (dest) == REGNO (XEXP (src, 0)))
++	    change = new change_info (
++		       new insn_change (insn, insn_change::DELETE),
++		       num_validated_changes ());
++	  else
++	    {
++	      /* If INSN is R1 = R2 + C, C is folded to 0, so emit a mov
++		 instead.  */
++	      new_insn_rtl = gen_move_insn (SET_DEST (set), XEXP (src, 0));
++	      change = new change_info (
++			 new insn_change (insn), num_validated_changes ());
++	    }
++
++	  changes->safe_push (change);
++	  return new_insn_rtl;
++	}
+     }
+ 
+-  /* Analyse folding opportunities for this memory instruction.  */
+-  bitmap_set_bit (&can_fold_insns, INSN_UID (insn));
+-  fold_offsets (insn, reg, true, NULL);
++  return NULL;
+ }
+ 
+-static void
+-do_fold_info_calculation (rtx_insn *insn, fold_info_map *fold_info)
++static bool
++sort_changes (insn_change *a, insn_change *b)
+ {
+-  rtx mem, reg;
+-  HOST_WIDE_INT cur_offset;
+-  if (!get_fold_mem_root (insn, &mem, &reg, &cur_offset))
+-    return;
++  return a->insn ()->compare_with (b->insn ()) < 0;
++}
+ 
+-  fold_mem_info *info = new fold_mem_info;
+-  info->added_offset = fold_offsets (insn, reg, false, info->fold_insns);
++static int
++sort_pairs (const void *p1, const void *p2)
++{
++  const std::pair<unsigned, auto_vec<insn_change*>*> *a
++    = (const std::pair<unsigned, auto_vec<insn_change*>*> *)p1;
++  const std::pair<unsigned, auto_vec<insn_change*>*> *b
++    = (const std::pair<unsigned, auto_vec<insn_change*>*> *)p2;
+ 
+-  fold_info->put (insn, info);
++  return a->first - b->first;
+ }
+ 
+-/* If INSN is a root memory instruction then compute a potentially new offset
+-   for it and test if the resulting instruction is valid.  */
+-static void
+-do_check_validity (rtx_insn *insn, fold_mem_info *info)
++/* Find and return the last definition of INSN.  */
++
++static def_info*
++get_last_def (insn_info* insn)
+ {
+-  rtx mem, reg;
+-  HOST_WIDE_INT cur_offset;
+-  if (!get_fold_mem_root (insn, &mem, &reg, &cur_offset))
+-    return;
+-
+-  HOST_WIDE_INT new_offset = cur_offset + info->added_offset;
+-
+-  /* Test if it is valid to change MEM's address offset to NEW_OFFSET.  */
+-  int icode = INSN_CODE (insn);
+-  INSN_CODE (insn) = -1;
+-  rtx mem_addr = XEXP (mem, 0);
+-  machine_mode mode = GET_MODE (mem_addr);
+-  if (new_offset != 0)
+-    XEXP (mem, 0) = gen_rtx_PLUS (mode, reg, gen_int_mode (new_offset, mode));
+-  else
+-    XEXP (mem, 0) = reg;
++  for (def_info *def : insn->defs ())
++    if (def->insn () == insn)
++      return def;
+ 
+-  bool illegal = insn_invalid_p (insn, false)
+-		 || !memory_address_addr_space_p (mode, XEXP (mem, 0),
+-						  MEM_ADDR_SPACE (mem));
++  return NULL;
++}
+ 
+-  /* Restore the instruction.  */
+-  XEXP (mem, 0) = mem_addr;
+-  INSN_CODE (insn) = icode;
++/* Move uses of DEF to the previous definition.  */
+ 
+-  if (illegal)
+-    bitmap_ior_into (&cannot_fold_insns, info->fold_insns);
+-  else
+-    bitmap_ior_into (&candidate_fold_insns, info->fold_insns);
++static void
++move_uses_to_prev_def (def_info *def)
++{
++  auto set = dyn_cast<set_info *> (def);
++  while (set->first_use ())
++    {
++      auto prev_set = dyn_cast<set_info *> (def->prev_def ());
++      if (!prev_set)
++	break;
++      crtl->ssa->reparent_use (set->first_use (), prev_set);
++    }
+ }
+ 
++/* Check if CHANGE exists in CHANGES.  */
++
+ static bool
+-compute_validity_closure (fold_info_map *fold_info)
++change_in_vec_p (const auto_vec<change_info *> &changes,
++		 const change_info &change)
+ {
+-  /* Let's say we have an arbitrary chain of foldable instructions xN = xN + C
+-     and memory operations rN that use xN as shown below.  If folding x1 in r1
+-     turns out to be invalid for whatever reason then it's also invalid to fold
+-     any of the other xN into any rN.  That means that we need the transitive
+-     closure of validity to determine whether we can fold a xN instruction.
+-
+-     +--------------+    +-------------------+    +-------------------+
+-     | r1 = mem[x1] |    | r2 = mem[x1 + x2] |    | r3 = mem[x2 + x3] |   ...
+-     +--------------+    +-------------------+    +-------------------+
+-	    ^                ^       ^                ^       ^
+-	    |               /        |               /        |           ...
+-	    |              /         |              /         |
+-     +-------------+      /   +-------------+      /   +-------------+
+-     | x1 = x1 + 1 |-----+    | x2 = x2 + 1 |-----+    | x3 = x3 + 1 |--- ...
+-     +-------------+          +-------------+          +-------------+
+-	    ^                        ^                        ^
+-	    |                        |                        |
+-	   ...                      ...                      ...
+-  */
+-
+-  /* In general three iterations should be enough for most cases, but allow up
+-     to five when -fexpensive-optimizations is used.  */
+-  int max_iters = 3 + 2 * flag_expensive_optimizations;
+-  for (int pass = 0; pass < max_iters; pass++)
+-    {
+-      bool made_changes = false;
+-      for (fold_info_map::iterator iter = fold_info->begin ();
+-	   iter != fold_info->end (); ++iter)
+-	{
+-	  fold_mem_info *info = (*iter).second;
+-	  if (bitmap_intersect_p (&cannot_fold_insns, info->fold_insns))
+-	    made_changes |= bitmap_ior_into (&cannot_fold_insns,
+-					     info->fold_insns);
+-	}
+-
+-      if (!made_changes)
+-	return true;
+-    }
++  for (const change_info *other_change : changes)
++    if (other_change->change->insn () == change.change->insn ())
++      return true;
+ 
+   return false;
+ }
+ 
+-/* If INSN is a root memory instruction that was affected by any folding
+-   then update its offset as necessary.  */
++/* Cancel current changes, clear CHANGES vector and update REMOVED_REGNOS.  */
++static void
++cancel_changes_for_group (int change_index, auto_vec<unsigned> *removed_regnos,
++			  unsigned regno, int *min_index)
++{
++  if (*min_index == -1 || change_index < *min_index)
++    *min_index = change_index;
++  if (!removed_regnos->contains (regno))
++    removed_regnos->safe_push (regno);
++}
++
++/* Find the keys in CHANGES_MAP that need to be removed, based on
++   CANCEL_MIN_INDEX and store them in KEYS_TO_REMOVE.  We do this by iterating
++   the entries of the map recalculating the minimun index, until reaching a
++   fixed-point.  */
++
+ static void
+-do_commit_offset (rtx_insn *insn, fold_mem_info *info)
++find_keys_to_remove (const hash_map<int_hash<unsigned, -1U, -2U>,
++			      auto_vec<change_info *>> &changes_map,
++		     auto_vec<unsigned int> *keys_to_remove,
++		     int *cancel_min_index)
+ {
+-  rtx mem, reg;
+-  HOST_WIDE_INT cur_offset;
+-  if (!get_fold_mem_root (insn, &mem, &reg, &cur_offset))
+-    return;
++  bool index_changed;
++  do {
++    index_changed = false;
++    for (const auto &entry : changes_map)
++      {
++	int min_index = INT_MAX;
++	bool cancelled_group = keys_to_remove->contains (entry.first);
++	for (change_info *change : entry.second)
++	  {
++	    int change_index = change->change_index;
++	    if (change_index < min_index)
++	      min_index = change_index;
++
++	    if (!cancelled_group && change_index >= *cancel_min_index)
++	      {
++		keys_to_remove->safe_push (entry.first);
++		cancelled_group = true;
++	      }
++	  }
+ 
+-  HOST_WIDE_INT new_offset = cur_offset + info->added_offset;
++	if (cancelled_group && min_index < *cancel_min_index)
++	  {
++	    *cancel_min_index = min_index;
++	    index_changed = true;
++	    break;
++	  }
++      }
++  }
++  while (index_changed);
++}
+ 
+-  if (new_offset == cur_offset)
+-    return;
++/* Update the memory offsets and constants in fold insns based on the analysis
++   done in fold_mem_offsets_1, using RTL SSA.  ATTEMPT is the attempt object
++   for the current changes.  CHANGES_MAP holds the changes that are going
++   to performed and is updated inside the function.  REMOVED_REGNOS holds the
++   keys of the map that have been removed, in order to prevent new attempts
++   on these.  */
++static unsigned int
++update_insns (fold_mem_info *info,
++	      insn_change_watermark *,
++	      obstack_watermark *attempt,
++	      hash_map<int_hash<unsigned, -1U, -2U>, auto_vec<change_info *>>
++	      *changes_map,
++	      auto_vec<unsigned> *removed_regnos,
++	      int *cancel_min_index)
++{
++  insn_info *insn = info->insn;
++  unsigned int stats_fold_count = 0;
++
++  auto_vec<change_info *> changes_info;
++
++  insn_change *change = new insn_change (insn);
++  change_info *change_inf = new change_info (change, num_validated_changes ());
++  int change_index = change_inf->change_index;
++  changes_info.safe_push (change_inf);
++
++  if (info->fold_insns.is_empty ())
++    return stats_fold_count;
++
++  const rtx_insn *last_fold_insn_rtl = info->fold_insns.last ()->rtl ();
++  unsigned regno_key = REGNO (SET_DEST (single_set (last_fold_insn_rtl)));
++  auto_vec<change_info *> *prev_changes = changes_map->get (regno_key);
++
++  /* Abort if changes for this key have been cancelled before.  */
++  if (removed_regnos->contains (regno_key))
++  {
++    cancel_changes_for_group (change_index, removed_regnos, regno_key,
++			      cancel_min_index);
++    return stats_fold_count;
++  }
++
++  /* Keep a copy of insn_change elements only.  */
++  auto_vec<insn_change *> changes (changes_info.length ());
++  for (change_info *ci : changes_info)
++    changes.quick_push (ci->change);
++
++  auto ignore = ignore_changing_insns (changes);
++  if (!rtl_ssa::restrict_movement (*change, ignore))
++    {
++      if (dump_file && (dump_flags & TDF_DETAILS))
++	fprintf (dump_file, "Restrict movement: Cannot update INSN %u.\n",
++		 insn->uid ());
++      cancel_changes_for_group (change_index, removed_regnos, regno_key,
++				cancel_min_index);
++      return stats_fold_count;
++    }
++
++  rtx new_insn = do_commit_offset (info);
++  if (new_insn == NULL_RTX)
++    return stats_fold_count;
+ 
+-  gcc_assert (!bitmap_empty_p (info->fold_insns));
++  rtx_insn *insn_rtl = info->insn->rtl ();
++  validate_change (insn_rtl, &PATTERN (insn_rtl), PATTERN (new_insn), 1);
+ 
+-  if (bitmap_intersect_p (&cannot_fold_insns, info->fold_insns))
+-    return;
++  /* Check change validity and new instruction cost.  */
++  if (!recog (*attempt, *change, ignore)
++      || !changes_are_worthwhile (changes)
++      || !crtl->ssa->verify_insn_changes (changes))
++    {
++      if (dump_file && (dump_flags & TDF_DETAILS))
++	fprintf (dump_file, "Recog/verify: Cannot update INSN %u.\n",
++		 insn->uid ());
++      cancel_changes_for_group (change_index, removed_regnos, regno_key,
++				cancel_min_index);
++      return stats_fold_count;
++    }
+ 
+   if (dump_file)
++    fprintf (dump_file, "INSN %u: Memory offset changed from "
++	 HOST_WIDE_INT_PRINT_DEC " to " HOST_WIDE_INT_PRINT_DEC ".\n",
++	 insn->uid (), info->offset, info->offset + info->added_offset);
++
++  while (!info->fold_insns.is_empty ())
+     {
+-      fprintf (dump_file, "Memory offset changed from "
+-	       HOST_WIDE_INT_PRINT_DEC " to " HOST_WIDE_INT_PRINT_DEC
+-	       " for instruction:\n", cur_offset, new_offset);
+-      print_rtl_single (dump_file, insn);
++      insn_info *fold_insn = info->fold_insns.pop ();
++      rtx_insn *fold_insn_rtl = fold_insn->rtl ();
++
++      rtx_insn *new_fold_insn = do_commit_insn (fold_insn, &changes_info);
++      if (!new_fold_insn)
++	continue;
++
++      change_info *last_change = changes_info.last ();
++      changes.safe_push (last_change->change);
++
++      std::sort (changes.begin (), changes.end (), sort_changes);
++
++      auto ignore = ignore_changing_insns (changes);
++      if (!rtl_ssa::restrict_movement (*last_change->change, ignore))
++	{
++	  if (dump_file && (dump_flags & TDF_DETAILS))
++	    fprintf (dump_file, "Restrict movement: Cannot update INSN %u.\n",
++		     fold_insn->uid ());
++	  cancel_changes_for_group (change_index, removed_regnos, regno_key,
++				    cancel_min_index);
++	  return 0;
++	}
++
++      if (!changes_are_worthwhile (changes)
++	  || !crtl->ssa->verify_insn_changes (changes))
++	{
++	  if (dump_file && (dump_flags & TDF_DETAILS))
++	    fprintf (dump_file, "Verify: Cannot update INSN %u.\n",
++		     fold_insn->uid ());
++	  cancel_changes_for_group (change_index, removed_regnos, regno_key,
++				    cancel_min_index);
++	  return 0;
++	}
++
++      if (last_change->change->is_deletion ())
++	{
++	  /* Find last instruction's def.  */
++	  def_info *insn_def = get_last_def (last_change->change->insn ());
++
++	  /* Move uses of deleted instruction to the previous def.  */
++	  move_uses_to_prev_def (insn_def);
++	}
++      else
++	{
++	  last_change->change_index = num_validated_changes ();
++	  validate_change (fold_insn_rtl, &PATTERN (fold_insn_rtl),
++			   PATTERN (new_fold_insn), 1);
++	  if (!recog (*attempt, *last_change->change, ignore))
++	    {
++	      if (dump_file && (dump_flags & TDF_DETAILS))
++		fprintf (dump_file, "Recog: Cannot update INSN %u.\n",
++			 fold_insn->uid ());
++	      cancel_changes_for_group (change_index, removed_regnos, regno_key,
++					cancel_min_index);
++	      return 0;
++	    }
++	}
++
++      if (dump_file)
++      {
++	const int last_change_uid = last_change->change->insn ()->uid ();
++	if (last_change->change->is_deletion ())
++	  fprintf (dump_file, "INSN %u: Marked for deletion.\n",
++		   last_change_uid);
++	else
++	  fprintf (dump_file, "INSN %u: Constant set to zero.\n",
++		   last_change_uid);
++      }
++
++      stats_fold_count++;
+     }
+ 
+-  machine_mode mode = GET_MODE (XEXP (mem, 0));
+-  if (new_offset != 0)
+-    XEXP (mem, 0) = gen_rtx_PLUS (mode, reg, gen_int_mode (new_offset, mode));
++  /* Add new changes to changes_map.  */
++  if (prev_changes)
++    {
++      for (change_info *change : changes_info)
++	if (!change_in_vec_p (*prev_changes, *change))
++	  prev_changes->safe_push (change);
++    }
+   else
+-    XEXP (mem, 0) = reg;
+-  INSN_CODE (insn) = recog (PATTERN (insn), insn, 0);
+-  df_insn_rescan (insn);
++    for (change_info *change : changes_info)
++      {
++	auto_vec<change_info *> &change_vect
++	  = changes_map->get_or_insert (regno_key);
++
++	if (!change_in_vec_p (change_vect, *change))
++	  change_vect.safe_push (change);
++      }
++
++  return stats_fold_count;
+ }
+ 
+-/* If INSN is a move / add instruction that was folded then replace its
+-   constant part with zero.  */
+-static void
+-do_commit_insn (rtx_insn *insn)
++/* Helper function for fold_mem_offsets.  Fold memory offsets by analysing the
++   DEF-USE chain.  If SINGLE_USE is true the DEFs will only have a single use,
++   otherwise they can have multiple uses.  */
++static unsigned int
++fold_mem_offsets_1 (bool single_use)
+ {
+-  if (bitmap_bit_p (&candidate_fold_insns, INSN_UID (insn))
+-      && !bitmap_bit_p (&cannot_fold_insns, INSN_UID (insn)))
++  unsigned int stats_fold_count = 0;
++
++  /* This maps the instruction changes to the register number of the first
++     fold_insn in the instruction sequence.  We use this so that we can
++     group interdependent instructions.  In this way, we can restrict the
++     change cancellation in a group only, if anything goes wrong.  */
++  hash_map<int_hash<unsigned, -1U, -2U>, auto_vec<change_info *>> changes_map;
++
++  auto attempt = crtl->ssa->new_change_attempt ();
++  insn_change_watermark watermark;
++
++  /* Set of removed reg numbers (keys to changes_map). If a change for a reg
++     number has been cancelled, we need to invalidate any future changes.  */
++  auto_vec<unsigned> removed_regnos;
++
++  int cancel_min_index = -1;
++
++  /* Iterate over all nondebug INSNs get our candidates and fold them.  */
++  auto_vec<fold_mem_info *> worklist;
++  for (auto insn : iterate_safely (crtl->ssa->nondebug_insns ()))
+     {
+-      if (dump_file)
++      if (!insn->is_real () || !insn->can_be_optimized ())
++	continue;
++
++      rtx mem, reg;
++      HOST_WIDE_INT offset;
++      if (!get_fold_mem_offset_root (insn, &mem, &reg, &offset))
++	continue;
++
++      fold_mem_info *info = new fold_mem_info (insn, mem, reg, offset);
++
++      if (dump_file && (dump_flags & TDF_DETAILS))
+ 	{
+-	  fprintf (dump_file, "Instruction folded:");
+-	  print_rtl_single (dump_file, insn);
++	  fprintf (dump_file, "Starting analysis from root: ");
++	  print_rtl_single (dump_file, info->insn->rtl ());
+ 	}
+ 
+-      stats_fold_count++;
++      /* Walk DEF-chain and collect info.fold_insns and the resulting
++	 offset.  */
++      info->added_offset = fold_offsets (info->insn, info->reg, info,
++					 single_use);
++      if (info->added_offset == 0)
++	  continue;
+ 
+-      rtx set = single_set (insn);
+-      rtx dest = SET_DEST (set);
+-      rtx src = SET_SRC (set);
++      if (dump_file && (dump_flags & TDF_DETAILS))
++	fprintf (dump_file,
++		 "Found root offset delta: " HOST_WIDE_INT_PRINT_DEC "\n",
++		 info->added_offset);
+ 
+-      /* Emit a move and let subsequent passes eliminate it if possible.  */
+-      if (GET_CODE (src) == CONST_INT)
++      if (single_use)
+ 	{
+-	  /* INSN is R1 = C.
+-	     Replace it with R1 = 0 because C was folded.  */
+-	  rtx mov_rtx
+-	    = gen_move_insn (dest, gen_int_mode (0, GET_MODE (dest)));
+-	  df_insn_rescan (emit_insn_after (mov_rtx, insn));
++	  stats_fold_count += update_insns (info, &watermark, &attempt,
++					    &changes_map, &removed_regnos,
++					    &cancel_min_index);
++	  delete info;
+ 	}
+       else
++	/* Append candidate.  */
++	worklist.safe_push (info);
++    }
++
++  if (!single_use)
++    {
++      /* Now drop all fold_mem_infos, which contain INSNs that have unknown
++	 USEs and are therefore not safe to change.  */
++      drop_unsafe_candidates (&worklist);
++
++      while (!worklist.is_empty ())
+ 	{
+-	  /* INSN is R1 = R2 + C.
+-	     Replace it with R1 = R2 because C was folded.  */
+-	  rtx arg1 = XEXP (src, 0);
++	  fold_mem_info *info = worklist.pop ();
++	  stats_fold_count += update_insns (info, &watermark, &attempt,
++					    &changes_map, &removed_regnos,
++					    &cancel_min_index);
++	  delete info;
++	}
++    }
++
++  /* In case that instructions have been cancelled, remove related
++     instructions from the map and find the minimun index to use in
++     cancel_changes.  */
++  if (cancel_min_index != -1)
++    {
++      find_keys_to_remove (changes_map, &removed_regnos, &cancel_min_index);
+ 
+-	  /* If the DEST == ARG1 then the move is a no-op.  */
+-	  if (REGNO (dest) != REGNO (arg1))
++      unsigned int i, key;
++      FOR_EACH_VEC_ELT (removed_regnos, i, key)
++	{
++	  auto_vec<change_info *> *changes = changes_map.get (key);
++	  if (changes)
+ 	    {
+-	      gcc_checking_assert (GET_MODE (dest) == GET_MODE (arg1));
+-	      rtx mov_rtx = gen_move_insn (dest, arg1);
+-	      df_insn_rescan (emit_insn_after (mov_rtx, insn));
++	      for (change_info *change : *changes)
++		{
++		  if (dump_file)
++		  fprintf (dump_file, "Change cancelled for insn %u.\n",
++			  change->change->insn ()->uid ());
++		  delete change;
++		}
+ 	    }
++	  changes_map.remove (key);
+ 	}
+ 
+-      /* Delete the original move / add instruction.  */
+-      delete_insn (insn);
++      cancel_changes (cancel_min_index);
+     }
++
++  /* Avoid confirming the group when all changes have been cancelled.  This
++     messes up with the instruction changes.  */
++  if (cancel_min_index != 0)
++    confirm_change_group ();
++
++  /* Copy the map into a vector and sort it for traversal.  */
++  unsigned int map_entries_num = changes_map.elements ();
++  auto_vec<std::pair<unsigned, auto_vec<insn_change *>*>> changes_pair_vec (
++    map_entries_num);
++
++  for (auto entry : changes_map)
++    {
++      auto_vec<insn_change *> *changes_vec
++	 = new auto_vec<insn_change *> (entry.second.length ());
++
++      for (change_info *change : entry.second)
++	changes_vec->quick_push (change->change);
++
++      std::pair<unsigned, auto_vec<insn_change *>*>
++	pair (static_cast<unsigned>(entry.first), changes_vec);
++      changes_pair_vec.quick_push (pair);
++    }
++
++  changes_pair_vec.qsort (sort_pairs);
++
++  for (const auto &change_pair : changes_pair_vec)
++    {
++      auto_vec<insn_change *> &changes = *change_pair.second;
++      unsigned int i, j;
++      insn_change **it;
++      /* Remove already deleted instructions from the vector.  */
++      VEC_ORDERED_REMOVE_IF (changes, i, j, it,
++			     (*it)->insn ()->has_been_deleted ());
++      std::sort (changes.begin (), changes.end (), sort_changes);
++      crtl->ssa->change_insns (changes);
++
++      for (insn_change *change : changes)
++	delete change;
++
++      changes.truncate (0);
++    }
++
++  return stats_fold_count;
+ }
+ 
+-unsigned int
+-pass_fold_mem_offsets::execute (function *fn)
++/* Main function of fold-mem-offsets pass.  */
++static unsigned int
++fold_mem_offsets (function *fn)
+ {
++  bool multi_use_mode = true;
++
+   /* Computing UD/DU chains for flow graphs which have a high connectivity
+      will take a long time and is unlikely to be particularly useful.
+ 
+@@ -856,69 +1216,81 @@ pass_fold_mem_offsets::execute (function *fn)
+ 	       "fold-mem-offsets: %d basic blocks and %d edges/basic block",
+ 	       n_basic_blocks_for_fn (cfun),
+ 	       n_edges_for_fn (cfun) / n_basic_blocks_for_fn (cfun));
+-      return 0;
++      multi_use_mode = false;
+     }
+ 
+-  df_set_flags (DF_EQ_NOTES + DF_RD_PRUNE_DEAD_DEFS + DF_DEFER_INSN_RESCAN);
+-  df_chain_add_problem (DF_UD_CHAIN + DF_DU_CHAIN);
++  /* There is a conflict between this pass and RISCV's shorten-memrefs
++     pass.  For now disable folding if optimizing for size because
++     otherwise this cancels the effects of shorten-memrefs.  */
++  cgraph_node *n = cgraph_node::get (fn->decl);
++  if (n && n->optimize_for_size_p ())
++    return 0;
++
++  /* Initialise RTL SSA.  */
++  calculate_dominance_info (CDI_DOMINATORS);
+   df_analyze ();
++  crtl->ssa = new rtl_ssa::function_info (cfun);
+ 
+-  bitmap_initialize (&can_fold_insns, NULL);
+-  bitmap_initialize (&candidate_fold_insns, NULL);
+-  bitmap_initialize (&cannot_fold_insns, NULL);
++  /* The number of instructions that were simplified or eliminated.  */
++  int stats_fold_count = 0;
+ 
+-  stats_fold_count = 0;
++  /* Fold mem offsets with DEFs that have a single USE.  */
++  stats_fold_count += fold_mem_offsets_1 (true);
+ 
+-  basic_block bb;
+-  rtx_insn *insn;
+-  FOR_ALL_BB_FN (bb, fn)
++  /* Fold mem offsets with DEFs that have multiple USEs.  */
++  if (multi_use_mode || flag_expensive_optimizations)
+     {
+-      /* There is a conflict between this pass and RISCV's shorten-memrefs
+-	 pass.  For now disable folding if optimizing for size because
+-	 otherwise this cancels the effects of shorten-memrefs.  */
+-      if (optimize_bb_for_size_p (bb))
+-	continue;
++      if (dump_file)
++	fprintf (dump_file, "Starting multi-use analysis\n");
++      stats_fold_count += fold_mem_offsets_1 (false);
++    }
+ 
+-      fold_info_map fold_info;
++  statistics_counter_event (cfun, "Number of folded instructions",
++			    stats_fold_count);
+ 
+-      bitmap_clear (&can_fold_insns);
+-      bitmap_clear (&candidate_fold_insns);
+-      bitmap_clear (&cannot_fold_insns);
++  free_dominance_info (CDI_DOMINATORS);
++  if (crtl->ssa->perform_pending_updates ())
++    cleanup_cfg (0);
+ 
+-      FOR_BB_INSNS (bb, insn)
+-	do_analysis (insn);
++  delete crtl->ssa;
++  crtl->ssa = nullptr;
+ 
+-      FOR_BB_INSNS (bb, insn)
+-	do_fold_info_calculation (insn, &fold_info);
++  return 0;
++}
+ 
+-      FOR_BB_INSNS (bb, insn)
+-	if (fold_mem_info **info = fold_info.get (insn))
+-	  do_check_validity (insn, *info);
++namespace {
+ 
+-      if (compute_validity_closure (&fold_info))
+-	{
+-	  FOR_BB_INSNS (bb, insn)
+-	    if (fold_mem_info **info = fold_info.get (insn))
+-	      do_commit_offset (insn, *info);
++const pass_data pass_data_fold_mem =
++{
++  RTL_PASS, /* type */
++  "fold_mem_offsets", /* name */
++  OPTGROUP_NONE, /* optinfo_flags */
++  TV_FOLD_MEM_OFFSETS, /* tv_id */
++  0, /* properties_required */
++  0, /* properties_provided */
++  0, /* properties_destroyed */
++  0, /* todo_flags_start */
++  TODO_df_finish, /* todo_flags_finish */
++};
+ 
+-	  FOR_BB_INSNS (bb, insn)
+-	    do_commit_insn (insn);
+-	}
++class pass_fold_mem_offsets : public rtl_opt_pass
++{
++public:
++  pass_fold_mem_offsets (gcc::context *ctxt)
++    : rtl_opt_pass (pass_data_fold_mem, ctxt)
++  {}
+ 
+-      for (fold_info_map::iterator iter = fold_info.begin ();
+-	   iter != fold_info.end (); ++iter)
+-	delete (*iter).second;
++  /* opt_pass methods: */
++  bool gate (function *) final override
++    {
++      return flag_fold_mem_offsets && optimize >= 2;
+     }
+ 
+-  statistics_counter_event (cfun, "Number of folded instructions",
+-			    stats_fold_count);
+-
+-  bitmap_release (&can_fold_insns);
+-  bitmap_release (&candidate_fold_insns);
+-  bitmap_release (&cannot_fold_insns);
+-
+-  return 0;
+-}
++  unsigned int execute (function *fn) final override
++    {
++      return fold_mem_offsets (fn);
++    }
++}; // class pass_fold_mem_offsets
+ 
+ } // anon namespace
+ 
+diff --git a/gcc/testsuite/g++.target/aarch64/fold-mem-offsets.C b/gcc/testsuite/g++.target/aarch64/fold-mem-offsets.C
+new file mode 100644
+index 000000000000..f8122ecf0213
+--- /dev/null
++++ b/gcc/testsuite/g++.target/aarch64/fold-mem-offsets.C
+@@ -0,0 +1,86 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -ffold-mem-offsets" } */
++
++typedef int a(void *);
++a b;
++
++struct e {
++  typedef struct d f;
++};
++
++template <typename, typename g = e, typename = typename g::f> struct h;
++
++template <typename i, typename g> struct h<i, g, int> {
++  i &operator[](unsigned);
++};
++
++template <typename i, typename g> i &h<i, g, int>::operator[](unsigned j) {
++  i *k = reinterpret_cast<i *>(1);
++  return k[j];
++}
++
++template <typename i> struct h<i> {
++  i &operator[](unsigned j) { return l[j]; }
++  h<i, e, int> l;
++};
++
++struct m {
++  typedef int aa;
++};
++
++template <typename ac, ac> struct n : m { static bool ad(ac); };
++
++template <typename ac, ac o> bool n<ac, o>::ad(ac j) {
++  return j == o;
++}
++
++template <typename ai> class F {
++  typedef typename ai::aa aa;
++
++public:
++  F(bool);
++  void an() {
++    bool ba;
++    a r;
++    aa *p;
++    do {
++      aa q = *p;
++      ba = ai::ad(q);
++      if (ba)
++        ;
++      else {
++        int bj = ai::ao(q);
++        aq(bj);
++      }
++      p++;
++    } while (r);
++  }
++  void aq(unsigned);
++};
++
++enum bk {};
++
++struct s {
++  int bn;
++  bk bo;
++  int *bv;
++};
++
++h<s> bp;
++
++struct t : n<int, 0> {
++  static unsigned ao(int);
++};
++
++unsigned t::ao(int j) {
++  s *c = &bp[j];
++  return b(c->bv) ^ c->bo;
++}
++
++void fn3() {
++  F<t> bs(5);
++  bs.an();
++}
++
++/* Check for updated memory offsets.  */
++/* { dg-final { scan-assembler "ldr\t.*, \[.*, 5\]" } } */
+\ No newline at end of file
+diff --git a/gcc/testsuite/gcc.target/aarch64/fold-mem-offsets.c b/gcc/testsuite/gcc.target/aarch64/fold-mem-offsets.c
+new file mode 100644
+index 000000000000..c79a376633dc
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/fold-mem-offsets.c
+@@ -0,0 +1,19 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -ffold-mem-offsets" } */
++
++struct a {
++  struct a *b;
++  int *d;
++  int c;
++  long ad[];
++} e, g;
++
++int f;
++long h;
++void i() {
++  h = g.ad[f] & e.ad[f];
++}
++
++/* Check for updated memory offsets.  */
++/* { dg-final { scan-assembler "ldr\t.*, \[.*, 64\]" } } */
++/* { dg-final { scan-assembler "ldr\t.*, \[.*, 40\]" } } */
+\ No newline at end of file
+-- 
+2.50.1
+
+
