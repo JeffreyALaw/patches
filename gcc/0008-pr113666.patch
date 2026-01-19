@@ -1,3 +1,13 @@
+	PR target/113666
+gcc/
+	* fold-const-call.cc (fold_const_vec_extract): New function.
+	(fold_const_call, case CFN_VEC_EXTRACT): Call it.
+	* match.pd (IFN_VEC_EXTRACT): Handle extraction from a uniform
+	vector.
+
+gcc/testsuite
+	* gcc.target/riscv/rvv/base/pr113666.c: New test.
+
 diff --git a/gcc/fold-const-call.cc b/gcc/fold-const-call.cc
 index 464d162cf550..aa63ced00bba 100644
 --- a/gcc/fold-const-call.cc
