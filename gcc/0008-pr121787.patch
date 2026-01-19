@@ -21,7 +21,7 @@ index 00000000000..4180a545202
 +/* { dg-options "-march=rv64gcv -mabi=lp64 -O" { target rv64 } } */
 +/* { dg-options "-march=rv32gcv -mabi=ilp32 -O" { target rv32 } } */
 +
-+#include <stdint.h-gcc>
++#include <stdint-gcc.h>
 +typedef int a;
 +int32_t b, e;
 +int32_t **c;
@@ -47,7 +47,7 @@ index 00000000000..f3be37b1a2a
 +/* { dg-options "-march=rv64gcv -mabi=lp64 -O" { target rv64 } } */
 +/* { dg-options "-march=rv32gcv -mabi=ilp32 -O" { target rv32 } } */
 +
-+#include <stdint.h-gcc>
++#include <stdint-gcc.h>
 +typedef int a;
 +int32_t b, e;
 +int32_t **c;
