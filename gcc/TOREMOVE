@@ -111,4 +111,5 @@ gcc/testsuite/g++.dg/modules/xtreme-header-8.C
 
 # Similarly.
 gcc/testsuite/gfortran.dg/minloc_with_dim_and_mask_1.f90
+gcc/testsuite/gfortran.dg/maxloc_with_dim_and_mask_1.f90
 
