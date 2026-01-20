@@ -105,3 +105,10 @@ gcc/testsuite/g++.dg/torture/pr58552.C
 # Sporadic failures across multiple platforms.  Believed to be timeouts
 gcc/testsuite/gcc.dg/torture/inline-mem-cmp-1.c
 gcc/testsuite/gcc.dg/torture/inline-mem-cpy-cmp-1.c
+
+# Seems to regularly cause problems
+gcc/testsuite/g++.dg/modules/xtreme-header-8.C
+
+# Similarly.
+gcc/testsuite/gfortran.dg/minloc_with_dim_and_mask_1.f90
+
