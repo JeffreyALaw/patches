@@ -40,7 +40,7 @@ index 3fe0ad0ccdf..d484c0d5ef3 100644
      FAIL;
  })
 diff --git a/gcc/match.pd b/gcc/match.pd
-index e0a2399ca65d..c5b86df10c1a 100644
+index e0a2399ca65d..ddc2e1f899fb 100644
 --- a/gcc/match.pd
 +++ b/gcc/match.pd
 @@ -12231,3 +12231,8 @@ and,
@@ -51,4 +51,4 @@ index e0a2399ca65d..c5b86df10c1a 100644
 +(simplify
 +  (cond (ne @0 integer_zerop) (bit_ior:c @1 @2) @1)
 +  (bit_ior @1
-+    (cond (ne @0 { build_zero_cst (type); }) @2 { build_zero_cst (type); })))
++    (cond (ne @0 { build_zero_cst (TREE_TYPE (@0)); }) @2 { build_zero_cst (type); })))
