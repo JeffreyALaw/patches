@@ -7,9 +7,9 @@ index e0a2399ca65..422b8951704 100644
  (simplify (IFN_VEC_EXTRACT (vec_duplicate @0) INTEGER_CST@1)
   @0)
 +
-+(for op (plus bit_and bit_ior bit_xor plus mult)
++(for op (plus bit_and bit_ior bit_xor mult)
 + (simplify
-+  (cond (ne @0 integer_zerop) (op:c @1 @2) @1)
++  (cond (ne @0 integer_zerop) (op @1 @2) @1)
 +  (op @1
 +    (cond (ne @0 { build_zero_cst (TREE_TYPE (@0)); }) @2 { build_zero_cst (type); }))))
 +
