@@ -1,0 +1,17 @@
+diff --git a/gcc/common.opt.urls b/gcc/common.opt.urls
+index ed4c9d55e3b3..2d07271dcd2d 100644
+--- a/gcc/common.opt.urls
++++ b/gcc/common.opt.urls
+@@ -1153,10 +1153,10 @@ fpost-ipa-mem-report
+ UrlSuffix(gcc/Developer-Options.html#index-fno-post-ipa-mem-report)
+ 
+ fpack-struct
+-UrlSuffix(gcc/Code-Gen-Options.html#index-fno-pack-struct)
++UrlSuffix(gcc/Code-Gen-Options.html#index-fpack-struct)
+ 
+ fpack-struct=
+-UrlSuffix(gcc/Code-Gen-Options.html#index-fno-pack-struct)
++UrlSuffix(gcc/Code-Gen-Options.html#index-fpack-struct)
+ 
+ ; skipping UrlSuffix for 'fpcc-struct-return' due to multiple URLs:
+ ;   duplicate: 'gcc/Code-Gen-Options.html#index-fno-pcc-struct-return'
