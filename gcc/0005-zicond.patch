@@ -1,8 +1,49 @@
+diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
+index 3fe0ad0ccdf4..d484c0d5ef34 100644
+--- a/gcc/config/riscv/riscv.md
++++ b/gcc/config/riscv/riscv.md
+@@ -3308,9 +3308,35 @@ (define_expand "mov<mode>cc"
+   "TARGET_SFB_ALU || TARGET_XTHEADCONDMOV || TARGET_ZICOND_LIKE
+    || TARGET_MOVCC || TARGET_XMIPSCMOV"
+ {
++  /* Prior to reload if we are given a sub-word input, go ahead and
++     convert it (via sign extension) to WORD_MODE and use a low-part
++     extraction to pull the result out of a WORD_MODE temporary.  */
++  rtx orig_dest = NULL_RTX;
++  if (TARGET_64BIT && <MODE>mode == SImode)
++    {
++      if (!CONST_INT_P (operands[2]))
++        operands[2] = convert_modes (word_mode, SImode, operands[2], false);
++      if (!CONST_INT_P (operands[3]))
++        operands[3] = convert_modes (word_mode, SImode, operands[3], false);
++
++      orig_dest = operands[0];
++      operands[0] = gen_reg_rtx (word_mode);
++    }
++
+   if (riscv_expand_conditional_move (operands[0], operands[1],
+ 				     operands[2], operands[3]))
+-    DONE;
++    {
++      /* If ORIG_DEST is non-null, copy the temporary destination to
++         the real destination using a lowpart extraction.  */
++      if (orig_dest)
++        {
++          rtx t = gen_lowpart (SImode, operands[0]);
++          SUBREG_PROMOTED_VAR_P (t) = 1;
++          SUBREG_PROMOTED_SET (t, SRP_SIGNED);
++          emit_move_insn (orig_dest, t);
++        }
++      DONE;
++    }
+   else
+     FAIL;
+ })
 diff --git a/gcc/match.pd b/gcc/match.pd
-index e0a2399ca65..422b8951704 100644
+index e94e474bdc57..d825ef88aac9 100644
 --- a/gcc/match.pd
 +++ b/gcc/match.pd
-@@ -12231,3 +12231,15 @@ and,
+@@ -12235,3 +12235,17 @@ and,
     long as the requested element is within range.  */
  (simplify (IFN_VEC_EXTRACT (vec_duplicate @0) INTEGER_CST@1)
   @0)
@@ -10,17 +51,19 @@ index e0a2399ca65..422b8951704 100644
 +(for op (plus bit_and bit_ior bit_xor mult)
 + (simplify
 +  (cond (ne @0 integer_zerop) (op @1 @2) @1)
-+  (op @1
-+    (cond (ne @0 { build_zero_cst (TREE_TYPE (@0)); }) @2 { build_zero_cst (type); }))))
++  (if (canonicalize_math_after_vectorization_p ())
++   (op @1
++    (cond (ne @0 { build_zero_cst (TREE_TYPE (@0)); }) @2 { build_zero_cst (type); })))))
 +
 +(for op (minus rshift lshift lrotate rrotate)
 + (simplify
 +  (cond (ne @0 integer_zerop) (op @1 @2) @1)
-+  (op @1
-+    (cond (ne @0 { build_zero_cst (TREE_TYPE (@0)); }) @2 { build_zero_cst (type); }))))
++   (if (canonicalize_math_after_vectorization_p ())
++    (op @1
++     (cond (ne @0 { build_zero_cst (TREE_TYPE (@0)); }) @2 { build_zero_cst (type); })))))
 diff --git a/gcc/testsuite/gcc.target/riscv/pr123322.c b/gcc/testsuite/gcc.target/riscv/pr123322.c
 new file mode 100644
-index 00000000000..606d573c1b1
+index 000000000000..606d573c1b1f
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/pr123322.c
 @@ -0,0 +1,18 @@
