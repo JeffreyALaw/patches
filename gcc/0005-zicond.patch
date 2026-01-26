@@ -48,7 +48,7 @@ index e94e474bdc57..d825ef88aac9 100644
  (simplify (IFN_VEC_EXTRACT (vec_duplicate @0) INTEGER_CST@1)
   @0)
 +
-+(for op (plus bit_and bit_ior bit_xor mult)
++(for op (plus bit_ior bit_xor)
 + (simplify
 +  (cond (ne @0 integer_zerop) (op @1 @2) @1)
 +  (if (canonicalize_math_after_vectorization_p ())
@@ -74,14 +74,12 @@ index 000000000000..606d573c1b1f
 +
 +#define TEST(NAME,OP) int f##NAME(int a, int b, int c) { if (c) a OP b; return a; }
 +
-+TEST(and, &=)
 +TEST(xor, ^=)
 +TEST(ior, |=)
 +TEST(rshift, >>=)
 +TEST(lshift, <<=)
 +TEST(plus, +=)
 +TEST(minus, -=)
-+TEST(mult, *=)
 +
 +/* Each test should have precisely one czero.  */ 
 +/* { dg-final { scan-assembler-times "czero" 8 } } */
