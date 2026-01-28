@@ -62,36 +62,32 @@ index 000000000000..606d573c1b1f
 +/* Each test should have precisely one czero.  */ 
 +/* { dg-final { scan-assembler-times "czero" 8 } } */
 diff --git a/gcc/match.pd b/gcc/match.pd
-index e94e474bdc57..dba9becbcdc8 100644
+index e94e474bdc57..05924f97ac78 100644
 --- a/gcc/match.pd
 +++ b/gcc/match.pd
-@@ -12235,3 +12235,29 @@ and,
+@@ -12235,3 +12235,25 @@ and,
     long as the requested element is within range.  */
  (simplify (IFN_VEC_EXTRACT (vec_duplicate @0) INTEGER_CST@1)
   @0)
 +
++/* Commutative conditional operations implementable without branching by
++   neutralizing one element.  Note the neutral value is not always zero!  */
 +(for op (plus bit_ior bit_xor)
 + (simplify
-+  (cond (ne @0 integer_zerop) (op @1 @2) @3)
++  (cond (ne @0 integer_zerop) (op:cs @1 @2) @3)
 +  (if (@1 == @3 && canonicalize_math_after_vectorization_p ())
-+   (op @1
-+    (cond (ne @0 { build_zero_cst (TREE_TYPE (@0)); }) @2 { build_zero_cst (TREE_TYPE (@2)); })))))
++   (switch
++    (if (op == MULT_EXPR)
++     (mult @1 (cond (ne @0 { build_zero_cst (TREE_TYPE (@0)); }) @2 { build_one_cst (TREE_TYPE (@2)); })))
++    (if (op == BIT_AND_EXPR)
++     (bit_and @1 (cond (ne @0 { build_zero_cst (TREE_TYPE (@0)); }) @2 { build_minus_one_cst (TREE_TYPE (@2)); })))
++    (op @1 (cond (ne @0 { build_zero_cst (TREE_TYPE (@0)); }) @2 { build_zero_cst (TREE_TYPE (@2)); }))))))
 +
++/* Non-commutative conditional operations implementable without branching
++   by neutralizing the second operand (usually a shift/rotate count).  */
 +(for op (minus rshift lshift lrotate rrotate)
 + (simplify
 +  (cond (ne @0 integer_zerop) (op @1 @2) @3)
 +   (if (@1 == @3 && canonicalize_math_after_vectorization_p ())
 +    (op @1
 +     (cond (ne @0 { build_zero_cst (TREE_TYPE (@0)); }) @2 { build_zero_cst (TREE_TYPE (@2)); })))))
-+
-+(simplify
-+ (cond (ne @0 integer_zerop) (mult @1 @2) @3)
-+  (if (@1 == @3 && canonicalize_math_after_vectorization_p ())
-+   (mult @1
-+    (cond (ne @0 { build_zero_cst (TREE_TYPE (@0)); }) @2 { build_one_cst (TREE_TYPE (@2)); }))))
-+
-+(simplify
-+ (cond (ne @0 integer_zerop) (bit_and @1 @2) @3)
-+  (if (@1 == @3 && canonicalize_math_after_vectorization_p ())
-+   (bit_and @1
-+    (cond (ne @0 { build_zero_cst (TREE_TYPE (@0)); }) @2 { build_minus_one_cst (TREE_TYPE (@2)); }))))
