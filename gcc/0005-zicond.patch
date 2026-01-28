@@ -62,13 +62,13 @@ index 000000000000..606d573c1b1f
 +/* Each test should have precisely one czero.  */ 
 +/* { dg-final { scan-assembler-times "czero" 8 } } */
 diff --git a/gcc/match.pd b/gcc/match.pd
-index e94e474bdc57..05924f97ac78 100644
+index 75511c459fa2..721ca18c90b7 100644
 --- a/gcc/match.pd
 +++ b/gcc/match.pd
-@@ -12235,3 +12235,25 @@ and,
-    long as the requested element is within range.  */
- (simplify (IFN_VEC_EXTRACT (vec_duplicate @0) INTEGER_CST@1)
-  @0)
+@@ -12243,3 +12243,25 @@ and,
+ (simplify
+  (BUILT_IN_CONSTANT_P (nop_convert@1 @0))
+  (BUILT_IN_CONSTANT_P @0))
 +
 +/* Commutative conditional operations implementable without branching by
 +   neutralizing one element.  Note the neutral value is not always zero!  */
