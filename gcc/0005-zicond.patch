@@ -1,93 +1,138 @@
-diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index 3fe0ad0ccdf4..d484c0d5ef34 100644
---- a/gcc/config/riscv/riscv.md
-+++ b/gcc/config/riscv/riscv.md
-@@ -3308,9 +3308,35 @@ (define_expand "mov<mode>cc"
-   "TARGET_SFB_ALU || TARGET_XTHEADCONDMOV || TARGET_ZICOND_LIKE
-    || TARGET_MOVCC || TARGET_XMIPSCMOV"
- {
-+  /* Prior to reload if we are given a sub-word input, go ahead and
-+     convert it (via sign extension) to WORD_MODE and use a low-part
-+     extraction to pull the result out of a WORD_MODE temporary.  */
-+  rtx orig_dest = NULL_RTX;
-+  if (TARGET_64BIT && <MODE>mode == SImode)
-+    {
-+      if (!CONST_INT_P (operands[2]))
-+        operands[2] = convert_modes (word_mode, SImode, operands[2], false);
-+      if (!CONST_INT_P (operands[3]))
-+        operands[3] = convert_modes (word_mode, SImode, operands[3], false);
+diff --git a/gcc/combine.cc b/gcc/combine.cc
+index 573ed716ad63..e0dab3d88280 100644
+--- a/gcc/combine.cc
++++ b/gcc/combine.cc
+@@ -2615,6 +2615,8 @@ try_combine (rtx_insn *i3, rtx_insn *i2, rtx_insn *i1, rtx_insn *i0,
+ 	    }
+ 	  else if (BINARY_P (src) && CONSTANT_P (XEXP (src, 1)))
+ 	    ngood++;
++	  else if (GET_CODE (src) == IF_THEN_ELSE)
++	    ngood++;
+ 	  else if (GET_CODE (src) == ASHIFT || GET_CODE (src) == ASHIFTRT
+ 		   || GET_CODE (src) == LSHIFTRT)
+ 	    nshift++;
+diff --git a/gcc/config/riscv/iterators.md b/gcc/config/riscv/iterators.md
+index 4cda08848f69..192556e92e27 100644
+--- a/gcc/config/riscv/iterators.md
++++ b/gcc/config/riscv/iterators.md
+@@ -211,6 +211,13 @@ (define_code_attr extend_name [
+   (sign_extend "extend") (zero_extend "zero_extend")
+ ])
+ 
++;; This code iterator captures cases where a zero value for an operand
++;; neutralizes the operation.  ie, a + 0 -> a.  That basic idea forms
++;; conditional operations.
++(define_code_iterator zero_is_neutral_op [plus minus ior xor ashift lshiftrt
++					  ashiftrt rotatert rotate])
++(define_code_iterator zero_is_neutral_op_c [plus ior xor])
 +
-+      orig_dest = operands[0];
-+      operands[0] = gen_reg_rtx (word_mode);
-+    }
+ ;; These code iterators allow unsigned and signed extraction to be generated
+ ;; from the same template.
+ (define_code_iterator any_extract [sign_extract zero_extract])
+@@ -227,6 +234,8 @@ (define_code_iterator any_shiftrt [ashiftrt lshiftrt])
+ ;; from the same template.
+ (define_code_iterator any_shift [ashift ashiftrt lshiftrt])
+ 
++(define_code_iterator any_shift_rotate [ashift ashiftrt lshiftrt rotate rotatert])
 +
-   if (riscv_expand_conditional_move (operands[0], operands[1],
- 				     operands[2], operands[3]))
--    DONE;
-+    {
-+      /* If ORIG_DEST is non-null, copy the temporary destination to
-+         the real destination using a lowpart extraction.  */
-+      if (orig_dest)
-+        {
-+          rtx t = gen_lowpart (SImode, operands[0]);
-+          SUBREG_PROMOTED_VAR_P (t) = 1;
-+          SUBREG_PROMOTED_SET (t, SRP_SIGNED);
-+          emit_move_insn (orig_dest, t);
-+        }
-+      DONE;
-+    }
-   else
-     FAIL;
- })
-diff --git a/gcc/testsuite/gcc.target/riscv/pr123322.c b/gcc/testsuite/gcc.target/riscv/pr123322.c
-new file mode 100644
-index 000000000000..606d573c1b1f
---- /dev/null
-+++ b/gcc/testsuite/gcc.target/riscv/pr123322.c
-@@ -0,0 +1,16 @@
-+/* { dg-do compile } */
-+/* { dg-options "-march=rv32gcb_zicond -mabi=ilp32 -mbranch-cost=4" { target { rv32 } } } */
-+/* { dg-options "-march=rv64gcb_zicond -mabi=lp64d -mbranch-cost=4" { target { rv64 } } } */
-+/* { dg-skip-if "" { *-*-* } { "-O0" "-Og"} } */
+ ;; This code iterator allows the three bitwise instructions to be generated
+ ;; from the same template.
+ (define_code_iterator any_bitwise [and ior xor])
+diff --git a/gcc/config/riscv/zicond.md b/gcc/config/riscv/zicond.md
+index 383859b30ced..4c65041bc0e6 100644
+--- a/gcc/config/riscv/zicond.md
++++ b/gcc/config/riscv/zicond.md
+@@ -270,3 +270,93 @@ (define_split
+   [(set (match_dup 0) (ashiftrt:X (match_dup 1) (match_dup 2)))
+    (set (match_dup 0) (ior:X (match_dup 0) (const_int 1)))]
+   { operands[2] = GEN_INT (GET_MODE_BITSIZE (word_mode) - 1); })
 +
-+#define TEST(NAME,OP) int f##NAME(int a, int b, int c) { if (c) a OP b; return a; }
++;; The next several splitters are mean to capture cases where if
++;; conversion was successful, but used a generalized conditional
++;; move during the first pass of if-conversion (typically because
++;; the conditional branch jumps over multiple sets).
++;;
++;; If the multiple sets would simplify into a single set, then we
++;; would often have been better off not converting during the first
++;; pass because we could use a more efficient sequence with a single
++;; czero.
++;;
++;; The basic idea here is to recognize when the two arms of the
++;; generalized conditional move have related values and where
++;; zero is a neutral operand.
++;;
++;; We conditionally zero the relevant operand, then emit the
++;; operation unconditionally.
++;;
++;; This is made more complex by the fact that 32-bit ops on rv64
++;; have an embedded sign extend.  Even worse, the mode of a shift
++;; count is QImode.  These quirks mean we have many more patterns
++;; than one might otherwise think we should.
++;;
++;; This does not handle the 32-bit ops on rv64 like addw right now.
++;; It's unclear how to do that safely since we have different modes
++;; in the two arms.
 +
-+TEST(xor, ^=)
-+TEST(ior, |=)
-+TEST(rshift, >>=)
-+TEST(lshift, <<=)
-+TEST(plus, +=)
-+TEST(minus, -=)
++;; Simple rv32 or rv64 ops where we can zero either operand to make
++;; it neutral.  Two as the the common and potentially neutral op in
++;; the 2nd if-then-else can be swapped.
++(define_split
++  [(set (match_operand:X 0 "register_operand")
++	(plus:X (if_then_else:X
++		  (eq:X (match_operand:X 1 "register_operand") (const_int 0))
++		  (match_operand:X 2 "register_operand")
++		  (const_int 0))
++		(if_then_else:X
++		  (ne:X (match_dup 1) (const_int 0))
++		  (zero_is_neutral_op:X
++		    (match_dup 2)
++		    (match_operand:X 3 "register_operand"))
++		  (const_int 0))))
++   (clobber (match_operand:X 4 "register_operand"))]
++  "TARGET_ZICOND_LIKE || TARGET_XTHEADCONDMOV"
++  [(set (match_dup 4) (if_then_else:X (ne:X (match_dup 1) (const_int 0))
++				      (match_dup 3)
++				      (const_int 0)))
++   (set (match_dup 0) (zero_is_neutral_op:X (match_dup 2) (match_dup 4)))])
 +
-+/* Each test should have precisely one czero.  */ 
-+/* { dg-final { scan-assembler-times "czero" 8 } } */
-diff --git a/gcc/match.pd b/gcc/match.pd
-index 75511c459fa2..721ca18c90b7 100644
---- a/gcc/match.pd
-+++ b/gcc/match.pd
-@@ -12243,3 +12243,25 @@ and,
- (simplify
-  (BUILT_IN_CONSTANT_P (nop_convert@1 @0))
-  (BUILT_IN_CONSTANT_P @0))
++(define_split
++  [(set (match_operand:X 0 "register_operand")
++	(plus:X (if_then_else:X
++		  (eq:X (match_operand:X 1 "register_operand") (const_int 0))
++		  (match_operand:X 2 "register_operand")
++		  (const_int 0))
++		(if_then_else:X
++		  (ne:X (match_dup 1) (const_int 0))
++		  (zero_is_neutral_op_c:X
++		    (match_operand:X 3 "register_operand")
++		    (match_dup 2))
++		  (const_int 0))))
++   (clobber (match_operand:X 4 "register_operand"))]
++  "TARGET_ZICOND_LIKE || TARGET_XTHEADCONDMOV"
++  [(set (match_dup 4) (if_then_else:X (ne:X (match_dup 1) (const_int 0))
++				      (match_dup 3)
++				      (const_int 0)))
++   (set (match_dup 0) (zero_is_neutral_op_c:X (match_dup 2) (match_dup 4)))])
 +
-+/* Commutative conditional operations implementable without branching by
-+   neutralizing one element.  Note the neutral value is not always zero!  */
-+(for op (plus bit_ior bit_xor)
-+ (simplify
-+  (cond (ne @0 integer_zerop) (op:cs @1 @2) @3)
-+  (if (@1 == @3 && canonicalize_math_after_vectorization_p ())
-+   (switch
-+    (if (op == MULT_EXPR)
-+     (mult @1 (cond (ne @0 { build_zero_cst (TREE_TYPE (@0)); }) @2 { build_one_cst (TREE_TYPE (@2)); })))
-+    (if (op == BIT_AND_EXPR)
-+     (bit_and @1 (cond (ne @0 { build_zero_cst (TREE_TYPE (@0)); }) @2 { build_minus_one_cst (TREE_TYPE (@2)); })))
-+    (op @1 (cond (ne @0 { build_zero_cst (TREE_TYPE (@0)); }) @2 { build_zero_cst (TREE_TYPE (@2)); }))))))
-+
-+/* Non-commutative conditional operations implementable without branching
-+   by neutralizing the second operand (usually a shift/rotate count).  */
-+(for op (minus rshift lshift lrotate rrotate)
-+ (simplify
-+  (cond (ne @0 integer_zerop) (op @1 @2) @3)
-+   (if (@1 == @3 && canonicalize_math_after_vectorization_p ())
-+    (op @1
-+     (cond (ne @0 { build_zero_cst (TREE_TYPE (@0)); }) @2 { build_zero_cst (TREE_TYPE (@2)); })))))
++;; This is a separate pattern because the mode on the shift count
++;; varies.  I guess we could make it modeless here and check it in
++;; the condition.  But that tends to trigger warnings from gen*.
++(define_split
++  [(set (match_operand:X 0 "register_operand")
++	(plus:X (if_then_else:X
++		  (eq:X (match_operand:X 1 "register_operand") (const_int 0))
++		  (match_operand:X 2 "register_operand")
++		  (const_int 0))
++		(if_then_else:X
++		  (ne:X (match_dup 1) (const_int 0))
++		  (any_shift_rotate:X
++		    (match_dup 2)
++		    (match_operand:QI 3 "register_operand"))
++		  (const_int 0))))
++   (clobber (match_operand:X 4 "register_operand"))]
++  "TARGET_ZICOND_LIKE || TARGET_XTHEADCONDMOV"
++  [(set (match_dup 4) (if_then_else:X (ne:X (match_dup 1) (const_int 0))
++				      (match_dup 3)
++				      (const_int 0)))
++   (set (match_dup 0) (any_shift_rotate:X (match_dup 2) (subreg:QI (match_dup 4) 0)))]
++  "operands[3] = gen_lowpart (word_mode, operands[3]);")
