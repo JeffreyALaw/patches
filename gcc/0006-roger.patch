@@ -1,0 +1,273 @@
+diff --git a/gcc/config/mips/mips.md b/gcc/config/mips/mips.md
+index 85e7d67901f..6a1b63b00d2 100644
+--- a/gcc/config/mips/mips.md
++++ b/gcc/config/mips/mips.md
+@@ -3952,7 +3952,7 @@
+ (define_insn_and_split "*extenddi_truncate<mode>"
+   [(set (match_operand:DI 0 "register_operand" "=d")
+ 	(sign_extend:DI
+-	    (truncate:SHORT (match_operand:DI 1 "register_operand" "d"))))]
++	    (truncate:SUBDI (match_operand:DI 1 "register_operand" "d"))))]
+   "TARGET_64BIT && !TARGET_MIPS16 && !ISA_HAS_EXTS"
+   "#"
+   "&& reload_completed"
+diff --git a/gcc/expr.cc b/gcc/expr.cc
+index b6d593d09a2..d7b0bfccb7d 100644
+--- a/gcc/expr.cc
++++ b/gcc/expr.cc
+@@ -5968,6 +5968,18 @@ mem_ref_refers_to_non_mem_p (tree ref)
+   return non_mem_decl_p (base);
+ }
+ 
++/* Helper function of expand_assignment.  Check if storing field of
++   size BITSIZE at position BITPOS overlaps with the most significant
++   bit of TO_RTX, known to be SUBREG_PROMOTED_VAR_P.
++   Updating this field requires an explicit extension.  */
++static bool
++store_field_updates_msb_p (poly_int64 bitpos, poly_int64 bitsize, rtx to_rtx)
++{
++  poly_int64 to_size = GET_MODE_SIZE (GET_MODE (to_rtx));
++  poly_int64 bitnum = BYTES_BIG_ENDIAN ? to_size - bitsize - bitpos : bitpos;
++  return maybe_eq (bitnum + bitsize, to_size);
++}
++
+ /* Expand an assignment that stores the value of FROM into TO.  If NONTEMPORAL
+    is true, try generating a nontemporal store.  */
+ 
+@@ -6314,8 +6326,7 @@ expand_assignment (tree to, tree from, bool nontemporal)
+ 		  && known_eq (bitsize, GET_MODE_BITSIZE (GET_MODE (to_rtx))))
+ 		result = store_expr (from, to_rtx, 0, nontemporal, false);
+ 	      /* Check if the field overlaps the MSB, requiring extension.  */
+-	      else if (maybe_eq (bitpos + bitsize,
+-				 GET_MODE_BITSIZE (GET_MODE (to_rtx))))
++	      else if (store_field_updates_msb_p (bitpos, bitsize, to_rtx))
+ 		{
+ 		  scalar_int_mode imode = subreg_unpromoted_mode (to_rtx);
+ 		  scalar_int_mode omode = subreg_promoted_mode (to_rtx);
+diff --git a/gcc/rtlanal.cc b/gcc/rtlanal.cc
+index 27349a0a74f..37df8d33e89 100644
+--- a/gcc/rtlanal.cc
++++ b/gcc/rtlanal.cc
+@@ -6200,6 +6200,17 @@ truncated_to_mode (machine_mode mode, const_rtx x)
+   if (REG_P (x) && rtl_hooks.reg_truncated_to_mode (mode, x))
+     return true;
+ 
++  /* This explicit TRUNCATE may be needed on targets that require
++     MODE to be suitably extended when stored in X.  Targets such as
++     mips64 use (sign_extend:DI (truncate:SI (reg:DI x))) to perform
++     an explicit extension, avoiding use of (subreg:SI (reg:DI x))
++     which is assumed to already be extended.  */
++  scalar_int_mode imode, omode;
++  if (is_a <scalar_int_mode> (mode, &imode)
++      && is_a <scalar_int_mode> (GET_MODE (x), &omode)
++      && targetm.mode_rep_extended (imode, omode) != UNKNOWN)
++    return false;
++
+   /* See if we already satisfy the requirements of MODE.  If yes we
+      can just switch to MODE.  */
+   if (num_sign_bit_copies_in_rep[GET_MODE (x)][mode]
+diff --git a/gcc/testsuite/gcc.target/mips/pr118608-1.c b/gcc/testsuite/gcc.target/mips/pr118608-1.c
+new file mode 100644
+index 00000000000..e7384d7137d
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/mips/pr118608-1.c
+@@ -0,0 +1,45 @@
++/* { dg-do run } */
++/* { dg-options "-mabi=64 -O2" } */
++
++#define COUNT 10
++
++typedef unsigned short u16;
++typedef unsigned int   u32;
++
++typedef struct NeedleAddress
++{
++  u16   nId;
++  u16   mId;
++} NeedleAddress;
++
++u32 __attribute__ ((noinline)) prepareNeedle(const u16 upper, const u16 lower)
++{
++    u32 needleAddress = 0;
++    NeedleAddress *const addr = (NeedleAddress*)(&needleAddress);
++    addr->mId = upper;
++    addr->nId = lower;
++    return needleAddress;
++}
++
++const u32* __attribute__ ((noinline)) findNeedle(const u32 needle, const u32* begin, const u32* end)
++{
++    while ( begin != end && needle != *begin )
++    {
++        ++begin;
++    }
++    return begin;
++}
++
++int main()
++{
++    u32 needle = prepareNeedle(0xDCBA, 0xABCD);
++
++    u32 haystack[COUNT] = {};
++    for (int i = 0; i < COUNT; i++)
++        haystack[i] = needle;
++
++    const u32* result = findNeedle(needle, haystack, haystack + COUNT);
++    if (result == haystack + COUNT)
++        __builtin_abort ();
++    return 0;
++}
+diff --git a/gcc/testsuite/gcc.target/mips/pr118608-2.c b/gcc/testsuite/gcc.target/mips/pr118608-2.c
+new file mode 100644
+index 00000000000..a5bcfda6ca1
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/mips/pr118608-2.c
+@@ -0,0 +1,45 @@
++/* { dg-do run } */
++/* { dg-options "-mabi=64 -Os" } */
++
++#define COUNT 10
++
++typedef unsigned short u16;
++typedef unsigned int   u32;
++
++typedef struct NeedleAddress
++{
++  u16   nId;
++  u16   mId;
++} NeedleAddress;
++
++u32 __attribute__ ((noinline)) prepareNeedle(const u16 upper, const u16 lower)
++{
++    u32 needleAddress = 0;
++    NeedleAddress *const addr = (NeedleAddress*)(&needleAddress);
++    addr->mId = upper;
++    addr->nId = lower;
++    return needleAddress;
++}
++
++const u32* __attribute__ ((noinline)) findNeedle(const u32 needle, const u32* begin, const u32* end)
++{
++    while ( begin != end && needle != *begin )
++    {
++        ++begin;
++    }
++    return begin;
++}
++
++int main()
++{
++    u32 needle = prepareNeedle(0xDCBA, 0xABCD);
++
++    u32 haystack[COUNT] = {};
++    for (int i = 0; i < COUNT; i++)
++        haystack[i] = needle;
++
++    const u32* result = findNeedle(needle, haystack, haystack + COUNT);
++    if (result == haystack + COUNT)
++        __builtin_abort ();
++    return 0;
++}
+diff --git a/gcc/testsuite/gcc.target/mips/pr118608-3.c b/gcc/testsuite/gcc.target/mips/pr118608-3.c
+new file mode 100644
+index 00000000000..f017e4e858c
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/mips/pr118608-3.c
+@@ -0,0 +1,45 @@
++/* { dg-do compile } */
++/* { dg-options "-mabi=64 -O2 -march=octeon2" } */
++
++#define COUNT 10
++
++typedef unsigned short u16;
++typedef unsigned int   u32;
++
++typedef struct NeedleAddress
++{
++  u16   nId;
++  u16   mId;
++} NeedleAddress;
++
++u32 __attribute__ ((noinline)) prepareNeedle(const u16 upper, const u16 lower)
++{
++    u32 needleAddress = 0;
++    NeedleAddress *const addr = (NeedleAddress*)(&needleAddress);
++    addr->mId = upper;
++    addr->nId = lower;
++    return needleAddress;
++}
++
++const u32* __attribute__ ((noinline)) findNeedle(const u32 needle, const u32* begin, const u32* end)
++{
++    while ( begin != end && needle != *begin )
++    {
++        ++begin;
++    }
++    return begin;
++}
++
++int main()
++{
++    u32 needle = prepareNeedle(0xDCBA, 0xABCD);
++
++    u32 haystack[COUNT] = {};
++    for (int i = 0; i < COUNT; i++)
++        haystack[i] = needle;
++
++    const u32* result = findNeedle(needle, haystack, haystack + COUNT);
++    if (result == haystack + COUNT)
++        __builtin_abort ();
++    return 0;
++}
+diff --git a/gcc/testsuite/gcc.target/mips/pr118608-4.c b/gcc/testsuite/gcc.target/mips/pr118608-4.c
+new file mode 100644
+index 00000000000..4c96e378e0f
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/mips/pr118608-4.c
+@@ -0,0 +1,45 @@
++/* { dg-do compile } */
++/* { dg-options "-mabi=64 -Os -march=octeon2" } */
++
++#define COUNT 10
++
++typedef unsigned short u16;
++typedef unsigned int   u32;
++
++typedef struct NeedleAddress
++{
++  u16   nId;
++  u16   mId;
++} NeedleAddress;
++
++u32 __attribute__ ((noinline)) prepareNeedle(const u16 upper, const u16 lower)
++{
++    u32 needleAddress = 0;
++    NeedleAddress *const addr = (NeedleAddress*)(&needleAddress);
++    addr->mId = upper;
++    addr->nId = lower;
++    return needleAddress;
++}
++
++const u32* __attribute__ ((noinline)) findNeedle(const u32 needle, const u32* begin, const u32* end)
++{
++    while ( begin != end && needle != *begin )
++    {
++        ++begin;
++    }
++    return begin;
++}
++
++int main()
++{
++    u32 needle = prepareNeedle(0xDCBA, 0xABCD);
++
++    u32 haystack[COUNT] = {};
++    for (int i = 0; i < COUNT; i++)
++        haystack[i] = needle;
++
++    const u32* result = findNeedle(needle, haystack, haystack + COUNT);
++    if (result == haystack + COUNT)
++        __builtin_abort ();
++    return 0;
++}
+
