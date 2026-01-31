@@ -1,17 +1,5 @@
-commit 58a4a34cc58c0a5179a1ce76ba225092687e1102
-Author: Jeff Law <jlaw@ventanamicro.com>
-Date:   Wed Sep 10 07:13:35 2025 -0600
-
-    Revert "compare_tests: Improve non-unique tests report"
-    
-    This reverts commit 21d4a0b08a6883763ccdf9ce1d1ff1dedd6240a2.
-    
-    Revert "compare_tests: Report non-unique test names"
-    
-    This reverts commit 750346a763df2573ea4c8a8dde8cddced64f69a5.
-
 diff --git a/contrib/compare_tests b/contrib/compare_tests
-index 8efd15e903f..e09fc4f113a 100755
+index d507eead9086..e09fc4f113a3 100755
 --- a/contrib/compare_tests
 +++ b/contrib/compare_tests
 @@ -41,8 +41,6 @@ tmp1=$TMPDIR/$tool-testing.$$a
@@ -32,7 +20,7 @@ index 8efd15e903f..e09fc4f113a 100755
  
  [ "$1" = "-strict" ] && strict=$1 && shift
  [ "$1" = "-?" ] && usage
-@@ -126,36 +124,6 @@ fi
+@@ -126,42 +124,6 @@ fi
  sort -t ':' $skip1 "$now" > "$now_s"
  sort -t ':' $skip1 "$before" > "$before_s"
  
@@ -46,8 +34,14 @@ index 8efd15e903f..e09fc4f113a 100755
 -# If we used the input files (so generally several times the same
 -# results in one section per target), we would incorreclty detect
 -# duplicates (as many as targets)
--grep -E '^(PASS|XPASS|FAIL|XFAIL|UNRESOLVED|UNSUPPORTED|UNTESTED|ERROR):' "$now_s"    | uniq -cd > "$now_u"
--grep -E '^(PASS|XPASS|FAIL|XFAIL|UNRESOLVED|UNSUPPORTED|UNTESTED|ERROR):' "$before_s" | uniq -cd > "$before_u"
+-EGREP="grep -E"
+-
+-if ! echo PASS | $EGREP '^(PASS|FAIL)' >/dev/null 2>&1; then
+-    EGREP="egrep"
+-fi
+-
+-$EGREP '^(PASS|XPASS|FAIL|XFAIL|UNRESOLVED|UNSUPPORTED|UNTESTED|ERROR):' "$now_s"    | uniq -cd > "$now_u"
+-$EGREP '^(PASS|XPASS|FAIL|XFAIL|UNRESOLVED|UNSUPPORTED|UNTESTED|ERROR):' "$before_s" | uniq -cd > "$before_u"
 -
 -same_uniq=" now"
 -cmp -s "$before_u" "$now_u" && same_uniq=""
@@ -61,7 +55,7 @@ index 8efd15e903f..e09fc4f113a 100755
 -
 -if [ -s "$before_u" -a "x$same_uniq" != "x" ]; then
 -    echo "Changes to non-unique test names:"
--    diff -u "$before_u" "$now_u" | grep -E '^[-\\+] '
+-    diff -u "$before_u" "$now_u" | $EGREP '^[-\\+] '
 -    echo
 -    exit_status=1
 -fi
