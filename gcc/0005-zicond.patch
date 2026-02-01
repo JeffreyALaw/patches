@@ -38,11 +38,32 @@ index 4cda08848f69..192556e92e27 100644
  ;; This code iterator allows the three bitwise instructions to be generated
  ;; from the same template.
  (define_code_iterator any_bitwise [and ior xor])
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index 32e72128f049..472c7e5f4920 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -4630,6 +4630,16 @@ riscv_rtx_costs (rtx x, machine_mode mode, int outer_code, int opno ATTRIBUTE_UN
+ 	  return true;
+ 	}
+ 
++      /* Conditional AND */
++      if (TARGET_ZICOND
++	  && GET_CODE (XEXP (x, 0)) == IF_THEN_ELSE
++	  && GET_CODE (XEXP (x, 1)) == IF_THEN_ELSE
++	  && GET_CODE (XEXP (XEXP (x, 1), 1)) == AND)
++	{
++	  *total = COSTS_N_INSNS (3);
++	  return true;
++	}
++
+       if (float_mode_p)
+ 	*total = tune_param->fp_add[mode == DFmode];
+       else
 diff --git a/gcc/config/riscv/zicond.md b/gcc/config/riscv/zicond.md
-index 383859b30ced..4c65041bc0e6 100644
+index 383859b30ced..663d70235a30 100644
 --- a/gcc/config/riscv/zicond.md
 +++ b/gcc/config/riscv/zicond.md
-@@ -270,3 +270,93 @@ (define_split
+@@ -270,3 +270,146 @@ (define_split
    [(set (match_dup 0) (ashiftrt:X (match_dup 1) (match_dup 2)))
     (set (match_dup 0) (ior:X (match_dup 0) (const_int 1)))]
    { operands[2] = GEN_INT (GET_MODE_BITSIZE (word_mode) - 1); })
@@ -136,3 +157,85 @@ index 383859b30ced..4c65041bc0e6 100644
 +				      (const_int 0)))
 +   (set (match_dup 0) (any_shift_rotate:X (match_dup 2) (subreg:QI (match_dup 4) 0)))]
 +  "operands[3] = gen_lowpart (word_mode, operands[3]);")
++
++;; AND is special as the czero doesn't produce the neutral operand.  It
++;; would be a natural 4->3 split, but combine doesn't support that, so
++;; a define_insn_and_split seems to be the safest path forward to address
++;; the remaining code quality regression (match.pd approaches will likely
++;; have undesirable fallout based on what's been seen in the gcc-16 cycle).
++(define_insn_and_split "conditional_and<mode>"
++  [(set (match_operand:X 0 "register_operand" "=&r")
++	(plus:X (if_then_else:X
++		  (eq:X (match_operand:X 1 "register_operand" "r") (const_int 0))
++		  (match_operand:X 2 "register_operand" "r")
++		  (const_int 0))
++		(if_then_else:X
++		  (ne:X (match_dup 1) (const_int 0))
++		  (and:X
++		    (match_dup 2)
++		    (match_operand:X 3 "register_operand" "r"))
++		  (const_int 0))))]
++  "(TARGET_ZICOND_LIKE || TARGET_XTHEADCONDMOV) && can_create_pseudo_p ()"
++  "#"
++  "&& 1"
++  [(set (match_dup 4) (and:X (match_dup 2) (match_dup 3)))
++   (set (match_dup 5) (if_then_else:X (ne:X (match_dup 1) (const_int 0))
++				      (match_dup 2)
++				      (const_int 0)))
++   (set (match_dup 0) (ior:X (match_dup 5) (match_dup 4)))]
++  "operands[4] = gen_reg_rtx (word_mode);
++   operands[5] = gen_reg_rtx (word_mode);")
++
++;; Same thing, but with operand order reversed
++(define_insn_and_split "conditional_and<mode>"
++  [(set (match_operand:X 0 "register_operand" "=&r")
++	(plus:X (if_then_else:X
++		  (eq:X (match_operand:X 1 "register_operand" "r") (const_int 0))
++		  (match_operand:X 2 "register_operand" "r")
++		  (const_int 0))
++		(if_then_else:X
++		  (ne:X (match_dup 1) (const_int 0))
++		  (and:X
++		    (match_operand:X 3 "register_operand" "r")
++		    (match_dup 2))
++		  (const_int 0))))]
++  "(TARGET_ZICOND_LIKE || TARGET_XTHEADCONDMOV) && can_create_pseudo_p ()"
++  "#"
++  "&& 1"
++  [(set (match_dup 4) (and:X (match_dup 2) (match_dup 3)))
++   (set (match_dup 5) (if_then_else:X (ne:X (match_dup 1) (const_int 0))
++				      (match_dup 2)
++				      (const_int 0)))
++   (set (match_dup 0) (ior:X (match_dup 5) (match_dup 4)))]
++  "operands[4] = gen_reg_rtx (word_mode);
++   operands[5] = gen_reg_rtx (word_mode);")
++
+diff --git a/gcc/testsuite/gcc.target/riscv/pr123322.c b/gcc/testsuite/gcc.target/riscv/pr123322.c
+new file mode 100644
+index 000000000000..da6759602dbb
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr123322.c
+@@ -0,0 +1,23 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv32gcb_zicond -mabi=ilp32 -mbranch-cost=4" { target { rv32 } } } */
++/* { dg-options "-march=rv64gcb_zicond -mabi=lp64d -mbranch-cost=4" { target { rv64 } } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" "-O1" "-Os" "-Oz" } } */
++
++#define TEST(NAME,OP) int f_int_##NAME(int a, int b, int c) { if (c) a OP b; return a; } \
++                      long f_long_##NAME(long a, long b, long c) { if (c) a OP b; return a; }
++
++TEST(xor, ^=)
++TEST(ior, |=)
++TEST(and, &=)
++TEST(plus, +=)
++TEST(minus, -=)
++TEST(rshift, >>=)
++TEST(lshift, <<=)
++
++/* AND and MULT can be handled too, but need a different neutral element that
++   we aren't handling yet.  */
++
++/* Each test should have precisely one czero.  But for rv64, the int tests
++   generate 2 for int cases where the op is widened.  */
++/* { dg-final { scan-assembler-times "czero" 14 { target rv32 } } } */
++/* { dg-final { scan-assembler-times "czero" 18 { target rv64 } } } */
