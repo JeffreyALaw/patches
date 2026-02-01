@@ -187,7 +187,7 @@ index 383859b30ced..663d70235a30 100644
 +   operands[5] = gen_reg_rtx (word_mode);")
 +
 +;; Same thing, but with operand order reversed
-+(define_insn_and_split "conditional_and<mode>"
++(define_insn_and_split "conditional_rand<mode>"
 +  [(set (match_operand:X 0 "register_operand" "=&r")
 +	(plus:X (if_then_else:X
 +		  (eq:X (match_operand:X 1 "register_operand" "r") (const_int 0))
