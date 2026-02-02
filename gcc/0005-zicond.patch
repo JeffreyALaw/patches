@@ -1,3 +1,18 @@
+	PR rtl-optimization/123322
+gcc/
+	* combine.cc (try_combine): Consider an IF_THEN_ELSE "good" when
+	evaluating if 4 insn combinations should be tried.
+	* config/riscv/iterators.md (zero_is_neutral_op): New iterator.
+	(zero_is_neutral_op_c): Likewise.
+	(any_shift_rotate): Likewise.
+	* config/riscv/riscv.cc (riscv_rtx_costs): Recognize the conditional
+	AND RTL and cost is appropriately.
+	* config/riscv/zicond.md: Add patterns to rewrite general conditional
+	move sequences into simpler forms.
+	
+gcc/testsuite
+	* target/riscv/pr123322.c: New test.
+
 diff --git a/gcc/combine.cc b/gcc/combine.cc
 index 573ed716ad63..e0dab3d88280 100644
 --- a/gcc/combine.cc
