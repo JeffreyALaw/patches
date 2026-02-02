@@ -1,0 +1,24 @@
+diff --git a/gcc/testsuite/gcc.target/riscv/pr114139.c b/gcc/testsuite/gcc.target/riscv/pr114139.c
+index 5aa587f1b6f0..34c0782392b6 100644
+--- a/gcc/testsuite/gcc.target/riscv/pr114139.c
++++ b/gcc/testsuite/gcc.target/riscv/pr114139.c
+@@ -1,5 +1,6 @@
+ /* { dg-do compile { target { ! riscv_abi_e } } } */
+-/* { dg-options "-O2 -fpic -mexplicit-relocs -mcpu=sifive-p450 -mabi=lp64d" } */
++/* { dg-options "-O2 -fpic -mexplicit-relocs -mcpu=sifive-p450 -mabi=lp64d" { target rv64 } } */
++/* { dg-options "-O2 -fpic -mexplicit-relocs -mcpu=sifive-p450 -mabi=lp64d" { target rv32 } } */
+ 
+ static void *p;
+ extern void *a[];
+diff --git a/gcc/testsuite/gcc.target/riscv/pr118170.c b/gcc/testsuite/gcc.target/riscv/pr118170.c
+index a39c4170ff2f..db39e2126042 100644
+--- a/gcc/testsuite/gcc.target/riscv/pr118170.c
++++ b/gcc/testsuite/gcc.target/riscv/pr118170.c
+@@ -1,5 +1,6 @@
+ /* { dg-do "compile" { target { ! riscv_abi_e } } } */
+-/* { dg-options "-O2 -mcpu=tt-ascalon-d8 -mabi=lp64d" } */
++/* { dg-options "-O2 -mcpu=tt-ascalon-d8 -mabi=lp64d" { target rv64 } } */
++/* { dg-options "-O2 -mcpu=tt-ascalon-d8 -mabi=lp64d" { target rv32 } } */
+ _Float16 f;
+ 
+ void
