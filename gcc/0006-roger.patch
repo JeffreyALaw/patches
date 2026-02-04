@@ -1,0 +1,144 @@
+
+
+
+Hi Jeff and Andrew,
+Awesome.  The following patch does indeed resolve the failure:
+
+diff --git a/gcc/recog.cc b/gcc/recog.cc
+index a0b4925a8ee..04864065424 100644
+--- a/gcc/recog.cc
++++ b/gcc/recog.cc
+@@ -608,7 +608,11 @@ cancel_changes (int num)
+       else
+        *changes[i].loc = changes[i].old;
+       if (changes[i].object && !MEM_P (changes[i].object))
+-       INSN_CODE (changes[i].object) = changes[i].old_code;
++       {
++         INSN_CODE (changes[i].object) = changes[i].old_code;
++         if (recog_data.insn == changes[i].object)
++           recog_data.insn = nullptr;
++       }
+     }
+   num_changes = num;
+ }
+
+
+Bootstrapping and regression testing (but happy for someone to beat me 
+to it, given the slow machines I build on).
+
+Roger
+--
+
+> -----Original Message-----
+> From: Jeffrey Law <jeffrey.law@oss.qualcomm.com>
+> Sent: 03 February 2026 23:52
+> To: Andrew Pinski <andrew.pinski@oss.qualcomm.com>
+> Cc: Roger Sayle <roger@nextmovesoftware.com>; GCC Patches <gcc-
+> patches@gcc.gnu.org>; Andrew Pinski <pinskia@gcc.gnu.org>
+> Subject: Re: [rtl-ssa PATCH] Use of insn attributes in insn_costs corrupts
+> recog_data.
+>
+>
+>
+> On 2/3/2026 4:26 PM, Andrew Pinski wrote:
+>> On Tue, Feb 3, 2026 at 3:03 PM Jeffrey Law <jeffrey.law@oss.qualcomm.com>
+> wrote:
+>>>
+>>>
+>>> On 2/3/2026 3:23 AM, Roger Sayle wrote:
+>>>> This is my fix for PR 123833, an ICE-on-valid regression in GCC 16,
+>>>> that is categorized as target-specific for mips64el, but the
+>>>> underlying issue affects all targets that use RTL insn attributes in
+>>>> their implementations of insn_costs, for example to determine the
+>>>> length, latency or type of an instruction.
+>>>>
+>>>> The unanticipated interaction is in rtl_ssa::changes_are_worthwhile,
+>>>> which when making a change (for example during fwprop) compares the
+>>>> target's insn_cost of the old instruction pattern to the replacement
+>>>> pattern.  For backends whose insn_cost implementation uses
+>>>> attributes from the machine description, this involves calling recog
+>>>> on the same
+>>>> rtx_insn* but with different patterns in quick succession, which
+>>>> plays havoc with recog's recog_data.insn caching.  In the test case
+>>>> given in the PR, this ultimately leads to the recog_data cache
+>>>> becoming stale in fwprop, which ultimately leads to an RTL assertion
+>>>> failure in a later pass.  Targets without these assertions would
+>>>> just see inexplicable/weird behavior.
+>>>>
+>>>> The proposed fix is to introduce a safe_insn_cost wrapper that saves
+>>>> and restores recog_data around calls to insn_cost, which can then be
+>>>> used in circumstances where an instruction is in the process of
+>>>> changing.  For now these are rtl_ssa::changes_are_worthwhile (the
+>>>> critical instance) and rtl-ssa/insns.cc's insn_info::calculate_cost
+>>>> (the only other use of insn_cost in the rtl-ssa subdirectory).
+>>>> In the hope this may be useful/needed in other locations, I've made
+>>>> safe_insn_cost a global function (like insn_cost), but the
+>>>> implementation could be kept local (or duplicated) if preferred by reviewers.
+>>>>
+>>>> I doubt there's an observable compile-time performance impact from
+>>>> this change, but in theory it's possible to avoid overhead of
+>>>> saving/restoring recog_data (on target's whose insn_costs don't call
+>>>> recog) by selectively clearing recog_data.insn if it would be used
+>>>> or has been updated by the call to insn_cost.  But that logic is a
+>>>> little more fragile.  Likewise, for RTL_CHECKING, it might be useful
+>>>> to cache INSN_CODE in recog_data, and add an assert that this also
+>>>> matches for insn == recog_data.insn cache hits (which would diagnose
+>>>> stale cache contents in future).  I'm not sure either of these refinements is
+> suitable for stage 4.
+>>>>
+>>>> A previous patch for this issue, that fixed the symptoms but didn't
+>>>> cure the disease, is described in bugzilla.  Many thanks to Andrew
+>>>> Pinski for prompting me to track down where the recog_data
+>>>> corruption was taking place.
+>>>>
+>>>>
+>>>> This patch has been tested on x86_64-pc-linux-gnu with make
+>>>> bootstrap and make -k check, both with and without
+>>>> --target_board=unix{-m32}, with no new failures.  Ok for mainline?
+>>>>
+>>>>
+>>>>
+>>>> 2026-02-03  Roger Sayle  <roger@nextmovesoftware.com>
+>>>>
+>>>> gcc/ChangeLog
+>>>>           PR rtl-optimization/123833
+>>>>           * rtlanal.cc (safe_insn_cost): Wrapper around insn_cost to save
+>>>>           and restore recog_data using recog_data_saver.
+>>>>           * rtl.h (safe_insn_cost): Prototype here.
+>>>>           * rtl-ssa/changes.cc (rtl_ssa:changes_are_worthwhile): Call
+>>>>           safe_insn_cost instead of insn_cost, while the insn is changing.
+>>>>           * rtl-ssa/insns.cc (insn_info::calculate_cost): Likewise.
+>>>>
+>>>> gcc/testsuite
+>>>>           PR rtl-optimization/123833
+>>>>           * gcc.target/mips/pr123833.c: New test case.
+>>> Part of me wants to know why calling recog after making changes is
+>>> problematical.  What I would expect is that we make some change in
+>>> the RTL, force re-recognition then cost.  The re-recognition ought to
+>>> wipe and repopulate the cache.
+>>>
+>>> So it feels like something is amiss, somewhere and this is just
+>>> working around that.
+>> So looking into this further, I see we do the cost which means
+>> populating the recog cache with the new instruction.
+>> BUT then we reject the replacement.
+>> ```
+>> propagating insn 19 into insn 29, replacing:
+>> (set (reg:DI 207 [ _10 ])
+>>      (and:DI (reg:DI 198 [ _21 ])
+>>          (const_int 255 [0xff])))
+>> successfully matched this instruction to *zero_extendqidi2:
+>> (set (reg:DI 207 [ _10 ])
+>>      (zero_extend:DI (subreg:QI (reg:SI 203) 0))) original cost = 4
+>> (weighted: 2.000000), replacement cost = 4
+>> (weighted: 2.000000); rejecting replacement change not profitable ```
+>> And the recog's cache is still the replacement version. Rather than
+>> the original version.
+>> So maybe cancel_changes should invalidate the cache. Just in case the
+>> cache included changes that have now been canceled out.
+> That makes sense.  We need to flush the cache if we cancel a replacement as
+> well since otherwise we leave the cache inconsistent with the state of the IL.
+>
+> Jeff
+
+
