@@ -1,0 +1,45 @@
+commit 19192abf148afd121729219096882503b7fdd3d1
+Author: Jeff Law <jeffrey.law@oss.qualcomm.com>
+Date:   Sun Feb 8 21:41:24 2026 -0700
+
+    Patch from andrew test from me.  Not a regression.  Queue for gcc-17
+
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index 3baf0a936b58..1fa311bbcacb 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -4281,7 +4281,9 @@ riscv_rtx_costs (rtx x, machine_mode mode, int outer_code, int opno ATTRIBUTE_UN
+ 		been to duplicate the operation than to CSE the constant.
+ 	     3. TODO: make cost more accurate specially if riscv_const_insns
+ 		returns > 1.  */
+-	  if (outer_code == SET || GET_MODE (x) == VOIDmode)
++	  if (outer_code == COMPARE)
++	    *total = COSTS_N_INSNS (cost);
++	  else if (outer_code == SET || GET_MODE (x) == VOIDmode)
+ 	    *total = COSTS_N_INSNS (1);
+ 	}
+       else /* The instruction will be fetched from the constant pool.  */
+diff --git a/gcc/testsuite/gcc.target/riscv/pr124029.c b/gcc/testsuite/gcc.target/riscv/pr124029.c
+new file mode 100644
+index 000000000000..a74258e0c0db
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr124029.c
+@@ -0,0 +1,18 @@
++/* { dg-do compile */
++/* { dg-options "-march=rv64gcvb_zicond -mabi=lp64d" { target { rv64 } } } */
++/* { dg-options "-march=rv32gcvb_zicond -mabi=ilp32" { target { rv32 } } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++void frob (void);
++void
++refine_subpel (int cost, int b_chroma_me)
++{
++
++  int bcost = bcost = (1 << 28);
++  if (b_chroma_me && cost < bcost)
++    frob ();
++}
++
++/* { dg-final { scan-assembler-not "addi\t" } } */
++/* { dg-final { scan-assembler-not "seqz\t" } } */
++
