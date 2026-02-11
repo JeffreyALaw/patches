@@ -1,0 +1,330 @@
+commit 4d255b8a622f022f2b55ad705f2977dc3527ab5d
+Author: Jeff Law <jeffrey.law@oss.qualcomm.com>
+Date:   Mon Feb 9 12:42:48 2026 -0700
+
+    Latest bits to address pr80770 more generically.
+    
+    Still requires risc-v specific bits to encourage CSE of the memory
+    references appearing in different modes.
+    
+    Not necessarily optimial everywhere, but should be an improvement.  Other
+    targets may have the same CSE problem for example.  And on the H8 we fail
+    to use the bnot form for bit 0, 8, 16, 24, but we do use it in other cases,
+    so that's likely a target specific issue.
+    
+    But again, overall good.
+
+diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
+index 3fe0ad0ccdf4..7e9205fb24bf 100644
+--- a/gcc/config/riscv/riscv.md
++++ b/gcc/config/riscv/riscv.md
+@@ -1916,7 +1916,25 @@ (define_expand "zero_extendqi<SUPERQI:mode>2"
+   [(set (match_operand:SUPERQI    0 "register_operand")
+ 	(zero_extend:SUPERQI
+ 	    (match_operand:QI 1 "nonimmediate_operand")))]
+-  "")
++  ""
++{
++  /* If the destination is not a full word, then do a zero extended
++     load to a full word and a sub-word extraction to get at the
++     appropriate low bits.  This enables more CSE of memory references
++     by having a canonical form.  That in turn can help other optimizations
++     as well.  */
++  if (<SUPERQI:MODE>mode != word_mode)
++    {
++      rtx tdest = gen_reg_rtx (word_mode);
++      emit_move_insn (tdest, gen_rtx_ZERO_EXTEND (word_mode, operands[1]));
++      tdest = gen_lowpart (<SUPERQI:MODE>mode, tdest);
++      SUBREG_PROMOTED_VAR_P (tdest) = 1;
++      SUBREG_PROMOTED_SET (tdest, SRP_UNSIGNED);
++      emit_move_insn (operands[0], tdest);
++      DONE;
++    }
++})
++
+ 
+ (define_insn "*zero_extendqi<SUPERQI:mode>2_internal"
+   [(set (match_operand:SUPERQI 0 "register_operand"    "=r,r")
+@@ -1966,7 +1984,24 @@ (define_insn "*extendsidi2_internal"
+ (define_expand "extend<SHORT:mode><SUPERQI:mode>2"
+   [(set (match_operand:SUPERQI 0 "register_operand")
+ 	(sign_extend:SUPERQI (match_operand:SHORT 1 "nonimmediate_operand")))]
+-  "")
++  ""
++{
++  /* If the destination is not a full word, then do a sign extended
++     load to a full word and a sub-word extraction to get at the
++     appropriate low bits.  This enables more CSE of memory references
++     by having a canonical form.  That in turn can help other optimizations
++     as well.  */
++  if (<SUPERQI:MODE>mode != word_mode)
++    {
++      rtx tdest = gen_reg_rtx (word_mode);
++      emit_move_insn (tdest, gen_rtx_SIGN_EXTEND (word_mode, operands[1]));
++      tdest = gen_lowpart (<SUPERQI:MODE>mode, tdest);
++      SUBREG_PROMOTED_VAR_P (tdest) = 1;
++      SUBREG_PROMOTED_SET (tdest, SRP_SIGNED);
++      emit_move_insn (operands[0], tdest);
++      DONE;
++    }
++})
+ 
+ (define_insn_and_split "*extend<SHORT:mode><SUPERQI:mode>2"
+   [(set (match_operand:SUPERQI   0 "register_operand"     "=r,r")
+diff --git a/gcc/simplify-rtx.cc b/gcc/simplify-rtx.cc
+index 88aa95c81232..1d73cdb7eaaa 100644
+--- a/gcc/simplify-rtx.cc
++++ b/gcc/simplify-rtx.cc
+@@ -3897,6 +3897,96 @@ simplify_context::simplify_binary_operation_1 (rtx_code code,
+ 	  && negated_ops_p (XEXP (op0, 0), op1))
+ 	return simplify_gen_binary (IOR, mode, XEXP (op0, 1), op1);
+ 
++      /* (ior (and (A C1) (and (not (A) C2))) can be converted
++	 into (and (xor (A C2) (and (A (C1 + C2))))) when there are
++	 no bits in common between C1 and C2.  */
++      if (GET_CODE (op0) == AND
++	  && GET_CODE (op1) == AND
++	  && GET_CODE (XEXP (op1, 0)) == NOT
++	  && XEXP (op0, 0) == XEXP (XEXP (op1, 0), 0)
++	  && CONST_INT_P (XEXP (op0, 1))
++	  && CONST_INT_P (XEXP (op1, 1))
++	  && (INTVAL (XEXP (op0, 1)) & INTVAL (XEXP (op1, 1))) == 0)
++	{
++	  rtx c = GEN_INT (INTVAL (XEXP (op0, 1)) + INTVAL (XEXP (op1, 1)));
++
++	  tem = simplify_gen_binary (XOR, mode, XEXP (op0, 0), XEXP (op1, 1));
++	  if (tem)
++	    {
++	      tem = simplify_gen_binary (AND, mode, tem, c);
++	      if (tem)
++		return tem;
++	    }
++	}
++
++      /* Same thing, but operand order is reversed for the outer IOR.  */
++      if (GET_CODE (op0) == AND
++	  && GET_CODE (op1) == AND
++	  && GET_CODE (XEXP (op0, 0)) == NOT
++	  && XEXP (op1, 0) == XEXP (XEXP (op0, 0), 0)
++	  && CONST_INT_P (XEXP (op0, 1))
++	  && CONST_INT_P (XEXP (op1, 1))
++	  && (INTVAL (XEXP (op0, 1)) & INTVAL (XEXP (op1, 1))) == 0)
++	{
++	  rtx c = GEN_INT (INTVAL (XEXP (op0, 1)) + INTVAL (XEXP (op1, 1)));
++
++	  tem = simplify_gen_binary (XOR, mode, XEXP (op1, 0), XEXP (op0, 1));
++	  if (tem)
++	    {
++	      tem = simplify_gen_binary (AND, mode, tem, c);
++	      if (tem)
++		return tem;
++	    }
++	}
++
++      /* Another variant seen on some backends, particularly those with
++	 sub-word operations.  */
++      if (GET_CODE (op0) == AND
++	  && GET_CODE (op1) == PLUS
++	  && GET_CODE (XEXP (op1, 0)) == AND
++	  && XEXP (op0, 0) == XEXP (XEXP (op1, 0), 0)
++	  && CONST_INT_P (XEXP (op0, 1))
++	  && CONST_INT_P (XEXP (op1, 1))
++	  && CONST_INT_P (XEXP (XEXP (op1, 0), 1))
++	  && INTVAL (XEXP (op1, 1)) == INTVAL (XEXP (XEXP (op1, 0), 1))
++	  && (INTVAL (XEXP (op0, 1)) & INTVAL (XEXP (op1, 1))) == 0)
++	{
++	  rtx c = GEN_INT (INTVAL (XEXP (op0, 1)) + INTVAL (XEXP (op1, 1)));
++
++	  tem = simplify_gen_binary (XOR, mode, XEXP (op0, 0), XEXP (op1, 1));
++	  if (tem)
++	    {
++	      tem = simplify_gen_binary (AND, mode, tem, c);
++	      if (tem)
++		return tem;
++	    }
++	}
++
++      /* And its variant with the operands of the outer AND reversed.  */
++      if (GET_CODE (op1) == AND
++	  && GET_CODE (op0) == PLUS
++	  && GET_CODE (XEXP (op0, 0)) == AND
++	  && XEXP (op1, 0) == XEXP (XEXP (op0, 0), 0)
++	  && CONST_INT_P (XEXP (op1, 1))
++	  && CONST_INT_P (XEXP (op0, 1))
++	  && CONST_INT_P (XEXP (XEXP (op0, 0), 1))
++	  && INTVAL (XEXP (op0, 1)) == INTVAL (XEXP (XEXP (op0, 0), 1))
++	  && (INTVAL (XEXP (op1, 1)) & INTVAL (XEXP (op0, 1))) == 0)
++	{
++	  rtx c = GEN_INT (INTVAL (XEXP (op1, 1)) + INTVAL (XEXP (op0, 1)));
++
++	  tem = simplify_gen_binary (XOR, mode, XEXP (op1, 0), XEXP (op0, 1));
++	  if (tem)
++	    {
++	      tem = simplify_gen_binary (AND, mode, tem, c);
++	      if (tem)
++		return tem;
++	    }
++	}
++
++      /* And its variant with the operands of the outer AND reversed.  */
++
++
+       tem = simplify_with_subreg_not (code, mode, op0, op1);
+       if (tem)
+ 	return tem;
+diff --git a/gcc/testsuite/gcc.target/riscv/pr80770.c b/gcc/testsuite/gcc.target/riscv/pr80770.c
+new file mode 100644
+index 000000000000..4dafe3955f05
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr80770.c
+@@ -0,0 +1,150 @@
++/* { dg-do compile } */
++/* { dg-additional-options "-std=gnu99" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" } } */
++
++
++struct S {
++  _Bool b0: 1;
++  _Bool b1: 1;
++  _Bool b2: 1;
++  _Bool b3: 1;
++  _Bool b4: 1;
++  _Bool b5: 1;
++  _Bool b6: 1;
++  _Bool b7: 1;
++  _Bool b8: 1;
++  _Bool b9: 1;
++  _Bool b10: 1;
++  _Bool b11: 1;
++  _Bool b12: 1;
++  _Bool b13: 1;
++  _Bool b14: 1;
++  _Bool b15: 1;
++  _Bool b16: 1;
++  _Bool b17: 1;
++  _Bool b18: 1;
++  _Bool b19: 1;
++  _Bool b20: 1;
++  _Bool b21: 1;
++  _Bool b22: 1;
++  _Bool b23: 1;
++  _Bool b24: 1;
++  _Bool b25: 1;
++  _Bool b26: 1;
++  _Bool b27: 1;
++  _Bool b28: 1;
++  _Bool b29: 1;
++  _Bool b30: 1;
++  _Bool b31: 1;
++  _Bool b32: 1;
++  _Bool b33: 1;
++  _Bool b34: 1;
++  _Bool b35: 1;
++  _Bool b36: 1;
++  _Bool b37: 1;
++  _Bool b38: 1;
++  _Bool b39: 1;
++  _Bool b40: 1;
++  _Bool b41: 1;
++  _Bool b42: 1;
++  _Bool b43: 1;
++  _Bool b44: 1;
++  _Bool b45: 1;
++  _Bool b46: 1;
++  _Bool b47: 1;
++  _Bool b48: 1;
++  _Bool b49: 1;
++  _Bool b50: 1;
++  _Bool b51: 1;
++  _Bool b52: 1;
++  _Bool b53: 1;
++  _Bool b54: 1;
++  _Bool b55: 1;
++  _Bool b56: 1;
++  _Bool b57: 1;
++  _Bool b58: 1;
++  _Bool b59: 1;
++  _Bool b60: 1;
++  _Bool b61: 1;
++  _Bool b62: 1;
++  _Bool b63: 1;
++};
++
++#define T(N) void fb##N (struct S *s) { s->b##N = !s->b##N; }
++
++T(0)
++T(1)
++T(2)
++T(3)
++T(4)
++T(5)
++T(6)
++T(7)
++T(8)
++T(9)
++T(10)
++T(11)
++T(12)
++T(13)
++T(14)
++T(15)
++T(16)
++T(17)
++T(18)
++T(19)
++T(20)
++T(21)
++T(22)
++T(23)
++T(24)
++T(25)
++T(26)
++T(27)
++T(28)
++T(29)
++T(30)
++T(31)
++#if __riscv_xlen == 64
++T(32)
++T(33)
++T(34)
++T(35)
++T(36)
++T(37)
++T(38)
++T(39)
++T(40)
++T(41)
++T(42)
++T(43)
++T(44)
++T(45)
++T(46)
++T(47)
++T(48)
++T(49)
++T(50)
++T(51)
++T(52)
++T(53)
++T(54)
++T(55)
++T(56)
++T(57)
++T(58)
++T(59)
++T(60)
++T(61)
++T(62)
++T(63)
++#endif
++
++/* { dg-final { scan-assembler-times "lbu\t" 64 { target rv64 } } } */
++/* { dg-final { scan-assembler-times "lbu\t" 32 { target rv32 } } } */
++
++/* { dg-final { scan-assembler-times "xori\t" 64 { target rv64 } } } */
++/* { dg-final { scan-assembler-times "xori\t" 32 { target rv32 } } } */
++
++
++/* { dg-final { scan-assembler-times "sb\t" 64 { target rv64 } } } */
++/* { dg-final { scan-assembler-times "sb\t" 32 { target rv32 } } } */
