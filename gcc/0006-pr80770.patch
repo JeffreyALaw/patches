@@ -120,7 +120,7 @@ index 88aa95c81232..1d73cdb7eaaa 100644
 +		return tem;
 +	    }
 +	}
-+
++#if 0
 +      /* Another variant seen on some backends, particularly those with
 +	 sub-word operations.  */
 +      if (GET_CODE (op0) == AND
@@ -168,7 +168,7 @@ index 88aa95c81232..1d73cdb7eaaa 100644
 +
 +      /* And its variant with the operands of the outer AND reversed.  */
 +
-+
++#endif
        tem = simplify_with_subreg_not (code, mode, op0, op1);
        if (tem)
  	return tem;
