@@ -1,19 +1,3 @@
-commit 4d255b8a622f022f2b55ad705f2977dc3527ab5d
-Author: Jeff Law <jeffrey.law@oss.qualcomm.com>
-Date:   Mon Feb 9 12:42:48 2026 -0700
-
-    Latest bits to address pr80770 more generically.
-    
-    Still requires risc-v specific bits to encourage CSE of the memory
-    references appearing in different modes.
-    
-    Not necessarily optimial everywhere, but should be an improvement.  Other
-    targets may have the same CSE problem for example.  And on the H8 we fail
-    to use the bnot form for bit 0, 8, 16, 24, but we do use it in other cases,
-    so that's likely a target specific issue.
-    
-    But again, overall good.
-
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
 index 3fe0ad0ccdf4..7e9205fb24bf 100644
 --- a/gcc/config/riscv/riscv.md
@@ -72,7 +56,7 @@ index 3fe0ad0ccdf4..7e9205fb24bf 100644
  (define_insn_and_split "*extend<SHORT:mode><SUPERQI:mode>2"
    [(set (match_operand:SUPERQI   0 "register_operand"     "=r,r")
 diff --git a/gcc/simplify-rtx.cc b/gcc/simplify-rtx.cc
-index 88aa95c81232..1d73cdb7eaaa 100644
+index 88aa95c81232..1831f3cec7e5 100644
 --- a/gcc/simplify-rtx.cc
 +++ b/gcc/simplify-rtx.cc
 @@ -3897,6 +3897,96 @@ simplify_context::simplify_binary_operation_1 (rtx_code code,
@@ -328,3 +312,18 @@ index 000000000000..4dafe3955f05
 +
 +/* { dg-final { scan-assembler-times "sb\t" 64 { target rv64 } } } */
 +/* { dg-final { scan-assembler-times "sb\t" 32 { target rv32 } } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/base/vwaddsub-1.c b/gcc/testsuite/gcc.target/riscv/rvv/base/vwaddsub-1.c
+index 43be202ebe9a..c720ec0c0612 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/base/vwaddsub-1.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/base/vwaddsub-1.c
+@@ -32,8 +32,8 @@ vwsub_wx_i64m8_m (vbool8_t vm, vint64m8_t vs2, int64_t rs1, size_t vl)
+ /*
+ ** vwadd_wx_i32m8_m:
+ **    ...
+-**    vsetvli\s+zero,[a-x0-9]+,\s*e16,\s*m4,\s*t[au],\s*m[au]
+-**    vwadd\.wx\tv8,v8,a5,v0.t
++**    vsetvli\s+zero,[a-x0-9]+,\s*e32,\s*m8,\s*t[au],\s*m[au]
++**    vadd\.wx\tv8,v8,a5,v0.t
+ **    ret
+ */
+ 
