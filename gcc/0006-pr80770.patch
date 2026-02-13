@@ -313,7 +313,7 @@ index 000000000000..4dafe3955f05
 +/* { dg-final { scan-assembler-times "sb\t" 64 { target rv64 } } } */
 +/* { dg-final { scan-assembler-times "sb\t" 32 { target rv32 } } } */
 diff --git a/gcc/testsuite/gcc.target/riscv/rvv/base/vwaddsub-1.c b/gcc/testsuite/gcc.target/riscv/rvv/base/vwaddsub-1.c
-index 43be202ebe9a..c720ec0c0612 100644
+index 43be202ebe9a..bd3b16829a64 100644
 --- a/gcc/testsuite/gcc.target/riscv/rvv/base/vwaddsub-1.c
 +++ b/gcc/testsuite/gcc.target/riscv/rvv/base/vwaddsub-1.c
 @@ -32,8 +32,8 @@ vwsub_wx_i64m8_m (vbool8_t vm, vint64m8_t vs2, int64_t rs1, size_t vl)
@@ -323,7 +323,7 @@ index 43be202ebe9a..c720ec0c0612 100644
 -**    vsetvli\s+zero,[a-x0-9]+,\s*e16,\s*m4,\s*t[au],\s*m[au]
 -**    vwadd\.wx\tv8,v8,a5,v0.t
 +**    vsetvli\s+zero,[a-x0-9]+,\s*e32,\s*m8,\s*t[au],\s*m[au]
-+**    vadd\.wx\tv8,v8,a5,v0.t
++**    vadd\.vx\tv8,v8,a5,v0.t
  **    ret
  */
  
