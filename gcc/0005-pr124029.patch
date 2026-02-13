@@ -1,5 +1,5 @@
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 3baf0a936b5..1fa311bbcac 100644
+index 3baf0a936b58..1fa311bbcacb 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
 @@ -4281,7 +4281,9 @@ riscv_rtx_costs (rtx x, machine_mode mode, int outer_code, int opno ATTRIBUTE_UN
@@ -15,7 +15,7 @@ index 3baf0a936b5..1fa311bbcac 100644
        else /* The instruction will be fetched from the constant pool.  */
 diff --git a/gcc/testsuite/gcc.target/riscv/pr124029.c b/gcc/testsuite/gcc.target/riscv/pr124029.c
 new file mode 100644
-index 00000000000..a74258e0c0d
+index 000000000000..a74258e0c0db
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/pr124029.c
 @@ -0,0 +1,18 @@
@@ -38,16 +38,23 @@ index 00000000000..a74258e0c0d
 +/* { dg-final { scan-assembler-not "seqz\t" } } */
 +
 diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/struct/struct_vect-2.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/struct/struct_vect-2.c
-index 52ded08faf5..75586775add 100644
+index 52ded08faf55..6a1605e2655a 100644
 --- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/struct/struct_vect-2.c
 +++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/struct/struct_vect-2.c
-@@ -15,8 +15,8 @@
- /* { dg-final { scan-assembler-times {vsseg3e16\.v} 8 } } */
+@@ -8,7 +8,7 @@
+ /* { dg-final { scan-assembler-times {vlseg3e16\.v} 8 } } */
+ /* { dg-final { scan-assembler-times {vlseg4e16\.v} 8 } } */
+ /* { dg-final { scan-assembler-times {vlseg5e16\.v} 8 } } */
+-/* { dg-final { scan-assembler-times {vlseg6e16\.v} 4 } } */
++/* { dg-final { scan-assembler-times {vlseg6e16\.v} 8 } } */
+ /* { dg-final { scan-assembler-times {vlseg7e16\.v} 4 } } */
+ /* { dg-final { scan-assembler-times {vlseg8e16\.v} 4 } } */
+ /* { dg-final { scan-assembler-times {vsseg2e16\.v} 8 } } */
+@@ -16,7 +16,7 @@
  /* { dg-final { scan-assembler-times {vsseg4e16\.v} 4 } } */
  /* { dg-final { scan-assembler-times {vsseg5e16\.v} 4 } } */
--/* { dg-final { scan-assembler-times {vsseg6e16\.v} 4 } } */
+ /* { dg-final { scan-assembler-times {vsseg6e16\.v} 4 } } */
 -/* { dg-final { scan-assembler-times {vsseg7e16\.v} 2 } } */
-+/* { dg-final { scan-assembler-times {vsseg6e16\.v} 8 } } */
 +/* { dg-final { scan-assembler-times {vsseg7e16\.v} 4 } } */
  /* { dg-final { scan-assembler-times {vsseg8e16\.v} 2 } } */
  /* { dg-final { scan-assembler-times {vsetivli\s+zero,\s*8,\s*e16,\s*m1,\s*t[au],\s*m[au]} 14 } } */
