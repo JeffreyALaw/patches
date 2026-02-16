@@ -113,3 +113,5 @@ gcc/testsuite/g++.dg/modules/xtreme-header-8.C
 gcc/testsuite/gfortran.dg/minloc_with_dim_and_mask_1.f90
 gcc/testsuite/gfortran.dg/maxloc_with_dim_and_mask_1.f90
 
+# These seem to be flakey, tripping failures in binutils
+gcc/testsuite/gcc.dg/lto/pr122515*
