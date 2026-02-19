@@ -6,3 +6,7 @@ gcc/testsuite/gfortran.dg/bind-c-contiguous-3.f90
 gcc/testsuite/gfortran.dg/bind-c-contiguous-5.f90
 
 
+# Seems to bounce a bit too
+gcc/testsuite/gcc.c-torture/execute/20101011-1.c
+gcc/testsuite/gcc.dg/pr116891.c
+
