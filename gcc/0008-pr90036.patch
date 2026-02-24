@@ -1,0 +1,136 @@
+diff --git a/gcc/testsuite/gfortran.dg/unconstrained_commons.f b/gcc/testsuite/gfortran.dg/unconstrained_commons.f
+index 28972b6d6b0..1e830ca730f 100644
+--- a/gcc/testsuite/gfortran.dg/unconstrained_commons.f
++++ b/gcc/testsuite/gfortran.dg/unconstrained_commons.f
+@@ -14,7 +14,6 @@
+   10  CONTINUE
+       RETURN
+       END
+-! { dg-final { scan-tree-dump-not "FIND" "dom2" } }
+ ! We should retain both a read and write of mycommon.x.
+ ! { dg-final { scan-tree-dump-times "  _\[0-9\]+ = mycommon\\.x\\\[_\[0-9\]+\\\];" 1 "dom2" } }
+ ! { dg-final { scan-tree-dump-times "  mycommon\\.x\\\[j?_\[0-9\]+\\\] = _\[0-9\]+;" 1 "dom2" } }
+diff --git a/gcc/tree-ssa-dom.cc b/gcc/tree-ssa-dom.cc
+index 10a1c3f0b21..3c5172375c8 100644
+--- a/gcc/tree-ssa-dom.cc
++++ b/gcc/tree-ssa-dom.cc
+@@ -189,7 +189,26 @@ edge_info::derive_equivalences (tree name, tree value, int recursion_limit)
+ 	      value = build_zero_cst (TREE_TYPE (rhs2));
+ 	      derive_equivalences (rhs2, value, recursion_limit - 1);
+ 	    }
+-	  break;
++	  else
++	    {
++	      /* If an operand is zero, then the other operand must have
++		 the same value as the result.  */
++	      tree rhs1 = gimple_assign_rhs1 (def_stmt);
++	      tree rhs2 = gimple_assign_rhs2 (def_stmt);
++
++	      if (integer_zerop (rhs1)
++		  || (TREE_CODE (rhs1) == SSA_NAME
++		      && SSA_NAME_VALUE (rhs1)
++		      && integer_zerop (SSA_NAME_VALUE (rhs1))))
++		derive_equivalences (rhs2, value, recursion_limit - 1);
++
++	      if (integer_zerop (rhs2)
++		  || (TREE_CODE (rhs2) == SSA_NAME
++		      && SSA_NAME_VALUE (rhs2)
++		      && integer_zerop (SSA_NAME_VALUE (rhs2))))
++		derive_equivalences (rhs1, value, recursion_limit - 1);
++	    }
++	break;
+ 
+ 	/* If the result of an AND is nonzero, then its operands are, too.  */
+ 	case BIT_AND_EXPR:
+@@ -1097,6 +1116,7 @@ dom_valueize (tree t)
+    additional equivalences that are valid on edge E.  */
+ static void
+ back_propagate_equivalences (tree lhs, edge e,
++			     class avail_exprs_stack *avail_exprs_stack,
+ 			     class const_and_copies *const_and_copies,
+ 			     bitmap domby)
+ {
+@@ -1149,6 +1169,20 @@ back_propagate_equivalences (tree lhs, edge e,
+ 						 no_follow_ssa_edges);
+       if (res && (TREE_CODE (res) == SSA_NAME || is_gimple_min_invariant (res)))
+ 	record_equality (lhs2, res, const_and_copies);
++
++      /* It may also be the case that the value is in the hash table.  So
++	 try to look it up there too.  But restrict ourselves to cases where
++	 the hash lookup produced a constant rather than another SSA_NAME.
++	 That avoids infinite recursion issues.  */
++      res = avail_exprs_stack->lookup_avail_expr (use_stmt, false, false);
++      if (res && is_gimple_min_invariant (res))
++	{
++	  record_equality (lhs2, res, const_and_copies);
++
++	  /* And that in turn may trigger further propagation opportunities.  */
++	  back_propagate_equivalences (lhs2, e, avail_exprs_stack,
++				       const_and_copies, domby);
++	}
+     }
+ }
+ 
+@@ -1173,7 +1207,25 @@ record_temporary_equivalences (edge e,
+       /* If we have 0 = COND or 1 = COND equivalences, record them
+ 	 into our expression hash tables.  */
+       for (i = 0; edge_info->cond_equivalences.iterate (i, &eq); ++i)
+-	avail_exprs_stack->record_cond (eq);
++	{
++	  avail_exprs_stack->record_cond (eq);
++
++	  /* This is not a simple equivalence, but may still enable
++	     discovery of other equivalences.  This is fairly narrowly
++	     implemented and can likely be generalized further.
++
++	     Essentially we're looking for [0/1] = A cond [0/1] and try
++	     to derive equivalences at use points of A.  */
++	     if ((integer_zerop (eq->value) || integer_onep (eq->value))
++		 && eq->cond.kind == EXPR_BINARY
++		 && (eq->cond.ops.binary.op == EQ_EXPR
++		     || eq->cond.ops.binary.op == NE_EXPR)
++		 && TREE_CODE (eq->cond.ops.binary.opnd0) == SSA_NAME
++		 && TREE_CODE (eq->cond.ops.binary.opnd1) == INTEGER_CST)
++		back_propagate_equivalences (eq->cond.ops.binary.opnd0, e,
++					     avail_exprs_stack,
++					     const_and_copies, blocks_on_stack);
++	}
+ 
+       edge_info::equiv_pair *seq;
+       for (i = 0; edge_info->simple_equivalences.iterate (i, &seq); ++i)
+@@ -1211,8 +1263,8 @@ record_temporary_equivalences (edge e,
+ 	  /* Any equivalence found for LHS may result in additional
+ 	     equivalences for other uses of LHS that we have already
+ 	     processed.  */
+-	  back_propagate_equivalences (lhs, e, const_and_copies,
+-				       blocks_on_stack);
++	  back_propagate_equivalences (lhs, e, avail_exprs_stack,
++				       const_and_copies, blocks_on_stack);
+ 	}
+     }
+ }
+diff --git a/gcc/tree-ssa-scopedtables.cc b/gcc/tree-ssa-scopedtables.cc
+index 828f214c7cb..95523b23478 100644
+--- a/gcc/tree-ssa-scopedtables.cc
++++ b/gcc/tree-ssa-scopedtables.cc
+@@ -392,13 +392,13 @@ avail_exprs_stack::record_cond (cond_equivalence *p)
+   expr_hash_elt **slot;
+ 
+   slot = m_avail_exprs->find_slot_with_hash (element, element->hash (), INSERT);
+-  if (*slot == NULL)
+-    {
+-      *slot = element;
+-      record_expr (element, NULL, '1');
+-    }
+-  else
+-    delete element;
++
++  /* We will always get back a valid slot in the hash table.  Go ahead and
++     record the new equivalence.  While it may be overwriting something older,
++     the belief is that the newer equivalence is more likely to be useful as
++     it was derived using more information/context.  */
++  record_expr (element, *slot, '1');
++  *slot = element;
+ }
+ 
+ /* Generate a hash value for a pair of expressions.  This can be used
