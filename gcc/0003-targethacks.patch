@@ -66,40 +66,6 @@ index 9dd28b106fb..a09d936c545 100644
  
  ;; Valid shift amount for RRUM, RRAM, RLAM, RRCM.
  (define_constraint "M"
-diff --git a/gcc/config/mcore/mcore.cc b/gcc/config/mcore/mcore.cc
-index cd5f2c52649..bdc1b40a153 100644
---- a/gcc/config/mcore/mcore.cc
-+++ b/gcc/config/mcore/mcore.cc
-@@ -202,7 +202,7 @@ TARGET_GNU_ATTRIBUTES (mcore_attribute_table,
- #define TARGET_MACHINE_DEPENDENT_REORG	mcore_reorg
- 
- #undef  TARGET_PROMOTE_FUNCTION_MODE
--#define TARGET_PROMOTE_FUNCTION_MODE	default_promote_function_mode_always_promote
-+#define TARGET_PROMOTE_FUNCTION_MODE	default_promote_function_mode
- #undef  TARGET_PROMOTE_PROTOTYPES
- #define TARGET_PROMOTE_PROTOTYPES	hook_bool_const_tree_true
- 
-diff --git a/gcc/config/iq2000/iq2000.cc b/gcc/config/iq2000/iq2000.cc
-index b69ee8f59b3..897c36c01ed 100644
---- a/gcc/config/iq2000/iq2000.cc
-+++ b/gcc/config/iq2000/iq2000.cc
-@@ -209,7 +209,7 @@ static HOST_WIDE_INT iq2000_starting_frame_offset (void);
- #define TARGET_PRINT_OPERAND_PUNCT_VALID_P iq2000_print_operand_punct_valid_p
- 
- #undef  TARGET_PROMOTE_FUNCTION_MODE
--#define TARGET_PROMOTE_FUNCTION_MODE	default_promote_function_mode_always_promote
-+#define TARGET_PROMOTE_FUNCTION_MODE	default_promote_function_mode
- #undef  TARGET_PROMOTE_PROTOTYPES
- #define TARGET_PROMOTE_PROTOTYPES	hook_bool_const_tree_true
- 
-commit 0ec2f586c8ee027586c373fe4f19ceb3a7c680c6
-Author: Jeff Law <jlaw@ventanamicro.com>
-Date:   Wed Feb 21 11:08:35 2024 -0700
-
-    Revert "libiberty: Fix error return value in pex_unix_exec_child [PR113957]."
-    
-    This reverts commit 20e57660e64eab7c9ef0f2dd25f3088835f8f44f.
-
 diff --git a/libiberty/pex-unix.c b/libiberty/pex-unix.c
 index f3a1cc95ada..4b004f5a9cc 100644
 --- a/libiberty/pex-unix.c
