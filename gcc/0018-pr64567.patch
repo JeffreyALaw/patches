@@ -1,0 +1,5 @@
+commit bd1da7799245b51e396f4213125e5dc67261ecf6
+Author: Jeff Law <jeffrey.law@oss.qualcomm.com>
+Date:   Sat Mar 14 15:33:14 2026 -0600
+
+    Daniel's patch for 64567.
