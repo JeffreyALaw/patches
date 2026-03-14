@@ -1,20 +1,14 @@
-diff --git a/gcc/config/riscv/iterators.md b/gcc/config/riscv/iterators.md
-index 192556e92e2..5d5a985f34b 100644
---- a/gcc/config/riscv/iterators.md
-+++ b/gcc/config/riscv/iterators.md
-@@ -264,6 +264,7 @@ (define_code_iterator any_ge [ge geu])
- (define_code_iterator any_lt [lt ltu])
- (define_code_iterator any_le [le leu])
- (define_code_iterator any_eq [eq ne])
-+(define_code_attr invert_eq [(eq "ne") (ne "eq")])
- 
- ;; Iterators for conditions we can emit a sCC against 0 or a reg directly
- (define_code_iterator scc_0  [eq ne gt gtu])
+commit a604c2210abdbe53d30eec28a7dc109f73fafb96
+Author: Jeff Law <jeffrey.law@oss.qualcomm.com>
+Date:   Sat Mar 14 08:58:03 2026 -0600
+
+    Revamp zicond splits to unify across the eq/ne selection, and exploit commutativity.
+
 diff --git a/gcc/config/riscv/zicond.md b/gcc/config/riscv/zicond.md
-index 2aefcff4fef..182df7eb825 100644
+index 2aefcff4fef..ac1aa3a6b7e 100644
 --- a/gcc/config/riscv/zicond.md
 +++ b/gcc/config/riscv/zicond.md
-@@ -128,111 +128,97 @@ (define_split
+@@ -128,111 +128,101 @@ (define_split
  ;; In some cases gimple can give us a sequence with a logical and
  ;; of two sCC insns.  This can be implemented an sCC feeding a
  ;; conditional zero.
@@ -97,9 +91,11 @@ index 2aefcff4fef..182df7eb825 100644
 +   (set (match_dup 0) (if_then_else:X (match_op_dup:X 1
 +				       [(match_dup 2) (const_int 0)])
  				      (const_int 0)
- 				      (match_dup 4)))])
- 
+-				      (match_dup 4)))])
 -
++				      (match_dup 4)))]
++  { PUT_CODE (operands[1], GET_CODE (operands[1]) == EQ ? NE : EQ); })
+ 
 -;; Inverted versions from above.  I tried to get this to work with
 -;; iterators, but didn't have any success disambiguating the code attr
 -;; for the eq/ne flip we have to do.
@@ -116,12 +112,9 @@ index 2aefcff4fef..182df7eb825 100644
    "TARGET_ZICOND_LIKE || TARGET_XTHEADCONDMOV"
 -  [(set (match_dup 4) (scc_0:X (match_dup 2) (match_dup 3)))
 -   (set (match_dup 0) (if_then_else:X (ne:X (match_dup 1) (const_int 0))
-+  [(set (match_dup 4) (any_ge:X (match_dup 3) (const_int 1)))
-+   (set (match_dup 0) (if_then_else:X (match_op_dup:X 1
-+				       [(match_dup 2) (const_int 0)])
- 				      (const_int 0)
- 				      (match_dup 4)))])
- 
+-				      (const_int 0)
+-				      (match_dup 4)))])
+-
 -;; Similarly but GE/GEU which requires (const_int 1) as an operand.
 -(define_split
 -  [(set (match_operand:X 0 "register_operand")
@@ -132,9 +125,14 @@ index 2aefcff4fef..182df7eb825 100644
 -  "TARGET_ZICOND_LIKE || TARGET_XTHEADCONDMOV"
 -  [(set (match_dup 3) (any_ge:X (match_dup 2) (const_int 1)))
 -   (set (match_dup 0) (if_then_else:X (ne:X (match_dup 1) (const_int 0))
--				      (const_int 0)
++  [(set (match_dup 4) (any_ge:X (match_dup 3) (const_int 1)))
++   (set (match_dup 0) (if_then_else:X (match_op_dup:X 1
++				       [(match_dup 2) (const_int 0)])
+ 				      (const_int 0)
 -				      (match_dup 3)))])
--
++				      (match_dup 4)))]
++  { PUT_CODE (operands[1], GET_CODE (operands[1]) == EQ ? NE : EQ); })
+ 
  ;; Similarly but LU/LTU which allows an arith_operand
  (define_split
    [(set (match_operand:X 0 "register_operand")
@@ -155,7 +153,8 @@ index 2aefcff4fef..182df7eb825 100644
 +				       [(match_dup 2) (const_int 0)])
  				      (const_int 0)
 -				      (match_dup 4)))])
-+				      (match_dup 5)))])
++				      (match_dup 5)))]
++  { PUT_CODE (operands[1], GET_CODE (operands[1]) == EQ ? NE : EQ); })
  
  ;; Finally LE/LEU which requires sle_operand.
  (define_split
@@ -177,7 +176,8 @@ index 2aefcff4fef..182df7eb825 100644
 +				       [(match_dup 2) (const_int 0)])
  				      (const_int 0)
 -				      (match_dup 4)))])
-+				      (match_dup 5)))])
++				      (match_dup 5)))]
++  { PUT_CODE (operands[1], GET_CODE (operands[1]) == EQ ? NE : EQ); })
  
  ;; We can splat the sign bit across a GPR with a arithmetic right shift
  ;; which gives us a 0, -1 result.  We then turn on bit #0 unconditionally
