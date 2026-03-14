@@ -1,11 +1,5 @@
-commit 80e1798ffce5fb1602aeccc1ca836e3606740472
-Author: Jeff Law <jeffrey.law@oss.qualcomm.com>
-Date:   Sat Mar 14 11:38:11 2026 -0600
-
-    Two new patterns to help code for pr56096
-
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index 3fe0ad0ccdf..6cf673b80b6 100644
+index 3fe0ad0ccdf..596712ce423 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
 @@ -3166,6 +3166,62 @@ (define_insn_and_split "zero_extendsidi2_shifted"
@@ -24,7 +18,7 @@ index 3fe0ad0ccdf..6cf673b80b6 100644
 +			 (match_operand 2 "shifted_const_arith_operand"))
 +		  (const_int 0)))
 +   (clobber (match_scratch:X 3 "=&r"))]
-+  ""
++  "!SMALL_OPERAND (INTVAL (operands[2]))"
 +  "#"
 +  "&& reload_completed"
 +  [(set (match_dup 3) (ashiftrt:X (match_dup 1) (match_dup 4)))
