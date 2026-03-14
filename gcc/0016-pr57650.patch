@@ -1,5 +1,17 @@
+diff --git a/gcc/config/riscv/iterators.md b/gcc/config/riscv/iterators.md
+index 192556e92e2..5d5a985f34b 100644
+--- a/gcc/config/riscv/iterators.md
++++ b/gcc/config/riscv/iterators.md
+@@ -264,6 +264,7 @@ (define_code_iterator any_ge [ge geu])
+ (define_code_iterator any_lt [lt ltu])
+ (define_code_iterator any_le [le leu])
+ (define_code_iterator any_eq [eq ne])
++(define_code_attr invert_eq [(eq "ne") (ne "eq")])
+ 
+ ;; Iterators for conditions we can emit a sCC against 0 or a reg directly
+ (define_code_iterator scc_0  [eq ne gt gtu])
 diff --git a/gcc/config/riscv/zicond.md b/gcc/config/riscv/zicond.md
-index 2aefcff4fef..d0c6bcb0ec2 100644
+index 2aefcff4fef..182df7eb825 100644
 --- a/gcc/config/riscv/zicond.md
 +++ b/gcc/config/riscv/zicond.md
 @@ -128,111 +128,97 @@ (define_split
@@ -27,7 +39,7 @@ index 2aefcff4fef..d0c6bcb0ec2 100644
 +					[(match_dup 2) (const_int 0)])
  				      (const_int 0)
 -				      (match_dup 4)))])
-+				      (match_dup 4)))]
++				      (match_dup 5)))]
 +  { PUT_CODE (operands[1], GET_CODE (operands[1]) == EQ ? NE : EQ); })
  
 -;; Similarly but GE/GEU which requires (const_int 1) as an operand.
@@ -50,7 +62,7 @@ index 2aefcff4fef..d0c6bcb0ec2 100644
 +					[(match_dup 2) (const_int 0)])
  				      (const_int 0)
 -				      (match_dup 3)))])
-+				      (match_dup 4)))]
++				      (match_dup 5)))]
 +  { PUT_CODE (operands[1], GET_CODE (operands[1]) == EQ ? NE : EQ); })
  
 -;; Similarly but LU/LTU which allows an arith_operand
