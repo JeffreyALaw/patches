@@ -1,20 +1,3 @@
-diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index a24ec95b2e4..f5849ef1e23 100644
---- a/gcc/config/riscv/riscv.md
-+++ b/gcc/config/riscv/riscv.md
-@@ -3525,9 +3525,9 @@
- 
- ;; Destination is always set in SI mode.
- 
--(define_expand "cstore<mode>4"
--  [(set (match_operand:SI 0 "register_operand")
--	(match_operator:SI 1 "ordered_comparison_operator"
-+(define_expand "cstore<GPR:mode>4"
-+  [(set (match_operand:GPR 0 "register_operand")
-+	(match_operator:GPR 1 "ordered_comparison_operator"
- 	    [(match_operand:GPR 2 "register_operand")
- 	     (match_operand:GPR 3 "nonmemory_operand")]))]
-   ""
 diff --git a/gcc/ifcvt.cc b/gcc/ifcvt.cc
 index 75d959f652c..5dc1718206d 100644
 --- a/gcc/ifcvt.cc
