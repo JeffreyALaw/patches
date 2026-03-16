@@ -1,0 +1,45 @@
+commit c9db0240df3c5e6caaaea33dbe6a84188b388ef8
+Author: Jeff Law <jeffrey.law@oss.qualcomm.com>
+Date:   Sun Mar 15 23:09:48 2026 -0600
+
+    Do not consider relaxed atomic loads inherently necessary.
+
+diff --git a/gcc/tree-ssa-dce.cc b/gcc/tree-ssa-dce.cc
+index 7932607e889..66bfa01510d 100644
+--- a/gcc/tree-ssa-dce.cc
++++ b/gcc/tree-ssa-dce.cc
+@@ -48,6 +48,7 @@ along with GCC; see the file COPYING3.  If not see
+ #include "backend.h"
+ #include "rtl.h"
+ #include "tree.h"
++#include "memmodel.h"
+ #include "gimple.h"
+ #include "cfghooks.h"
+ #include "tree-pass.h"
+@@ -419,6 +420,26 @@ mark_stmt_if_obviously_necessary (gimple *stmt, bool aggressive)
+ 	    mark_stmt_necessary (call, true);
+ 	    return;
+ 	  }
++
++	if (gimple_call_builtin_p (stmt, BUILT_IN_NORMAL))
++	  {
++	    tree callee = gimple_call_fndecl (stmt);
++	    switch (DECL_FUNCTION_CODE (callee))
++	      {
++	      case BUILT_IN_ATOMIC_LOAD_1:
++	      case BUILT_IN_ATOMIC_LOAD_2:
++	      case BUILT_IN_ATOMIC_LOAD_4:
++	      case BUILT_IN_ATOMIC_LOAD_8:
++	      case BUILT_IN_ATOMIC_LOAD_16:
++		if (TREE_INT_CST_LOW (gimple_call_arg (stmt, 1)) == MEMMODEL_RELAXED)
++		  return;
++
++	      default:
++		break;
++	      }
++
++	  }
++
+ 	break;
+       }
+ 
