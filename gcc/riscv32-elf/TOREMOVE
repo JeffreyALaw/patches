@@ -48,3 +48,6 @@ gcc/testsuite/gcc.target/riscv/rvv/autovec/widen/widen-complicate-6.c
 gcc/testsuite/gcc.target/riscv/rvv/autovec/widen/widen-complicate-7.c
 gcc/testsuite/gcc.target/riscv/rvv/autovec/widen/widen-complicate-8.c
 gcc/testsuite/gcc.target/riscv/rvv/autovec/widen/widen-complicate-9.c
+
+# Requires zvl512, but we're not passing that to QEMU
+gcc/testsuite/gcc.target/riscv/rvv/autovec/pr123022.c
