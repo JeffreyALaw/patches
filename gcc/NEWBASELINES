@@ -23,4 +23,6 @@ riscv32-elf
 riscv64-elf
 rx-elf
 v850e-elf
+pru-elf
+mcore-elf
 
