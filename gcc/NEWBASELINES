@@ -2,21 +2,10 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 riscv32-elf
-arc-elf
-sh3-linux-gnu
-fr30-elf
-moxie-elf
-nds32be-elf
-m32r-elf
-nds32le-elf
 iq2000-elf
-microblaze-elf
-sh3eb-linux-gnu
-cris-elf
+microblaze-linux
 csky-linux-gnu
 ft32-elf
-msp430-elf
-bfin-elf
 mn10300-elf
 iq2000-elf
 riscv32-elf
