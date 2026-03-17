@@ -1,0 +1,146 @@
+commit 28132c5bbd86887afc7b41175ed3d0dfe579d750
+Author: Jeff Law <jeffrey.law@oss.qualcomm.com>
+Date:   Tue Mar 17 11:01:23 2026 -0600
+
+    Daniel's patch for pr71336
+
+diff --git a/gcc/match.pd b/gcc/match.pd
+index 1d6428bf7e53..73bf697997aa 100644
+--- a/gcc/match.pd
++++ b/gcc/match.pd
+@@ -5195,6 +5195,44 @@ DEFINE_INT_AND_FLOAT_ROUND_FN (RINT)
+        && expr_no_side_effects_p (@2))
+        (op (mult (convert:type @0) @2) @1))))
+ 
++/* PR71336:
++   zero_one != 0 ? CST1 : CST2 -> ((typeof (CST2))zero_one * diff) + CST2,
++   where CST1 > CST2 and diff = CST1 - CST2.
++
++   Includes the "zero_one == 0 ? (...)" variant too.  */
++(for cmp (ne eq)
++ (simplify
++  (cond (cmp zero_one_valued_p@0 integer_zerop) INTEGER_CST@1 INTEGER_CST@2)
++  (with {
++    unsigned HOST_WIDE_INT diff = 0;
++
++    if (tree_int_cst_sgn (@1) > 0 && tree_int_cst_sgn (@2) > 0
++	&& tree_fits_uhwi_p (@1) && tree_fits_uhwi_p (@2))
++     {
++	if (cmp == NE_EXPR
++	    && wi::gtu_p (wi::to_wide (@1), wi::to_wide (@2)))
++	  diff = tree_to_uhwi (@1) - tree_to_uhwi (@2);
++
++	if (cmp == EQ_EXPR
++	    && wi::gtu_p (wi::to_wide (@2), wi::to_wide (@1)))
++	  diff = tree_to_uhwi (@2) - tree_to_uhwi (@1);
++     }
++   }
++   (if (cmp == NE_EXPR
++	&& INTEGRAL_TYPE_P (type)
++	&& TYPE_PRECISION (type) <= BITS_PER_WORD
++	&& INTEGRAL_TYPE_P (TREE_TYPE (@0))
++	&& diff > 0)
++     (plus (mult (convert:type @0) { build_int_cst (type, diff); })
++	    @2)
++    (if (cmp == EQ_EXPR
++	 && INTEGRAL_TYPE_P (type)
++	 && TYPE_PRECISION (type) <= BITS_PER_WORD
++	 && INTEGRAL_TYPE_P (TREE_TYPE (@0))
++	 && diff > 0)
++      (plus (mult (convert:type @0) { build_int_cst (type, diff); })
++	     @1))))))
++
+ /* ?: Value replacement. */
+ /* a == 0 ? b : b + a  -> b + a */
+ (for op (plus bit_ior bit_xor)
+diff --git a/gcc/testsuite/gcc.dg/tree-ssa/pr71336-2.c b/gcc/testsuite/gcc.dg/tree-ssa/pr71336-2.c
+new file mode 100644
+index 000000000000..da44489d3e4c
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/tree-ssa/pr71336-2.c
+@@ -0,0 +1,59 @@
++/* { dg-do run } */
++/* { dg-options "-O1" } */
++
++/* Macro adapted from builtin-object-size-common.h  */
++#define FAIL() \
++  do { \
++    __builtin_printf ("Failure at line: %d\n", __LINE__);     \
++    abort();						      \
++  } while (0)
++
++void abort(void);
++
++int test (int a) {
++    return a & 1 ? 7 : 3;
++}
++
++int test2 (int a) {
++    return a & 1 ? 3 : 7;
++}
++
++int test3 (int a) {
++    return (a & 1) == 0 ? 3 : 7;
++}
++
++int test4 (int a) {
++    return (a & 1) == 0 ? 7 : 3;
++}
++
++int main (void) {
++  if (test (0) != 3)
++    FAIL ();
++  if (test (1) != 7)
++    FAIL ();
++  if (test (3) != 7)
++    FAIL ();
++
++  if (test2 (0) != 7)
++    FAIL ();
++  if (test2 (1) != 3)
++    FAIL ();
++  if (test2 (3) != 3)
++    FAIL ();
++
++  if (test3 (0) != 3)
++    FAIL ();
++  if (test3 (1) != 7)
++    FAIL ();
++  if (test3 (2) != 3)
++    FAIL ();
++
++  if (test4 (0) != 7)
++    FAIL ();
++  if (test4 (1) != 3)
++    FAIL ();
++  if (test4 (2) != 7)
++    FAIL ();
++
++  return 0;
++}
+diff --git a/gcc/testsuite/gcc.dg/tree-ssa/pr71336.c b/gcc/testsuite/gcc.dg/tree-ssa/pr71336.c
+new file mode 100644
+index 000000000000..fb643bf1eb35
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/tree-ssa/pr71336.c
+@@ -0,0 +1,20 @@
++/* { dg-additional-options -O1 } */
++/* { dg-additional-options -fdump-tree-gimple } */
++
++int test (int a) {
++    return a & 1 ? 7 : 3;
++}
++
++int test2 (int a) {
++    return (a & 1) == 0 ? 3 : 7;
++}
++
++int test3 (int a) {
++    return a & 1 ? 17 : 3;
++}
++
++int test4 (int a) {
++    return (a & 1) == 0 ? 3 : 17;
++}
++
++/* { dg-final { scan-tree-dump-times " goto " 0 gimple } } */
