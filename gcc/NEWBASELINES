@@ -13,3 +13,12 @@ m32r-elf
 nds32le-elf
 visium-elf
 iq2000-elf
+microblaze-elf
+avr-elf
+sh3eb-linux-gnu
+xstormy16-elf
+cris-elf
+csky-linux-gnu
+ft32-elf
+msp430-elf
+bfin-elf
