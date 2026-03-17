@@ -51,3 +51,4 @@ gcc/testsuite/gcc.target/riscv/rvv/autovec/widen/widen-complicate-9.c
 
 # Requires zvl512, but we're not passing that to QEMU
 gcc/testsuite/gcc.target/riscv/rvv/autovec/pr123022.c
+gcc/testsuite/gcc.target/riscv/rvv/autovec/pr123022-2.c
