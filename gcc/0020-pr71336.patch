@@ -36,14 +36,14 @@ index 1d6428bf7e53..73bf697997aa 100644
 +     }
 +   }
 +   (if (cmp == NE_EXPR
-+	&& INTEGRAL_TYPE_P (type)
++	&& 0 && INTEGRAL_TYPE_P (type)
 +	&& TYPE_PRECISION (type) <= BITS_PER_WORD
 +	&& INTEGRAL_TYPE_P (TREE_TYPE (@0))
 +	&& diff > 0)
 +     (plus (mult (convert:type @0) { build_int_cst (type, diff); })
 +	    @2)
 +    (if (cmp == EQ_EXPR
-+	 && INTEGRAL_TYPE_P (type)
++	 && 0 && INTEGRAL_TYPE_P (type)
 +	 && TYPE_PRECISION (type) <= BITS_PER_WORD
 +	 && INTEGRAL_TYPE_P (TREE_TYPE (@0))
 +	 && diff > 0)
