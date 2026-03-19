@@ -1,0 +1,26 @@
+diff --git a/gcc/combine.cc b/gcc/combine.cc
+index e0dab3d88280..980eb1ddf696 100644
+--- a/gcc/combine.cc
++++ b/gcc/combine.cc
+@@ -5289,6 +5289,21 @@ find_split_point (rtx *loc, rtx_insn *insn, bool set_src)
+ 	 worthless to try this split.  */
+       if (!set_src && GET_CODE (XEXP (x, 0)) == NOT)
+ 	return loc;
++
++      /* On some targets we can profitably split at an embedded SIGN_EXTEND, only
++	 do this for arithmetic and shift operands to the SIGN_EXTEND.  This is
++	 particularly useful for RISC-V, but may help other targets too.  */
++      if (GET_CODE (XEXP (x, 0)) == SIGN_EXTEND)
++	{
++	  rtx_code inner_code = GET_CODE (XEXP (x, 0));
++	  if (inner_code == PLUS || inner_code == MINUS
++	      || inner_code == MULT || inner_code == DIV
++	      || inner_code == MOD || inner_code == ASHIFT
++	      || inner_code == LSHIFTRT || inner_code == ASHIFTRT
++	      || inner_code == ROTATE || inner_code == ROTATERT
++	      || inner_code == NEG)
++	    return &XEXP (x, 0);
++	}
+       break;
+ 
+     case PLUS:
