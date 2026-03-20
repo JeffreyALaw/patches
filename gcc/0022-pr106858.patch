@@ -24,3 +24,146 @@ index e0dab3d88280..980eb1ddf696 100644
        break;
  
      case PLUS:
+diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
+index 0d16d79df3ae..9d0d21e0c580 100644
+--- a/gcc/config/riscv/bitmanip.md
++++ b/gcc/config/riscv/bitmanip.md
+@@ -385,6 +385,13 @@ (define_insn "rotrsi3_sext"
+   "ror%i2%~\t%0,%1,%2"
+   [(set_attr "type" "bitmanip")])
+ 
++(define_insn "rotrsi3_dontcare"
++  [(set (match_operand:DI 0 "register_operand" "=r")
++	(subreg:DI (rotatert:SI (match_operand:SI 1 "register_operand" "r")
++                                (match_operand:QI 2 "arith_operand" "rI")) 0))]
++  "TARGET_64BIT && (TARGET_ZBB || TARGET_ZBKB)"
++  "ror%i2%~\t%0,%1,%2"
++  [(set_attr "type" "bitmanip")])
+ (define_insn "*rotlsi3"
+   [(set (match_operand:SI 0 "register_operand" "=r")
+ 	(rotate:SI (match_operand:SI 1 "register_operand" "r")
+@@ -427,6 +434,14 @@ (define_insn "rotlsi3_sext"
+   "rolw\t%0,%1,%2"
+   [(set_attr "type" "bitmanip")])
+ 
++(define_insn "rotlsi3_dontcare"
++  [(set (match_operand:DI 0 "register_operand" "=r")
++	(subreg:DI (rotate:SI (match_operand:SI 1 "register_operand" "r")
++			      (match_operand:QI 2 "register_operand" "r")) 0))]
++  "TARGET_64BIT && (TARGET_ZBB || TARGET_ZBKB)"
++  "rolw\t%0,%1,%2"
++  [(set_attr "type" "bitmanip")])
++
+ (define_insn "*<bitmanip_optab><mode>3_mask"
+   [(set (match_operand:X 0 "register_operand" "=r")
+ 	(bitmanip_rotate:X
+diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
+index 3fe0ad0ccdf4..8e448279eb52 100644
+--- a/gcc/config/riscv/riscv.md
++++ b/gcc/config/riscv/riscv.md
+@@ -870,6 +870,16 @@ (define_insn "*addsi3_extended2"
+   [(set_attr "type" "arith")
+    (set_attr "mode" "SI")])
+ 
++(define_insn "addsi3_dontcare"
++  [(set (match_operand:DI               0 "register_operand" "=r,r")
++	(subreg:DI
++	     (plus:SI (match_operand:SI 1 "register_operand" " r,r")
++		      (match_operand:SI 2 "arith_operand"    " r,I")) 0))]
++  "TARGET_64BIT"
++  "add%i2w\t%0,%1,%2"
++  [(set_attr "type" "arith")
++   (set_attr "mode" "SI")])
++
+ ;; Transform (X & C1) + C2 into (X | ~C1) - (-C2 | ~C1)
+ ;; Where C1 is not a LUI operand, but ~C1 is a LUI operand
+ 
+@@ -1056,6 +1066,16 @@ (define_insn "*subsi3_extended2"
+   [(set_attr "type" "arith")
+    (set_attr "mode" "SI")])
+ 
++(define_insn "subsi3_dontcare"
++  [(set (match_operand:DI               0 "register_operand" "= r")
++	(subreg:DI
++	    (minus:SI (match_operand:SI 1 "reg_or_0_operand" " rJ")
++		      (match_operand:SI 2 "register_operand" "  r")) 0))]
++  "TARGET_64BIT"
++  "subw\t%0,%z1,%2"
++  [(set_attr "type" "arith")
++   (set_attr "mode" "SI")])
++
+ (define_insn "negdi2"
+   [(set (match_operand:DI         0 "register_operand" "=r")
+ 	(neg:DI (match_operand:DI 1 "register_operand" " r")))]
+@@ -1108,6 +1128,15 @@ (define_insn "*negsi2_extended2"
+   [(set_attr "type" "arith")
+    (set_attr "mode" "SI")])
+ 
++(define_insn "negsi2_dontcare"
++  [(set (match_operand:DI          0 "register_operand" "=r")
++	(subreg:DI
++	 (neg:SI (match_operand:SI 1 "register_operand" " r")) 0))]
++  "TARGET_64BIT"
++  "negw\t%0,%1"
++  [(set_attr "type" "arith")
++   (set_attr "mode" "SI")])
++
+ ;;
+ ;;  ....................
+ ;;
+@@ -1261,6 +1290,16 @@ (define_insn "*mulsi3_extended2"
+   [(set_attr "type" "imul")
+    (set_attr "mode" "SI")])
+ 
++(define_insn "mulsi3_dontcare"
++  [(set (match_operand:DI              0 "register_operand" "=r")
++	(subreg:DI
++	    (mult:SI (match_operand:SI 1 "register_operand" " r")
++		     (match_operand:SI 2 "register_operand" " r")) 0))]
++  "(TARGET_ZMMUL || TARGET_MUL) && TARGET_64BIT"
++  "mulw\t%0,%1,%2"
++  [(set_attr "type" "imul")
++   (set_attr "mode" "SI")])
++
+ ;;
+ ;;  ........................
+ ;;
+@@ -1472,6 +1511,16 @@ (define_insn "div<mode>3"
+   [(set_attr "type" "fdiv")
+    (set_attr "mode" "<UNITMODE>")])
+ 
++(define_insn "<optab>si3_dontcare"
++  [(set (match_operand:DI                 0 "register_operand" "=r")
++	(subreg:DI
++	    (any_div:SI (match_operand:SI 1 "register_operand" " r")
++			(match_operand:SI 2 "register_operand" " r")) 0))]
++  "TARGET_DIV && TARGET_64BIT"
++  "<insn>%i2w\t%0,%1,%2"
++  [(set_attr "type" "idiv")
++   (set_attr "mode" "DI")])
++
+ ;;
+ ;;  ....................
+ ;;
+@@ -2993,6 +3042,21 @@ (define_insn "*<optab>si3_extend_mask"
+   [(set_attr "type" "shift")
+    (set_attr "mode" "SI")])
+ 
++(define_insn "<optab>si3_dontcare"
++  [(set (match_operand:DI                   0 "register_operand" "= r")
++	(subreg:DI
++	    (any_shift:SI (match_operand:SI 1 "register_operand" "  r")
++			  (match_operand:QI 2 "arith_operand"    " rI")) 0))]
++  "TARGET_64BIT"
++{
++  if (GET_CODE (operands[2]) == CONST_INT)
++    operands[2] = GEN_INT (INTVAL (operands[2]) & 0x1f);
++
++  return "<insn>%i2w\t%0,%1,%2";
++}
++  [(set_attr "type" "shift")
++   (set_attr "mode" "SI")])
++
+ ;; We can reassociate the shift and bitwise operator which may allow us to
+ ;; reduce the immediate operand of the bitwise operator into a range that
+ ;; fits in a simm12.
