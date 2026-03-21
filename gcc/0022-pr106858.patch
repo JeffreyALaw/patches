@@ -167,3 +167,85 @@ index 3fe0ad0ccdf4..8e448279eb52 100644
  ;; We can reassociate the shift and bitwise operator which may allow us to
  ;; reduce the immediate operand of the bitwise operator into a range that
  ;; fits in a simm12.
+diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
+index 5cc15dd9b44f..255157fb1fd9 100644
+--- a/gcc/ext-dce.cc
++++ b/gcc/ext-dce.cc
+@@ -387,7 +387,7 @@ ext_dce_process_sets (rtx_insn *insn, rtx obj, bitmap live_tmp)
+ }
+ 
+ /* INSN is a right shift and the second insn in a shift pair that is a
+-   sign or zero extension (SET is the single set associated with INSN).  
++   sign or zero extension (SET is the single set associated with INSN).
+ 
+    Replace the source of SET with NEW_SRC which is a source register
+    from NEW_SRC_INSN (the left shift in the pair).  This is effectively
+@@ -426,7 +426,7 @@ ext_dce_try_optimize_rshift (rtx_insn *insn, rtx set, rtx new_src, rtx_insn *new
+      into a sequence that we can emit after the current insn.   */
+   start_sequence ();
+   emit_move_insn (SET_DEST (set), new_src);
+-  rtx_insn *seq = end_sequence (); 
++  rtx_insn *seq = end_sequence ();
+   emit_insn_after (seq, insn);
+ 
+   /* Mark the destination as changed.  */
+@@ -455,6 +455,30 @@ ext_dce_try_optimize_rshift (rtx_insn *insn, rtx set, rtx new_src, rtx_insn *new
+     }
+ }
+ 
++/* Some targets have operations that sign extend their result to a
++   wider mode.  For example the "w" forms for RISC-V in 64 bit mode.
++
++   When the upper bits are not live, then we would like to replace
++   the extension with a widening SUBREG which carries that semantic
++   information.  That in turn can allow combine to do a better job
++   in certain cases.
++
++   The code here are meant to stay in sync with the set combine
++   uses for deciding to split at a sign extension rather than
++   the inner operation. 
++
++   Return true of CODE is one of those opcodes, false otherwise.  */
++static bool
++op_may_be_extended (rtx_code code)
++{
++  return (code == PLUS || code == MINUS
++	  || code == MULT || code == DIV
++	  || code == MOD || code == ASHIFT
++	  || code == LSHIFTRT || code == ASHIFTRT
++	  || code == ROTATE || code == ROTATERT
++	  || code == NEG);
++}
++
+ 
+ /* INSN has a sign/zero extended source inside SET that we will
+    try to turn into a SUBREG.  If NEW_SRC is non-null, use that
+@@ -468,7 +492,9 @@ ext_dce_try_optimize_extension (rtx_insn *insn, rtx set)
+ 
+   /* Avoid (subreg (mem)) and other constructs which may be valid RTL, but
+      not useful for this optimization.  */
+-  if (!(REG_P (inner) || (SUBREG_P (inner) && REG_P (SUBREG_REG (inner)))))
++  if (!(REG_P (inner)
++	|| (SUBREG_P (inner) && REG_P (SUBREG_REG (inner)))
++	|| op_may_be_extended (GET_CODE (inner))))
+     return;
+ 
+   rtx new_pattern;
+@@ -865,6 +891,8 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj,
+ 		 at the bottom of the loop by resetting Y.  */
+ 	      if (BINARY_P (src))
+ 		y = XEXP (src, 0);
++	      else if (GET_CODE (src) == NEG || GET_CODE (src) == NOT)
++		y = XEXP (src, 0);
+ 	      else
+ 		y = src;
+ 
+@@ -1204,7 +1232,7 @@ reset_subreg_promoted_p (void)
+      closure of the original CHANGED_PSEUDOS and registers they're
+      connected to via copies.  So expand the set.  */
+   expand_changed_pseudos ();
+-    
++
+   /* If we removed an extension, that changed the promoted state
+      of the destination of that extension.  Thus we need to go
+      find any SUBREGs that reference that pseudo and adjust their
