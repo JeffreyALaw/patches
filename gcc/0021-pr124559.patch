@@ -100,32 +100,3 @@ index 3fe0ad0ccdf4..7bb338eb6d35 100644
    DONE;
  }
  [(set_attr "type" "move")])
-@@ -2589,28 +2587,6 @@ (define_insn "*movhi_internal"
-    (set_attr "type" "move,move,load,store,mtc,mfc,move")
-    (set_attr "ext" "base,base,base,base,f,f,vector")])
- 
--;; HImode constant generation; see riscv_move_integer for details.
--;; si+si->hi without truncation is legal because of
--;; TARGET_TRULY_NOOP_TRUNCATION.
--
--(define_insn "*add<mode>hi3"
--  [(set (match_operand:HI            0 "register_operand" "=r,r")
--	(plus:HI (match_operand:HISI 1 "register_operand" " r,r")
--		 (match_operand:HISI 2 "arith_operand"    " r,I")))]
--  ""
--  "add%i2%~\t%0,%1,%2"
--  [(set_attr "type" "arith")
--   (set_attr "mode" "HI")])
--
--(define_insn "*xor<mode>hi3"
--  [(set (match_operand:HI 0 "register_operand"           "=r,r")
--	(xor:HI (match_operand:HISI 1 "register_operand" " r,r")
--		(match_operand:HISI 2 "arith_operand"    " r,I")))]
--  ""
--  "xor%i2\t%0,%1,%2"
--  [(set_attr "type" "logical")
--   (set_attr "mode" "HI")])
--
- ;; 8-bit Integer moves
- 
- (define_expand "movqi"
