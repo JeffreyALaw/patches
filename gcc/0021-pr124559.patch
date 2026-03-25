@@ -101,17 +101,20 @@ index 3fe0ad0ccdf4..7bb338eb6d35 100644
  }
  [(set_attr "type" "move")])
 diff --git a/gcc/cse.cc b/gcc/cse.cc
-index e5fa88f9de50..2b020d9afbab 100644
+index e5fa88f9de50..8ac45245b9d4 100644
 --- a/gcc/cse.cc
 +++ b/gcc/cse.cc
-@@ -4962,6 +4962,30 @@ cse_insn (rtx_insn *insn)
+@@ -4962,6 +4962,34 @@ cse_insn (rtx_insn *insn)
  	    }
  	}
  
 +      /* If SRC_EQV is a CONST_INT, try looking up some related
 +	 constants (logical and arithmetic negation).  Those may
 +	 ultimately be cheaper to re-use.  */
-+      if (src_const
++      if (GET_CODE (src) != CONST_INT
++	  && GET_CODE (src) != REG
++	  && GET_CODE (src) != SUBREG
++	  && src_const
 +	  && GET_CODE (src_const) == CONST_INT)
 +	{
 +	  rtx trial_rtx = GEN_INT (~UINTVAL (src_const));
@@ -127,6 +130,7 @@ index e5fa88f9de50..2b020d9afbab 100644
 +	  if (tmp)
 +	    {
 +	      src_related = gen_rtx_fmt_e (code, mode, tmp->first_same_value->exp);
++	      src_eqv_here = src_related;
 +	      src_related_is_const_anchor = true;
 +	    }
 +
