@@ -1,43 +1,140 @@
-commit d577f12c9f383acf1a66dbc36c04d251782956a4
-Author: Jeff Law <jeffrey.law@oss.qualcomm.com>
-Date:   Thu Mar 12 21:09:08 2026 -0600
 
-    Daniel's 119422 work + fixes for INTEGRAL_TYPE_P.
+
+From: Daniel Barboza <daniel.barboza@oss.qualcomm.com>
+
+Add the LT variant as well:
+
+(bool >= A) < A -> bool < A
+
+Bootstrapped on x86, aarch64 and rv64.
+Regression tested in x86 and aarch64.
+
+	PR tree-optimization/119422
+
+gcc/ChangeLog:
+
+	* match.pd(`(bool >= A) >= A -> bool >= A`): New pattern.
+	(`(bool >= A) < A -> bool < A`): New pattern.
+
+gcc/testsuite/ChangeLog:
+
+	* gcc.dg/tree-ssa/pr119422-2.c: New test.
+	* gcc.dg/tree-ssa/pr119422.c: New test.
+---
+
+Changes from v1:
+- add LE pattern
+- add INTEGRAL_TYPE_P check before TYPE_UNSIGNED
+- v1 link: https://gcc.gnu.org/pipermail/gcc-patches/2026-March/709756.html
+
+ gcc/match.pd                               | 10 ++++++
+ gcc/testsuite/gcc.dg/tree-ssa/pr119422-2.c | 42 ++++++++++++++++++++++
+ gcc/testsuite/gcc.dg/tree-ssa/pr119422.c   | 24 +++++++++++++
+ 3 files changed, 76 insertions(+)
+ create mode 100644 gcc/testsuite/gcc.dg/tree-ssa/pr119422-2.c
+ create mode 100644 gcc/testsuite/gcc.dg/tree-ssa/pr119422.c
 
 diff --git a/gcc/match.pd b/gcc/match.pd
-index 1d6428bf7e53..ae5bb701e92f 100644
+index 7f16fd4e081..1d18feffed5 100644
 --- a/gcc/match.pd
 +++ b/gcc/match.pd
-@@ -5367,6 +5367,13 @@ DEFINE_INT_AND_FLOAT_ROUND_FN (RINT)
+@@ -5367,6 +5367,16 @@ DEFINE_INT_AND_FLOAT_ROUND_FN (RINT)
        @0)))))
  #endif
  
-+/* PR119422: (bool >= A) >= A -> bool >= A;  */
-+(simplify
-+ (ge (convert? (ge zero_one_valued_p@0 @1)) @1)
++/* PR119422:
++  (bool >= A) >= A -> bool >= A
++  (bool >= A) <  A -> bool <  A.  */
++(for cmp (ge lt)
++ (simplify
++  (cmp (convert? (ge zero_one_valued_p@0 @1)) @1)
 +  (if (INTEGRAL_TYPE_P (TREE_TYPE (@1))
 +       && TYPE_UNSIGNED (TREE_TYPE (@1)))
-+   (ge @0 @1)))
++   (cmp @0 @1))))
 +
  /* Rewrite an LROTATE_EXPR by a constant into an
     RROTATE_EXPR by a new constant.  */
  (simplify
+diff --git a/gcc/testsuite/gcc.dg/tree-ssa/pr119422-2.c b/gcc/testsuite/gcc.dg/tree-ssa/pr119422-2.c
+new file mode 100644
+index 00000000000..85b8e20ba8b
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/tree-ssa/pr119422-2.c
+@@ -0,0 +1,42 @@
++/* { dg-do run } */
++/* { dg-options "-O1" } */
++
++/* Macro adapted from builtin-object-size-common.h  */
++#define FAIL() \
++  do { \
++    __builtin_printf ("Failure at line: %d\n", __LINE__);     \
++    abort();						      \
++  } while (0)
++
++void abort(void);
++
++int gg (_Bool b, unsigned a)
++{
++  return ((unsigned)b >= a) >= a;
++}
++int gg2 (_Bool b, unsigned a)
++{
++  return ((unsigned)b >= a) < a;
++}
++
++int main (void) {
++  if (gg (0, 0) != 1)
++    FAIL ();
++  if (gg (1, 0) != 1)
++    FAIL ();
++  if (gg (1, 1) != 1)
++    FAIL ();
++  if (gg (0, 1) != 0)
++    FAIL ();
++
++  if (gg2 (0, 0) != 0)
++    FAIL ();
++  if (gg2 (1, 0) != 0)
++    FAIL ();
++  if (gg2 (1, 1) != 0)
++    FAIL ();
++  if (gg2 (0, 1) != 1)
++    FAIL ();
++
++  return 0;
++}
 diff --git a/gcc/testsuite/gcc.dg/tree-ssa/pr119422.c b/gcc/testsuite/gcc.dg/tree-ssa/pr119422.c
 new file mode 100644
-index 000000000000..780558b24b9d
+index 00000000000..d64464062ff
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/tree-ssa/pr119422.c
-@@ -0,0 +1,13 @@
-+/* { dg-additional-options -O2 } */
-+/* { dg-additional-options -fdump-tree-optimized } */
+@@ -0,0 +1,24 @@
++/* { dg-options "-O1 -fdump-tree-original" } */
 +
-+typedef enum my_bool {
-+   val0 = 0,
-+   val1 = 1
-+} my_bool;
-+
-+int gg (unsigned u, my_bool b)
++int gg (unsigned u, _Bool b)
 +{
 +  return u <= (u <= (unsigned)b);
 +}
-+/* { dg-final { scan-tree-dump-times " >= " 1 "optimized" } } */
++
++int gg2 (unsigned u, _Bool b)
++{
++  return ((unsigned)b >= u) >= u;
++}
++
++int gg3 (unsigned u, _Bool b)
++{
++  return u > (u <= (unsigned)b);
++}
++
++int gg4 (unsigned u, _Bool b)
++{
++  return ((unsigned)b >= u) < u;
++}
++
++/* { dg-final { scan-tree-dump-times " >= " 2 "original" } } */
++/* { dg-final { scan-tree-dump-times " < " 2 "original" } } */
+-- 
+2.43.0
+
+
+
