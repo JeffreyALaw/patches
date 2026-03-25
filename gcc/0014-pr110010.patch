@@ -4,7 +4,8 @@ From: Daniel Barboza <daniel.barboza@oss.qualcomm.com>
 
 Also adding the variant "(A>>C) == (B>>C) -> (A^B) < (1<<C)"
 
-Bootstrapped and regression tested on x86.
+Bootstrapped on x86, aarch64 and rv64.
+Regression tested on x86 and aarch64.
 
 	PR tree-optimization/110010
 
@@ -17,16 +18,21 @@ gcc/testsuite/ChangeLog:
 
 	* gcc.dg/tree-ssa/pr110010.c: New test.
 ---
- gcc/match.pd                             | 15 +++++++++++++++
+
+Changes from v1:
+- add TYPE_UNSIGNED checks for @0 and @1
+- v1 link: https://gcc.gnu.org/pipermail/gcc-patches/2026-March/709680.html
+
+ gcc/match.pd                             | 17 +++++++++++++++++
  gcc/testsuite/gcc.dg/tree-ssa/pr110010.c | 14 ++++++++++++++
- 2 files changed, 29 insertions(+)
+ 2 files changed, 31 insertions(+)
  create mode 100644 gcc/testsuite/gcc.dg/tree-ssa/pr110010.c
 
 diff --git a/gcc/match.pd b/gcc/match.pd
-index 7f16fd4e081..d98971e7220 100644
+index 7f16fd4e081..55aea2e9c25 100644
 --- a/gcc/match.pd
 +++ b/gcc/match.pd
-@@ -2615,6 +2615,21 @@ DEFINE_INT_AND_FLOAT_ROUND_FN (RINT)
+@@ -2615,6 +2615,23 @@ DEFINE_INT_AND_FLOAT_ROUND_FN (RINT)
         && tree_to_shwi (@1) < TYPE_PRECISION (TREE_TYPE (@0)))
      (eq @0 @2)))
  
@@ -42,6 +48,8 @@ index 7f16fd4e081..d98971e7220 100644
 +  (cmp (rshift @0 INTEGER_CST@2) (rshift @1 INTEGER_CST@2))
 +   (if (INTEGRAL_TYPE_P (TREE_TYPE (@0))
 +	&& INTEGRAL_TYPE_P (TREE_TYPE (@1))
++	&& TYPE_UNSIGNED (TREE_TYPE (@0))
++	&& TYPE_UNSIGNED (TREE_TYPE (@1))
 +	&& TYPE_PRECISION (TREE_TYPE (@0)) == TYPE_PRECISION (TREE_TYPE (@1)))
 +  (icmp (bit_xor @0 @1) (lshift { build_one_cst (TREE_TYPE (@0)); } @2)))))
 +
@@ -70,5 +78,7 @@ index 00000000000..bda6f1191b1
 +/* { dg-final { scan-tree-dump-times " >> " 0 gimple } } */
 -- 
 2.43.0
+
+
 
 
