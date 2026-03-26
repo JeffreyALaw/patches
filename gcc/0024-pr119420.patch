@@ -1,0 +1,81 @@
+
+
+From: Daniel Barboza <daniel.barboza@oss.qualcomm.com>
+
+Note that we're not adding its counterpart:
+
+"(A>>bool) != 0 -> (unsigned)A) > bool"
+
+Because it will collide with patterns that handles builtin_clz (e.g.
+clz-complement-int.c tree-ssa test).
+
+Bootstrapped and regression tested in x86.
+
+        PR tree-optimization/119420
+
+gcc/ChangeLog:
+
+	* match.pd(`(A>>bool) EQ 0 -> (unsigned)A) LE bool`): New
+	pattern.
+
+gcc/testsuite/ChangeLog:
+
+        * gcc.dg/tree-ssa/pr119420.c: New test.
+---
+ gcc/match.pd                             |  8 ++++++++
+ gcc/testsuite/gcc.dg/tree-ssa/pr119420.c | 23 +++++++++++++++++++++++
+ 2 files changed, 31 insertions(+)
+ create mode 100644 gcc/testsuite/gcc.dg/tree-ssa/pr119420.c
+
+diff --git a/gcc/match.pd b/gcc/match.pd
+index 7f16fd4e081..348e9f45a28 100644
+--- a/gcc/match.pd
++++ b/gcc/match.pd
+@@ -5367,6 +5367,14 @@ DEFINE_INT_AND_FLOAT_ROUND_FN (RINT)
+       @0)))))
+ #endif
+ 
++/* PR119420: (A >> bool) == 0 -> (unsigned)a <= (unsigned)bool;  */
++(simplify
++ (eq (rshift @0 zero_one_valued_p@1) integer_zerop)
++ (with {
++     tree utype = unsigned_type_for (TREE_TYPE (@0));
++  }
++  (le (convert:utype @0) (convert:utype @1))))
++
+ /* Rewrite an LROTATE_EXPR by a constant into an
+    RROTATE_EXPR by a new constant.  */
+ (simplify
+diff --git a/gcc/testsuite/gcc.dg/tree-ssa/pr119420.c b/gcc/testsuite/gcc.dg/tree-ssa/pr119420.c
+new file mode 100644
+index 00000000000..3169650fe66
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/tree-ssa/pr119420.c
+@@ -0,0 +1,23 @@
++/* { dg-additional-options -O2 } */
++/* { dg-additional-options -fdump-tree-optimized } */
++
++int ll (signed a)
++{
++  int d = a >> 1;
++  return d == 0;
++}
++
++int ll1 (signed a)
++{
++  int d = a & ~1;
++  return d == 0;
++}
++
++int ll2 (signed a)
++{
++  unsigned aa = a;
++  return aa <= 1;
++}
++
++/* { dg-final { scan-tree-dump-times " >> " 0 optimized } } */
++/* { dg-final { scan-tree-dump-times " <= " 3 optimized } } */
+-- 
+2.43.0
+
+
