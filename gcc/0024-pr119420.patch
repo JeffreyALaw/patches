@@ -37,7 +37,7 @@ index 7f16fd4e081..348e9f45a28 100644
  
 +/* PR119420: (A >> bool) == 0 -> (unsigned)a <= (unsigned)bool;  */
 +(simplify
-+ (eq (rshift @0 zero_one_valued_p@1) integer_zerop)
++ (eq (rshift:s @0 zero_one_valued_p@1) integer_zerop)
 + (with {
 +     tree utype = unsigned_type_for (TREE_TYPE (@0));
 +  }
