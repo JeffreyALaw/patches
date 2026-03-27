@@ -1,0 +1,182 @@
+
+
+The <bitmanip_optab>si3 expansion for smin/smax/umin/umax sign-extends
+both inputs and then performs the DImode min/max, which returns one of
+its inputs unchanged.  The result is therefore always sign-extended,
+but the missing SUBREG_PROMOTED annotation on the lowpart caused GCC
+to emit a redundant sext.w.
+
+Add the SUBREG_PROMOTED_VAR_P / SUBREG_PROMOTED_SET(SRP_SIGNED)
+annotation, matching rotrsi3, rotlsi3, and other si3 expansions.
+
+gcc/ChangeLog:
+
+	* config/riscv/bitmanip.md (<bitmanip_optab>si3): Add
+	SUBREG_PROMOTED annotation to lowpart result.
+
+gcc/testsuite/ChangeLog:
+
+	* gcc.target/riscv/zbb-min-max-05.c: New test.
+	* gcc.target/riscv/zbb-min-max-06.c: New test.
+	* gcc.target/riscv/zbb-min-max-07-run.c: New test.
+
+diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
+index 0d16d79df3ae..45881994f3ad 100644
+--- a/gcc/config/riscv/bitmanip.md
++++ b/gcc/config/riscv/bitmanip.md
+@@ -541,7 +541,10 @@ (define_expand "<bitmanip_optab>si3"
+       operands[1] = force_reg (DImode, gen_rtx_SIGN_EXTEND (DImode, operands[1]));
+       operands[2] = force_reg (DImode, gen_rtx_SIGN_EXTEND (DImode, operands[2]));
+       emit_insn (gen_<bitmanip_optab>di3 (t, operands[1], operands[2]));
+-      emit_move_insn (operands[0], gen_lowpart (SImode, t));
++      t = gen_lowpart (SImode, t);
++      SUBREG_PROMOTED_VAR_P (t) = 1;
++      SUBREG_PROMOTED_SET (t, SRP_SIGNED);
++      emit_move_insn (operands[0], t);
+       DONE;
+     }
+ })
+diff --git a/gcc/testsuite/gcc.target/riscv/zbb-min-max-05.c b/gcc/testsuite/gcc.target/riscv/zbb-min-max-05.c
+new file mode 100644
+index 000000000000..f0b24ad44f1c
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/zbb-min-max-05.c
+@@ -0,0 +1,37 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc_zba_zbb -mabi=lp64d -O3" } */
++/* Verify that minu/maxu/min/max si3 expansions set SUBREG_PROMOTED,
++   so that no redundant sext.w is emitted after the min/max.  */
++
++unsigned int umin_loop(const unsigned char *cur, const unsigned char *buf,
++		       unsigned int *nodes, unsigned int cur_match,
++		       unsigned int len_limit, unsigned int depth)
++{
++    unsigned int len0 = 0, len1 = 0;
++    unsigned int len_best = 0;
++
++    while (depth--) {
++        const unsigned char *pb = buf + cur_match;
++        unsigned int len = (len0 < len1) ? len0 : len1;
++
++        if (pb[len] == cur[len]) {
++            while (++len != len_limit)
++                if (pb[len] != cur[len])
++                    break;
++            if (len > len_best)
++                len_best = len;
++        }
++
++        if (pb[len] < cur[len]) {
++            cur_match = nodes[2 * cur_match + 1];
++            len1 = len;
++        } else {
++            cur_match = nodes[2 * cur_match];
++            len0 = len;
++        }
++    }
++    return len_best;
++}
++
++/* { dg-final { scan-assembler-times {\mminu} 1 } } */
++/* { dg-final { scan-assembler-not {\msext\.w\M} } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/zbb-min-max-06.c b/gcc/testsuite/gcc.target/riscv/zbb-min-max-06.c
+new file mode 100644
+index 000000000000..48c6fc5a300f
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/zbb-min-max-06.c
+@@ -0,0 +1,15 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc_zbb -mabi=lp64d -O2" } */
++/* Verify that all four si3 min/max expansions set SUBREG_PROMOTED,
++   so that no redundant sext.w is emitted after each operation.  */
++
++int smin_si3(int a, int b) { return a < b ? a : b; }
++int smax_si3(int a, int b) { return a > b ? a : b; }
++unsigned umin_si3(unsigned a, unsigned b) { return a < b ? a : b; }
++unsigned umax_si3(unsigned a, unsigned b) { return a > b ? a : b; }
++
++/* { dg-final { scan-assembler-times {\mmin\t} 1 } } */
++/* { dg-final { scan-assembler-times {\mmax\t} 1 } } */
++/* { dg-final { scan-assembler-times {\mminu} 1 } } */
++/* { dg-final { scan-assembler-times {\mmaxu} 1 } } */
++/* { dg-final { scan-assembler-not {\msext\.w\M} } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/zbb-min-max-07-run.c b/gcc/testsuite/gcc.target/riscv/zbb-min-max-07-run.c
+new file mode 100644
+index 000000000000..feba3c5807d4
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/zbb-min-max-07-run.c
+@@ -0,0 +1,70 @@
++/* { dg-do run { target { rv64 && riscv_zbb } } } */
++/* { dg-options "-O2" } */
++
++/* Runtime correctness checks for si3 min/max with edge values,
++   verifying that the SUBREG_PROMOTED annotation does not break
++   the result for boundary cases.  */
++
++#define INT_MAX __INT_MAX__
++#define INT_MIN (-INT_MAX - 1)
++#define UINT_MAX (INT_MAX * 2U + 1U)
++
++int __attribute__((noinline)) smin_si3(int a, int b) { return a < b ? a : b; }
++int __attribute__((noinline)) smax_si3(int a, int b) { return a > b ? a : b; }
++unsigned __attribute__((noinline)) umin_si3(unsigned a, unsigned b) { return a < b ? a : b; }
++unsigned __attribute__((noinline)) umax_si3(unsigned a, unsigned b) { return a > b ? a : b; }
++
++#define CHECK(expr) do { if (!(expr)) __builtin_abort (); } while (0)
++
++int
++main (void)
++{
++  /* smin edge cases */
++  CHECK (smin_si3 (0, 0) == 0);
++  CHECK (smin_si3 (1, -1) == -1);
++  CHECK (smin_si3 (-1, 1) == -1);
++  CHECK (smin_si3 (INT_MIN, INT_MAX) == INT_MIN);
++  CHECK (smin_si3 (INT_MAX, INT_MIN) == INT_MIN);
++  CHECK (smin_si3 (INT_MIN, 0) == INT_MIN);
++  CHECK (smin_si3 (0, INT_MIN) == INT_MIN);
++  CHECK (smin_si3 (INT_MAX, 0) == 0);
++  CHECK (smin_si3 (INT_MIN, INT_MIN) == INT_MIN);
++  CHECK (smin_si3 (INT_MAX, INT_MAX) == INT_MAX);
++
++  /* smax edge cases */
++  CHECK (smax_si3 (0, 0) == 0);
++  CHECK (smax_si3 (1, -1) == 1);
++  CHECK (smax_si3 (-1, 1) == 1);
++  CHECK (smax_si3 (INT_MIN, INT_MAX) == INT_MAX);
++  CHECK (smax_si3 (INT_MAX, INT_MIN) == INT_MAX);
++  CHECK (smax_si3 (INT_MIN, 0) == 0);
++  CHECK (smax_si3 (0, INT_MAX) == INT_MAX);
++  CHECK (smax_si3 (INT_MIN, INT_MIN) == INT_MIN);
++  CHECK (smax_si3 (INT_MAX, INT_MAX) == INT_MAX);
++
++  /* umin edge cases -- bit-31 boundary is the key case */
++  CHECK (umin_si3 (0U, 0U) == 0U);
++  CHECK (umin_si3 (1U, 0U) == 0U);
++  CHECK (umin_si3 (0U, 1U) == 0U);
++  CHECK (umin_si3 (UINT_MAX, 0U) == 0U);
++  CHECK (umin_si3 (0U, UINT_MAX) == 0U);
++  CHECK (umin_si3 (UINT_MAX, UINT_MAX) == UINT_MAX);
++  CHECK (umin_si3 (0x7FFFFFFFU, 0x80000000U) == 0x7FFFFFFFU);
++  CHECK (umin_si3 (0x80000000U, 0x7FFFFFFFU) == 0x7FFFFFFFU);
++  CHECK (umin_si3 (0x80000000U, 0x80000001U) == 0x80000000U);
++  CHECK (umin_si3 (0xFFFFFFFEU, 0xFFFFFFFFU) == 0xFFFFFFFEU);
++
++  /* umax edge cases */
++  CHECK (umax_si3 (0U, 0U) == 0U);
++  CHECK (umax_si3 (1U, 0U) == 1U);
++  CHECK (umax_si3 (0U, 1U) == 1U);
++  CHECK (umax_si3 (UINT_MAX, 0U) == UINT_MAX);
++  CHECK (umax_si3 (0U, UINT_MAX) == UINT_MAX);
++  CHECK (umax_si3 (UINT_MAX, UINT_MAX) == UINT_MAX);
++  CHECK (umax_si3 (0x7FFFFFFFU, 0x80000000U) == 0x80000000U);
++  CHECK (umax_si3 (0x80000000U, 0x7FFFFFFFU) == 0x80000000U);
++  CHECK (umax_si3 (0x80000000U, 0x80000001U) == 0x80000001U);
++  CHECK (umax_si3 (0xFFFFFFFEU, 0xFFFFFFFFU) == 0xFFFFFFFFU);
++
++  return 0;
++}
+-- 
+2.34.1
+
+
