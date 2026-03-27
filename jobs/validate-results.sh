@@ -11,6 +11,7 @@ rm -rf testresults
 mkdir -p testresults
 if [ -f ${TARGET}-obj/gcc/gcc/testsuite/gcc/gcc.sum ]; then
   cp `find ${TARGET}-obj -name \*.sum -print` testresults
+  cp `find ${TARGET}-obj/gcc/gcc/testsuite -name \*.log -print` testresults
 fi
 if [ -f obj/gcc/gcc/testsuite/gcc/gcc.sum ]; then
   cp `find obj -name \*.sum -print` testresults
@@ -50,5 +51,5 @@ if [ -f old-testresults/gcc.sum.gz ]; then
 fi
 
 cd testresults
-gzip --best *.sum || true
+gzip --best *.sum *.log || true
 
