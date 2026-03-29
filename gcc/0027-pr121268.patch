@@ -1,12 +1,11 @@
 diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
-index 0d16d79df3ae..7ea9115896b2 100644
+index 5a12f1ea763a..0c85d448e065 100644
 --- a/gcc/config/riscv/bitmanip.md
 +++ b/gcc/config/riscv/bitmanip.md
-@@ -1365,3 +1365,49 @@ (define_split
-    (set (match_dup 0) (zero_extract:X (match_dup 3)
- 				      (const_int 1)
- 				      (zero_extend:X (match_dup 2))))])
-+
+@@ -1397,3 +1397,48 @@ (define_insn_and_split ""
+ }
+   [(set_attr "type" "arith")])
+ 
 +;; If we have (and (not X) (not Y)), and we can implement one of those NOT
 +;; expressions as a single insn, then do so as that will allow using andn.
 +;; In this case we exploit ~(-x) == x - 1.  Two versions as we can reverse
