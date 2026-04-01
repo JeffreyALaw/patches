@@ -5,6 +5,7 @@ gcc/testsuite/g++.target/loongarch/bstrins-run.C
 gcc/testsuite/gfortran.dg/bind-c-contiguous-3.f90
 gcc/testsuite/gfortran.dg/bind-c-contiguous-4.f90
 gcc/testsuite/gfortran.dg/bind-c-contiguous-5.f90
+gcc/testsuite/g++.dg/modules/compile-std-1.C
 
 
 # Seems to bounce a bit too
