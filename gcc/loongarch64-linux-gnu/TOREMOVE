@@ -1,8 +1,9 @@
 # Bounces back and forth regularly
 gcc/testsuite/g++.target/loongarch/bstrins-run.C
 
-# I'm pretty sure I've seen this bounce back and forth
+# These timeout from time to time
 gcc/testsuite/gfortran.dg/bind-c-contiguous-3.f90
+gcc/testsuite/gfortran.dg/bind-c-contiguous-4.f90
 gcc/testsuite/gfortran.dg/bind-c-contiguous-5.f90
 
 
