@@ -1,8 +1,62 @@
+
+diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
+index 3fe0ad0ccdf4..1cc0c6c72d47 100644
+--- a/gcc/config/riscv/riscv.md
++++ b/gcc/config/riscv/riscv.md
+@@ -4960,6 +4960,48 @@ (define_split
+   { operands[3] = GEN_INT (BITS_PER_WORD
+ 			   - exact_log2 (INTVAL (operands[3]) + 1)); })
+ 
++;; EQ/NE of a sign bit splat against zero is just GE/LT 0, so we can
++;; recognize it directly.  Note there may be a subreg expression buried
++;; in there
++(define_insn "*sign_bit_splat_equality_test"
++  [(set (pc)
++	(if_then_else
++	 (any_eq
++	  (subreg:SI (ashiftrt:DI (match_operand:DI 1 "register_operand" "r")
++				  (const_int 63)) 0)
++	  (const_int 0))
++	 (label_ref (match_operand 0 "" ""))
++	 (pc)))]
++  "TARGET_64BIT"
++{
++  rtx x = PATTERN (insn);
++
++  /* We'll always have a SET, so it's safe to extract the source.  */
++  x = SET_SRC (x);
++
++  /* Get the condition of the IF_THEN_ELSE.  */
++  x = XEXP (x, 0);
++
++  if (GET_CODE (x) == EQ)
++    {
++      if (get_attr_length (insn) == 12)
++	return "blt\t%1,zero,1f; jump\t%l0,ra; 1:";
++      return "bge\t%1,zero,%l0";
++    }
++  else if (GET_CODE (x) == NE)
++    {
++      if (get_attr_length (insn) == 12)
++	return "bge\t%1,zero,1f; jump\t%l0,ra; 1:";
++      return "blt\t%1,zero,%l0";
++    }
++  else
++    gcc_unreachable ();
++}
++  [(set_attr "type" "branch")
++   (set_attr "mode" "none")])
++					
++	
++
+ ;; Standard extensions and pattern for optimization
+ (include "bitmanip.md")
+ (include "crypto.md")
 diff --git a/gcc/simplify-rtx.cc b/gcc/simplify-rtx.cc
-index 50fc51152cab..0b59029fd368 100644
+index 50fc51152cab..23de16800065 100644
 --- a/gcc/simplify-rtx.cc
 +++ b/gcc/simplify-rtx.cc
-@@ -6649,6 +6739,35 @@ simplify_context::simplify_relational_operation_1 (rtx_code code,
+@@ -6649,6 +6649,14 @@ simplify_context::simplify_relational_operation_1 (rtx_code code,
        return simplify_gen_relational (code, mode, cmp_mode, x, tem);
      }
  
@@ -13,27 +67,6 @@ index 50fc51152cab..0b59029fd368 100644
 +      && (INTEGRAL_MODE_P (cmp_mode) || flag_unsafe_math_optimizations))
 +    return simplify_gen_relational (code, mode, cmp_mode,
 +				    XEXP (op0, 0), const0_rtx);
-+
-+  /* (eq/ne (sign-bit-splat) (const_int 0)) is just (ge 0) and (lt 0) respectively.
-+     We may have a SUBREG wrapping the sign-bit splat.  */
-+  if ((code == EQ || code == NE)
-+      && op1 == const0_rtx)
-+    {
-+      rtx new_op0 = op0;
-+
-+      if (GET_CODE (op0) == SUBREG && subreg_lowpart_p (op0))
-+	new_op0 = SUBREG_REG (op0);
-+
-+      if (GET_CODE (new_op0) == ASHIFTRT
-+	  && CONST_INT_P (XEXP (new_op0, 1))
-+	  && known_eq (GET_MODE_BITSIZE (GET_MODE (new_op0)),
-+					 INTVAL (XEXP (new_op0, 1)) + 1))
-+	return simplify_gen_relational (code == EQ ? GE : LT,
-+					mode,
-+					GET_MODE (new_op0),
-+					XEXP (new_op0, 0),
-+					const0_rtx);
-+    }
 +
    /* (ne:SI (zero_extract:SI FOO (const_int 1) BAR) (const_int 0))) is
       the same as (zero_extract:SI FOO (const_int 1) BAR).  */
