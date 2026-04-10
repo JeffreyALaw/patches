@@ -1,0 +1,830 @@
+
+
+This is the current state of the patch.  Bootstrapped and regtested it on x86, 
+power10, and aarch64.
+
+Thanks.
+
+-
+
+
+This patch adds backpropagation of demand-bit information to the
+backprop pass.  It is intended to catch cases like this
+
+  int
+  foo (int in)
+    {
+      int a = in & 0xff;
+      int b = a << 1;
+      int c = b & 0xf;
+      return c;
+    }
+
+  int a = x & 0xFF;
+  int b = a << 1;
+  int c = b & 0xF;
+  int d = a + y;
+  return c + (d & 0x7);
+
+where we can propagate B's demand of 0xf back to IN and elide the
+& 0xff masking.
+
+The implementation is rather simple for now, handling
+BIT_AND_EXPR, MULT_EXPR, LSHIFT_EXPR, RSHIFT_EXPR, and
+PLUS_EXPR, MINUS_EXPR.
+
+Once the demand has reached a BIT_AND_EXPR and we see that it does not
+exceed what we mask off anyway, we elide the mask.
+
+	PR tree-optimization/113487
+	PR tree-optimization/122209
+
+gcc/ChangeLog:
+
+	* gimple-ssa-backprop.cc (usage_info::intersection_identity):
+	Add demand-bit handling.
+	(usage_info::is_useful): Ditto.
+	(dump_usage_info): Log demand bits.
+	(backprop::process_assign_use): Handle demand bits.
+	(backprop::process_phi_use): Ditto.
+	(backprop::intersect_uses): Ditto.
+	(backprop::process_var): Ditto.
+	(backprop::optimize_assign): Elide mask if possible.
+
+gcc/testsuite/ChangeLog:
+
+	* gcc.dg/tree-ssa/backprop-bits-1.c: New test.
+	* gcc.dg/tree-ssa/backprop-bits-2.c: New test.
+	* gcc.dg/tree-ssa/backprop-bits-3.c: New test.
+	* gcc.dg/tree-ssa/backprop-bits-4.c: New test.
+	* gcc.dg/tree-ssa/backprop-bits-5.c: New test.
+	* gcc.dg/tree-ssa/backprop-bits-6.c: New test.
+	* gcc.dg/tree-ssa/backprop-bits-7.c: New test.
+---
+ gcc/gimple-ssa-backprop.cc                    | 363 ++++++++++++++++--
+ .../gcc.dg/tree-ssa/backprop-bits-1.c         |  16 +
+ .../gcc.dg/tree-ssa/backprop-bits-2.c         |  29 ++
+ .../gcc.dg/tree-ssa/backprop-bits-3.c         |  29 ++
+ .../gcc.dg/tree-ssa/backprop-bits-4.c         |  34 ++
+ .../gcc.dg/tree-ssa/backprop-bits-5.c         |  39 ++
+ .../gcc.dg/tree-ssa/backprop-bits-6.c         |  18 +
+ .../gcc.dg/tree-ssa/backprop-bits-7.c         |  41 ++
+ 8 files changed, 539 insertions(+), 30 deletions(-)
+ create mode 100644 gcc/testsuite/gcc.dg/tree-ssa/backprop-bits-1.c
+ create mode 100644 gcc/testsuite/gcc.dg/tree-ssa/backprop-bits-2.c
+ create mode 100644 gcc/testsuite/gcc.dg/tree-ssa/backprop-bits-3.c
+ create mode 100644 gcc/testsuite/gcc.dg/tree-ssa/backprop-bits-4.c
+ create mode 100644 gcc/testsuite/gcc.dg/tree-ssa/backprop-bits-5.c
+ create mode 100644 gcc/testsuite/gcc.dg/tree-ssa/backprop-bits-6.c
+ create mode 100644 gcc/testsuite/gcc.dg/tree-ssa/backprop-bits-7.c
+
+diff --git a/gcc/gimple-ssa-backprop.cc b/gcc/gimple-ssa-backprop.cc
+index 3ac44116d27..87cd50ac3b6 100644
+--- a/gcc/gimple-ssa-backprop.cc
++++ b/gcc/gimple-ssa-backprop.cc
+@@ -23,12 +23,13 @@ along with GCC; see the file COPYING3.  If not see
+    fully or partially dead code, but the main focus is simplifying
+    computations.
+ 
+-   At the moment the pass only handles one piece of information: whether the
+-   sign of a value matters, and therefore whether sign-changing operations
+-   can be skipped.  The pass could be extended to more interesting
+-   information in future, such as which bits of an integer are significant.
++   The pass only handles two distinct properties:
++      (a) Whether the sign of a value matters, and therefore whether
++	  sign-changing operations can be skipped.
++      (b) The bits a variable demands.  This opens up possibilities to
++	  elide redundant bit masking.
+ 
+-   For example, take the function:
++   For an example of (a), take the function:
+ 
+      double
+      f (double *a, int n, double start)
+@@ -48,6 +49,20 @@ along with GCC; see the file COPYING3.  If not see
+    with start.  Since there are no other uses of the fabs result,
+    the call would get deleted as dead.
+ 
++   A typical case for (b) is:
++
++     void use (unsigned);
++
++     void
++     foo (unsigned x)
++     {
++       unsigned a = x & 0xff;
++       unsigned b = a * 4;
++       use (b & 0x10);
++       use (b & 0xe0);
++     }
++
++
+    The algorithm is:
+ 
+    (1) Do a post-order traversal of the blocks in the function, walking
+@@ -110,9 +125,9 @@ namespace {
+ class usage_info
+ {
+ public:
+-  usage_info () : flag_word (0) {}
++  usage_info () : flag_word (0), needed_bits (-1) {}
++
+   usage_info &operator &= (const usage_info &);
+-  usage_info operator & (const usage_info &) const;
+   bool operator == (const usage_info &) const;
+   bool operator != (const usage_info &) const;
+   bool is_useful () const;
+@@ -129,6 +144,9 @@ public:
+     /* All the flag bits as a single int.  */
+     unsigned int flag_word;
+   };
++
++  /* The live bits.  */
++  widest_int needed_bits;
+ };
+ 
+ /* Return an X such that X & Y == Y for all Y.  This is the most
+@@ -139,6 +157,7 @@ usage_info::intersection_identity ()
+ {
+   usage_info ret;
+   ret.flag_word = -1;
++  ret.needed_bits = 0;
+   return ret;
+ }
+ 
+@@ -149,24 +168,15 @@ usage_info &
+ usage_info::operator &= (const usage_info &other)
+ {
+   flag_word &= other.flag_word;
++  needed_bits = needed_bits | other.needed_bits;
+   return *this;
+ }
+ 
+-/* Return the intersection of *THIS and OTHER, i.e. a structure that
+-   describes all uses covered by *THIS and OTHER.  */
+-
+-usage_info
+-usage_info::operator & (const usage_info &other) const
+-{
+-  usage_info info (*this);
+-  info &= other;
+-  return info;
+-}
+-
+ bool
+ usage_info::operator == (const usage_info &other) const
+ {
+-  return flag_word == other.flag_word;
++  return flag_word == other.flag_word
++    && needed_bits == other.needed_bits;
+ }
+ 
+ bool
+@@ -180,7 +190,7 @@ usage_info::operator != (const usage_info &other) const
+ bool
+ usage_info::is_useful () const
+ {
+-  return flag_word != 0;
++  return flag_word != 0 || needed_bits != -1;
+ }
+ 
+ /* Start a dump line about SSA name VAR.  */
+@@ -203,6 +213,18 @@ dump_usage_info (FILE *file, tree var, usage_info *info)
+       dump_usage_prefix (file, var);
+       fprintf (file, "sign bit not important\n");
+     }
++  if (info->needed_bits != -1)
++    {
++      tree type = TREE_TYPE (var);
++      if (VECTOR_TYPE_P (type))
++	type = TREE_TYPE (type);
++      unsigned prec = TYPE_PRECISION (type);
++      wide_int mask = wide_int::from (info->needed_bits, prec, UNSIGNED);
++      dump_usage_prefix (file, var);
++      fprintf (file, "demand bit mask: ");
++      print_hex (mask, file);
++      fprintf (file, "\n");
++    }
+ }
+ 
+ /* Represents one execution of the pass.  */
+@@ -417,7 +439,12 @@ void
+ backprop::process_assign_use (gassign *assign, tree rhs, usage_info *info)
+ {
+   tree lhs = gimple_assign_lhs (assign);
+-  switch (gimple_assign_rhs_code (assign))
++  const usage_info *lhs_info = lookup_operand (lhs);
++  info->needed_bits = -1;
++
++  tree_code code = gimple_assign_rhs_code (assign);
++
++  switch (code)
+     {
+     case ABS_EXPR:
+     case ABSU_EXPR:
+@@ -430,17 +457,56 @@ backprop::process_assign_use (gassign *assign, tree rhs, usage_info *info)
+ 	 to C and D.  */
+       if (rhs != gimple_assign_rhs1 (assign))
+ 	{
+-	  const usage_info *lhs_info = lookup_operand (lhs);
+ 	  if (lhs_info)
+ 	    *info = *lhs_info;
+ 	}
+       break;
+ 
+     case MULT_EXPR:
+-      /* In X * X, the sign of X doesn't matter.  */
+-      if (gimple_assign_rhs1 (assign) == rhs
+-	  && gimple_assign_rhs2 (assign) == rhs)
+-	info->flags.ignore_sign = true;
++	{
++	  /* In X * X, the sign of X doesn't matter.  */
++	  if (gimple_assign_rhs1 (assign) == rhs
++	      && gimple_assign_rhs2 (assign) == rhs)
++	    info->flags.ignore_sign = true;
++
++	  tree type = TREE_TYPE (lhs);
++	  if (VECTOR_TYPE_P (type))
++	    type = TREE_TYPE (type);
++
++	  tree other = (rhs == gimple_assign_rhs1 (assign))
++		       ? gimple_assign_rhs2 (assign)
++		       : gimple_assign_rhs1 (assign);
++	  wide_int nz;
++
++	  /* Given the LHS/output demand, we assume that all RHS bits not
++	     higher than LHS's highest set bit can contribute to the output.
++	     If we know that a number of low bits are zero, this gives a lower
++	     bound on the bits.
++	     Multiplication by a power of two is different.  Here we know that
++	     no carries happen and the output bits carry over to the input.
++	     */
++	  if (INTEGRAL_TYPE_P (type) && lhs_info
++	      && lhs_info->needed_bits != -1
++	      && (nz = get_nonzero_bits (other)).get_precision () != 0)
++	    {
++	      widest_int wnz = widest_int::from (nz, UNSIGNED);
++	      HOST_WIDE_INT lo = wi::ctz (wnz);
++	      HOST_WIDE_INT hi = wi::floor_log2 (lhs_info->needed_bits);
++
++	      if (wnz == 0)
++		info->needed_bits = 0;
++	      else if (wi::popcount (wnz) == 1)
++		info->needed_bits = lo > 0
++		  ? wi::lrshift (lhs_info->needed_bits, lo)
++		  : lhs_info->needed_bits;
++	      else if (hi < lo)
++		info->needed_bits = 0;
++	      else
++		info->needed_bits
++		  = wi::mask<widest_int> (hi - lo + 1, false);
++	    }
++	}
++
+       /* Fall through.  */
+ 
+     case NEGATE_EXPR:
+@@ -449,12 +515,203 @@ backprop::process_assign_use (gassign *assign, tree rhs, usage_info *info)
+ 	 doesn't matter either.  */
+       if (FLOAT_TYPE_P (TREE_TYPE (rhs)))
+ 	{
+-	  const usage_info *lhs_info = lookup_operand (lhs);
+ 	  if (lhs_info)
+ 	    info->flags.ignore_sign = lhs_info->flags.ignore_sign;
+ 	}
+       break;
+ 
++    case TRUNC_DIV_EXPR:
++	{
++	  tree type = TREE_TYPE (rhs);
++	  if (VECTOR_TYPE_P (type))
++	    type = TREE_TYPE (type);
++	  if (!INTEGRAL_TYPE_P (type) || !TYPE_UNSIGNED (type))
++	    break;
++
++	  tree rhs1 = gimple_assign_rhs1 (assign);
++	  tree rhs2 = gimple_assign_rhs2 (assign);
++	  if (rhs != rhs1 || TREE_CODE (rhs2) != INTEGER_CST)
++	    break;
++
++	  if (!lhs_info || lhs_info->needed_bits == -1)
++	    break;
++
++	  widest_int div = widest_int::from (wi::to_wide (rhs2), UNSIGNED);
++	  if (div == 0)
++	    break;
++
++	  /* Opposite to multiplication, with division at least all LHS bits
++	     contribute.  As the input is not smaller than the output, the
++	     RHS/divisor's determines the number of bits that contribute on
++	     top, with the highest bit marking the upper bound.
++
++	     An example is that we're looking for IN's bits that could
++	     contribute to the known bits of A:
++
++	       char a    =  in / 3;
++		    |
++	       0b00001101 = ? /  3
++
++	       =>
++
++	       0b00001101 = 0b00??1101 / 3
++
++	     So the lower bits come from the output (A), while the next higher
++	     ones come from the divisor 3.  */
++
++	  HOST_WIDE_INT log_k = wi::exact_log2 (div);
++	  if (log_k >= 0)
++	    info->needed_bits = wi::lshift (lhs_info->needed_bits, log_k);
++	  else
++	    {
++	      HOST_WIDE_INT needed_out
++		= wi::floor_log2 (lhs_info->needed_bits);
++	      HOST_WIDE_INT needed_cst = wi::floor_log2 (div - 1) + 1;
++	      HOST_WIDE_INT width = needed_out + needed_cst + 1;
++	      unsigned prec = TYPE_PRECISION (type);
++	      if (width >= (HOST_WIDE_INT) prec)
++		info->needed_bits = -1;
++	      else
++		info->needed_bits = wi::mask<widest_int> (width, false);
++	    }
++	}
++      break;
++
++    case BIT_AND_EXPR:
++	{
++	  if (lhs_info)
++	    info->needed_bits = lhs_info->needed_bits;
++
++	  tree other;
++	  if (rhs == gimple_assign_rhs1 (assign))
++	    other = gimple_assign_rhs2 (assign);
++	  else
++	    other = gimple_assign_rhs1 (assign);
++
++	  wide_int nz = get_nonzero_bits (other);
++	  widest_int wnz (-1);
++	  if (nz.get_precision () != 0)
++	    wnz = widest_int::from (nz, UNSIGNED);
++	  info->needed_bits &= wnz;
++	}
++      break;
++
++    case LSHIFT_EXPR:
++    case RSHIFT_EXPR:
++      if (rhs == gimple_assign_rhs1 (assign))
++	{
++	  tree rhs2 = gimple_assign_rhs2 (assign);
++	  if (TREE_CODE (rhs2) == INTEGER_CST
++	      && lhs_info)
++	    {
++	      info->needed_bits = lhs_info->needed_bits;
++	      widest_int shift_count
++		= widest_int::from (wi::to_wide (rhs2), UNSIGNED);
++
++	      if (code == LSHIFT_EXPR)
++		info->needed_bits = wi::lrshift (info->needed_bits,
++						 shift_count);
++	      else
++		{
++		  if (TYPE_UNSIGNED (TREE_TYPE (rhs)))
++		    info->needed_bits = wi::lshift (info->needed_bits,
++						    shift_count);
++		  /* ??? Treat sign extension conservatively for now.  */
++		  else
++		    info->needed_bits = -1;
++		}
++	    }
++	}
++      break;
++
++    case PLUS_EXPR:
++    case MINUS_EXPR:
++      if (rhs == gimple_assign_rhs1 (assign)
++	  || rhs == gimple_assign_rhs2 (assign))
++	{
++	  if (lhs_info)
++	    info->needed_bits = lhs_info->needed_bits;
++
++	  tree type = TREE_TYPE (rhs);
++	  if (VECTOR_TYPE_P (type))
++	    type = TREE_TYPE (type);
++
++	  if (info->needed_bits != -1)
++	    {
++	      int hi = wi::floor_log2 (info->needed_bits);
++	      info->needed_bits = wi::mask<widest_int> (hi + 1, false);
++	    }
++	}
++      break;
++
++    case LROTATE_EXPR:
++    case RROTATE_EXPR:
++      if (rhs == gimple_assign_rhs1 (assign))
++	{
++	  tree rhs2 = gimple_assign_rhs2 (assign);
++	  tree type = TREE_TYPE (rhs);
++	  if (VECTOR_TYPE_P (type))
++	    type = TREE_TYPE (type);
++	  HOST_WIDE_INT prec = TYPE_PRECISION (type);
++
++	  if (TREE_CODE (rhs2) == INTEGER_CST)
++	    {
++	      widest_int count
++		= widest_int::from (wi::to_wide (rhs2), UNSIGNED);
++
++	      if (lhs_info)
++		info->needed_bits = lhs_info->needed_bits;
++
++	      if (code == LROTATE_EXPR)
++		info->needed_bits = wi::rrotate (info->needed_bits, count,
++						 prec);
++	      else
++		info->needed_bits = wi::lrotate (info->needed_bits, count,
++						 prec);
++	    }
++	}
++      break;
++
++    case NOP_EXPR:
++    case CONVERT_EXPR:
++	{
++	  tree rhs1 = gimple_assign_rhs1 (assign);
++	  tree rhs_type = TREE_TYPE (rhs1);
++	  tree lhs_type = TREE_TYPE (lhs);
++	  if (VECTOR_TYPE_P (lhs_type))
++	    {
++	      lhs_type = TREE_TYPE (lhs_type);
++	      rhs_type = TREE_TYPE (rhs_type);
++	    }
++
++	  if (!INTEGRAL_TYPE_P (lhs_type) || !INTEGRAL_TYPE_P (rhs_type)
++	      || !lhs_info)
++	    break;
++
++	  HOST_WIDE_INT rhs_prec = TYPE_PRECISION (rhs_type);
++	  HOST_WIDE_INT lhs_prec = TYPE_PRECISION (lhs_type);
++
++	  if (lhs_prec <= rhs_prec)
++	    info->needed_bits = lhs_info->needed_bits;
++	  else if (TYPE_UNSIGNED (rhs_type))
++	    info->needed_bits
++	      = lhs_info->needed_bits & wi::mask<widest_int> (rhs_prec, false);
++	  else
++	    /* As in the RSHIFT case above, treat sign extension
++	       conservatively for now.  */
++	    info->needed_bits = -1;
++	}
++      break;
++
++      /* The following expressions don't affect the needed bits so we can just
++	 pass through the output.  */
++    case BIT_IOR_EXPR:
++    case BIT_XOR_EXPR:
++    case BIT_NOT_EXPR:
++      if (lhs_info)
++	info->needed_bits = lhs_info->needed_bits;
++      break;
++
+     default:
+       break;
+     }
+@@ -468,6 +725,8 @@ backprop::process_phi_use (gphi *phi, usage_info *info)
+   tree result = gimple_phi_result (phi);
+   if (const usage_info *result_info = lookup_operand (result))
+     *info = *result_info;
++  else
++    info->needed_bits = -1;
+ }
+ 
+ /* Make INFO describe all uses of RHS in STMT.  */
+@@ -516,7 +775,7 @@ backprop::intersect_uses (tree var, usage_info *info)
+ 	  && !bitmap_bit_p (m_visited_phis,
+ 			    SSA_NAME_VERSION (gimple_phi_result (phi))))
+ 	{
+-	  /* Skip unprocessed phis.  */
++	  info->needed_bits = -1;
+ 	  if (dump_file && (dump_flags & TDF_DETAILS))
+ 	    {
+ 	      fprintf (dump_file, "[BACKEDGE] ");
+@@ -601,7 +860,8 @@ backprop::process_var (tree var)
+       else if (info != *map_info)
+ 	{
+ 	  /* Recording information that is less optimistic than before.  */
+-	  gcc_checking_assert ((info & *map_info) == info);
++	  gcc_checking_assert ((info.flag_word & map_info->flag_word)
++			       == info.flag_word);
+ 	  *map_info = info;
+ 	  if (dump_file && (dump_flags & TDF_DETAILS))
+ 	    dump_var_info (var, map_info, "Updating information");
+@@ -819,7 +1079,8 @@ backprop::replace_assign_rhs (gassign *assign, tree lhs, tree rhs1,
+ void
+ backprop::optimize_assign (gassign *assign, tree lhs, const usage_info *info)
+ {
+-  switch (gimple_assign_rhs_code (assign))
++  tree_code code = gimple_assign_rhs_code (assign);
++  switch (code)
+     {
+     case MULT_EXPR:
+     case RDIV_EXPR:
+@@ -842,6 +1103,48 @@ backprop::optimize_assign (gassign *assign, tree lhs, const usage_info *info)
+ 			    strip_sign_op (gimple_assign_rhs3 (assign)));
+       break;
+ 
++    case BIT_AND_EXPR:
++    case BIT_IOR_EXPR:
++    case BIT_XOR_EXPR:
++      /* If we mask off some bits and they're being discarded later on anyway,
++	 we can elide the mask.  */
++      if (info->needed_bits != -1)
++	{
++	  tree rhs2 = gimple_assign_rhs2 (assign);
++	  if (TREE_CODE (rhs2) == INTEGER_CST)
++	    {
++	      bool elide_p = false;
++	      widest_int mask
++		= widest_int::from (wi::to_wide (rhs2), UNSIGNED);
++
++	      if (code == BIT_AND_EXPR
++		  && (info->needed_bits & ~mask) == 0)
++		elide_p = true;
++
++	      if ((code == BIT_IOR_EXPR
++		   || code == BIT_XOR_EXPR)
++		  && (info->needed_bits & mask) == 0)
++		elide_p = true;
++
++	      if (elide_p)
++		{
++		  /* Just make the assignment a nop here.  */
++		  if (dump_file && (dump_flags & TDF_DETAILS))
++		    {
++		      fprintf (dump_file, "Eliding redundant mask");
++		      fprintf (dump_file, " in ");
++		      print_gimple_stmt (dump_file, assign, 0, TDF_SLIM);
++		    }
++		  prepare_change (lhs);
++		  gimple_stmt_iterator gsi = gsi_for_stmt (assign);
++		  gimple_assign_set_rhs_from_tree (&gsi, gimple_assign_rhs1
++						   (assign));
++		  complete_change (assign);
++		}
++	    }
++	}
++      break;
++
+     default:
+       break;
+     }
+diff --git a/gcc/testsuite/gcc.dg/tree-ssa/backprop-bits-1.c b/gcc/testsuite/gcc.dg/tree-ssa/backprop-bits-1.c
+new file mode 100644
+index 00000000000..e46adce4bdb
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/tree-ssa/backprop-bits-1.c
+@@ -0,0 +1,16 @@
++/* { dg-do compile } */
++/* { dg-additional-options "-O -fdump-tree-backprop-details" } */
++
++#include <stdbool.h>
++
++void use (unsigned);
++
++void
++src (bool c, unsigned a, unsigned b) {
++    unsigned s = c ? a & 24 : b & 25;
++    use(s & 8);
++    use(s & 16);
++}
++
++/* { dg-final { scan-tree-dump-not "  s_8 = a_7(D) & 24;" "backprop" } } */
++/* { dg-final { scan-tree-dump-not "  s_6 = b_5(D) & 25;" "backprop" } } */
+diff --git a/gcc/testsuite/gcc.dg/tree-ssa/backprop-bits-2.c b/gcc/testsuite/gcc.dg/tree-ssa/backprop-bits-2.c
+new file mode 100644
+index 00000000000..3a4af6b8a10
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/tree-ssa/backprop-bits-2.c
+@@ -0,0 +1,29 @@
++/* { dg-do compile } */
++/* { dg-additional-options "-O -fdump-tree-optimized" } */
++
++int
++foo (int t)
++{
++  t += 3 + 3 * t;
++  t &= 0xFFF;
++  t += 3 + 3 * t;
++  t &= 0xFFF;
++  t += 3 + 3 * t;
++  t &= 0xFFF;
++  t += 3 + 3 * t;
++  t &= 0xFFF;
++  t += 3 + 3 * t;
++  t &= 0xFFF;
++  t += 3 + 3 * t;
++  t &= 0xFFF;
++  t += 3 + 3 * t;
++  t &= 0xFFF;
++  t += 3 + 3 * t;
++  t &= 0xFFF;
++  t += 3 + 3 * t;
++  t &= 0xFFF;
++
++  return t;
++}
++
++/* { dg-final { scan-tree-dump "4095" "optimized" } } */
+diff --git a/gcc/testsuite/gcc.dg/tree-ssa/backprop-bits-3.c b/gcc/testsuite/gcc.dg/tree-ssa/backprop-bits-3.c
+new file mode 100644
+index 00000000000..d7b573edf88
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/tree-ssa/backprop-bits-3.c
+@@ -0,0 +1,29 @@
++/* { dg-do compile { target bitint } } */
++/* { dg-additional-options "-O -fdump-tree-optimized" } */
++
++int
++foo (int t)
++{
++  t += 3 + 3 * t;
++  t &= 0xFFF;
++  t += 3 + 3 * t;
++  t &= 0xFFF;
++  t += 3 + 3 * t;
++  t &= 0xFFF;
++  t += 3 + 3 * t;
++  t &= 0xFFF;
++  t += 3 + 3 * t;
++  t &= 0xFFF;
++  t += 3 + 3 * t;
++  t &= 0xFFF;
++  t += 3 + 3 * t;
++  t &= 0xFFF;
++  t += 3 + 3 * t;
++  t &= 0xFFF;
++  t += 3 + 3 * t;
++  t &= 0xFFF;
++
++  return t;
++}
++
++/* { dg-final { scan-tree-dump "return" "optimized" } } */
+diff --git a/gcc/testsuite/gcc.dg/tree-ssa/backprop-bits-4.c b/gcc/testsuite/gcc.dg/tree-ssa/backprop-bits-4.c
+new file mode 100644
+index 00000000000..7fcc90c7adf
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/tree-ssa/backprop-bits-4.c
+@@ -0,0 +1,34 @@
++/* { dg-do compile } */
++/* { dg-additional-options "-O -fdump-tree-backprop-details -std=gnu99" } */
++
++void use (unsigned);
++
++void
++foo (unsigned x)
++{
++  unsigned a = x & 0xff;
++  unsigned b = a * 4;
++  use (b & 0x10);
++  use (b & 0xe0);
++}
++
++void
++bar (unsigned x)
++{
++  unsigned a = x & 0xff;
++  unsigned b = a / 3;
++  use (b & 0x3);
++  use (b & 0xc);
++}
++
++void
++baz (unsigned x)
++{
++  unsigned a = x & 0xffff;
++  unsigned a2 = a * 2;
++  unsigned b = a2 & 0xff;
++  use (b & 0x3);
++  use (b & 0xc);
++}
++
++/* { dg-final { scan-tree-dump-times "Eliding redundant mask" 3 "backprop" } } */
+diff --git a/gcc/testsuite/gcc.dg/tree-ssa/backprop-bits-5.c b/gcc/testsuite/gcc.dg/tree-ssa/backprop-bits-5.c
+new file mode 100644
+index 00000000000..7a0ab3ade7d
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/tree-ssa/backprop-bits-5.c
+@@ -0,0 +1,39 @@
++/* { dg-do compile } */
++/* { dg-additional-options "-O -fdump-tree-backprop-details -std=gnu99" } */
++
++void use (unsigned);
++
++void
++foo (unsigned x)
++{
++  unsigned a = x & 0xff;
++  use (a & 0xf);
++  use (a);
++}
++
++void
++bar (unsigned x, unsigned y)
++{
++  unsigned a = x & 0xff;
++  unsigned b = a + y;
++  use (b & 0xf);
++}
++
++void
++baz (unsigned x, unsigned s)
++{
++  unsigned a = x & 0xff;
++  unsigned b = a << s;
++  use (b & 0xf);
++}
++
++unsigned
++baf (unsigned x, int n)
++{
++  unsigned a = x & 0xff;
++  for (int i = 0; i < n; i++)
++    a = (a + 1) & 0xff;
++  return a;
++}
++
++/* { dg-final { scan-tree-dump-not "Eliding redundant mask" "backprop" } } */
+diff --git a/gcc/testsuite/gcc.dg/tree-ssa/backprop-bits-6.c b/gcc/testsuite/gcc.dg/tree-ssa/backprop-bits-6.c
+new file mode 100644
+index 00000000000..6cedb819c81
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/tree-ssa/backprop-bits-6.c
+@@ -0,0 +1,18 @@
++/* { dg-do compile } */
++/* { dg-additional-options "-O -fdump-tree-backprop-details -std=gnu99" } */
++
++void use (unsigned);
++
++void
++f_phi (int c, unsigned x, unsigned y)
++{
++  unsigned t;
++  if (c)
++    t = x & 0xff;
++  else
++    t = y & 0xff;
++  use (t & 0x3);
++  use (t & 0xc);
++}
++
++/* { dg-final { scan-tree-dump-times "Eliding redundant mask" 2 "backprop" } } */
+diff --git a/gcc/testsuite/gcc.dg/tree-ssa/backprop-bits-7.c b/gcc/testsuite/gcc.dg/tree-ssa/backprop-bits-7.c
+new file mode 100644
+index 00000000000..795e461160f
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/tree-ssa/backprop-bits-7.c
+@@ -0,0 +1,41 @@
++/* { dg-do compile } */
++/* { dg-additional-options "-O -fdump-tree-backprop-details -std=gnu99" } */
++
++void use (unsigned);
++
++void
++foo (unsigned x)
++{
++  unsigned a = x | 0xff00;
++  unsigned b = a * 2;
++  use (b & 0x3);
++  use (b & 0xc);
++}
++
++void
++bar (unsigned x)
++{
++  unsigned a = x ^ 0xff00;
++  unsigned b = a * 2;
++  use (b & 0x3);
++  use (b & 0xc);
++}
++
++void
++baz (unsigned x)
++{
++  unsigned a = x | 0x18;
++  use (a & 0x3);
++  use (a & 0xc);
++}
++
++void
++baf (unsigned x)
++{
++  unsigned a = x ^ 0x18;
++  use (a & 0x3);
++  use (a & 0xc);
++}
++
++/* foo and bar can be simplified by eliding the IOR.  baz and baf can't.  */
++/* { dg-final { scan-tree-dump-times "Eliding redundant" 2 "backprop" } } */
+-- 
+2.53.0
+
+
