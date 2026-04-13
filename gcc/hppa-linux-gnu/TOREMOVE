@@ -4,16 +4,39 @@
 gcc/testsuite/gcc.dg/torture/ftrapv-1.c
 gcc/testsuite/gcc.dg/torture/ftrapv-2.c
 
-# Don't remember
-gcc/testsuite/g++.dg/modules/bad-mapper-3.C
 
 # Timeout under heavy load
 # system-1.h, system-2.H and various struct-layout tests do as well
+gcc/testsuite/g++.dg/modules/bad-mapper-3.C
+gcc/testsuite/g++.dg/modules/compile-std1.C
 gcc/testsuite/g++.dg/tree-ssa/pr90078.C
 gcc/testsuite/g++.dg/tree-ssa/pr96979.C
 gcc/testsuite/g++.dg/warn/uninit-pr105562.C
 gcc/testsuite/g++.dg/warn/Wsequence-point-5.C
+gcc/testsuite/g++.modules/xtreme-header-7_a.H
+gcc/testsuite/g++.modules/xtreme-header-7_b.C
+gcc/testsuite/g++.dg/torture/pr31863.C
 
-gcc.testsuite/g++modules/xtreme-header-7_a.H
-gcc.testsuite/g++modules/xtreme-header-7_b.C
+libgomp/testsuite/libgomp.c-c++-common/for-3.c
+libgomp/testsuite/libgomp.c-c++-common/for-5.c
+libgomp/testsuite/libgomp.c-c++-common/for-6.c
+libgomp/testsuite/libgomp.c-c++-common/for-9.c
+libgomp/testsuite/libgomp.c-c++-common/for-11.c
+libgomp/testsuite/libgomp.c-c++-common/for-12.c
+libgomp/testsuite/libgomp.c-c++-common/for-14.c
+libgomp/testsuite/libgomp.c-c++-common/for-15.c
 
+gcc/testsuite/gfortran.dg/bind-c-contiguous-3.f90
+gcc/testsuite/gfortran.dg/bind-c-contiguous-4.f90
+gcc/testsuite/gfortran.dg/bind-c-contiguous-5.f90
+
+libstdc++-v3/testsuite/21_strings/basic_string/modifiers/assign/assign_range.cc
+libstdc++-v3/testsuite/21_strings/basic_string/modifiers/insert/insert_range.cc
+libstdc++-v3/testsuite/21_strings/basic_string/cons/from_range.cc
+libstdc++-v3/testsuite/21_strings/basic_string/modifiers/append/append_range.cc
+libstdc++-v3/testsuite/21_strings/basic_string/modifiers/replace/replace_with_range.cc
+libstdc++-v3/testsuite/21_strings/basic_string/modifiers/assign/assign_range.cc
+libstdc++-v3/testsuite/21_strings/basic_string/modifiers/insert/insert_range.cc
+libstdc++-v3/testsuite/21_strings/basic_string/modifiers/replace/replace_with_range.cc
+libstdc++-v3/testsuite/23_containers/deque/modifiers/append_range.cc
+libstdc++-v3/testsuite/23_containers/deque/modifiers/insert/insert_range.cc
