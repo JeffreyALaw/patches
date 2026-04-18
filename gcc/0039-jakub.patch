@@ -541,8 +541,8 @@ x86_64-linux, i686-linux, aarch64-linux and s390x-linux too?
 	(bitint_large_huge::lower_float_conv_stmt): Use signed RSHIFT_EXPR
 	instead of unsigned.
 
---- gcc/gimple-lower-bitint.cc.jj	2026-04-18 11:18:51.764826014 +0200
-+++ gcc/gimple-lower-bitint.cc	2026-04-18 14:14:18.244936407 +0200
+--- a/gcc/gimple-lower-bitint.cc.jj	2026-04-18 11:18:51.764826014 +0200
++++ b/gcc/gimple-lower-bitint.cc	2026-04-18 14:14:18.244936407 +0200
 @@ -3798,6 +3798,7 @@ bitint_large_huge::lower_shift_stmt (tre
  			       bitint_big_endian
  			       ? size_int (-1) : size_one_node);
