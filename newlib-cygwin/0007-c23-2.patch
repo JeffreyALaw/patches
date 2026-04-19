@@ -1,3 +1,506 @@
+diff --git a/newlib/Makefile.in b/newlib/Makefile.in
+index 0de6d2b37..85cd06f1b 100644
+--- a/newlib/Makefile.in
++++ b/newlib/Makefile.in
+@@ -2646,52 +2646,38 @@ am_libc_a_OBJECTS = $(am__objects_1) \
+ 	$(am__objects_31) $(am__objects_33) $(am__objects_34) \
+ 	$(am__objects_36) $(am__objects_37) $(am__objects_24) \
+ 	$(am__objects_39) $(am__objects_41) $(am__objects_43) \
+-	$(am__objects_44) $(am__objects_45) \
+-	libc/stdbit/libc_a-stdc_bit_ceil.$(OBJEXT) \
+-	libc/stdbit/libc_a-stdc_bit_floor.$(OBJEXT) \
+-	libc/stdbit/libc_a-stdc_bit_width.$(OBJEXT) \
+-	libc/stdbit/libc_a-stdc_count_ones.$(OBJEXT) \
+-	libc/stdbit/libc_a-stdc_count_zeros.$(OBJEXT) \
+-	libc/stdbit/libc_a-stdc_first_leading_one.$(OBJEXT) \
+-	libc/stdbit/libc_a-stdc_first_leading_zero.$(OBJEXT) \
+-	libc/stdbit/libc_a-stdc_first_trailing_one.$(OBJEXT) \
+-	libc/stdbit/libc_a-stdc_first_trailing_zero.$(OBJEXT) \
+-	libc/stdbit/libc_a-stdc_has_single_bit.$(OBJEXT) \
+-	libc/stdbit/libc_a-stdc_leading_ones.$(OBJEXT) \
+-	libc/stdbit/libc_a-stdc_leading_zeros.$(OBJEXT) \
+-	libc/stdbit/libc_a-stdc_trailing_ones.$(OBJEXT) \
+-	libc/stdbit/libc_a-stdc_trailing_zeros.$(OBJEXT) \
+-	$(am__objects_46) $(am__objects_49) $(am__objects_52) \
+-	$(am__objects_53) $(am__objects_54) $(am__objects_55) \
+-	$(am__objects_56) $(am__objects_57) $(am__objects_58) \
+-	$(am__objects_59) $(am__objects_60) $(am__objects_61) \
+-	$(am__objects_62) $(am__objects_63) $(am__objects_64) \
+-	$(am__objects_65) $(am__objects_66) $(am__objects_67) \
+-	$(am__objects_68) $(am__objects_69) $(am__objects_70) \
+-	$(am__objects_71) $(am__objects_72) $(am__objects_73) \
+-	$(am__objects_74) $(am__objects_75) $(am__objects_76) \
+-	$(am__objects_77) $(am__objects_78) $(am__objects_79) \
+-	$(am__objects_80) $(am__objects_81) $(am__objects_82) \
+-	$(am__objects_83) $(am__objects_84) $(am__objects_85) \
+-	$(am__objects_86) $(am__objects_87) $(am__objects_88) \
+-	$(am__objects_89) $(am__objects_90) $(am__objects_91) \
+-	$(am__objects_92) $(am__objects_93) $(am__objects_94) \
+-	$(am__objects_95) $(am__objects_96) $(am__objects_97) \
+-	$(am__objects_98) $(am__objects_99) $(am__objects_100) \
+-	$(am__objects_101) $(am__objects_102) $(am__objects_103) \
+-	$(am__objects_104) $(am__objects_105) $(am__objects_106) \
+-	$(am__objects_107) $(am__objects_108) $(am__objects_109) \
+-	$(am__objects_110) $(am__objects_111) $(am__objects_112) \
+-	$(am__objects_113) $(am__objects_114) $(am__objects_115) \
+-	$(am__objects_116) $(am__objects_117) $(am__objects_118) \
+-	$(am__objects_119) $(am__objects_120) $(am__objects_121) \
+-	$(am__objects_122) $(am__objects_123) $(am__objects_124) \
+-	$(am__objects_125) $(am__objects_126) $(am__objects_127) \
+-	$(am__objects_128) $(am__objects_129) $(am__objects_130) \
+-	$(am__objects_131) $(am__objects_132) $(am__objects_133) \
+-	$(am__objects_134) $(am__objects_135) $(am__objects_136) \
+-	$(am__objects_137) $(am__objects_138) $(am__objects_139) \
+-	$(am__objects_140) $(am__objects_141) $(am__objects_142)
++	$(am__objects_44) $(am__objects_45) $(am__objects_46) \
++	$(am__objects_49) $(am__objects_52) $(am__objects_53) \
++	$(am__objects_54) $(am__objects_55) $(am__objects_56) \
++	$(am__objects_57) $(am__objects_58) $(am__objects_59) \
++	$(am__objects_60) $(am__objects_61) $(am__objects_62) \
++	$(am__objects_63) $(am__objects_64) $(am__objects_65) \
++	$(am__objects_66) $(am__objects_67) $(am__objects_68) \
++	$(am__objects_69) $(am__objects_70) $(am__objects_71) \
++	$(am__objects_72) $(am__objects_73) $(am__objects_74) \
++	$(am__objects_75) $(am__objects_76) $(am__objects_77) \
++	$(am__objects_78) $(am__objects_79) $(am__objects_80) \
++	$(am__objects_81) $(am__objects_82) $(am__objects_83) \
++	$(am__objects_84) $(am__objects_85) $(am__objects_86) \
++	$(am__objects_87) $(am__objects_88) $(am__objects_89) \
++	$(am__objects_90) $(am__objects_91) $(am__objects_92) \
++	$(am__objects_93) $(am__objects_94) $(am__objects_95) \
++	$(am__objects_96) $(am__objects_97) $(am__objects_98) \
++	$(am__objects_99) $(am__objects_100) $(am__objects_101) \
++	$(am__objects_102) $(am__objects_103) $(am__objects_104) \
++	$(am__objects_105) $(am__objects_106) $(am__objects_107) \
++	$(am__objects_108) $(am__objects_109) $(am__objects_110) \
++	$(am__objects_111) $(am__objects_112) $(am__objects_113) \
++	$(am__objects_114) $(am__objects_115) $(am__objects_116) \
++	$(am__objects_117) $(am__objects_118) $(am__objects_119) \
++	$(am__objects_120) $(am__objects_121) $(am__objects_122) \
++	$(am__objects_123) $(am__objects_124) $(am__objects_125) \
++	$(am__objects_126) $(am__objects_127) $(am__objects_128) \
++	$(am__objects_129) $(am__objects_130) $(am__objects_131) \
++	$(am__objects_132) $(am__objects_133) $(am__objects_134) \
++	$(am__objects_135) $(am__objects_136) $(am__objects_137) \
++	$(am__objects_138) $(am__objects_139) $(am__objects_140) \
++	$(am__objects_141) $(am__objects_142)
+ libc_a_OBJECTS = $(am_libc_a_OBJECTS)
+ libc_machine_cris_libic_a_AR = $(AR) $(ARFLAGS)
+ @HAVE_LIBC_MACHINE_CRIS_TRUE@libc_machine_cris_libic_a_DEPENDENCIES = libc/machine/cris/libc_a-setjmp.o \
+@@ -4271,49 +4257,38 @@ libc_a_SOURCES = $(am__append_5) libc/stdlib/__adjust.c \
+ 	$(am__append_26) $(am__append_27) $(am__append_28) \
+ 	$(am__append_29) $(am__append_30) $(am__append_31) \
+ 	$(am__append_32) $(am__append_33) $(am__append_34) \
+-	$(am__append_35) libc/stdbit/stdc_bit_ceil.c \
+-	libc/stdbit/stdc_bit_floor.c libc/stdbit/stdc_bit_width.c \
+-	libc/stdbit/stdc_count_ones.c libc/stdbit/stdc_count_zeros.c \
+-	libc/stdbit/stdc_first_leading_one.c \
+-	libc/stdbit/stdc_first_leading_zero.c \
+-	libc/stdbit/stdc_first_trailing_one.c \
+-	libc/stdbit/stdc_first_trailing_zero.c \
+-	libc/stdbit/stdc_has_single_bit.c \
+-	libc/stdbit/stdc_leading_ones.c \
+-	libc/stdbit/stdc_leading_zeros.c \
+-	libc/stdbit/stdc_trailing_ones.c \
+-	libc/stdbit/stdc_trailing_zeros.c $(am__append_36) \
+-	$(am__append_38) $(am__append_41) $(am__append_42) \
+-	$(am__append_43) $(am__append_44) $(am__append_45) \
+-	$(am__append_46) $(am__append_47) $(am__append_48) \
+-	$(am__append_49) $(am__append_50) $(am__append_51) \
+-	$(am__append_52) $(am__append_53) $(am__append_54) \
+-	$(am__append_55) $(am__append_56) $(am__append_57) \
+-	$(am__append_58) $(am__append_59) $(am__append_60) \
+-	$(am__append_61) $(am__append_62) $(am__append_63) \
+-	$(am__append_64) $(am__append_65) $(am__append_66) \
+-	$(am__append_67) $(am__append_68) $(am__append_69) \
+-	$(am__append_70) $(am__append_71) $(am__append_72) \
+-	$(am__append_74) $(am__append_75) $(am__append_76) \
+-	$(am__append_77) $(am__append_78) $(am__append_79) \
+-	$(am__append_80) $(am__append_81) $(am__append_82) \
+-	$(am__append_83) $(am__append_84) $(am__append_85) \
+-	$(am__append_86) $(am__append_87) $(am__append_88) \
+-	$(am__append_89) $(am__append_90) $(am__append_91) \
+-	$(am__append_92) $(am__append_93) $(am__append_94) \
+-	$(am__append_95) $(am__append_96) $(am__append_97) \
+-	$(am__append_98) $(am__append_99) $(am__append_100) \
+-	$(am__append_101) $(am__append_102) $(am__append_103) \
+-	$(am__append_104) $(am__append_105) $(am__append_106) \
+-	$(am__append_107) $(am__append_108) $(am__append_109) \
+-	$(am__append_110) $(am__append_111) $(am__append_112) \
+-	$(am__append_113) $(am__append_114) $(am__append_115) \
+-	$(am__append_116) $(am__append_117) $(am__append_118) \
+-	$(am__append_119) $(am__append_120) $(am__append_121) \
+-	$(am__append_122) $(am__append_123) $(am__append_124) \
+-	$(am__append_125) $(am__append_126) $(am__append_127) \
+-	$(am__append_128) $(am__append_129) $(am__append_130) \
+-	$(am__append_131) $(am__append_132)
++	$(am__append_35) $(am__append_36) $(am__append_38) \
++	$(am__append_41) $(am__append_42) $(am__append_43) \
++	$(am__append_44) $(am__append_45) $(am__append_46) \
++	$(am__append_47) $(am__append_48) $(am__append_49) \
++	$(am__append_50) $(am__append_51) $(am__append_52) \
++	$(am__append_53) $(am__append_54) $(am__append_55) \
++	$(am__append_56) $(am__append_57) $(am__append_58) \
++	$(am__append_59) $(am__append_60) $(am__append_61) \
++	$(am__append_62) $(am__append_63) $(am__append_64) \
++	$(am__append_65) $(am__append_66) $(am__append_67) \
++	$(am__append_68) $(am__append_69) $(am__append_70) \
++	$(am__append_71) $(am__append_72) $(am__append_74) \
++	$(am__append_75) $(am__append_76) $(am__append_77) \
++	$(am__append_78) $(am__append_79) $(am__append_80) \
++	$(am__append_81) $(am__append_82) $(am__append_83) \
++	$(am__append_84) $(am__append_85) $(am__append_86) \
++	$(am__append_87) $(am__append_88) $(am__append_89) \
++	$(am__append_90) $(am__append_91) $(am__append_92) \
++	$(am__append_93) $(am__append_94) $(am__append_95) \
++	$(am__append_96) $(am__append_97) $(am__append_98) \
++	$(am__append_99) $(am__append_100) $(am__append_101) \
++	$(am__append_102) $(am__append_103) $(am__append_104) \
++	$(am__append_105) $(am__append_106) $(am__append_107) \
++	$(am__append_108) $(am__append_109) $(am__append_110) \
++	$(am__append_111) $(am__append_112) $(am__append_113) \
++	$(am__append_114) $(am__append_115) $(am__append_116) \
++	$(am__append_117) $(am__append_118) $(am__append_119) \
++	$(am__append_120) $(am__append_121) $(am__append_122) \
++	$(am__append_123) $(am__append_124) $(am__append_125) \
++	$(am__append_126) $(am__append_127) $(am__append_128) \
++	$(am__append_129) $(am__append_130) $(am__append_131) \
++	$(am__append_132)
+ libc_a_CFLAGS = $(AM_CFLAGS) $(libc_a_CFLAGS_$(subst /,_,$(@D))) $(libc_a_CFLAGS_$(subst /,_,$(@D)_$(<F)))
+ libc_a_CCASFLAGS = $(AM_CCASFLAGS) $(libc_a_CCASFLAGS_$(subst /,_,$(@D))) $(libc_a_CCASFLAGS_$(subst /,_,$(@D)_$(<F)))
+ libc_a_CPPFLAGS = $(AM_CPPFLAGS) $(libc_a_CPPFLAGS_$(subst /,_,$(@D))) $(libc_a_CPPFLAGS_$(subst /,_,$(@D)_$(<F)))
+@@ -5387,7 +5362,7 @@ all: newlib.h _newlib_version.h
+ .SUFFIXES: .def .xml .S .c .dvi .o .obj .ps .s
+ am--refresh: Makefile
+ 	@:
+-$(srcdir)/Makefile.in: @MAINTAINER_MODE_TRUE@ $(srcdir)/Makefile.am $(srcdir)/../multilib.am $(srcdir)/doc/Makefile.inc $(srcdir)/libc/Makefile.inc $(srcdir)/libc/argz/Makefile.inc $(srcdir)/libc/stdlib/Makefile.inc $(srcdir)/libc/ctype/Makefile.inc $(srcdir)/libc/search/Makefile.inc $(srcdir)/libc/stdio/Makefile.inc $(srcdir)/libc/stdio64/Makefile.inc $(srcdir)/libc/string/Makefile.inc $(srcdir)/libc/signal/Makefile.inc $(srcdir)/libc/time/Makefile.inc $(srcdir)/libc/locale/Makefile.inc $(srcdir)/libc/reent/Makefile.inc $(srcdir)/libc/errno/Makefile.inc $(srcdir)/libc/misc/Makefile.inc $(srcdir)/libc/unix/Makefile.inc $(srcdir)/libc/posix/Makefile.inc $(srcdir)/libc/syscalls/Makefile.inc $(srcdir)/libc/stdbit/Makefile.inc $(srcdir)/libc/iconv/Makefile.inc $(srcdir)/libc/iconv/ces/Makefile.inc $(srcdir)/libc/iconv/ccs/Makefile.inc $(srcdir)/libc/iconv/ccs/binary/Makefile.inc $(srcdir)/libc/iconv/lib/Makefile.inc $(srcdir)/libc/xdr/Makefile.inc $(srcdir)/libc/ssp/Makefile.inc $(srcdir)/libc/sys/Makefile.inc $(srcdir)/libc/sys/a29khif/Makefile.inc $(srcdir)/libc/sys/amdgcn/Makefile.inc $(srcdir)/libc/sys/arm/Makefile.inc $(srcdir)/libc/sys/d10v/Makefile.inc $(srcdir)/libc/sys/epiphany/Makefile.inc $(srcdir)/libc/sys/h8300hms/Makefile.inc $(srcdir)/libc/sys/h8500hms/Makefile.inc $(srcdir)/libc/sys/m88kbug/Makefile.inc $(srcdir)/libc/sys/mmixware/Makefile.inc $(srcdir)/libc/sys/netware/Makefile.inc $(srcdir)/libc/sys/or1k/Makefile.inc $(srcdir)/libc/sys/rdos/Makefile.inc $(srcdir)/libc/sys/rtems/Makefile.inc $(srcdir)/libc/sys/sh/Makefile.inc $(srcdir)/libc/sys/sysmec/Makefile.inc $(srcdir)/libc/sys/sysnec810/Makefile.inc $(srcdir)/libc/sys/sysnecv850/Makefile.inc $(srcdir)/libc/sys/sysvi386/Makefile.inc $(srcdir)/libc/sys/sysvnecv70/Makefile.inc $(srcdir)/libc/sys/tic80/Makefile.inc $(srcdir)/libc/sys/tirtos/Makefile.inc $(srcdir)/libc/sys/w65/Makefile.inc $(srcdir)/libc/sys/z8ksim/Makefile.inc $(srcdir)/libc/machine/Makefile.inc $(srcdir)/libc/machine/aarch64/Makefile.inc $(srcdir)/libc/machine/amdgcn/Makefile.inc $(srcdir)/libc/machine/arc/Makefile.inc $(srcdir)/libc/machine/arc64/Makefile.inc $(srcdir)/libc/machine/arm/Makefile.inc $(srcdir)/libc/machine/bfin/Makefile.inc $(srcdir)/libc/machine/cr16/Makefile.inc $(srcdir)/libc/machine/cris/Makefile.inc $(srcdir)/libc/machine/crx/Makefile.inc $(srcdir)/libc/machine/csky/Makefile.inc $(srcdir)/libc/machine/d10v/Makefile.inc $(srcdir)/libc/machine/d30v/Makefile.inc $(srcdir)/libc/machine/epiphany/Makefile.inc $(srcdir)/libc/machine/fr30/Makefile.inc $(srcdir)/libc/machine/frv/Makefile.inc $(srcdir)/libc/machine/ft32/Makefile.inc $(srcdir)/libc/machine/h8300/Makefile.inc $(srcdir)/libc/machine/h8500/Makefile.inc $(srcdir)/libc/machine/hppa/Makefile.inc $(srcdir)/libc/machine/i386/Makefile.inc $(srcdir)/libc/machine/i960/Makefile.inc $(srcdir)/libc/machine/iq2000/Makefile.inc $(srcdir)/libc/machine/lm32/Makefile.inc $(srcdir)/libc/machine/m32c/Makefile.inc $(srcdir)/libc/machine/m32r/Makefile.inc $(srcdir)/libc/machine/m68hc11/Makefile.inc $(srcdir)/libc/machine/m68k/Makefile.inc $(srcdir)/libc/machine/m88k/Makefile.inc $(srcdir)/libc/machine/mep/Makefile.inc $(srcdir)/libc/machine/microblaze/Makefile.inc $(srcdir)/libc/machine/mips/Makefile.inc $(srcdir)/libc/machine/mn10200/Makefile.inc $(srcdir)/libc/machine/mn10300/Makefile.inc $(srcdir)/libc/machine/moxie/Makefile.inc $(srcdir)/libc/machine/msp430/Makefile.inc $(srcdir)/libc/machine/mt/Makefile.inc $(srcdir)/libc/machine/nds32/Makefile.inc $(srcdir)/libc/machine/necv70/Makefile.inc $(srcdir)/libc/machine/nios2/Makefile.inc $(srcdir)/libc/machine/nvptx/Makefile.inc $(srcdir)/libc/machine/or1k/Makefile.inc $(srcdir)/libc/machine/powerpc/Makefile.inc $(srcdir)/libc/machine/pru/Makefile.inc $(srcdir)/libc/machine/riscv/Makefile.inc $(srcdir)/libc/machine/rl78/Makefile.inc $(srcdir)/libc/machine/rx/Makefile.inc $(srcdir)/libc/machine/sh/Makefile.inc $(srcdir)/libc/machine/sparc/Makefile.inc $(srcdir)/libc/machine/spu/Makefile.inc $(srcdir)/libc/machine/tic4x/Makefile.inc $(srcdir)/libc/machine/tic6x/Makefile.inc $(srcdir)/libc/machine/tic80/Makefile.inc $(srcdir)/libc/machine/v850/Makefile.inc $(srcdir)/libc/machine/visium/Makefile.inc $(srcdir)/libc/machine/w65/Makefile.inc $(srcdir)/libc/machine/x86_64/Makefile.inc $(srcdir)/libc/machine/xc16x/Makefile.inc $(srcdir)/libc/machine/xstormy16/Makefile.inc $(srcdir)/libc/machine/xtensa/Makefile.inc $(srcdir)/libc/machine/z8k/Makefile.inc $(srcdir)/libm/Makefile.inc $(srcdir)/libm/mathfp/Makefile.inc $(srcdir)/libm/math/Makefile.inc $(srcdir)/libm/common/Makefile.inc $(srcdir)/libm/ld/Makefile.inc $(srcdir)/libm/complex/Makefile.inc $(srcdir)/libm/fenv/Makefile.inc $(srcdir)/libm/test/Makefile.inc $(srcdir)/libm/machine/aarch64/Makefile.inc $(srcdir)/libm/ld128/Makefile.inc $(srcdir)/libm/machine/amdgcn/Makefile.inc $(srcdir)/libm/machine/arm/Makefile.inc $(srcdir)/libm/machine/i386/Makefile.inc $(srcdir)/libm/ld80/Makefile.inc $(srcdir)/libm/machine/mips/Makefile.inc $(srcdir)/libm/machine/nds32/Makefile.inc $(srcdir)/libm/machine/powerpc/Makefile.inc $(srcdir)/libm/machine/pru/Makefile.inc $(srcdir)/libm/machine/sparc/Makefile.inc $(srcdir)/libm/machine/spu/Makefile.inc $(srcdir)/libm/machine/riscv/Makefile.inc $(srcdir)/libm/ld128/Makefile.inc $(srcdir)/libm/machine/x86_64/Makefile.inc $(srcdir)/libm/ld80/Makefile.inc $(srcdir)/libm/machine/xtensa/Makefile.inc $(am__configure_deps)
++$(srcdir)/Makefile.in: @MAINTAINER_MODE_TRUE@ $(srcdir)/Makefile.am $(srcdir)/../multilib.am $(srcdir)/doc/Makefile.inc $(srcdir)/libc/Makefile.inc $(srcdir)/libc/argz/Makefile.inc $(srcdir)/libc/stdlib/Makefile.inc $(srcdir)/libc/ctype/Makefile.inc $(srcdir)/libc/search/Makefile.inc $(srcdir)/libc/stdio/Makefile.inc $(srcdir)/libc/stdio64/Makefile.inc $(srcdir)/libc/string/Makefile.inc $(srcdir)/libc/signal/Makefile.inc $(srcdir)/libc/time/Makefile.inc $(srcdir)/libc/locale/Makefile.inc $(srcdir)/libc/reent/Makefile.inc $(srcdir)/libc/errno/Makefile.inc $(srcdir)/libc/misc/Makefile.inc $(srcdir)/libc/unix/Makefile.inc $(srcdir)/libc/posix/Makefile.inc $(srcdir)/libc/syscalls/Makefile.inc $(srcdir)/libc/iconv/Makefile.inc $(srcdir)/libc/iconv/ces/Makefile.inc $(srcdir)/libc/iconv/ccs/Makefile.inc $(srcdir)/libc/iconv/ccs/binary/Makefile.inc $(srcdir)/libc/iconv/lib/Makefile.inc $(srcdir)/libc/xdr/Makefile.inc $(srcdir)/libc/ssp/Makefile.inc $(srcdir)/libc/sys/Makefile.inc $(srcdir)/libc/sys/a29khif/Makefile.inc $(srcdir)/libc/sys/amdgcn/Makefile.inc $(srcdir)/libc/sys/arm/Makefile.inc $(srcdir)/libc/sys/d10v/Makefile.inc $(srcdir)/libc/sys/epiphany/Makefile.inc $(srcdir)/libc/sys/h8300hms/Makefile.inc $(srcdir)/libc/sys/h8500hms/Makefile.inc $(srcdir)/libc/sys/m88kbug/Makefile.inc $(srcdir)/libc/sys/mmixware/Makefile.inc $(srcdir)/libc/sys/netware/Makefile.inc $(srcdir)/libc/sys/or1k/Makefile.inc $(srcdir)/libc/sys/rdos/Makefile.inc $(srcdir)/libc/sys/rtems/Makefile.inc $(srcdir)/libc/sys/sh/Makefile.inc $(srcdir)/libc/sys/sysmec/Makefile.inc $(srcdir)/libc/sys/sysnec810/Makefile.inc $(srcdir)/libc/sys/sysnecv850/Makefile.inc $(srcdir)/libc/sys/sysvi386/Makefile.inc $(srcdir)/libc/sys/sysvnecv70/Makefile.inc $(srcdir)/libc/sys/tic80/Makefile.inc $(srcdir)/libc/sys/tirtos/Makefile.inc $(srcdir)/libc/sys/w65/Makefile.inc $(srcdir)/libc/sys/z8ksim/Makefile.inc $(srcdir)/libc/machine/Makefile.inc $(srcdir)/libc/machine/aarch64/Makefile.inc $(srcdir)/libc/machine/amdgcn/Makefile.inc $(srcdir)/libc/machine/arc/Makefile.inc $(srcdir)/libc/machine/arc64/Makefile.inc $(srcdir)/libc/machine/arm/Makefile.inc $(srcdir)/libc/machine/bfin/Makefile.inc $(srcdir)/libc/machine/cr16/Makefile.inc $(srcdir)/libc/machine/cris/Makefile.inc $(srcdir)/libc/machine/crx/Makefile.inc $(srcdir)/libc/machine/csky/Makefile.inc $(srcdir)/libc/machine/d10v/Makefile.inc $(srcdir)/libc/machine/d30v/Makefile.inc $(srcdir)/libc/machine/epiphany/Makefile.inc $(srcdir)/libc/machine/fr30/Makefile.inc $(srcdir)/libc/machine/frv/Makefile.inc $(srcdir)/libc/machine/ft32/Makefile.inc $(srcdir)/libc/machine/h8300/Makefile.inc $(srcdir)/libc/machine/h8500/Makefile.inc $(srcdir)/libc/machine/hppa/Makefile.inc $(srcdir)/libc/machine/i386/Makefile.inc $(srcdir)/libc/machine/i960/Makefile.inc $(srcdir)/libc/machine/iq2000/Makefile.inc $(srcdir)/libc/machine/lm32/Makefile.inc $(srcdir)/libc/machine/m32c/Makefile.inc $(srcdir)/libc/machine/m32r/Makefile.inc $(srcdir)/libc/machine/m68hc11/Makefile.inc $(srcdir)/libc/machine/m68k/Makefile.inc $(srcdir)/libc/machine/m88k/Makefile.inc $(srcdir)/libc/machine/mep/Makefile.inc $(srcdir)/libc/machine/microblaze/Makefile.inc $(srcdir)/libc/machine/mips/Makefile.inc $(srcdir)/libc/machine/mn10200/Makefile.inc $(srcdir)/libc/machine/mn10300/Makefile.inc $(srcdir)/libc/machine/moxie/Makefile.inc $(srcdir)/libc/machine/msp430/Makefile.inc $(srcdir)/libc/machine/mt/Makefile.inc $(srcdir)/libc/machine/nds32/Makefile.inc $(srcdir)/libc/machine/necv70/Makefile.inc $(srcdir)/libc/machine/nios2/Makefile.inc $(srcdir)/libc/machine/nvptx/Makefile.inc $(srcdir)/libc/machine/or1k/Makefile.inc $(srcdir)/libc/machine/powerpc/Makefile.inc $(srcdir)/libc/machine/pru/Makefile.inc $(srcdir)/libc/machine/riscv/Makefile.inc $(srcdir)/libc/machine/rl78/Makefile.inc $(srcdir)/libc/machine/rx/Makefile.inc $(srcdir)/libc/machine/sh/Makefile.inc $(srcdir)/libc/machine/sparc/Makefile.inc $(srcdir)/libc/machine/spu/Makefile.inc $(srcdir)/libc/machine/tic4x/Makefile.inc $(srcdir)/libc/machine/tic6x/Makefile.inc $(srcdir)/libc/machine/tic80/Makefile.inc $(srcdir)/libc/machine/v850/Makefile.inc $(srcdir)/libc/machine/visium/Makefile.inc $(srcdir)/libc/machine/w65/Makefile.inc $(srcdir)/libc/machine/x86_64/Makefile.inc $(srcdir)/libc/machine/xc16x/Makefile.inc $(srcdir)/libc/machine/xstormy16/Makefile.inc $(srcdir)/libc/machine/xtensa/Makefile.inc $(srcdir)/libc/machine/z8k/Makefile.inc $(srcdir)/libm/Makefile.inc $(srcdir)/libm/mathfp/Makefile.inc $(srcdir)/libm/math/Makefile.inc $(srcdir)/libm/common/Makefile.inc $(srcdir)/libm/ld/Makefile.inc $(srcdir)/libm/complex/Makefile.inc $(srcdir)/libm/fenv/Makefile.inc $(srcdir)/libm/test/Makefile.inc $(srcdir)/libm/machine/aarch64/Makefile.inc $(srcdir)/libm/ld128/Makefile.inc $(srcdir)/libm/machine/amdgcn/Makefile.inc $(srcdir)/libm/machine/arm/Makefile.inc $(srcdir)/libm/machine/i386/Makefile.inc $(srcdir)/libm/ld80/Makefile.inc $(srcdir)/libm/machine/mips/Makefile.inc $(srcdir)/libm/machine/nds32/Makefile.inc $(srcdir)/libm/machine/powerpc/Makefile.inc $(srcdir)/libm/machine/pru/Makefile.inc $(srcdir)/libm/machine/sparc/Makefile.inc $(srcdir)/libm/machine/spu/Makefile.inc $(srcdir)/libm/machine/riscv/Makefile.inc $(srcdir)/libm/ld128/Makefile.inc $(srcdir)/libm/machine/x86_64/Makefile.inc $(srcdir)/libm/ld80/Makefile.inc $(srcdir)/libm/machine/xtensa/Makefile.inc $(am__configure_deps)
+ 	@for dep in $?; do \
+ 	  case '$(am__configure_deps)' in \
+ 	    *$$dep*) \
+@@ -5409,7 +5384,7 @@ Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
+ 	    echo ' cd $(top_builddir) && $(SHELL) ./config.status $@ $(am__depfiles_maybe)'; \
+ 	    cd $(top_builddir) && $(SHELL) ./config.status $@ $(am__depfiles_maybe);; \
+ 	esac;
+-$(srcdir)/../multilib.am $(srcdir)/doc/Makefile.inc $(srcdir)/libc/Makefile.inc $(srcdir)/libc/argz/Makefile.inc $(srcdir)/libc/stdlib/Makefile.inc $(srcdir)/libc/ctype/Makefile.inc $(srcdir)/libc/search/Makefile.inc $(srcdir)/libc/stdio/Makefile.inc $(srcdir)/libc/stdio64/Makefile.inc $(srcdir)/libc/string/Makefile.inc $(srcdir)/libc/signal/Makefile.inc $(srcdir)/libc/time/Makefile.inc $(srcdir)/libc/locale/Makefile.inc $(srcdir)/libc/reent/Makefile.inc $(srcdir)/libc/errno/Makefile.inc $(srcdir)/libc/misc/Makefile.inc $(srcdir)/libc/unix/Makefile.inc $(srcdir)/libc/posix/Makefile.inc $(srcdir)/libc/syscalls/Makefile.inc $(srcdir)/libc/stdbit/Makefile.inc $(srcdir)/libc/iconv/Makefile.inc $(srcdir)/libc/iconv/ces/Makefile.inc $(srcdir)/libc/iconv/ccs/Makefile.inc $(srcdir)/libc/iconv/ccs/binary/Makefile.inc $(srcdir)/libc/iconv/lib/Makefile.inc $(srcdir)/libc/xdr/Makefile.inc $(srcdir)/libc/ssp/Makefile.inc $(srcdir)/libc/sys/Makefile.inc $(srcdir)/libc/sys/a29khif/Makefile.inc $(srcdir)/libc/sys/amdgcn/Makefile.inc $(srcdir)/libc/sys/arm/Makefile.inc $(srcdir)/libc/sys/d10v/Makefile.inc $(srcdir)/libc/sys/epiphany/Makefile.inc $(srcdir)/libc/sys/h8300hms/Makefile.inc $(srcdir)/libc/sys/h8500hms/Makefile.inc $(srcdir)/libc/sys/m88kbug/Makefile.inc $(srcdir)/libc/sys/mmixware/Makefile.inc $(srcdir)/libc/sys/netware/Makefile.inc $(srcdir)/libc/sys/or1k/Makefile.inc $(srcdir)/libc/sys/rdos/Makefile.inc $(srcdir)/libc/sys/rtems/Makefile.inc $(srcdir)/libc/sys/sh/Makefile.inc $(srcdir)/libc/sys/sysmec/Makefile.inc $(srcdir)/libc/sys/sysnec810/Makefile.inc $(srcdir)/libc/sys/sysnecv850/Makefile.inc $(srcdir)/libc/sys/sysvi386/Makefile.inc $(srcdir)/libc/sys/sysvnecv70/Makefile.inc $(srcdir)/libc/sys/tic80/Makefile.inc $(srcdir)/libc/sys/tirtos/Makefile.inc $(srcdir)/libc/sys/w65/Makefile.inc $(srcdir)/libc/sys/z8ksim/Makefile.inc $(srcdir)/libc/machine/Makefile.inc $(srcdir)/libc/machine/aarch64/Makefile.inc $(srcdir)/libc/machine/amdgcn/Makefile.inc $(srcdir)/libc/machine/arc/Makefile.inc $(srcdir)/libc/machine/arc64/Makefile.inc $(srcdir)/libc/machine/arm/Makefile.inc $(srcdir)/libc/machine/bfin/Makefile.inc $(srcdir)/libc/machine/cr16/Makefile.inc $(srcdir)/libc/machine/cris/Makefile.inc $(srcdir)/libc/machine/crx/Makefile.inc $(srcdir)/libc/machine/csky/Makefile.inc $(srcdir)/libc/machine/d10v/Makefile.inc $(srcdir)/libc/machine/d30v/Makefile.inc $(srcdir)/libc/machine/epiphany/Makefile.inc $(srcdir)/libc/machine/fr30/Makefile.inc $(srcdir)/libc/machine/frv/Makefile.inc $(srcdir)/libc/machine/ft32/Makefile.inc $(srcdir)/libc/machine/h8300/Makefile.inc $(srcdir)/libc/machine/h8500/Makefile.inc $(srcdir)/libc/machine/hppa/Makefile.inc $(srcdir)/libc/machine/i386/Makefile.inc $(srcdir)/libc/machine/i960/Makefile.inc $(srcdir)/libc/machine/iq2000/Makefile.inc $(srcdir)/libc/machine/lm32/Makefile.inc $(srcdir)/libc/machine/m32c/Makefile.inc $(srcdir)/libc/machine/m32r/Makefile.inc $(srcdir)/libc/machine/m68hc11/Makefile.inc $(srcdir)/libc/machine/m68k/Makefile.inc $(srcdir)/libc/machine/m88k/Makefile.inc $(srcdir)/libc/machine/mep/Makefile.inc $(srcdir)/libc/machine/microblaze/Makefile.inc $(srcdir)/libc/machine/mips/Makefile.inc $(srcdir)/libc/machine/mn10200/Makefile.inc $(srcdir)/libc/machine/mn10300/Makefile.inc $(srcdir)/libc/machine/moxie/Makefile.inc $(srcdir)/libc/machine/msp430/Makefile.inc $(srcdir)/libc/machine/mt/Makefile.inc $(srcdir)/libc/machine/nds32/Makefile.inc $(srcdir)/libc/machine/necv70/Makefile.inc $(srcdir)/libc/machine/nios2/Makefile.inc $(srcdir)/libc/machine/nvptx/Makefile.inc $(srcdir)/libc/machine/or1k/Makefile.inc $(srcdir)/libc/machine/powerpc/Makefile.inc $(srcdir)/libc/machine/pru/Makefile.inc $(srcdir)/libc/machine/riscv/Makefile.inc $(srcdir)/libc/machine/rl78/Makefile.inc $(srcdir)/libc/machine/rx/Makefile.inc $(srcdir)/libc/machine/sh/Makefile.inc $(srcdir)/libc/machine/sparc/Makefile.inc $(srcdir)/libc/machine/spu/Makefile.inc $(srcdir)/libc/machine/tic4x/Makefile.inc $(srcdir)/libc/machine/tic6x/Makefile.inc $(srcdir)/libc/machine/tic80/Makefile.inc $(srcdir)/libc/machine/v850/Makefile.inc $(srcdir)/libc/machine/visium/Makefile.inc $(srcdir)/libc/machine/w65/Makefile.inc $(srcdir)/libc/machine/x86_64/Makefile.inc $(srcdir)/libc/machine/xc16x/Makefile.inc $(srcdir)/libc/machine/xstormy16/Makefile.inc $(srcdir)/libc/machine/xtensa/Makefile.inc $(srcdir)/libc/machine/z8k/Makefile.inc $(srcdir)/libm/Makefile.inc $(srcdir)/libm/mathfp/Makefile.inc $(srcdir)/libm/math/Makefile.inc $(srcdir)/libm/common/Makefile.inc $(srcdir)/libm/ld/Makefile.inc $(srcdir)/libm/complex/Makefile.inc $(srcdir)/libm/fenv/Makefile.inc $(srcdir)/libm/test/Makefile.inc $(srcdir)/libm/machine/aarch64/Makefile.inc $(srcdir)/libm/ld128/Makefile.inc $(srcdir)/libm/machine/amdgcn/Makefile.inc $(srcdir)/libm/machine/arm/Makefile.inc $(srcdir)/libm/machine/i386/Makefile.inc $(srcdir)/libm/ld80/Makefile.inc $(srcdir)/libm/machine/mips/Makefile.inc $(srcdir)/libm/machine/nds32/Makefile.inc $(srcdir)/libm/machine/powerpc/Makefile.inc $(srcdir)/libm/machine/pru/Makefile.inc $(srcdir)/libm/machine/sparc/Makefile.inc $(srcdir)/libm/machine/spu/Makefile.inc $(srcdir)/libm/machine/riscv/Makefile.inc $(srcdir)/libm/ld128/Makefile.inc $(srcdir)/libm/machine/x86_64/Makefile.inc $(srcdir)/libm/ld80/Makefile.inc $(srcdir)/libm/machine/xtensa/Makefile.inc $(am__empty):
++$(srcdir)/../multilib.am $(srcdir)/doc/Makefile.inc $(srcdir)/libc/Makefile.inc $(srcdir)/libc/argz/Makefile.inc $(srcdir)/libc/stdlib/Makefile.inc $(srcdir)/libc/ctype/Makefile.inc $(srcdir)/libc/search/Makefile.inc $(srcdir)/libc/stdio/Makefile.inc $(srcdir)/libc/stdio64/Makefile.inc $(srcdir)/libc/string/Makefile.inc $(srcdir)/libc/signal/Makefile.inc $(srcdir)/libc/time/Makefile.inc $(srcdir)/libc/locale/Makefile.inc $(srcdir)/libc/reent/Makefile.inc $(srcdir)/libc/errno/Makefile.inc $(srcdir)/libc/misc/Makefile.inc $(srcdir)/libc/unix/Makefile.inc $(srcdir)/libc/posix/Makefile.inc $(srcdir)/libc/syscalls/Makefile.inc $(srcdir)/libc/iconv/Makefile.inc $(srcdir)/libc/iconv/ces/Makefile.inc $(srcdir)/libc/iconv/ccs/Makefile.inc $(srcdir)/libc/iconv/ccs/binary/Makefile.inc $(srcdir)/libc/iconv/lib/Makefile.inc $(srcdir)/libc/xdr/Makefile.inc $(srcdir)/libc/ssp/Makefile.inc $(srcdir)/libc/sys/Makefile.inc $(srcdir)/libc/sys/a29khif/Makefile.inc $(srcdir)/libc/sys/amdgcn/Makefile.inc $(srcdir)/libc/sys/arm/Makefile.inc $(srcdir)/libc/sys/d10v/Makefile.inc $(srcdir)/libc/sys/epiphany/Makefile.inc $(srcdir)/libc/sys/h8300hms/Makefile.inc $(srcdir)/libc/sys/h8500hms/Makefile.inc $(srcdir)/libc/sys/m88kbug/Makefile.inc $(srcdir)/libc/sys/mmixware/Makefile.inc $(srcdir)/libc/sys/netware/Makefile.inc $(srcdir)/libc/sys/or1k/Makefile.inc $(srcdir)/libc/sys/rdos/Makefile.inc $(srcdir)/libc/sys/rtems/Makefile.inc $(srcdir)/libc/sys/sh/Makefile.inc $(srcdir)/libc/sys/sysmec/Makefile.inc $(srcdir)/libc/sys/sysnec810/Makefile.inc $(srcdir)/libc/sys/sysnecv850/Makefile.inc $(srcdir)/libc/sys/sysvi386/Makefile.inc $(srcdir)/libc/sys/sysvnecv70/Makefile.inc $(srcdir)/libc/sys/tic80/Makefile.inc $(srcdir)/libc/sys/tirtos/Makefile.inc $(srcdir)/libc/sys/w65/Makefile.inc $(srcdir)/libc/sys/z8ksim/Makefile.inc $(srcdir)/libc/machine/Makefile.inc $(srcdir)/libc/machine/aarch64/Makefile.inc $(srcdir)/libc/machine/amdgcn/Makefile.inc $(srcdir)/libc/machine/arc/Makefile.inc $(srcdir)/libc/machine/arc64/Makefile.inc $(srcdir)/libc/machine/arm/Makefile.inc $(srcdir)/libc/machine/bfin/Makefile.inc $(srcdir)/libc/machine/cr16/Makefile.inc $(srcdir)/libc/machine/cris/Makefile.inc $(srcdir)/libc/machine/crx/Makefile.inc $(srcdir)/libc/machine/csky/Makefile.inc $(srcdir)/libc/machine/d10v/Makefile.inc $(srcdir)/libc/machine/d30v/Makefile.inc $(srcdir)/libc/machine/epiphany/Makefile.inc $(srcdir)/libc/machine/fr30/Makefile.inc $(srcdir)/libc/machine/frv/Makefile.inc $(srcdir)/libc/machine/ft32/Makefile.inc $(srcdir)/libc/machine/h8300/Makefile.inc $(srcdir)/libc/machine/h8500/Makefile.inc $(srcdir)/libc/machine/hppa/Makefile.inc $(srcdir)/libc/machine/i386/Makefile.inc $(srcdir)/libc/machine/i960/Makefile.inc $(srcdir)/libc/machine/iq2000/Makefile.inc $(srcdir)/libc/machine/lm32/Makefile.inc $(srcdir)/libc/machine/m32c/Makefile.inc $(srcdir)/libc/machine/m32r/Makefile.inc $(srcdir)/libc/machine/m68hc11/Makefile.inc $(srcdir)/libc/machine/m68k/Makefile.inc $(srcdir)/libc/machine/m88k/Makefile.inc $(srcdir)/libc/machine/mep/Makefile.inc $(srcdir)/libc/machine/microblaze/Makefile.inc $(srcdir)/libc/machine/mips/Makefile.inc $(srcdir)/libc/machine/mn10200/Makefile.inc $(srcdir)/libc/machine/mn10300/Makefile.inc $(srcdir)/libc/machine/moxie/Makefile.inc $(srcdir)/libc/machine/msp430/Makefile.inc $(srcdir)/libc/machine/mt/Makefile.inc $(srcdir)/libc/machine/nds32/Makefile.inc $(srcdir)/libc/machine/necv70/Makefile.inc $(srcdir)/libc/machine/nios2/Makefile.inc $(srcdir)/libc/machine/nvptx/Makefile.inc $(srcdir)/libc/machine/or1k/Makefile.inc $(srcdir)/libc/machine/powerpc/Makefile.inc $(srcdir)/libc/machine/pru/Makefile.inc $(srcdir)/libc/machine/riscv/Makefile.inc $(srcdir)/libc/machine/rl78/Makefile.inc $(srcdir)/libc/machine/rx/Makefile.inc $(srcdir)/libc/machine/sh/Makefile.inc $(srcdir)/libc/machine/sparc/Makefile.inc $(srcdir)/libc/machine/spu/Makefile.inc $(srcdir)/libc/machine/tic4x/Makefile.inc $(srcdir)/libc/machine/tic6x/Makefile.inc $(srcdir)/libc/machine/tic80/Makefile.inc $(srcdir)/libc/machine/v850/Makefile.inc $(srcdir)/libc/machine/visium/Makefile.inc $(srcdir)/libc/machine/w65/Makefile.inc $(srcdir)/libc/machine/x86_64/Makefile.inc $(srcdir)/libc/machine/xc16x/Makefile.inc $(srcdir)/libc/machine/xstormy16/Makefile.inc $(srcdir)/libc/machine/xtensa/Makefile.inc $(srcdir)/libc/machine/z8k/Makefile.inc $(srcdir)/libm/Makefile.inc $(srcdir)/libm/mathfp/Makefile.inc $(srcdir)/libm/math/Makefile.inc $(srcdir)/libm/common/Makefile.inc $(srcdir)/libm/ld/Makefile.inc $(srcdir)/libm/complex/Makefile.inc $(srcdir)/libm/fenv/Makefile.inc $(srcdir)/libm/test/Makefile.inc $(srcdir)/libm/machine/aarch64/Makefile.inc $(srcdir)/libm/ld128/Makefile.inc $(srcdir)/libm/machine/amdgcn/Makefile.inc $(srcdir)/libm/machine/arm/Makefile.inc $(srcdir)/libm/machine/i386/Makefile.inc $(srcdir)/libm/ld80/Makefile.inc $(srcdir)/libm/machine/mips/Makefile.inc $(srcdir)/libm/machine/nds32/Makefile.inc $(srcdir)/libm/machine/powerpc/Makefile.inc $(srcdir)/libm/machine/pru/Makefile.inc $(srcdir)/libm/machine/sparc/Makefile.inc $(srcdir)/libm/machine/spu/Makefile.inc $(srcdir)/libm/machine/riscv/Makefile.inc $(srcdir)/libm/ld128/Makefile.inc $(srcdir)/libm/machine/x86_64/Makefile.inc $(srcdir)/libm/ld80/Makefile.inc $(srcdir)/libm/machine/xtensa/Makefile.inc $(am__empty):
+ 
+ $(top_builddir)/config.status: $(top_srcdir)/configure $(CONFIG_STATUS_DEPENDENCIES)
+ 	$(SHELL) ./config.status --recheck
+@@ -6949,54 +6924,6 @@ libc/syscalls/libc_a-sysfork.$(OBJEXT): libc/syscalls/$(am__dirstamp) \
+ 	libc/syscalls/$(DEPDIR)/$(am__dirstamp)
+ libc/syscalls/libc_a-syswait.$(OBJEXT): libc/syscalls/$(am__dirstamp) \
+ 	libc/syscalls/$(DEPDIR)/$(am__dirstamp)
+-libc/stdbit/$(am__dirstamp):
+-	@$(MKDIR_P) libc/stdbit
+-	@: > libc/stdbit/$(am__dirstamp)
+-libc/stdbit/$(DEPDIR)/$(am__dirstamp):
+-	@$(MKDIR_P) libc/stdbit/$(DEPDIR)
+-	@: > libc/stdbit/$(DEPDIR)/$(am__dirstamp)
+-libc/stdbit/libc_a-stdc_bit_ceil.$(OBJEXT):  \
+-	libc/stdbit/$(am__dirstamp) \
+-	libc/stdbit/$(DEPDIR)/$(am__dirstamp)
+-libc/stdbit/libc_a-stdc_bit_floor.$(OBJEXT):  \
+-	libc/stdbit/$(am__dirstamp) \
+-	libc/stdbit/$(DEPDIR)/$(am__dirstamp)
+-libc/stdbit/libc_a-stdc_bit_width.$(OBJEXT):  \
+-	libc/stdbit/$(am__dirstamp) \
+-	libc/stdbit/$(DEPDIR)/$(am__dirstamp)
+-libc/stdbit/libc_a-stdc_count_ones.$(OBJEXT):  \
+-	libc/stdbit/$(am__dirstamp) \
+-	libc/stdbit/$(DEPDIR)/$(am__dirstamp)
+-libc/stdbit/libc_a-stdc_count_zeros.$(OBJEXT):  \
+-	libc/stdbit/$(am__dirstamp) \
+-	libc/stdbit/$(DEPDIR)/$(am__dirstamp)
+-libc/stdbit/libc_a-stdc_first_leading_one.$(OBJEXT):  \
+-	libc/stdbit/$(am__dirstamp) \
+-	libc/stdbit/$(DEPDIR)/$(am__dirstamp)
+-libc/stdbit/libc_a-stdc_first_leading_zero.$(OBJEXT):  \
+-	libc/stdbit/$(am__dirstamp) \
+-	libc/stdbit/$(DEPDIR)/$(am__dirstamp)
+-libc/stdbit/libc_a-stdc_first_trailing_one.$(OBJEXT):  \
+-	libc/stdbit/$(am__dirstamp) \
+-	libc/stdbit/$(DEPDIR)/$(am__dirstamp)
+-libc/stdbit/libc_a-stdc_first_trailing_zero.$(OBJEXT):  \
+-	libc/stdbit/$(am__dirstamp) \
+-	libc/stdbit/$(DEPDIR)/$(am__dirstamp)
+-libc/stdbit/libc_a-stdc_has_single_bit.$(OBJEXT):  \
+-	libc/stdbit/$(am__dirstamp) \
+-	libc/stdbit/$(DEPDIR)/$(am__dirstamp)
+-libc/stdbit/libc_a-stdc_leading_ones.$(OBJEXT):  \
+-	libc/stdbit/$(am__dirstamp) \
+-	libc/stdbit/$(DEPDIR)/$(am__dirstamp)
+-libc/stdbit/libc_a-stdc_leading_zeros.$(OBJEXT):  \
+-	libc/stdbit/$(am__dirstamp) \
+-	libc/stdbit/$(DEPDIR)/$(am__dirstamp)
+-libc/stdbit/libc_a-stdc_trailing_ones.$(OBJEXT):  \
+-	libc/stdbit/$(am__dirstamp) \
+-	libc/stdbit/$(DEPDIR)/$(am__dirstamp)
+-libc/stdbit/libc_a-stdc_trailing_zeros.$(OBJEXT):  \
+-	libc/stdbit/$(am__dirstamp) \
+-	libc/stdbit/$(DEPDIR)/$(am__dirstamp)
+ libc/iconv/ces/$(am__dirstamp):
+ 	@$(MKDIR_P) libc/iconv/ces
+ 	@: > libc/iconv/ces/$(am__dirstamp)
+@@ -12748,7 +12675,6 @@ mostlyclean-compile:
+ 	-rm -f libc/search/*.$(OBJEXT)
+ 	-rm -f libc/signal/*.$(OBJEXT)
+ 	-rm -f libc/ssp/*.$(OBJEXT)
+-	-rm -f libc/stdbit/*.$(OBJEXT)
+ 	-rm -f libc/stdio/*.$(OBJEXT)
+ 	-rm -f libc/stdio64/*.$(OBJEXT)
+ 	-rm -f libc/stdlib/*.$(OBJEXT)
+@@ -13550,20 +13476,6 @@ distclean-compile:
+ @AMDEP_TRUE@@am__include@ @am__quote@libc/ssp/$(DEPDIR)/libc_a-strncpy_chk.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@libc/ssp/$(DEPDIR)/libc_a-vsnprintf_chk.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@libc/ssp/$(DEPDIR)/libc_a-vsprintf_chk.Po@am__quote@
+-@AMDEP_TRUE@@am__include@ @am__quote@libc/stdbit/$(DEPDIR)/libc_a-stdc_bit_ceil.Po@am__quote@
+-@AMDEP_TRUE@@am__include@ @am__quote@libc/stdbit/$(DEPDIR)/libc_a-stdc_bit_floor.Po@am__quote@
+-@AMDEP_TRUE@@am__include@ @am__quote@libc/stdbit/$(DEPDIR)/libc_a-stdc_bit_width.Po@am__quote@
+-@AMDEP_TRUE@@am__include@ @am__quote@libc/stdbit/$(DEPDIR)/libc_a-stdc_count_ones.Po@am__quote@
+-@AMDEP_TRUE@@am__include@ @am__quote@libc/stdbit/$(DEPDIR)/libc_a-stdc_count_zeros.Po@am__quote@
+-@AMDEP_TRUE@@am__include@ @am__quote@libc/stdbit/$(DEPDIR)/libc_a-stdc_first_leading_one.Po@am__quote@
+-@AMDEP_TRUE@@am__include@ @am__quote@libc/stdbit/$(DEPDIR)/libc_a-stdc_first_leading_zero.Po@am__quote@
+-@AMDEP_TRUE@@am__include@ @am__quote@libc/stdbit/$(DEPDIR)/libc_a-stdc_first_trailing_one.Po@am__quote@
+-@AMDEP_TRUE@@am__include@ @am__quote@libc/stdbit/$(DEPDIR)/libc_a-stdc_first_trailing_zero.Po@am__quote@
+-@AMDEP_TRUE@@am__include@ @am__quote@libc/stdbit/$(DEPDIR)/libc_a-stdc_has_single_bit.Po@am__quote@
+-@AMDEP_TRUE@@am__include@ @am__quote@libc/stdbit/$(DEPDIR)/libc_a-stdc_leading_ones.Po@am__quote@
+-@AMDEP_TRUE@@am__include@ @am__quote@libc/stdbit/$(DEPDIR)/libc_a-stdc_leading_zeros.Po@am__quote@
+-@AMDEP_TRUE@@am__include@ @am__quote@libc/stdbit/$(DEPDIR)/libc_a-stdc_trailing_ones.Po@am__quote@
+-@AMDEP_TRUE@@am__include@ @am__quote@libc/stdbit/$(DEPDIR)/libc_a-stdc_trailing_zeros.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@libc/stdio/$(DEPDIR)/libc_a-asiprintf.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@libc/stdio/$(DEPDIR)/libc_a-asniprintf.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@libc/stdio/$(DEPDIR)/libc_a-asnprintf.Po@am__quote@
+@@ -29837,202 +29749,6 @@ libc/syscalls/libc_a-syswait.obj: libc/syscalls/syswait.c
+ @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+ @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/syscalls/libc_a-syswait.obj `if test -f 'libc/syscalls/syswait.c'; then $(CYGPATH_W) 'libc/syscalls/syswait.c'; else $(CYGPATH_W) '$(srcdir)/libc/syscalls/syswait.c'; fi`
+ 
+-libc/stdbit/libc_a-stdc_bit_ceil.o: libc/stdbit/stdc_bit_ceil.c
+-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/stdbit/libc_a-stdc_bit_ceil.o -MD -MP -MF libc/stdbit/$(DEPDIR)/libc_a-stdc_bit_ceil.Tpo -c -o libc/stdbit/libc_a-stdc_bit_ceil.o `test -f 'libc/stdbit/stdc_bit_ceil.c' || echo '$(srcdir)/'`libc/stdbit/stdc_bit_ceil.c
+-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/stdbit/$(DEPDIR)/libc_a-stdc_bit_ceil.Tpo libc/stdbit/$(DEPDIR)/libc_a-stdc_bit_ceil.Po
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libc/stdbit/stdc_bit_ceil.c' object='libc/stdbit/libc_a-stdc_bit_ceil.o' libtool=no @AMDEPBACKSLASH@
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/stdbit/libc_a-stdc_bit_ceil.o `test -f 'libc/stdbit/stdc_bit_ceil.c' || echo '$(srcdir)/'`libc/stdbit/stdc_bit_ceil.c
+-
+-libc/stdbit/libc_a-stdc_bit_ceil.obj: libc/stdbit/stdc_bit_ceil.c
+-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/stdbit/libc_a-stdc_bit_ceil.obj -MD -MP -MF libc/stdbit/$(DEPDIR)/libc_a-stdc_bit_ceil.Tpo -c -o libc/stdbit/libc_a-stdc_bit_ceil.obj `if test -f 'libc/stdbit/stdc_bit_ceil.c'; then $(CYGPATH_W) 'libc/stdbit/stdc_bit_ceil.c'; else $(CYGPATH_W) '$(srcdir)/libc/stdbit/stdc_bit_ceil.c'; fi`
+-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/stdbit/$(DEPDIR)/libc_a-stdc_bit_ceil.Tpo libc/stdbit/$(DEPDIR)/libc_a-stdc_bit_ceil.Po
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libc/stdbit/stdc_bit_ceil.c' object='libc/stdbit/libc_a-stdc_bit_ceil.obj' libtool=no @AMDEPBACKSLASH@
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/stdbit/libc_a-stdc_bit_ceil.obj `if test -f 'libc/stdbit/stdc_bit_ceil.c'; then $(CYGPATH_W) 'libc/stdbit/stdc_bit_ceil.c'; else $(CYGPATH_W) '$(srcdir)/libc/stdbit/stdc_bit_ceil.c'; fi`
+-
+-libc/stdbit/libc_a-stdc_bit_floor.o: libc/stdbit/stdc_bit_floor.c
+-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/stdbit/libc_a-stdc_bit_floor.o -MD -MP -MF libc/stdbit/$(DEPDIR)/libc_a-stdc_bit_floor.Tpo -c -o libc/stdbit/libc_a-stdc_bit_floor.o `test -f 'libc/stdbit/stdc_bit_floor.c' || echo '$(srcdir)/'`libc/stdbit/stdc_bit_floor.c
+-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/stdbit/$(DEPDIR)/libc_a-stdc_bit_floor.Tpo libc/stdbit/$(DEPDIR)/libc_a-stdc_bit_floor.Po
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libc/stdbit/stdc_bit_floor.c' object='libc/stdbit/libc_a-stdc_bit_floor.o' libtool=no @AMDEPBACKSLASH@
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/stdbit/libc_a-stdc_bit_floor.o `test -f 'libc/stdbit/stdc_bit_floor.c' || echo '$(srcdir)/'`libc/stdbit/stdc_bit_floor.c
+-
+-libc/stdbit/libc_a-stdc_bit_floor.obj: libc/stdbit/stdc_bit_floor.c
+-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/stdbit/libc_a-stdc_bit_floor.obj -MD -MP -MF libc/stdbit/$(DEPDIR)/libc_a-stdc_bit_floor.Tpo -c -o libc/stdbit/libc_a-stdc_bit_floor.obj `if test -f 'libc/stdbit/stdc_bit_floor.c'; then $(CYGPATH_W) 'libc/stdbit/stdc_bit_floor.c'; else $(CYGPATH_W) '$(srcdir)/libc/stdbit/stdc_bit_floor.c'; fi`
+-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/stdbit/$(DEPDIR)/libc_a-stdc_bit_floor.Tpo libc/stdbit/$(DEPDIR)/libc_a-stdc_bit_floor.Po
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libc/stdbit/stdc_bit_floor.c' object='libc/stdbit/libc_a-stdc_bit_floor.obj' libtool=no @AMDEPBACKSLASH@
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/stdbit/libc_a-stdc_bit_floor.obj `if test -f 'libc/stdbit/stdc_bit_floor.c'; then $(CYGPATH_W) 'libc/stdbit/stdc_bit_floor.c'; else $(CYGPATH_W) '$(srcdir)/libc/stdbit/stdc_bit_floor.c'; fi`
+-
+-libc/stdbit/libc_a-stdc_bit_width.o: libc/stdbit/stdc_bit_width.c
+-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/stdbit/libc_a-stdc_bit_width.o -MD -MP -MF libc/stdbit/$(DEPDIR)/libc_a-stdc_bit_width.Tpo -c -o libc/stdbit/libc_a-stdc_bit_width.o `test -f 'libc/stdbit/stdc_bit_width.c' || echo '$(srcdir)/'`libc/stdbit/stdc_bit_width.c
+-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/stdbit/$(DEPDIR)/libc_a-stdc_bit_width.Tpo libc/stdbit/$(DEPDIR)/libc_a-stdc_bit_width.Po
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libc/stdbit/stdc_bit_width.c' object='libc/stdbit/libc_a-stdc_bit_width.o' libtool=no @AMDEPBACKSLASH@
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/stdbit/libc_a-stdc_bit_width.o `test -f 'libc/stdbit/stdc_bit_width.c' || echo '$(srcdir)/'`libc/stdbit/stdc_bit_width.c
+-
+-libc/stdbit/libc_a-stdc_bit_width.obj: libc/stdbit/stdc_bit_width.c
+-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/stdbit/libc_a-stdc_bit_width.obj -MD -MP -MF libc/stdbit/$(DEPDIR)/libc_a-stdc_bit_width.Tpo -c -o libc/stdbit/libc_a-stdc_bit_width.obj `if test -f 'libc/stdbit/stdc_bit_width.c'; then $(CYGPATH_W) 'libc/stdbit/stdc_bit_width.c'; else $(CYGPATH_W) '$(srcdir)/libc/stdbit/stdc_bit_width.c'; fi`
+-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/stdbit/$(DEPDIR)/libc_a-stdc_bit_width.Tpo libc/stdbit/$(DEPDIR)/libc_a-stdc_bit_width.Po
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libc/stdbit/stdc_bit_width.c' object='libc/stdbit/libc_a-stdc_bit_width.obj' libtool=no @AMDEPBACKSLASH@
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/stdbit/libc_a-stdc_bit_width.obj `if test -f 'libc/stdbit/stdc_bit_width.c'; then $(CYGPATH_W) 'libc/stdbit/stdc_bit_width.c'; else $(CYGPATH_W) '$(srcdir)/libc/stdbit/stdc_bit_width.c'; fi`
+-
+-libc/stdbit/libc_a-stdc_count_ones.o: libc/stdbit/stdc_count_ones.c
+-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/stdbit/libc_a-stdc_count_ones.o -MD -MP -MF libc/stdbit/$(DEPDIR)/libc_a-stdc_count_ones.Tpo -c -o libc/stdbit/libc_a-stdc_count_ones.o `test -f 'libc/stdbit/stdc_count_ones.c' || echo '$(srcdir)/'`libc/stdbit/stdc_count_ones.c
+-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/stdbit/$(DEPDIR)/libc_a-stdc_count_ones.Tpo libc/stdbit/$(DEPDIR)/libc_a-stdc_count_ones.Po
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libc/stdbit/stdc_count_ones.c' object='libc/stdbit/libc_a-stdc_count_ones.o' libtool=no @AMDEPBACKSLASH@
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/stdbit/libc_a-stdc_count_ones.o `test -f 'libc/stdbit/stdc_count_ones.c' || echo '$(srcdir)/'`libc/stdbit/stdc_count_ones.c
+-
+-libc/stdbit/libc_a-stdc_count_ones.obj: libc/stdbit/stdc_count_ones.c
+-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/stdbit/libc_a-stdc_count_ones.obj -MD -MP -MF libc/stdbit/$(DEPDIR)/libc_a-stdc_count_ones.Tpo -c -o libc/stdbit/libc_a-stdc_count_ones.obj `if test -f 'libc/stdbit/stdc_count_ones.c'; then $(CYGPATH_W) 'libc/stdbit/stdc_count_ones.c'; else $(CYGPATH_W) '$(srcdir)/libc/stdbit/stdc_count_ones.c'; fi`
+-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/stdbit/$(DEPDIR)/libc_a-stdc_count_ones.Tpo libc/stdbit/$(DEPDIR)/libc_a-stdc_count_ones.Po
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libc/stdbit/stdc_count_ones.c' object='libc/stdbit/libc_a-stdc_count_ones.obj' libtool=no @AMDEPBACKSLASH@
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/stdbit/libc_a-stdc_count_ones.obj `if test -f 'libc/stdbit/stdc_count_ones.c'; then $(CYGPATH_W) 'libc/stdbit/stdc_count_ones.c'; else $(CYGPATH_W) '$(srcdir)/libc/stdbit/stdc_count_ones.c'; fi`
+-
+-libc/stdbit/libc_a-stdc_count_zeros.o: libc/stdbit/stdc_count_zeros.c
+-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/stdbit/libc_a-stdc_count_zeros.o -MD -MP -MF libc/stdbit/$(DEPDIR)/libc_a-stdc_count_zeros.Tpo -c -o libc/stdbit/libc_a-stdc_count_zeros.o `test -f 'libc/stdbit/stdc_count_zeros.c' || echo '$(srcdir)/'`libc/stdbit/stdc_count_zeros.c
+-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/stdbit/$(DEPDIR)/libc_a-stdc_count_zeros.Tpo libc/stdbit/$(DEPDIR)/libc_a-stdc_count_zeros.Po
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libc/stdbit/stdc_count_zeros.c' object='libc/stdbit/libc_a-stdc_count_zeros.o' libtool=no @AMDEPBACKSLASH@
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/stdbit/libc_a-stdc_count_zeros.o `test -f 'libc/stdbit/stdc_count_zeros.c' || echo '$(srcdir)/'`libc/stdbit/stdc_count_zeros.c
+-
+-libc/stdbit/libc_a-stdc_count_zeros.obj: libc/stdbit/stdc_count_zeros.c
+-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/stdbit/libc_a-stdc_count_zeros.obj -MD -MP -MF libc/stdbit/$(DEPDIR)/libc_a-stdc_count_zeros.Tpo -c -o libc/stdbit/libc_a-stdc_count_zeros.obj `if test -f 'libc/stdbit/stdc_count_zeros.c'; then $(CYGPATH_W) 'libc/stdbit/stdc_count_zeros.c'; else $(CYGPATH_W) '$(srcdir)/libc/stdbit/stdc_count_zeros.c'; fi`
+-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/stdbit/$(DEPDIR)/libc_a-stdc_count_zeros.Tpo libc/stdbit/$(DEPDIR)/libc_a-stdc_count_zeros.Po
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libc/stdbit/stdc_count_zeros.c' object='libc/stdbit/libc_a-stdc_count_zeros.obj' libtool=no @AMDEPBACKSLASH@
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/stdbit/libc_a-stdc_count_zeros.obj `if test -f 'libc/stdbit/stdc_count_zeros.c'; then $(CYGPATH_W) 'libc/stdbit/stdc_count_zeros.c'; else $(CYGPATH_W) '$(srcdir)/libc/stdbit/stdc_count_zeros.c'; fi`
+-
+-libc/stdbit/libc_a-stdc_first_leading_one.o: libc/stdbit/stdc_first_leading_one.c
+-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/stdbit/libc_a-stdc_first_leading_one.o -MD -MP -MF libc/stdbit/$(DEPDIR)/libc_a-stdc_first_leading_one.Tpo -c -o libc/stdbit/libc_a-stdc_first_leading_one.o `test -f 'libc/stdbit/stdc_first_leading_one.c' || echo '$(srcdir)/'`libc/stdbit/stdc_first_leading_one.c
+-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/stdbit/$(DEPDIR)/libc_a-stdc_first_leading_one.Tpo libc/stdbit/$(DEPDIR)/libc_a-stdc_first_leading_one.Po
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libc/stdbit/stdc_first_leading_one.c' object='libc/stdbit/libc_a-stdc_first_leading_one.o' libtool=no @AMDEPBACKSLASH@
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/stdbit/libc_a-stdc_first_leading_one.o `test -f 'libc/stdbit/stdc_first_leading_one.c' || echo '$(srcdir)/'`libc/stdbit/stdc_first_leading_one.c
+-
+-libc/stdbit/libc_a-stdc_first_leading_one.obj: libc/stdbit/stdc_first_leading_one.c
+-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/stdbit/libc_a-stdc_first_leading_one.obj -MD -MP -MF libc/stdbit/$(DEPDIR)/libc_a-stdc_first_leading_one.Tpo -c -o libc/stdbit/libc_a-stdc_first_leading_one.obj `if test -f 'libc/stdbit/stdc_first_leading_one.c'; then $(CYGPATH_W) 'libc/stdbit/stdc_first_leading_one.c'; else $(CYGPATH_W) '$(srcdir)/libc/stdbit/stdc_first_leading_one.c'; fi`
+-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/stdbit/$(DEPDIR)/libc_a-stdc_first_leading_one.Tpo libc/stdbit/$(DEPDIR)/libc_a-stdc_first_leading_one.Po
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libc/stdbit/stdc_first_leading_one.c' object='libc/stdbit/libc_a-stdc_first_leading_one.obj' libtool=no @AMDEPBACKSLASH@
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/stdbit/libc_a-stdc_first_leading_one.obj `if test -f 'libc/stdbit/stdc_first_leading_one.c'; then $(CYGPATH_W) 'libc/stdbit/stdc_first_leading_one.c'; else $(CYGPATH_W) '$(srcdir)/libc/stdbit/stdc_first_leading_one.c'; fi`
+-
+-libc/stdbit/libc_a-stdc_first_leading_zero.o: libc/stdbit/stdc_first_leading_zero.c
+-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/stdbit/libc_a-stdc_first_leading_zero.o -MD -MP -MF libc/stdbit/$(DEPDIR)/libc_a-stdc_first_leading_zero.Tpo -c -o libc/stdbit/libc_a-stdc_first_leading_zero.o `test -f 'libc/stdbit/stdc_first_leading_zero.c' || echo '$(srcdir)/'`libc/stdbit/stdc_first_leading_zero.c
+-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/stdbit/$(DEPDIR)/libc_a-stdc_first_leading_zero.Tpo libc/stdbit/$(DEPDIR)/libc_a-stdc_first_leading_zero.Po
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libc/stdbit/stdc_first_leading_zero.c' object='libc/stdbit/libc_a-stdc_first_leading_zero.o' libtool=no @AMDEPBACKSLASH@
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/stdbit/libc_a-stdc_first_leading_zero.o `test -f 'libc/stdbit/stdc_first_leading_zero.c' || echo '$(srcdir)/'`libc/stdbit/stdc_first_leading_zero.c
+-
+-libc/stdbit/libc_a-stdc_first_leading_zero.obj: libc/stdbit/stdc_first_leading_zero.c
+-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/stdbit/libc_a-stdc_first_leading_zero.obj -MD -MP -MF libc/stdbit/$(DEPDIR)/libc_a-stdc_first_leading_zero.Tpo -c -o libc/stdbit/libc_a-stdc_first_leading_zero.obj `if test -f 'libc/stdbit/stdc_first_leading_zero.c'; then $(CYGPATH_W) 'libc/stdbit/stdc_first_leading_zero.c'; else $(CYGPATH_W) '$(srcdir)/libc/stdbit/stdc_first_leading_zero.c'; fi`
+-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/stdbit/$(DEPDIR)/libc_a-stdc_first_leading_zero.Tpo libc/stdbit/$(DEPDIR)/libc_a-stdc_first_leading_zero.Po
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libc/stdbit/stdc_first_leading_zero.c' object='libc/stdbit/libc_a-stdc_first_leading_zero.obj' libtool=no @AMDEPBACKSLASH@
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/stdbit/libc_a-stdc_first_leading_zero.obj `if test -f 'libc/stdbit/stdc_first_leading_zero.c'; then $(CYGPATH_W) 'libc/stdbit/stdc_first_leading_zero.c'; else $(CYGPATH_W) '$(srcdir)/libc/stdbit/stdc_first_leading_zero.c'; fi`
+-
+-libc/stdbit/libc_a-stdc_first_trailing_one.o: libc/stdbit/stdc_first_trailing_one.c
+-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/stdbit/libc_a-stdc_first_trailing_one.o -MD -MP -MF libc/stdbit/$(DEPDIR)/libc_a-stdc_first_trailing_one.Tpo -c -o libc/stdbit/libc_a-stdc_first_trailing_one.o `test -f 'libc/stdbit/stdc_first_trailing_one.c' || echo '$(srcdir)/'`libc/stdbit/stdc_first_trailing_one.c
+-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/stdbit/$(DEPDIR)/libc_a-stdc_first_trailing_one.Tpo libc/stdbit/$(DEPDIR)/libc_a-stdc_first_trailing_one.Po
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libc/stdbit/stdc_first_trailing_one.c' object='libc/stdbit/libc_a-stdc_first_trailing_one.o' libtool=no @AMDEPBACKSLASH@
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/stdbit/libc_a-stdc_first_trailing_one.o `test -f 'libc/stdbit/stdc_first_trailing_one.c' || echo '$(srcdir)/'`libc/stdbit/stdc_first_trailing_one.c
+-
+-libc/stdbit/libc_a-stdc_first_trailing_one.obj: libc/stdbit/stdc_first_trailing_one.c
+-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/stdbit/libc_a-stdc_first_trailing_one.obj -MD -MP -MF libc/stdbit/$(DEPDIR)/libc_a-stdc_first_trailing_one.Tpo -c -o libc/stdbit/libc_a-stdc_first_trailing_one.obj `if test -f 'libc/stdbit/stdc_first_trailing_one.c'; then $(CYGPATH_W) 'libc/stdbit/stdc_first_trailing_one.c'; else $(CYGPATH_W) '$(srcdir)/libc/stdbit/stdc_first_trailing_one.c'; fi`
+-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/stdbit/$(DEPDIR)/libc_a-stdc_first_trailing_one.Tpo libc/stdbit/$(DEPDIR)/libc_a-stdc_first_trailing_one.Po
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libc/stdbit/stdc_first_trailing_one.c' object='libc/stdbit/libc_a-stdc_first_trailing_one.obj' libtool=no @AMDEPBACKSLASH@
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/stdbit/libc_a-stdc_first_trailing_one.obj `if test -f 'libc/stdbit/stdc_first_trailing_one.c'; then $(CYGPATH_W) 'libc/stdbit/stdc_first_trailing_one.c'; else $(CYGPATH_W) '$(srcdir)/libc/stdbit/stdc_first_trailing_one.c'; fi`
+-
+-libc/stdbit/libc_a-stdc_first_trailing_zero.o: libc/stdbit/stdc_first_trailing_zero.c
+-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/stdbit/libc_a-stdc_first_trailing_zero.o -MD -MP -MF libc/stdbit/$(DEPDIR)/libc_a-stdc_first_trailing_zero.Tpo -c -o libc/stdbit/libc_a-stdc_first_trailing_zero.o `test -f 'libc/stdbit/stdc_first_trailing_zero.c' || echo '$(srcdir)/'`libc/stdbit/stdc_first_trailing_zero.c
+-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/stdbit/$(DEPDIR)/libc_a-stdc_first_trailing_zero.Tpo libc/stdbit/$(DEPDIR)/libc_a-stdc_first_trailing_zero.Po
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libc/stdbit/stdc_first_trailing_zero.c' object='libc/stdbit/libc_a-stdc_first_trailing_zero.o' libtool=no @AMDEPBACKSLASH@
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/stdbit/libc_a-stdc_first_trailing_zero.o `test -f 'libc/stdbit/stdc_first_trailing_zero.c' || echo '$(srcdir)/'`libc/stdbit/stdc_first_trailing_zero.c
+-
+-libc/stdbit/libc_a-stdc_first_trailing_zero.obj: libc/stdbit/stdc_first_trailing_zero.c
+-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/stdbit/libc_a-stdc_first_trailing_zero.obj -MD -MP -MF libc/stdbit/$(DEPDIR)/libc_a-stdc_first_trailing_zero.Tpo -c -o libc/stdbit/libc_a-stdc_first_trailing_zero.obj `if test -f 'libc/stdbit/stdc_first_trailing_zero.c'; then $(CYGPATH_W) 'libc/stdbit/stdc_first_trailing_zero.c'; else $(CYGPATH_W) '$(srcdir)/libc/stdbit/stdc_first_trailing_zero.c'; fi`
+-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/stdbit/$(DEPDIR)/libc_a-stdc_first_trailing_zero.Tpo libc/stdbit/$(DEPDIR)/libc_a-stdc_first_trailing_zero.Po
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libc/stdbit/stdc_first_trailing_zero.c' object='libc/stdbit/libc_a-stdc_first_trailing_zero.obj' libtool=no @AMDEPBACKSLASH@
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/stdbit/libc_a-stdc_first_trailing_zero.obj `if test -f 'libc/stdbit/stdc_first_trailing_zero.c'; then $(CYGPATH_W) 'libc/stdbit/stdc_first_trailing_zero.c'; else $(CYGPATH_W) '$(srcdir)/libc/stdbit/stdc_first_trailing_zero.c'; fi`
+-
+-libc/stdbit/libc_a-stdc_has_single_bit.o: libc/stdbit/stdc_has_single_bit.c
+-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/stdbit/libc_a-stdc_has_single_bit.o -MD -MP -MF libc/stdbit/$(DEPDIR)/libc_a-stdc_has_single_bit.Tpo -c -o libc/stdbit/libc_a-stdc_has_single_bit.o `test -f 'libc/stdbit/stdc_has_single_bit.c' || echo '$(srcdir)/'`libc/stdbit/stdc_has_single_bit.c
+-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/stdbit/$(DEPDIR)/libc_a-stdc_has_single_bit.Tpo libc/stdbit/$(DEPDIR)/libc_a-stdc_has_single_bit.Po
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libc/stdbit/stdc_has_single_bit.c' object='libc/stdbit/libc_a-stdc_has_single_bit.o' libtool=no @AMDEPBACKSLASH@
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/stdbit/libc_a-stdc_has_single_bit.o `test -f 'libc/stdbit/stdc_has_single_bit.c' || echo '$(srcdir)/'`libc/stdbit/stdc_has_single_bit.c
+-
+-libc/stdbit/libc_a-stdc_has_single_bit.obj: libc/stdbit/stdc_has_single_bit.c
+-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/stdbit/libc_a-stdc_has_single_bit.obj -MD -MP -MF libc/stdbit/$(DEPDIR)/libc_a-stdc_has_single_bit.Tpo -c -o libc/stdbit/libc_a-stdc_has_single_bit.obj `if test -f 'libc/stdbit/stdc_has_single_bit.c'; then $(CYGPATH_W) 'libc/stdbit/stdc_has_single_bit.c'; else $(CYGPATH_W) '$(srcdir)/libc/stdbit/stdc_has_single_bit.c'; fi`
+-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/stdbit/$(DEPDIR)/libc_a-stdc_has_single_bit.Tpo libc/stdbit/$(DEPDIR)/libc_a-stdc_has_single_bit.Po
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libc/stdbit/stdc_has_single_bit.c' object='libc/stdbit/libc_a-stdc_has_single_bit.obj' libtool=no @AMDEPBACKSLASH@
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/stdbit/libc_a-stdc_has_single_bit.obj `if test -f 'libc/stdbit/stdc_has_single_bit.c'; then $(CYGPATH_W) 'libc/stdbit/stdc_has_single_bit.c'; else $(CYGPATH_W) '$(srcdir)/libc/stdbit/stdc_has_single_bit.c'; fi`
+-
+-libc/stdbit/libc_a-stdc_leading_ones.o: libc/stdbit/stdc_leading_ones.c
+-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/stdbit/libc_a-stdc_leading_ones.o -MD -MP -MF libc/stdbit/$(DEPDIR)/libc_a-stdc_leading_ones.Tpo -c -o libc/stdbit/libc_a-stdc_leading_ones.o `test -f 'libc/stdbit/stdc_leading_ones.c' || echo '$(srcdir)/'`libc/stdbit/stdc_leading_ones.c
+-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/stdbit/$(DEPDIR)/libc_a-stdc_leading_ones.Tpo libc/stdbit/$(DEPDIR)/libc_a-stdc_leading_ones.Po
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libc/stdbit/stdc_leading_ones.c' object='libc/stdbit/libc_a-stdc_leading_ones.o' libtool=no @AMDEPBACKSLASH@
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/stdbit/libc_a-stdc_leading_ones.o `test -f 'libc/stdbit/stdc_leading_ones.c' || echo '$(srcdir)/'`libc/stdbit/stdc_leading_ones.c
+-
+-libc/stdbit/libc_a-stdc_leading_ones.obj: libc/stdbit/stdc_leading_ones.c
+-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/stdbit/libc_a-stdc_leading_ones.obj -MD -MP -MF libc/stdbit/$(DEPDIR)/libc_a-stdc_leading_ones.Tpo -c -o libc/stdbit/libc_a-stdc_leading_ones.obj `if test -f 'libc/stdbit/stdc_leading_ones.c'; then $(CYGPATH_W) 'libc/stdbit/stdc_leading_ones.c'; else $(CYGPATH_W) '$(srcdir)/libc/stdbit/stdc_leading_ones.c'; fi`
+-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/stdbit/$(DEPDIR)/libc_a-stdc_leading_ones.Tpo libc/stdbit/$(DEPDIR)/libc_a-stdc_leading_ones.Po
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libc/stdbit/stdc_leading_ones.c' object='libc/stdbit/libc_a-stdc_leading_ones.obj' libtool=no @AMDEPBACKSLASH@
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/stdbit/libc_a-stdc_leading_ones.obj `if test -f 'libc/stdbit/stdc_leading_ones.c'; then $(CYGPATH_W) 'libc/stdbit/stdc_leading_ones.c'; else $(CYGPATH_W) '$(srcdir)/libc/stdbit/stdc_leading_ones.c'; fi`
+-
+-libc/stdbit/libc_a-stdc_leading_zeros.o: libc/stdbit/stdc_leading_zeros.c
+-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/stdbit/libc_a-stdc_leading_zeros.o -MD -MP -MF libc/stdbit/$(DEPDIR)/libc_a-stdc_leading_zeros.Tpo -c -o libc/stdbit/libc_a-stdc_leading_zeros.o `test -f 'libc/stdbit/stdc_leading_zeros.c' || echo '$(srcdir)/'`libc/stdbit/stdc_leading_zeros.c
+-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/stdbit/$(DEPDIR)/libc_a-stdc_leading_zeros.Tpo libc/stdbit/$(DEPDIR)/libc_a-stdc_leading_zeros.Po
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libc/stdbit/stdc_leading_zeros.c' object='libc/stdbit/libc_a-stdc_leading_zeros.o' libtool=no @AMDEPBACKSLASH@
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/stdbit/libc_a-stdc_leading_zeros.o `test -f 'libc/stdbit/stdc_leading_zeros.c' || echo '$(srcdir)/'`libc/stdbit/stdc_leading_zeros.c
+-
+-libc/stdbit/libc_a-stdc_leading_zeros.obj: libc/stdbit/stdc_leading_zeros.c
+-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/stdbit/libc_a-stdc_leading_zeros.obj -MD -MP -MF libc/stdbit/$(DEPDIR)/libc_a-stdc_leading_zeros.Tpo -c -o libc/stdbit/libc_a-stdc_leading_zeros.obj `if test -f 'libc/stdbit/stdc_leading_zeros.c'; then $(CYGPATH_W) 'libc/stdbit/stdc_leading_zeros.c'; else $(CYGPATH_W) '$(srcdir)/libc/stdbit/stdc_leading_zeros.c'; fi`
+-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/stdbit/$(DEPDIR)/libc_a-stdc_leading_zeros.Tpo libc/stdbit/$(DEPDIR)/libc_a-stdc_leading_zeros.Po
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libc/stdbit/stdc_leading_zeros.c' object='libc/stdbit/libc_a-stdc_leading_zeros.obj' libtool=no @AMDEPBACKSLASH@
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/stdbit/libc_a-stdc_leading_zeros.obj `if test -f 'libc/stdbit/stdc_leading_zeros.c'; then $(CYGPATH_W) 'libc/stdbit/stdc_leading_zeros.c'; else $(CYGPATH_W) '$(srcdir)/libc/stdbit/stdc_leading_zeros.c'; fi`
+-
+-libc/stdbit/libc_a-stdc_trailing_ones.o: libc/stdbit/stdc_trailing_ones.c
+-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/stdbit/libc_a-stdc_trailing_ones.o -MD -MP -MF libc/stdbit/$(DEPDIR)/libc_a-stdc_trailing_ones.Tpo -c -o libc/stdbit/libc_a-stdc_trailing_ones.o `test -f 'libc/stdbit/stdc_trailing_ones.c' || echo '$(srcdir)/'`libc/stdbit/stdc_trailing_ones.c
+-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/stdbit/$(DEPDIR)/libc_a-stdc_trailing_ones.Tpo libc/stdbit/$(DEPDIR)/libc_a-stdc_trailing_ones.Po
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libc/stdbit/stdc_trailing_ones.c' object='libc/stdbit/libc_a-stdc_trailing_ones.o' libtool=no @AMDEPBACKSLASH@
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/stdbit/libc_a-stdc_trailing_ones.o `test -f 'libc/stdbit/stdc_trailing_ones.c' || echo '$(srcdir)/'`libc/stdbit/stdc_trailing_ones.c
+-
+-libc/stdbit/libc_a-stdc_trailing_ones.obj: libc/stdbit/stdc_trailing_ones.c
+-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/stdbit/libc_a-stdc_trailing_ones.obj -MD -MP -MF libc/stdbit/$(DEPDIR)/libc_a-stdc_trailing_ones.Tpo -c -o libc/stdbit/libc_a-stdc_trailing_ones.obj `if test -f 'libc/stdbit/stdc_trailing_ones.c'; then $(CYGPATH_W) 'libc/stdbit/stdc_trailing_ones.c'; else $(CYGPATH_W) '$(srcdir)/libc/stdbit/stdc_trailing_ones.c'; fi`
+-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/stdbit/$(DEPDIR)/libc_a-stdc_trailing_ones.Tpo libc/stdbit/$(DEPDIR)/libc_a-stdc_trailing_ones.Po
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libc/stdbit/stdc_trailing_ones.c' object='libc/stdbit/libc_a-stdc_trailing_ones.obj' libtool=no @AMDEPBACKSLASH@
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/stdbit/libc_a-stdc_trailing_ones.obj `if test -f 'libc/stdbit/stdc_trailing_ones.c'; then $(CYGPATH_W) 'libc/stdbit/stdc_trailing_ones.c'; else $(CYGPATH_W) '$(srcdir)/libc/stdbit/stdc_trailing_ones.c'; fi`
+-
+-libc/stdbit/libc_a-stdc_trailing_zeros.o: libc/stdbit/stdc_trailing_zeros.c
+-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/stdbit/libc_a-stdc_trailing_zeros.o -MD -MP -MF libc/stdbit/$(DEPDIR)/libc_a-stdc_trailing_zeros.Tpo -c -o libc/stdbit/libc_a-stdc_trailing_zeros.o `test -f 'libc/stdbit/stdc_trailing_zeros.c' || echo '$(srcdir)/'`libc/stdbit/stdc_trailing_zeros.c
+-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/stdbit/$(DEPDIR)/libc_a-stdc_trailing_zeros.Tpo libc/stdbit/$(DEPDIR)/libc_a-stdc_trailing_zeros.Po
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libc/stdbit/stdc_trailing_zeros.c' object='libc/stdbit/libc_a-stdc_trailing_zeros.o' libtool=no @AMDEPBACKSLASH@
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/stdbit/libc_a-stdc_trailing_zeros.o `test -f 'libc/stdbit/stdc_trailing_zeros.c' || echo '$(srcdir)/'`libc/stdbit/stdc_trailing_zeros.c
+-
+-libc/stdbit/libc_a-stdc_trailing_zeros.obj: libc/stdbit/stdc_trailing_zeros.c
+-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/stdbit/libc_a-stdc_trailing_zeros.obj -MD -MP -MF libc/stdbit/$(DEPDIR)/libc_a-stdc_trailing_zeros.Tpo -c -o libc/stdbit/libc_a-stdc_trailing_zeros.obj `if test -f 'libc/stdbit/stdc_trailing_zeros.c'; then $(CYGPATH_W) 'libc/stdbit/stdc_trailing_zeros.c'; else $(CYGPATH_W) '$(srcdir)/libc/stdbit/stdc_trailing_zeros.c'; fi`
+-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/stdbit/$(DEPDIR)/libc_a-stdc_trailing_zeros.Tpo libc/stdbit/$(DEPDIR)/libc_a-stdc_trailing_zeros.Po
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libc/stdbit/stdc_trailing_zeros.c' object='libc/stdbit/libc_a-stdc_trailing_zeros.obj' libtool=no @AMDEPBACKSLASH@
+-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -c -o libc/stdbit/libc_a-stdc_trailing_zeros.obj `if test -f 'libc/stdbit/stdc_trailing_zeros.c'; then $(CYGPATH_W) 'libc/stdbit/stdc_trailing_zeros.c'; else $(CYGPATH_W) '$(srcdir)/libc/stdbit/stdc_trailing_zeros.c'; fi`
+-
+ libc/iconv/ces/libc_a-utf-8.o: libc/iconv/ces/utf-8.c
+ @am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libc_a_CPPFLAGS) $(CPPFLAGS) $(libc_a_CFLAGS) $(CFLAGS) -MT libc/iconv/ces/libc_a-utf-8.o -MD -MP -MF libc/iconv/ces/$(DEPDIR)/libc_a-utf-8.Tpo -c -o libc/iconv/ces/libc_a-utf-8.o `test -f 'libc/iconv/ces/utf-8.c' || echo '$(srcdir)/'`libc/iconv/ces/utf-8.c
+ @am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) libc/iconv/ces/$(DEPDIR)/libc_a-utf-8.Tpo libc/iconv/ces/$(DEPDIR)/libc_a-utf-8.Po
+@@ -50916,8 +50632,6 @@ distclean-generic:
+ 	-rm -f libc/signal/$(am__dirstamp)
+ 	-rm -f libc/ssp/$(DEPDIR)/$(am__dirstamp)
+ 	-rm -f libc/ssp/$(am__dirstamp)
+-	-rm -f libc/stdbit/$(DEPDIR)/$(am__dirstamp)
+-	-rm -f libc/stdbit/$(am__dirstamp)
+ 	-rm -f libc/stdio/$(DEPDIR)/$(am__dirstamp)
+ 	-rm -f libc/stdio/$(am__dirstamp)
+ 	-rm -f libc/stdio64/$(DEPDIR)/$(am__dirstamp)
+@@ -51034,7 +50748,7 @@ clean-am: clean-aminfo clean-checkPROGRAMS clean-generic clean-local \
+ 
+ distclean: distclean-am
+ 	-rm -f $(am__CONFIG_DISTCLEAN_FILES)
+-	-rm -rf libc/argz/$(DEPDIR) libc/ctype/$(DEPDIR) libc/errno/$(DEPDIR) libc/iconv/ccs/$(DEPDIR) libc/iconv/ces/$(DEPDIR) libc/iconv/lib/$(DEPDIR) libc/locale/$(DEPDIR) libc/machine/aarch64/$(DEPDIR) libc/machine/amdgcn/$(DEPDIR) libc/machine/arc/$(DEPDIR) libc/machine/arc64/$(DEPDIR) libc/machine/arm/$(DEPDIR) libc/machine/bfin/$(DEPDIR) libc/machine/cr16/$(DEPDIR) libc/machine/cris/$(DEPDIR) libc/machine/crx/$(DEPDIR) libc/machine/csky/$(DEPDIR) libc/machine/d10v/$(DEPDIR) libc/machine/d30v/$(DEPDIR) libc/machine/epiphany/$(DEPDIR) libc/machine/fr30/$(DEPDIR) libc/machine/frv/$(DEPDIR) libc/machine/ft32/$(DEPDIR) libc/machine/h8300/$(DEPDIR) libc/machine/h8500/$(DEPDIR) libc/machine/hppa/$(DEPDIR) libc/machine/i386/$(DEPDIR) libc/machine/i960/$(DEPDIR) libc/machine/iq2000/$(DEPDIR) libc/machine/lm32/$(DEPDIR) libc/machine/m32c/$(DEPDIR) libc/machine/m32r/$(DEPDIR) libc/machine/m68hc11/$(DEPDIR) libc/machine/m68k/$(DEPDIR) libc/machine/m88k/$(DEPDIR) libc/machine/mep/$(DEPDIR) libc/machine/microblaze/$(DEPDIR) libc/machine/mips/$(DEPDIR) libc/machine/mn10200/$(DEPDIR) libc/machine/mn10300/$(DEPDIR) libc/machine/moxie/$(DEPDIR) libc/machine/msp430/$(DEPDIR) libc/machine/mt/$(DEPDIR) libc/machine/nds32/$(DEPDIR) libc/machine/necv70/$(DEPDIR) libc/machine/nvptx/$(DEPDIR) libc/machine/or1k/$(DEPDIR) libc/machine/powerpc/$(DEPDIR) libc/machine/riscv/$(DEPDIR) libc/machine/rl78/$(DEPDIR) libc/machine/rx/$(DEPDIR) libc/machine/sh/$(DEPDIR) libc/machine/sparc/$(DEPDIR) libc/machine/spu/$(DEPDIR) libc/machine/tic4x/$(DEPDIR) libc/machine/tic6x/$(DEPDIR) libc/machine/tic80/$(DEPDIR) libc/machine/v850/$(DEPDIR) libc/machine/visium/$(DEPDIR) libc/machine/w65/$(DEPDIR) libc/machine/x86_64/$(DEPDIR) libc/machine/xc16x/$(DEPDIR) libc/machine/xstormy16/$(DEPDIR) libc/machine/xtensa/$(DEPDIR) libc/machine/z8k/$(DEPDIR) libc/misc/$(DEPDIR) libc/posix/$(DEPDIR) libc/reent/$(DEPDIR) libc/search/$(DEPDIR) libc/signal/$(DEPDIR) libc/ssp/$(DEPDIR) libc/stdbit/$(DEPDIR) libc/stdio/$(DEPDIR) libc/stdio64/$(DEPDIR) libc/stdlib/$(DEPDIR) libc/string/$(DEPDIR) libc/sys/a29khif/$(DEPDIR) libc/sys/amdgcn/$(DEPDIR) libc/sys/arm/$(DEPDIR) libc/sys/d10v/$(DEPDIR) libc/sys/epiphany/$(DEPDIR) libc/sys/h8300hms/$(DEPDIR) libc/sys/h8500hms/$(DEPDIR) libc/sys/m88kbug/$(DEPDIR) libc/sys/mmixware/$(DEPDIR) libc/sys/netware/$(DEPDIR) libc/sys/or1k/$(DEPDIR) libc/sys/rdos/$(DEPDIR) libc/sys/rtems/$(DEPDIR) libc/sys/sh/$(DEPDIR) libc/sys/sysmec/$(DEPDIR) libc/sys/sysnec810/$(DEPDIR) libc/sys/sysnecv850/$(DEPDIR) libc/sys/sysvi386/$(DEPDIR) libc/sys/sysvnecv70/$(DEPDIR) libc/sys/tirtos/$(DEPDIR) libc/sys/w65/$(DEPDIR) libc/sys/z8ksim/$(DEPDIR) libc/syscalls/$(DEPDIR) libc/time/$(DEPDIR) libc/unix/$(DEPDIR) libc/xdr/$(DEPDIR) libm/common/$(DEPDIR) libm/complex/$(DEPDIR) libm/fenv/$(DEPDIR) libm/ld/$(DEPDIR) libm/ld128/$(DEPDIR) libm/ld80/$(DEPDIR) libm/machine/aarch64/$(DEPDIR) libm/machine/amdgcn/$(DEPDIR) libm/machine/arm/$(DEPDIR) libm/machine/i386/$(DEPDIR) libm/machine/mips/$(DEPDIR) libm/machine/nds32/$(DEPDIR) libm/machine/powerpc/$(DEPDIR) libm/machine/pru/$(DEPDIR) libm/machine/riscv/$(DEPDIR) libm/machine/sparc/$(DEPDIR) libm/machine/spu/$(DEPDIR) libm/machine/x86_64/$(DEPDIR) libm/machine/xtensa/$(DEPDIR) libm/math/$(DEPDIR) libm/mathfp/$(DEPDIR) libm/test/$(DEPDIR)
++	-rm -rf libc/argz/$(DEPDIR) libc/ctype/$(DEPDIR) libc/errno/$(DEPDIR) libc/iconv/ccs/$(DEPDIR) libc/iconv/ces/$(DEPDIR) libc/iconv/lib/$(DEPDIR) libc/locale/$(DEPDIR) libc/machine/aarch64/$(DEPDIR) libc/machine/amdgcn/$(DEPDIR) libc/machine/arc/$(DEPDIR) libc/machine/arc64/$(DEPDIR) libc/machine/arm/$(DEPDIR) libc/machine/bfin/$(DEPDIR) libc/machine/cr16/$(DEPDIR) libc/machine/cris/$(DEPDIR) libc/machine/crx/$(DEPDIR) libc/machine/csky/$(DEPDIR) libc/machine/d10v/$(DEPDIR) libc/machine/d30v/$(DEPDIR) libc/machine/epiphany/$(DEPDIR) libc/machine/fr30/$(DEPDIR) libc/machine/frv/$(DEPDIR) libc/machine/ft32/$(DEPDIR) libc/machine/h8300/$(DEPDIR) libc/machine/h8500/$(DEPDIR) libc/machine/hppa/$(DEPDIR) libc/machine/i386/$(DEPDIR) libc/machine/i960/$(DEPDIR) libc/machine/iq2000/$(DEPDIR) libc/machine/lm32/$(DEPDIR) libc/machine/m32c/$(DEPDIR) libc/machine/m32r/$(DEPDIR) libc/machine/m68hc11/$(DEPDIR) libc/machine/m68k/$(DEPDIR) libc/machine/m88k/$(DEPDIR) libc/machine/mep/$(DEPDIR) libc/machine/microblaze/$(DEPDIR) libc/machine/mips/$(DEPDIR) libc/machine/mn10200/$(DEPDIR) libc/machine/mn10300/$(DEPDIR) libc/machine/moxie/$(DEPDIR) libc/machine/msp430/$(DEPDIR) libc/machine/mt/$(DEPDIR) libc/machine/nds32/$(DEPDIR) libc/machine/necv70/$(DEPDIR) libc/machine/nvptx/$(DEPDIR) libc/machine/or1k/$(DEPDIR) libc/machine/powerpc/$(DEPDIR) libc/machine/riscv/$(DEPDIR) libc/machine/rl78/$(DEPDIR) libc/machine/rx/$(DEPDIR) libc/machine/sh/$(DEPDIR) libc/machine/sparc/$(DEPDIR) libc/machine/spu/$(DEPDIR) libc/machine/tic4x/$(DEPDIR) libc/machine/tic6x/$(DEPDIR) libc/machine/tic80/$(DEPDIR) libc/machine/v850/$(DEPDIR) libc/machine/visium/$(DEPDIR) libc/machine/w65/$(DEPDIR) libc/machine/x86_64/$(DEPDIR) libc/machine/xc16x/$(DEPDIR) libc/machine/xstormy16/$(DEPDIR) libc/machine/xtensa/$(DEPDIR) libc/machine/z8k/$(DEPDIR) libc/misc/$(DEPDIR) libc/posix/$(DEPDIR) libc/reent/$(DEPDIR) libc/search/$(DEPDIR) libc/signal/$(DEPDIR) libc/ssp/$(DEPDIR) libc/stdio/$(DEPDIR) libc/stdio64/$(DEPDIR) libc/stdlib/$(DEPDIR) libc/string/$(DEPDIR) libc/sys/a29khif/$(DEPDIR) libc/sys/amdgcn/$(DEPDIR) libc/sys/arm/$(DEPDIR) libc/sys/d10v/$(DEPDIR) libc/sys/epiphany/$(DEPDIR) libc/sys/h8300hms/$(DEPDIR) libc/sys/h8500hms/$(DEPDIR) libc/sys/m88kbug/$(DEPDIR) libc/sys/mmixware/$(DEPDIR) libc/sys/netware/$(DEPDIR) libc/sys/or1k/$(DEPDIR) libc/sys/rdos/$(DEPDIR) libc/sys/rtems/$(DEPDIR) libc/sys/sh/$(DEPDIR) libc/sys/sysmec/$(DEPDIR) libc/sys/sysnec810/$(DEPDIR) libc/sys/sysnecv850/$(DEPDIR) libc/sys/sysvi386/$(DEPDIR) libc/sys/sysvnecv70/$(DEPDIR) libc/sys/tirtos/$(DEPDIR) libc/sys/w65/$(DEPDIR) libc/sys/z8ksim/$(DEPDIR) libc/syscalls/$(DEPDIR) libc/time/$(DEPDIR) libc/unix/$(DEPDIR) libc/xdr/$(DEPDIR) libm/common/$(DEPDIR) libm/complex/$(DEPDIR) libm/fenv/$(DEPDIR) libm/ld/$(DEPDIR) libm/ld128/$(DEPDIR) libm/ld80/$(DEPDIR) libm/machine/aarch64/$(DEPDIR) libm/machine/amdgcn/$(DEPDIR) libm/machine/arm/$(DEPDIR) libm/machine/i386/$(DEPDIR) libm/machine/mips/$(DEPDIR) libm/machine/nds32/$(DEPDIR) libm/machine/powerpc/$(DEPDIR) libm/machine/pru/$(DEPDIR) libm/machine/riscv/$(DEPDIR) libm/machine/sparc/$(DEPDIR) libm/machine/spu/$(DEPDIR) libm/machine/x86_64/$(DEPDIR) libm/machine/xtensa/$(DEPDIR) libm/math/$(DEPDIR) libm/mathfp/$(DEPDIR) libm/test/$(DEPDIR)
+ 	-rm -f Makefile
+ distclean-am: clean-am distclean-DEJAGNU distclean-compile \
+ 	distclean-generic distclean-hdr distclean-local distclean-tags
+@@ -51172,7 +50886,7 @@ installcheck-am:
+ maintainer-clean: maintainer-clean-am
+ 	-rm -f $(am__CONFIG_DISTCLEAN_FILES)
+ 	-rm -rf $(top_srcdir)/autom4te.cache
+-	-rm -rf libc/argz/$(DEPDIR) libc/ctype/$(DEPDIR) libc/errno/$(DEPDIR) libc/iconv/ccs/$(DEPDIR) libc/iconv/ces/$(DEPDIR) libc/iconv/lib/$(DEPDIR) libc/locale/$(DEPDIR) libc/machine/aarch64/$(DEPDIR) libc/machine/amdgcn/$(DEPDIR) libc/machine/arc/$(DEPDIR) libc/machine/arc64/$(DEPDIR) libc/machine/arm/$(DEPDIR) libc/machine/bfin/$(DEPDIR) libc/machine/cr16/$(DEPDIR) libc/machine/cris/$(DEPDIR) libc/machine/crx/$(DEPDIR) libc/machine/csky/$(DEPDIR) libc/machine/d10v/$(DEPDIR) libc/machine/d30v/$(DEPDIR) libc/machine/epiphany/$(DEPDIR) libc/machine/fr30/$(DEPDIR) libc/machine/frv/$(DEPDIR) libc/machine/ft32/$(DEPDIR) libc/machine/h8300/$(DEPDIR) libc/machine/h8500/$(DEPDIR) libc/machine/hppa/$(DEPDIR) libc/machine/i386/$(DEPDIR) libc/machine/i960/$(DEPDIR) libc/machine/iq2000/$(DEPDIR) libc/machine/lm32/$(DEPDIR) libc/machine/m32c/$(DEPDIR) libc/machine/m32r/$(DEPDIR) libc/machine/m68hc11/$(DEPDIR) libc/machine/m68k/$(DEPDIR) libc/machine/m88k/$(DEPDIR) libc/machine/mep/$(DEPDIR) libc/machine/microblaze/$(DEPDIR) libc/machine/mips/$(DEPDIR) libc/machine/mn10200/$(DEPDIR) libc/machine/mn10300/$(DEPDIR) libc/machine/moxie/$(DEPDIR) libc/machine/msp430/$(DEPDIR) libc/machine/mt/$(DEPDIR) libc/machine/nds32/$(DEPDIR) libc/machine/necv70/$(DEPDIR) libc/machine/nvptx/$(DEPDIR) libc/machine/or1k/$(DEPDIR) libc/machine/powerpc/$(DEPDIR) libc/machine/riscv/$(DEPDIR) libc/machine/rl78/$(DEPDIR) libc/machine/rx/$(DEPDIR) libc/machine/sh/$(DEPDIR) libc/machine/sparc/$(DEPDIR) libc/machine/spu/$(DEPDIR) libc/machine/tic4x/$(DEPDIR) libc/machine/tic6x/$(DEPDIR) libc/machine/tic80/$(DEPDIR) libc/machine/v850/$(DEPDIR) libc/machine/visium/$(DEPDIR) libc/machine/w65/$(DEPDIR) libc/machine/x86_64/$(DEPDIR) libc/machine/xc16x/$(DEPDIR) libc/machine/xstormy16/$(DEPDIR) libc/machine/xtensa/$(DEPDIR) libc/machine/z8k/$(DEPDIR) libc/misc/$(DEPDIR) libc/posix/$(DEPDIR) libc/reent/$(DEPDIR) libc/search/$(DEPDIR) libc/signal/$(DEPDIR) libc/ssp/$(DEPDIR) libc/stdbit/$(DEPDIR) libc/stdio/$(DEPDIR) libc/stdio64/$(DEPDIR) libc/stdlib/$(DEPDIR) libc/string/$(DEPDIR) libc/sys/a29khif/$(DEPDIR) libc/sys/amdgcn/$(DEPDIR) libc/sys/arm/$(DEPDIR) libc/sys/d10v/$(DEPDIR) libc/sys/epiphany/$(DEPDIR) libc/sys/h8300hms/$(DEPDIR) libc/sys/h8500hms/$(DEPDIR) libc/sys/m88kbug/$(DEPDIR) libc/sys/mmixware/$(DEPDIR) libc/sys/netware/$(DEPDIR) libc/sys/or1k/$(DEPDIR) libc/sys/rdos/$(DEPDIR) libc/sys/rtems/$(DEPDIR) libc/sys/sh/$(DEPDIR) libc/sys/sysmec/$(DEPDIR) libc/sys/sysnec810/$(DEPDIR) libc/sys/sysnecv850/$(DEPDIR) libc/sys/sysvi386/$(DEPDIR) libc/sys/sysvnecv70/$(DEPDIR) libc/sys/tirtos/$(DEPDIR) libc/sys/w65/$(DEPDIR) libc/sys/z8ksim/$(DEPDIR) libc/syscalls/$(DEPDIR) libc/time/$(DEPDIR) libc/unix/$(DEPDIR) libc/xdr/$(DEPDIR) libm/common/$(DEPDIR) libm/complex/$(DEPDIR) libm/fenv/$(DEPDIR) libm/ld/$(DEPDIR) libm/ld128/$(DEPDIR) libm/ld80/$(DEPDIR) libm/machine/aarch64/$(DEPDIR) libm/machine/amdgcn/$(DEPDIR) libm/machine/arm/$(DEPDIR) libm/machine/i386/$(DEPDIR) libm/machine/mips/$(DEPDIR) libm/machine/nds32/$(DEPDIR) libm/machine/powerpc/$(DEPDIR) libm/machine/pru/$(DEPDIR) libm/machine/riscv/$(DEPDIR) libm/machine/sparc/$(DEPDIR) libm/machine/spu/$(DEPDIR) libm/machine/x86_64/$(DEPDIR) libm/machine/xtensa/$(DEPDIR) libm/math/$(DEPDIR) libm/mathfp/$(DEPDIR) libm/test/$(DEPDIR)
++	-rm -rf libc/argz/$(DEPDIR) libc/ctype/$(DEPDIR) libc/errno/$(DEPDIR) libc/iconv/ccs/$(DEPDIR) libc/iconv/ces/$(DEPDIR) libc/iconv/lib/$(DEPDIR) libc/locale/$(DEPDIR) libc/machine/aarch64/$(DEPDIR) libc/machine/amdgcn/$(DEPDIR) libc/machine/arc/$(DEPDIR) libc/machine/arc64/$(DEPDIR) libc/machine/arm/$(DEPDIR) libc/machine/bfin/$(DEPDIR) libc/machine/cr16/$(DEPDIR) libc/machine/cris/$(DEPDIR) libc/machine/crx/$(DEPDIR) libc/machine/csky/$(DEPDIR) libc/machine/d10v/$(DEPDIR) libc/machine/d30v/$(DEPDIR) libc/machine/epiphany/$(DEPDIR) libc/machine/fr30/$(DEPDIR) libc/machine/frv/$(DEPDIR) libc/machine/ft32/$(DEPDIR) libc/machine/h8300/$(DEPDIR) libc/machine/h8500/$(DEPDIR) libc/machine/hppa/$(DEPDIR) libc/machine/i386/$(DEPDIR) libc/machine/i960/$(DEPDIR) libc/machine/iq2000/$(DEPDIR) libc/machine/lm32/$(DEPDIR) libc/machine/m32c/$(DEPDIR) libc/machine/m32r/$(DEPDIR) libc/machine/m68hc11/$(DEPDIR) libc/machine/m68k/$(DEPDIR) libc/machine/m88k/$(DEPDIR) libc/machine/mep/$(DEPDIR) libc/machine/microblaze/$(DEPDIR) libc/machine/mips/$(DEPDIR) libc/machine/mn10200/$(DEPDIR) libc/machine/mn10300/$(DEPDIR) libc/machine/moxie/$(DEPDIR) libc/machine/msp430/$(DEPDIR) libc/machine/mt/$(DEPDIR) libc/machine/nds32/$(DEPDIR) libc/machine/necv70/$(DEPDIR) libc/machine/nvptx/$(DEPDIR) libc/machine/or1k/$(DEPDIR) libc/machine/powerpc/$(DEPDIR) libc/machine/riscv/$(DEPDIR) libc/machine/rl78/$(DEPDIR) libc/machine/rx/$(DEPDIR) libc/machine/sh/$(DEPDIR) libc/machine/sparc/$(DEPDIR) libc/machine/spu/$(DEPDIR) libc/machine/tic4x/$(DEPDIR) libc/machine/tic6x/$(DEPDIR) libc/machine/tic80/$(DEPDIR) libc/machine/v850/$(DEPDIR) libc/machine/visium/$(DEPDIR) libc/machine/w65/$(DEPDIR) libc/machine/x86_64/$(DEPDIR) libc/machine/xc16x/$(DEPDIR) libc/machine/xstormy16/$(DEPDIR) libc/machine/xtensa/$(DEPDIR) libc/machine/z8k/$(DEPDIR) libc/misc/$(DEPDIR) libc/posix/$(DEPDIR) libc/reent/$(DEPDIR) libc/search/$(DEPDIR) libc/signal/$(DEPDIR) libc/ssp/$(DEPDIR) libc/stdio/$(DEPDIR) libc/stdio64/$(DEPDIR) libc/stdlib/$(DEPDIR) libc/string/$(DEPDIR) libc/sys/a29khif/$(DEPDIR) libc/sys/amdgcn/$(DEPDIR) libc/sys/arm/$(DEPDIR) libc/sys/d10v/$(DEPDIR) libc/sys/epiphany/$(DEPDIR) libc/sys/h8300hms/$(DEPDIR) libc/sys/h8500hms/$(DEPDIR) libc/sys/m88kbug/$(DEPDIR) libc/sys/mmixware/$(DEPDIR) libc/sys/netware/$(DEPDIR) libc/sys/or1k/$(DEPDIR) libc/sys/rdos/$(DEPDIR) libc/sys/rtems/$(DEPDIR) libc/sys/sh/$(DEPDIR) libc/sys/sysmec/$(DEPDIR) libc/sys/sysnec810/$(DEPDIR) libc/sys/sysnecv850/$(DEPDIR) libc/sys/sysvi386/$(DEPDIR) libc/sys/sysvnecv70/$(DEPDIR) libc/sys/tirtos/$(DEPDIR) libc/sys/w65/$(DEPDIR) libc/sys/z8ksim/$(DEPDIR) libc/syscalls/$(DEPDIR) libc/time/$(DEPDIR) libc/unix/$(DEPDIR) libc/xdr/$(DEPDIR) libm/common/$(DEPDIR) libm/complex/$(DEPDIR) libm/fenv/$(DEPDIR) libm/ld/$(DEPDIR) libm/ld128/$(DEPDIR) libm/ld80/$(DEPDIR) libm/machine/aarch64/$(DEPDIR) libm/machine/amdgcn/$(DEPDIR) libm/machine/arm/$(DEPDIR) libm/machine/i386/$(DEPDIR) libm/machine/mips/$(DEPDIR) libm/machine/nds32/$(DEPDIR) libm/machine/powerpc/$(DEPDIR) libm/machine/pru/$(DEPDIR) libm/machine/riscv/$(DEPDIR) libm/machine/sparc/$(DEPDIR) libm/machine/spu/$(DEPDIR) libm/machine/x86_64/$(DEPDIR) libm/machine/xtensa/$(DEPDIR) libm/math/$(DEPDIR) libm/mathfp/$(DEPDIR) libm/test/$(DEPDIR)
+ 	-rm -f Makefile
+ maintainer-clean-am: distclean-am maintainer-clean-aminfo \
+ 	maintainer-clean-generic maintainer-clean-local
 diff --git a/newlib/libc/Makefile.inc b/newlib/libc/Makefile.inc
 index 39e98338d..d07eed764 100644
 --- a/newlib/libc/Makefile.inc
