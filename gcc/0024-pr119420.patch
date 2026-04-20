@@ -2,14 +2,12 @@
 
 From: Daniel Barboza <daniel.barboza@oss.qualcomm.com>
 
-Note that we're not adding its counterpart:
+Also add its counterpart:
 
 "(A>>bool) != 0 -> (unsigned)A) > bool"
 
-Because it will collide with patterns that handles builtin_clz (e.g.
-clz-complement-int.c tree-ssa test).
-
-Bootstrapped and regression tested in x86.
+Bootstrap tested in x86, aarch64 and RISC-V.
+Regression tested in x86 and aarch64.
 
         PR tree-optimization/119420
 
@@ -22,36 +20,48 @@ gcc/testsuite/ChangeLog:
 
         * gcc.dg/tree-ssa/pr119420.c: New test.
 ---
- gcc/match.pd                             |  8 ++++++++
- gcc/testsuite/gcc.dg/tree-ssa/pr119420.c | 23 +++++++++++++++++++++++
- 2 files changed, 31 insertions(+)
+
+Changes from v2:
+- gate the pattern with "#if GIMPLE"
+- use 'single_use' in the rshift result
+- add the NE variant
+- v2 link: https://gcc.gnu.org/pipermail/gcc-patches/2026-April/712431.html
+
+ gcc/match.pd                             | 13 ++++++++
+ gcc/testsuite/gcc.dg/tree-ssa/pr119420.c | 42 ++++++++++++++++++++++++
+ 2 files changed, 55 insertions(+)
  create mode 100644 gcc/testsuite/gcc.dg/tree-ssa/pr119420.c
 
 diff --git a/gcc/match.pd b/gcc/match.pd
-index 7f16fd4e081..348e9f45a28 100644
+index 7b652afb43d..fab1da673d1 100644
 --- a/gcc/match.pd
 +++ b/gcc/match.pd
-@@ -5367,6 +5367,14 @@ DEFINE_INT_AND_FLOAT_ROUND_FN (RINT)
+@@ -5367,6 +5367,19 @@ DEFINE_INT_AND_FLOAT_ROUND_FN (RINT)
        @0)))))
  #endif
  
-+/* PR119420: (A >> bool) == 0 -> (unsigned)a <= (unsigned)bool;  */
-+(simplify
-+ (eq (rshift:s @0 zero_one_valued_p@1) integer_zerop)
-+ (with {
-+     tree utype = unsigned_type_for (TREE_TYPE (@0));
-+  }
-+  (le (convert:utype @0) (convert:utype @1))))
++#if GIMPLE
++/* PR119420: (A >> bool) == 0 -> (unsigned)a <= (unsigned)bool
++   and its variant:
++   (A >> bool) != 0 -> (unsigned)a > (unsigned)bool;  */
++(for cmp (eq ne)
++     icmp (le gt)
++ (simplify
++  (cmp (rshift@2 @0 zero_one_valued_p@1) integer_zerop)
++  (if (single_use (@2))
++   (with { tree utype = unsigned_type_for (TREE_TYPE (@0)); }
++    (icmp (convert:utype @0) (convert:utype @1))))))
++#endif
 +
  /* Rewrite an LROTATE_EXPR by a constant into an
     RROTATE_EXPR by a new constant.  */
  (simplify
 diff --git a/gcc/testsuite/gcc.dg/tree-ssa/pr119420.c b/gcc/testsuite/gcc.dg/tree-ssa/pr119420.c
 new file mode 100644
-index 00000000000..3169650fe66
+index 00000000000..99259fd4a8b
 --- /dev/null
 +++ b/gcc/testsuite/gcc.dg/tree-ssa/pr119420.c
-@@ -0,0 +1,23 @@
+@@ -0,0 +1,42 @@
 +/* { dg-additional-options -O2 } */
 +/* { dg-additional-options -fdump-tree-optimized } */
 +
@@ -73,8 +83,27 @@ index 00000000000..3169650fe66
 +  return aa <= 1;
 +}
 +
++int ll3 (signed a)
++{
++  int d = a >> 1;
++  return d != 0;
++}
++
++int ll4 (signed a)
++{
++  int d = a & ~1;
++  return d != 0;
++}
++
++int ll5 (signed a)
++{
++  unsigned aa = a;
++  return aa > 1;
++}
++
 +/* { dg-final { scan-tree-dump-times " >> " 0 optimized } } */
 +/* { dg-final { scan-tree-dump-times " <= " 3 optimized } } */
++/* { dg-final { scan-tree-dump-times " > " 3 optimized } } */
 -- 
 2.43.0
 
