@@ -1,0 +1,13 @@
+diff --git a/gcc/config/riscv/thead.cc b/gcc/config/riscv/thead.cc
+index f43bfdbb354..1f25af96e7f 100644
+--- a/gcc/config/riscv/thead.cc
++++ b/gcc/config/riscv/thead.cc
+@@ -678,7 +678,7 @@ th_memidx_classify_address_index (struct riscv_address_info *info, rtx x,
+     {
+       type = (GET_CODE (XEXP (offset, 0)) == SIGN_EXTEND)
+ 	     ? ADDRESS_REG_REG : ADDRESS_REG_UREG;
+-      shift = exact_log2 (INTVAL (XEXP (x, 1)));
++      shift = exact_log2 (INTVAL (offset));
+       offset = XEXP (XEXP (x, 0), 0);
+     }
+   /* (ashift:X (reg:X) (const_int shift)) */
