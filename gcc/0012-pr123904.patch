@@ -1,17 +1,53 @@
-commit 9b642bb5353528a552bc44440769f64aba965590
-Author: Jeff Law <jeffrey.law@oss.qualcomm.com>
-Date:   Tue Mar 10 16:01:44 2026 -0600
-
-    Use shift pair to optimize this case
-
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index 3fe0ad0ccdf4..7ffbdbbb8700 100644
+index 7e9205fb24bf..89042a55b325 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
-@@ -4960,6 +4960,33 @@ (define_split
+@@ -4995,6 +4995,77 @@ (define_split
    { operands[3] = GEN_INT (BITS_PER_WORD
  			   - exact_log2 (INTVAL (operands[3]) + 1)); })
  
++;; If a shift count is BITS_PER_WORD - 1 - N, then we can exploit the identity
++;; that -x = ~x + 1 which is equivalent to (-1 - x) = ~x.  When shifting only
++;; low bits of X matter (5 for SI, 6 for DI).  So 31/63 are equivalent to -1
++;; for SI/DI shifts.
++;;
++;; Strangely, even for rv64, the shift computation is done in SI, presumably
++;; something narrowed the arithmetic prior to gimple->rtl expansion.
++;; Ultimately it gets wrapped with a SUBREG narrowing to QI.
++(define_split
++  [(set (match_operand:X 0 "register_operand")
++	(any_shift_rotate:X
++	  (match_operand:X 1 "register_operand")
++	  (subreg:QI (minus:SI (match_operand 2 "bitpos_mask_operand")
++			       (match_operand:SI 3 "register_operand")) 0)))
++    (clobber (match_operand:X 4 "register_operand"))]
++  ""
++  [(set (match_dup 4) (not:X (match_dup 6)))
++   (set (match_dup 0) (any_shift_rotate:X (match_dup 1) (match_dup 5)))]
++ { 
++   operands[5] = gen_lowpart (QImode, operands[4]);
++   operands[6] = gen_lowpart (word_mode, operands[3]);
++ })
++
++;; This is the same thing as the prior pattern, but for 32 bit shifts on rv64.
++(define_split
++  [(set (match_operand:DI 0 "register_operand")
++	(sign_extend:DI
++	 (any_shift_rotate:SI
++	  (match_operand:SI 1 "register_operand")
++	  (subreg:QI (minus:SI (const_int 31)
++			       (match_operand:SI 2 "register_operand") ) 0))))
++    (clobber (match_operand:DI 3 "register_operand"))]
++  "TARGET_64BIT"
++  [(set (match_dup 3) (not:DI (match_dup 2)))
++   (set (match_dup 0)
++	(sign_extend:DI (any_shift_rotate:SI (match_dup 1)
++					     (match_dup 4))))]
++ {
++   operands[2] = gen_lowpart (DImode, operands[2]);
++   operands[4] = gen_lowpart (QImode, operands[3]);
++ })
++
 +;; This is similar using a shift triplet to implement a logical AND when
 +;; the mask is a consecutive_bits_operand.
 +;;
@@ -29,7 +65,9 @@ index 3fe0ad0ccdf4..7ffbdbbb8700 100644
 +   (set (match_dup 0) (lshiftrt:X (match_dup 4) (match_dup 6)))]
 +"{
 +  /* We want to left shift by the number of leading zeros in the mask,
-+     plus the number of bits shifted left by the pattern.  */
++     plus the number of bits shifted left by the pattern.  Remember that
++     a HOST_WIDE_INT may be 64 bits, so clz on that value can count bits
++     we don't care about for rv32.  */
 +  HOST_WIDE_INT lshift
 +    = clz_hwi (UINTVAL (operands[3])) % BITS_PER_WORD + INTVAL (operands[2]);
 +  operands[5] = gen_int_mode (lshift, QImode);
@@ -42,6 +80,27 @@ index 3fe0ad0ccdf4..7ffbdbbb8700 100644
  ;; Standard extensions and pattern for optimization
  (include "bitmanip.md")
  (include "crypto.md")
+diff --git a/gcc/testsuite/gcc.target/riscv/pr123838.c b/gcc/testsuite/gcc.target/riscv/pr123838.c
+new file mode 100644
+index 000000000000..58a8ea6ea0bb
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr123838.c
+@@ -0,0 +1,15 @@
++/* { dg-do compile } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og"} } */
++
++#define F(NAME, OP, TYPE) TYPE f##NAME##TYPE (TYPE x, TYPE n) { return x OP (sizeof (TYPE) * 8 - 1 - n); }
++
++F(RSHIFT, >>, int)
++F(LSHIFT, <<, int)
++F(RSHIFT, >>, long)
++F(LSHIFT, <<, long)
++
++/* { dg-final { scan-assembler-times "not\t" 4 } } */
++/* { dg-final { scan-assembler-not "li\t" } } */
++/* { dg-final { scan-assembler-not "sub\t" } } */
++/* { dg-final { scan-assembler-not "subw\t" } } */
++
 diff --git a/gcc/testsuite/gcc.target/riscv/pr123904.c b/gcc/testsuite/gcc.target/riscv/pr123904.c
 new file mode 100644
 index 000000000000..7181c8de46f3
