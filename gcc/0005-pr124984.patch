@@ -1,8 +1,8 @@
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index 3fe0ad0ccdf..b7b1c19d099 100644
+index 7e9205fb24bf..3aa7d5f343b2 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
-@@ -4960,6 +4960,48 @@ (define_split
+@@ -4995,6 +4995,48 @@ (define_split
    { operands[3] = GEN_INT (BITS_PER_WORD
  			   - exact_log2 (INTVAL (operands[3]) + 1)); })
  
@@ -53,10 +53,10 @@ index 3fe0ad0ccdf..b7b1c19d099 100644
  (include "crypto.md")
 diff --git a/gcc/testsuite/gcc.target/riscv/pr123838.c b/gcc/testsuite/gcc.target/riscv/pr123838.c
 new file mode 100644
-index 00000000000..c8fe202a6ad
+index 000000000000..58a8ea6ea0bb
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/pr123838.c
-@@ -0,0 +1,13 @@
+@@ -0,0 +1,15 @@
 +/* { dg-do compile } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" "-Og"} } */
 +
@@ -69,4 +69,6 @@ index 00000000000..c8fe202a6ad
 +
 +/* { dg-final { scan-assembler-times "not\t" 4 } } */
 +/* { dg-final { scan-assembler-not "li\t" } } */
++/* { dg-final { scan-assembler-not "sub\t" } } */
++/* { dg-final { scan-assembler-not "subw\t" } } */
 +
