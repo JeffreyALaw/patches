@@ -22,7 +22,7 @@ index 3fe0ad0ccdf..b7b1c19d099 100644
 +			       (match_operand:SI 3 "register_operand")) 0)))
 +    (clobber (match_operand:X 4 "register_operand"))]
 +  ""
-+  [(set (match_dup 4) (not:X (match_dup 4)))
++  [(set (match_dup 4) (not:X (match_dup 6)))
 +   (set (match_dup 0) (any_shift_rotate:X (match_dup 1) (match_dup 5)))]
 + { 
 +   operands[5] = gen_lowpart (QImode, operands[4]);
