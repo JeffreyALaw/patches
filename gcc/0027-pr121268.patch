@@ -1,21 +1,21 @@
-	PR target/121268
+       PR target/121268
 gcc/
-	* config/riscv/bitmanip.md: Add splitters to exploit identities
-	that relate subtraction and bitwise negation on 2's complement
-	arithmetic.
+       * config/riscv/bitmanip.md: Add splitters to exploit identities
+       that relate subtraction and bitwise negation on 2's complement
+       arithmetic.
 
 gcc/testsuite/
-	* gcc.target/riscv/pr121268.c: New test.
+       * gcc.target/riscv/pr121268.c: New test.
+
 
 diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
-index 45881994f3ad..27577ab6d507 100644
+index 120ee6b1ceaf..2dea0bc8b5fc 100644
 --- a/gcc/config/riscv/bitmanip.md
 +++ b/gcc/config/riscv/bitmanip.md
-@@ -1368,3 +1368,62 @@ (define_split
-    (set (match_dup 0) (zero_extract:X (match_dup 3)
- 				      (const_int 1)
- 				      (zero_extend:X (match_dup 2))))])
-+
+@@ -1400,3 +1399,60 @@ (define_insn_and_split ""
+ }
+   [(set_attr "type" "arith")])
+ 
 +;; If we have (and (not X) (not Y)), and we can implement one of those NOT
 +;; expressions as a single insn, then do so as that will allow using andn.
 +;; In this case we exploit ~(-x) == x - 1.  Two versions as we can reverse
@@ -72,7 +72,6 @@ index 45881994f3ad..27577ab6d507 100644
 +  "TARGET_ZBB"
 +  [(set (match_dup 2) (plus:X (match_dup 1) (const_int -1)))
 +   (set (match_dup 0) (and:X (not:X (match_dup 1)) (match_dup 2)))])
-+
 +
 diff --git a/gcc/testsuite/gcc.target/riscv/pr121268.c b/gcc/testsuite/gcc.target/riscv/pr121268.c
 new file mode 100644
