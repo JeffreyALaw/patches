@@ -1,13 +1,11 @@
 diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
-index 0d16d79df3ae..5a12f1ea763a 100644
+index 1ca9f82b363f..19030f886f89 100644
 --- a/gcc/config/riscv/bitmanip.md
 +++ b/gcc/config/riscv/bitmanip.md
-@@ -1365,3 +1365,35 @@ (define_split
-    (set (match_dup 0) (zero_extract:X (match_dup 3)
- 				      (const_int 1)
- 				      (zero_extend:X (match_dup 2))))])
-+
-+
+@@ -1426,3 +1426,33 @@ (define_split
+   [(set (match_dup 2) (plus:X (match_dup 1) (const_int -1)))
+    (set (match_dup 0) (and:X (not:X (match_dup 1)) (match_dup 2)))])
+ 
 +;; So the basic idea here is to realize that if we just want to test a
 +;; single bit in SImode, we can left shift the input by 32 additional
 +;; bit positions.  That removes any "junk" in the high order bits.  We
@@ -39,7 +37,7 @@ index 0d16d79df3ae..5a12f1ea763a 100644
 +  [(set_attr "type" "arith")])
 +
 diff --git a/gcc/config/riscv/predicates.md b/gcc/config/riscv/predicates.md
-index 220a6f0830c7..73e6a72ff5be 100644
+index 8022c84b1141..7e56f9366ff9 100644
 --- a/gcc/config/riscv/predicates.md
 +++ b/gcc/config/riscv/predicates.md
 @@ -265,6 +265,14 @@ (define_predicate "p2m1_shift_operand"
@@ -58,7 +56,7 @@ index 220a6f0830c7..73e6a72ff5be 100644
    (match_code "const_int")
  {
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index 3fe0ad0ccdf4..075007a7488e 100644
+index c350283fa344..12224a35f17e 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
 @@ -906,6 +906,28 @@ (define_insn_and_split "*lui_constraint<X:mode>_and_to_or"
@@ -90,9 +88,9 @@ index 3fe0ad0ccdf4..075007a7488e 100644
  ;;
  ;;  ....................
  ;;
-@@ -4960,6 +4982,103 @@ (define_split
-   { operands[3] = GEN_INT (BITS_PER_WORD
- 			   - exact_log2 (INTVAL (operands[3]) + 1)); })
+@@ -5123,6 +5145,103 @@ (define_split
+   operands[6] = gen_int_mode (rshift, QImode);
+ }")
  
 +;; The idea here is an equality test of a right shifted value is really
 +;; just a range test in certain circumstances.
@@ -195,10 +193,10 @@ index 3fe0ad0ccdf4..075007a7488e 100644
  (include "bitmanip.md")
  (include "crypto.md")
 diff --git a/gcc/match.pd b/gcc/match.pd
-index 7f16fd4e0814..fd6ae9a4cbf6 100644
+index 7e6d5bd3af39..a97cad6e4e58 100644
 --- a/gcc/match.pd
 +++ b/gcc/match.pd
-@@ -12261,3 +12261,27 @@ and,
+@@ -12326,3 +12326,27 @@ and,
  (simplify
   (BUILT_IN_CONSTANT_P (nop_convert@1 @0))
   (BUILT_IN_CONSTANT_P @0))
