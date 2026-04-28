@@ -1,11 +1,34 @@
 diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
-index 1ca9f82b363f..19030f886f89 100644
+index c9561b0b622..668f4fc47d1 100644
 --- a/gcc/config/riscv/bitmanip.md
 +++ b/gcc/config/riscv/bitmanip.md
-@@ -1426,3 +1426,33 @@ (define_split
-   [(set (match_dup 2) (plus:X (match_dup 1) (const_int -1)))
-    (set (match_dup 0) (and:X (not:X (match_dup 1)) (match_dup 2)))])
- 
+@@ -1441,3 +1441,56 @@ (define_split
+     operands[3] = gen_lowpart (DImode, operands[3]);
+     operands[6] = gen_lowpart (SImode, operands[5]);
+   })
++
++(define_split
++  [(set (match_operand:X 0 "register_operand")
++        (xor:X (xor:X (ior:X (match_operand:X 1 "register_operand")
++                             (match_operand:X 2 "register_operand"))
++                      (match_dup 1))
++               (match_operand:X 3 "register_operand")))
++   (clobber (match_operand:X 4 "register_operand"))]
++  "TARGET_ZBB || TARGET_ZBKB"
++  [(set (match_dup 4) (and:X (not:X (match_dup 1)) (match_dup 2)))
++   (set (match_dup 0) (xor:X (match_dup 4) (match_dup 3)))])
++
++(define_split
++  [(set (match_operand:X 0 "register_operand")
++        (xor:X (xor:X (ior:X (match_operand:X 1 "register_operand")
++                             (match_operand:X 2 "register_operand"))
++                      (match_dup 2))
++               (match_operand:X 3 "register_operand")))
++   (clobber (match_operand:X 4 "register_operand"))]
++  "TARGET_ZBB || TARGET_ZBKB"
++  [(set (match_dup 4) (and:X (not:X (match_dup 2)) (match_dup 1)))
++   (set (match_dup 0) (xor:X (match_dup 4) (match_dup 3)))])
++
 +;; So the basic idea here is to realize that if we just want to test a
 +;; single bit in SImode, we can left shift the input by 32 additional
 +;; bit positions.  That removes any "junk" in the high order bits.  We
@@ -37,7 +60,7 @@ index 1ca9f82b363f..19030f886f89 100644
 +  [(set_attr "type" "arith")])
 +
 diff --git a/gcc/config/riscv/predicates.md b/gcc/config/riscv/predicates.md
-index 8022c84b1141..7e56f9366ff9 100644
+index 8022c84b114..7e56f9366ff 100644
 --- a/gcc/config/riscv/predicates.md
 +++ b/gcc/config/riscv/predicates.md
 @@ -265,6 +265,14 @@ (define_predicate "p2m1_shift_operand"
@@ -56,10 +79,10 @@ index 8022c84b1141..7e56f9366ff9 100644
    (match_code "const_int")
  {
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index c350283fa344..12224a35f17e 100644
+index 6b5f824109e..0a2d1ec0f90 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
-@@ -906,6 +906,28 @@ (define_insn_and_split "*lui_constraint<X:mode>_and_to_or"
+@@ -911,6 +911,28 @@ (define_insn_and_split "*lui_constraint<X:mode>_and_to_or"
    }
    [(set_attr "type" "arith")])
  
@@ -88,9 +111,9 @@ index c350283fa344..12224a35f17e 100644
  ;;
  ;;  ....................
  ;;
-@@ -5123,6 +5145,103 @@ (define_split
-   operands[6] = gen_int_mode (rshift, QImode);
- }")
+@@ -5172,6 +5194,103 @@ (define_insn "*sign_bit_splat_equality_test"
+ 					
+ 	
  
 +;; The idea here is an equality test of a right shifted value is really
 +;; just a range test in certain circumstances.
@@ -193,10 +216,10 @@ index c350283fa344..12224a35f17e 100644
  (include "bitmanip.md")
  (include "crypto.md")
 diff --git a/gcc/match.pd b/gcc/match.pd
-index 7e6d5bd3af39..a97cad6e4e58 100644
+index 65a2292ecae..866b51f1875 100644
 --- a/gcc/match.pd
 +++ b/gcc/match.pd
-@@ -12326,3 +12326,27 @@ and,
+@@ -12335,3 +12335,27 @@ and,
  (simplify
   (BUILT_IN_CONSTANT_P (nop_convert@1 @0))
   (BUILT_IN_CONSTANT_P @0))
@@ -226,7 +249,7 @@ index 7e6d5bd3af39..a97cad6e4e58 100644
 +  (eq (lshift (convert:utype @0) { count; }) { rhs; }))))
 diff --git a/gcc/testsuite/gcc.target/riscv/pr85234.c b/gcc/testsuite/gcc.target/riscv/pr85234.c
 new file mode 100644
-index 000000000000..6b188419f6bc
+index 00000000000..6b188419f6b
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/pr85234.c
 @@ -0,0 +1,43 @@
@@ -273,3 +296,21 @@ index 000000000000..6b188419f6bc
 +/* { dg-final { scan-assembler-times "srai\t" 1 { target rv64 } } } */
 +/* { dg-final { scan-assembler-times "sub\t" 2 { target rv64 } } } */
 +/* { dg-final { scan-assembler-times "andi\t" 1 { target rv64 } } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/pr96692.c b/gcc/testsuite/gcc.target/riscv/pr96692.c
+new file mode 100644
+index 00000000000..650f4f0f80d
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr96692.c
+@@ -0,0 +1,12 @@
++/* { dg-do compile } */
++/* { dg-additional-options "-march=rv64gcb_zicond -mabi=lp64d" { target rv64 } } */
++/* { dg-additional-options "-march=rv32gcb_zicond -mabi=ilp32" { target rv32 } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
++
++int f(int a, int b, int c)
++{
++    return (a ^ b) ^ (a | c);
++}
++
++/* { dg-final { scan-assembler-times "xor\t" 1 } } */
++/* { dg-final { scan-assembler-times "andn\t" 1 } } */
