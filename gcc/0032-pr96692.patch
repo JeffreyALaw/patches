@@ -1,12 +1,11 @@
 diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
-index a464e712e0b0..27ab3c957821 100644
+index 668f4fc47d1..729f0b02aa5 100644
 --- a/gcc/config/riscv/bitmanip.md
 +++ b/gcc/config/riscv/bitmanip.md
-@@ -1461,3 +1461,26 @@ (define_split
-     operands[3] = gen_lowpart (DImode, operands[3]);
-     operands[6] = gen_lowpart (SImode, operands[5]);
-   })
-+
+@@ -1494,3 +1494,25 @@ (define_insn_and_split ""
+ }
+   [(set_attr "type" "arith")])
+ 
 +(define_split
 +  [(set (match_operand:X 0 "register_operand")
 +        (xor:X (xor:X (ior:X (match_operand:X 1 "register_operand")
