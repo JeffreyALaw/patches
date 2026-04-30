@@ -1,25 +1,57 @@
 diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
-index 27ab3c957821..b2bcde034c96 100644
+index c9561b0b6228..30046e1fb69e 100644
 --- a/gcc/config/riscv/bitmanip.md
 +++ b/gcc/config/riscv/bitmanip.md
-@@ -1484,3 +1484,20 @@ (define_split
+@@ -1441,3 +1441,25 @@ (define_split
    [(set (match_dup 4) (and:X (not:X (match_dup 2)) (match_dup 1)))
     (set (match_dup 0) (xor:X (match_dup 4) (match_dup 3)))])
  
++
 +;; This would typically be a 3 instruction sequence.  Two shifts plus
-+;; the rotate.  But in this form we can push the extension to wrap the
-+;; rotate so long as the mask constant preserves bits 31..63.  If the
-+;; mask is a small operand, then we win.
-+(define_split
-+  [(set (match_operand:DI 0 "register_operand")
-+        (sign_extend:DI (and:SI (rotatert:SI (match_operand:SI 1 "register_operand")
-+                                             (match_operand 2 "const_int_operand"))
-+                                (match_operand 3 "const_int_operand"))))
-+   (clobber (match_operand:DI 4 "register_operand"))]
++;; the rotate.  But with bits 32..63 defined by value in bit 31, we can
++;; use the sign extending shifts/rotates.  And with the number of low bits
++;; masked off by the AND matching the final shift count we can turn this mess
++;; into simple "w" mode left shift.
++(define_insn "rotate_with_masking_to_shift"
++  [(set (match_operand:DI 0 "register_operand" "=r")
++        (sign_extend:DI (and:SI (rotatert:SI (match_operand:SI 1 "register_operand" "r")
++                                             (match_operand 2 "const_int_operand" "i"))
++                                (match_operand 3 "consecutive_bits_operand" "i"))))]
 +  "(TARGET_64BIT && (TARGET_ZBB || TARGET_ZBKB)
 +    && INTVAL (operands[2]) < 32
 +    && (INTVAL (operands[3]) & HOST_WIDE_INT_C (0xffffffff80000000)) == HOST_WIDE_INT_C (0xffffffff80000000)
-+    && SMALL_OPERAND (INTVAL (operands[3])))"
-+  [(set (match_dup 4) (sign_extend:DI (rotatert:SI (match_dup 1) (match_dup 2))))
-+   (set (match_dup 0) (and:DI (match_dup 4) (match_dup 3)))])
++    && ctz_hwi (INTVAL (operands[3])) == 32 - INTVAL (operands[2]))"
++{
++  operands[2] = GEN_INT (32 - INTVAL (operands[2]));
++  return "slliw\t%0,%1,%2";
++}
++  [(set_attr "type" "shift")
++   (set_attr "mode" "DI")])
 +
+diff --git a/gcc/testsuite/gcc.target/riscv/pr109038.c b/gcc/testsuite/gcc.target/riscv/pr109038.c
+new file mode 100644
+index 000000000000..6a4e82673fb9
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr109038.c
+@@ -0,0 +1,21 @@
++/* { dg-do compile } */
++/* { dg-additional-options "-march=rv64gcb_zicond -mabi=lp64d" { target rv64 } } */
++/* { dg-additional-options "-march=rv32gcb_zicond -mabi=ilp32" { target rv32 } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
++
++unsigned
++foo (unsigned int a)
++{
++  unsigned int b = a & 0x00FFFFFF;
++  unsigned int c = ((b & 0x000000FF) << 8
++            | (b & 0x0000FF00) << 8
++            | (b & 0x00FF0000) << 8
++            | (b & 0xFF000000) >> 24);
++  return c;
++}
++
++/* These don't have the trailing "w" so that they work for
++   both rv32 and rv64.  */
++/* { dg-final { scan-assembler-not "srli" } } */
++/* { dg-final { scan-assembler-not "rori" } } */
++/* { dg-final { scan-assembler-times "sll" 1 } } */
