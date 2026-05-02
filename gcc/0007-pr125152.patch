@@ -1,0 +1,16 @@
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index baa0de22de14..3fae7b5b9f06 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -5828,10 +5828,9 @@ riscv_expand_conditional_move (rtx dest, rtx op, rtx cons, rtx alt)
+        && GET_MODE_CLASS (cond_mode) == MODE_INT)
+        || TARGET_COND_MOV)
+     {
++      canonicalize_comparands (code, &op0, &op1);
+       machine_mode mode0 = GET_MODE (op0);
+ 
+-      canonicalize_comparands (code,&op0,&op1);
+-
+       /* In the fallback generic case use DST_MODE rather than WORD_MODE
+ 	 for the output of the SCC instruction, to match the mode of the NEG
+ 	 operation below.  The output of SCC is 0 or 1 boolean, so it is
