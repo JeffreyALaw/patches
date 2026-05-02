@@ -1,0 +1,87 @@
+diff --git a/gcc/config/riscv/iterators.md b/gcc/config/riscv/iterators.md
+index 192556e92e27..076911e5e7f1 100644
+--- a/gcc/config/riscv/iterators.md
++++ b/gcc/config/riscv/iterators.md
+@@ -266,7 +266,7 @@ (define_code_iterator any_le [le leu])
+ (define_code_iterator any_eq [eq ne])
+ 
+ ;; Iterators for conditions we can emit a sCC against 0 or a reg directly
+-(define_code_iterator scc_0  [eq ne gt gtu])
++(define_code_iterator scc_0  [any_eq any_gt any_lt])
+ 
+ ; atomics code iterator
+ (define_code_iterator any_atomic [plus ior xor and])
+diff --git a/gcc/config/riscv/zicond.md b/gcc/config/riscv/zicond.md
+index ac1aa3a6b7ea..34fe2ce29c6d 100644
+--- a/gcc/config/riscv/zicond.md
++++ b/gcc/config/riscv/zicond.md
+@@ -403,3 +403,69 @@ (define_insn_and_split "conditional_rand<mode>"
+   "operands[4] = gen_reg_rtx (word_mode);
+    operands[5] = gen_reg_rtx (word_mode);")
+ 
++;; We want to select between 2^n and 0.  Use an sCC insn to generate 1/0, then
++;; left shift that by N to get the final result
++(define_split
++  [(set (match_operand:X 0 "register_operand")
++	(if_then_else:X
++	 (scc_0:X (match_operand:X 1 "register_operand")
++		  (const_int 0))
++	 (match_operand 2 "const_int_operand")
++	 (const_int 0)))
++   (clobber (match_operand:X 3 "register_operand"))]
++  "exact_log2 (INTVAL (operands[2])) >= 0"
++  [(set (match_dup 3) (scc_0:X (match_dup 1) (const_int 0)))
++   (set (match_dup 0) (ashift:X (match_dup 3) (match_dup 4)))]
++  { operands[4] = GEN_INT (exact_log2 (INTVAL (operands[2]))); })
++
++(define_split
++  [(set (match_operand:X 0 "register_operand")
++	(if_then_else:X
++	 (any_gt:X (match_operand:X 1 "register_operand")
++		   (match_operand:X 2 "reg_or_0_operand"))
++	 (match_operand 3 "const_int_operand")
++	 (const_int 0)))
++   (clobber (match_operand:X 4 "register_operand"))]
++  "exact_log2 (INTVAL (operands[3])) >= 0"
++  [(set (match_dup 4) (any_gt:X (match_dup 1) (match_dup 2)))
++   (set (match_dup 0) (ashift:X (match_dup 4) (match_dup 5)))]
++  { operands[5] = GEN_INT (exact_log2 (INTVAL (operands[3]))); })
++
++(define_split
++  [(set (match_operand:X 0 "register_operand")
++	(if_then_else:X
++	 (any_ge:X (match_operand:X 1 "register_operand")
++		   (const_int 1))
++	 (match_operand 2 "const_int_operand")
++	 (const_int 0)))
++   (clobber (match_operand:X 3 "register_operand"))]
++  "exact_log2 (INTVAL (operands[2])) >= 0"
++  [(set (match_dup 3) (any_gt:X (match_dup 1) (const_int 1)))
++   (set (match_dup 0) (ashift:X (match_dup 3) (match_dup 4)))]
++  { operands[4] = GEN_INT (exact_log2 (INTVAL (operands[2]))); })
++
++(define_split
++  [(set (match_operand:X 0 "register_operand")
++	(if_then_else:X
++	 (any_lt:X (match_operand:X 1 "register_operand")
++		   (match_operand:X 2 "arith_operand"))
++	 (match_operand 3 "const_int_operand")
++	 (const_int 0)))
++   (clobber (match_operand:X 4 "register_operand"))]
++  "exact_log2 (INTVAL (operands[3])) >= 0"
++  [(set (match_dup 4) (any_lt:X (match_dup 1) (match_dup 2)))
++   (set (match_dup 0) (ashift:X (match_dup 4) (match_dup 5)))]
++  { operands[5] = GEN_INT (exact_log2 (INTVAL (operands[3]))); })
++
++(define_split
++  [(set (match_operand:X 0 "register_operand")
++	(if_then_else:X
++	 (any_le:X (match_operand:X 1 "register_operand")
++		   (match_operand:X 2 "sle_operand"))
++	 (match_operand 3 "const_int_operand")
++	 (const_int 0)))
++   (clobber (match_operand:X 4 "register_operand"))]
++  "exact_log2 (INTVAL (operands[3])) >= 0"
++  [(set (match_dup 4) (any_le:X (match_dup 1) (match_dup 2)))
++   (set (match_dup 0) (ashift:X (match_dup 4) (match_dup 5)))]
++  { operands[5] = GEN_INT (exact_log2 (INTVAL (operands[3]))); })
