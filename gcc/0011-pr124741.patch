@@ -1,0 +1,126 @@
+diff --git a/gcc/config/riscv/sync-rvwmo.md b/gcc/config/riscv/sync-rvwmo.md
+index ed65cecf5143..afbf2c1b68d5 100644
+--- a/gcc/config/riscv/sync-rvwmo.md
++++ b/gcc/config/riscv/sync-rvwmo.md
+@@ -49,7 +49,7 @@ (define_insn "mem_thread_fence_rvwmo"
+ (define_insn "atomic_load_rvwmo<mode>"
+   [(set (match_operand:ANYI 0 "register_operand" "=r")
+ 	(unspec_volatile:ANYI
+-	    [(match_operand:ANYI 1 "memory_operand" "A")
++	    [(match_operand:ANYI 1 "memory_operand" "m")
+ 	     (match_operand:SI 2 "const_int_operand")]  ;; model
+ 	 UNSPEC_ATOMIC_LOAD))]
+   "!TARGET_ZTSO"
+@@ -73,10 +73,37 @@ (define_insn "atomic_load_rvwmo<mode>"
+ 		      : is_mm_acquire (memmodel_from_int (INTVAL (operands[2]))) ? 8
+ 		      : 4)"))])
+ 
++(define_insn "*atomic_load_rvwmo<X:mode><SUBX:mode>"
++  [(set (match_operand:X 0 "register_operand" "=r")
++	(any_extend:X (unspec_volatile:SUBX
++	    [(match_operand:SUBX 1 "memory_operand" "m")
++	     (match_operand:SI 2 "const_int_operand")]  ;; model
++	 UNSPEC_ATOMIC_LOAD)))]
++  "!TARGET_ZTSO"
++  {
++    enum memmodel model = (enum memmodel) INTVAL (operands[2]);
++    model = memmodel_base (model);
++
++    if (model == MEMMODEL_SEQ_CST)
++      return "fence\trw,rw\;"
++	     "<SUBX:load><u>\t%0,%1\;"
++	     "fence\tr,rw";
++    if (model == MEMMODEL_ACQUIRE)
++      return "<SUBX:load><u>\t%0,%1\;"
++	     "fence\tr,rw";
++    else
++      return "<SUBX:load><u>\t%0,%1";
++  }
++  [(set_attr "type" "multi")
++   (set (attr "length")
++	(symbol_ref "(is_mm_seq_cst (memmodel_from_int (INTVAL (operands[2]))) ? 12
++		      : is_mm_acquire (memmodel_from_int (INTVAL (operands[2]))) ? 8
++		      : 4)"))])
++
+ ;; Implement atomic stores with conservative fences.
+ ;; This allows us to be compatible with the ISA manual Table A.6 and Table A.7.
+ (define_insn "atomic_store_rvwmo<mode>"
+-  [(set (match_operand:ANYI 0 "memory_operand" "=A")
++  [(set (match_operand:ANYI 0 "memory_operand" "=m")
+ 	(unspec_volatile:ANYI
+ 	    [(match_operand:ANYI 1 "reg_or_0_operand" "rJ")
+ 	     (match_operand:SI 2 "const_int_operand")]  ;; model
+diff --git a/gcc/config/riscv/sync-ztso.md b/gcc/config/riscv/sync-ztso.md
+index 689025a4b211..f92d753ef287 100644
+--- a/gcc/config/riscv/sync-ztso.md
++++ b/gcc/config/riscv/sync-ztso.md
+@@ -43,7 +43,7 @@ (define_insn "mem_thread_fence_ztso"
+ (define_insn "atomic_load_ztso<mode>"
+   [(set (match_operand:ANYI 0 "register_operand" "=r")
+ 	(unspec_volatile:ANYI
+-	    [(match_operand:ANYI 1 "memory_operand" "A")
++	    [(match_operand:ANYI 1 "memory_operand" "m")
+ 	     (match_operand:SI 2 "const_int_operand")]  ;; model
+ 	 UNSPEC_ATOMIC_LOAD))]
+   "TARGET_ZTSO"
+@@ -62,9 +62,31 @@ (define_insn "atomic_load_ztso<mode>"
+ 	(symbol_ref "(is_mm_seq_cst (memmodel_from_int (INTVAL (operands[2]))) ? 8
+ 		      : 4)"))])
+ 
++(define_insn "*atomic_load_ztso<X:mode><SUBX:mode>"
++  [(set (match_operand:X 0 "register_operand" "=r")
++	(any_extend:X (unspec_volatile:SUBX
++	    [(match_operand:SUBX 1 "memory_operand" "m")
++	     (match_operand:SI 2 "const_int_operand")]  ;; model
++	 UNSPEC_ATOMIC_LOAD)))]
++  "TARGET_ZTSO"
++  {
++    enum memmodel model = (enum memmodel) INTVAL (operands[2]);
++    model = memmodel_base (model);
++
++    if (model == MEMMODEL_SEQ_CST)
++      return "fence\trw,rw\;"
++	     "<SUBX:load><u>\t%0,%1";
++    else
++      return "<SUBX:load><u>\t%0,%1";
++  }
++  [(set_attr "type" "multi")
++   (set (attr "length")
++	(symbol_ref "(is_mm_seq_cst (memmodel_from_int (INTVAL (operands[2]))) ? 8
++		      : 4)"))])
++
+ 
+ (define_insn "atomic_store_ztso<mode>"
+-  [(set (match_operand:ANYI 0 "memory_operand" "=A")
++  [(set (match_operand:ANYI 0 "memory_operand" "=m")
+ 	(unspec_volatile:ANYI
+ 	    [(match_operand:ANYI 1 "reg_or_0_operand" "rJ")
+ 	     (match_operand:SI 2 "const_int_operand")]  ;; model
+diff --git a/gcc/testsuite/gcc.target/riscv/pr124741.c b/gcc/testsuite/gcc.target/riscv/pr124741.c
+new file mode 100644
+index 000000000000..a0cd23fced65
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr124741.c
+@@ -0,0 +1,22 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gcb -mabi=lp64" { target rv64 } } */
++/* { dg-options "-march=rv32gcb -mabi=ilp32" { target rv32 } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" } } */
++
++#define TEST(TYPE, NAME) typedef struct { int x; TYPE repr; } atomic_u_t_##NAME; \
++TYPE atomic_load_##NAME (const atomic_u_t_##NAME *a) { TYPE result; __atomic_load (&a->repr, &result, 0); return result; }
++
++TEST (unsigned char, uc)
++TEST (unsigned short, us)
++TEST (unsigned int, ui)
++TEST (unsigned long, ul)
++
++TEST (signed char, sc)
++TEST (signed short, ss)
++TEST (signed int, si)
++TEST (signed long, sl)
++
++/* { dg-final { scan-assembler-not "sext" } } */
++/* { dg-final { scan-assembler-not "zext" } } */
++/* { dg-final { scan-assembler-not "andi" } } */
++
