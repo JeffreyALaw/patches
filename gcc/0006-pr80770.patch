@@ -1,14 +1,14 @@
 diff --git a/gcc/simplify-rtx.cc b/gcc/simplify-rtx.cc
-index bf625cdaf608..42bca103d918 100644
+index bf625cdaf608..365bb9db1930 100644
 --- a/gcc/simplify-rtx.cc
 +++ b/gcc/simplify-rtx.cc
-@@ -3897,6 +3897,93 @@ simplify_context::simplify_binary_operation_1 (rtx_code code,
+@@ -3897,6 +3897,101 @@ simplify_context::simplify_binary_operation_1 (rtx_code code,
  	  && negated_ops_p (XEXP (op0, 0), op1))
  	return simplify_gen_binary (IOR, mode, XEXP (op0, 1), op1);
  
 +      /* (ior (and (A C1) (and (not (A) C2))) can be converted
-+	 into (and (xor (A C2) (and (A (C1 + C2))))) when there are
-+	 no bits in common between C1 and C2.  */
++	 into (and (xor (A C2) (C1 + C2))) when there are no bits
++	 in common between C1 and C2.  */
 +      if (GET_CODE (op0) == AND
 +	  && GET_CODE (op1) == AND
 +	  && GET_CODE (XEXP (op1, 0)) == NOT
@@ -49,7 +49,9 @@ index bf625cdaf608..42bca103d918 100644
 +	}
 +
 +      /* Another variant seen on some backends, particularly those with
-+	 sub-word operations.  */
++	 sub-word operations.  For these cases we have to know there is no
++	 carry from the PLUS into relevant bits.  In practice that means
++	 it's only valid for the uppermost bit.  */
 +      if (GET_CODE (op0) == AND
 +	  && GET_CODE (op1) == PLUS
 +	  && GET_CODE (XEXP (op1, 0)) == AND
@@ -58,6 +60,9 @@ index bf625cdaf608..42bca103d918 100644
 +	  && CONST_INT_P (XEXP (op1, 1))
 +	  && CONST_INT_P (XEXP (XEXP (op1, 0), 1))
 +	  && INTVAL (XEXP (op1, 1)) == INTVAL (XEXP (XEXP (op1, 0), 1))
++	  && GET_MODE_BITSIZE (GET_MODE (op1)).is_constant ()
++	  && ((INTVAL (XEXP (op1, 1)) & GET_MODE_MASK (GET_MODE (op1)))
++	      == HOST_WIDE_INT_1U << (GET_MODE_BITSIZE (GET_MODE (op1)).to_constant () - 1))
 +	  && (INTVAL (XEXP (op0, 1)) & INTVAL (XEXP (op1, 1))) == 0)
 +	{
 +	  rtx c = GEN_INT (INTVAL (XEXP (op0, 1)) + INTVAL (XEXP (op1, 1)));
@@ -80,6 +85,9 @@ index bf625cdaf608..42bca103d918 100644
 +	  && CONST_INT_P (XEXP (op0, 1))
 +	  && CONST_INT_P (XEXP (XEXP (op0, 0), 1))
 +	  && INTVAL (XEXP (op0, 1)) == INTVAL (XEXP (XEXP (op0, 0), 1))
++	  && GET_MODE_BITSIZE (GET_MODE (op0)).is_constant ()
++	  && ((INTVAL (XEXP (op0, 1)) & GET_MODE_MASK (GET_MODE (op0)))
++	      == HOST_WIDE_INT_1U << (GET_MODE_BITSIZE (GET_MODE (op0)).to_constant () - 1))
 +	  && (INTVAL (XEXP (op1, 1)) & INTVAL (XEXP (op0, 1))) == 0)
 +	{
 +	  rtx c = GEN_INT (INTVAL (XEXP (op1, 1)) + INTVAL (XEXP (op0, 1)));
