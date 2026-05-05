@@ -4,6 +4,8 @@ gcc/testsuite/gcc.c-torture/execute/920501-6.c
 gcc/testsuite/gcc.c-torture/execute/arith-rand-ll.c
 gcc/testsuite/gcc.dg/pr82004.c
 gcc/testsuite/gcc.dg/pr107523.c
+gcc/testsuite/c-c++-common/torture/builtin-arith-overflow-8.c
+gcc/testsuite/c-c++-common/torture/builtin-arith-overflow-p-8.c
 gcc/testsuite/c-c++-common/torture/builtin-arith-overflow-10.c
 gcc/testsuite/c-c++-common/torture/builtin-arith-overflow-p-10.c
 gcc/testsuite/gcc.dg/loop-unswitch-4.c
