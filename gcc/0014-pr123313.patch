@@ -1,0 +1,97 @@
+diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
+index 4a49e778fed5..bfea53bcf86b 100644
+--- a/gcc/config/riscv/riscv.md
++++ b/gcc/config/riscv/riscv.md
+@@ -3620,9 +3620,9 @@ (define_insn_and_split "*branch_on_bit_range<X:mode>"
+ 
+ ;; Destination is always set in SI mode.
+ 
+-(define_expand "cstore<mode>4"
+-  [(set (match_operand:SI 0 "register_operand")
+-	(match_operator:SI 1 "ordered_comparison_operator"
++(define_expand "cstore<GPR:mode>4"
++  [(set (match_operand:GPR 0 "register_operand")
++	(match_operator:GPR 1 "ordered_comparison_operator"
+ 	    [(match_operand:GPR 2 "register_operand")
+ 	     (match_operand:GPR 3 "nonmemory_operand")]))]
+   ""
+diff --git a/gcc/ifcvt.cc b/gcc/ifcvt.cc
+index c151146c1b22..f65d58b008d1 100644
+--- a/gcc/ifcvt.cc
++++ b/gcc/ifcvt.cc
+@@ -1778,6 +1778,65 @@ noce_try_store_flag_constants (struct noce_if_info *if_info)
+   return false;
+ }
+ 
++/* This is trying to capture cases like dest = cond ? a : -1.
++
++   The basic idea is to use a store-flag insn to generate a -1/0
++   value (directly or indirectly), then IOR that with the other
++   input.  */
++static bool
++noce_try_store_flag_logical (struct noce_if_info *if_info)
++{
++  rtx a = if_info->a;
++  rtx b = if_info->b;
++  rtx dest = if_info->x;
++  machine_mode mode = GET_MODE (dest);
++
++  if (STORE_FLAG_VALUE != -1 && STORE_FLAG_VALUE != 1)
++    return false;
++
++  bool swapped = false;
++  if (a == CONSTM1_RTX (GET_MODE (dest))
++      && if_info->rev_cond)
++    {
++      std::swap (a, b);
++      swapped = true;
++    }
++
++  if (b != CONSTM1_RTX (GET_MODE (dest)))
++    return false;
++
++  /* At this point we've got dest = cond ? a : -1.  Emit the store flag and
++     adjust its value (if necessary) to -1/0.  */
++  start_sequence ();
++  rtx target = noce_emit_store_flag (if_info, if_info->x, !swapped, false);
++  if (!target)
++    {
++      end_sequence ();
++      return false;
++    }
++
++  if (STORE_FLAG_VALUE == 1)
++    {
++      rtx x = gen_rtx_PLUS (mode, target, CONSTM1_RTX (mode));
++      emit_move_insn (target, x);
++    }
++
++  /* Now we've got -1/0 in TARGET.  We can just IOR with A.  */
++  rtx x = gen_rtx_IOR (mode, target, a);
++  emit_move_insn (dest, x);
++
++  /* We've generated all the RTL, make sure it recognizes and is
++     profitable.  */
++  rtx_insn *seq = end_ifcvt_sequence (if_info);
++  if (!seq || !targetm.noce_conversion_profitable_p (seq, if_info))
++    return false;
++
++  emit_insn_before_setloc (seq, if_info->jump,
++			   INSN_LOCATION (if_info->insn_a));
++  if_info->transform_name = "noce_try_store_flag_logical";
++  return true;
++}
++
+ /* Convert "if (test) foo++" into "foo += (test != 0)", and
+    similarly for "foo--".  */
+ 
+@@ -4481,6 +4540,9 @@ noce_process_if_block (struct noce_if_info *if_info)
+   if (!targetm.have_conditional_execution ()
+       && noce_try_store_flag_constants (if_info))
+     goto success;
++  if (!targetm.have_conditional_execution ()
++      && noce_try_store_flag_logical (if_info))
++    goto success;
+   if (noce_try_sign_bit_splat (if_info))
+     goto success;
+   if (HAVE_conditional_move
