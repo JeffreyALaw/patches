@@ -1,3 +1,6 @@
+gcc/testsuite
+	* gcc.target/riscv/rvv/vsetvl/avl_single-26.c: Update expected output.
+
 diff --git a/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_single-26.c b/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_single-26.c
 index 0ff7f3b3c90f..2ac02254dbeb 100644
 --- a/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_single-26.c
