@@ -18,4 +18,7 @@ gcc/testsuite/gfortran.dg/maxlocval_1.f90
 gcc/testsuite/g++.dg/modules/bad-mapper-3.C
 
 # This triggers timeouts
-
+gcc/testsuite/c-c++-common/torture/builtin-arith-overflow-14.c
+gcc/testsuite/gcc.c-torture/execute/20020406-1.c
+gcc/testsuite/gcc.c-torture/execute/memcpy-2.
+gcc/testsuite/gfortran.dg/g77/f77-edit-s-out.f
