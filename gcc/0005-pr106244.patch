@@ -21,7 +21,7 @@ index 4a49e778fed5..e4dac32d71db 100644
 +		(const_int 1)))
 +   (clobber (match_operand:DI 2 "register_operand"))]
 +  "TARGET_64BIT"
-+  [(set (match_dup 2) (and:DI (match_dup 1) (const_int 63)))
++  [(set (match_dup 2) (and:DI (match_dup 1) (const_int 31)))
 +   (set (match_dup 0) (eq:DI (match_dup 2) (const_int 0)))]
 +  { operands[1] = gen_lowpart (DImode, operands[1]); })
 +
