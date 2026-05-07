@@ -1,5 +1,5 @@
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index cf0305c00e1..df2a609ab7a 100644
+index b7fba2e88a3..869061e18ae 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
 @@ -5184,6 +5184,36 @@ (define_split
@@ -36,6 +36,6 @@ index cf0305c00e1..df2a609ab7a 100644
 +  operands[7] = gen_lowpart (SImode, operands[6]);
 +})
 +
- ;; Standard extensions and pattern for optimization
  (include "bitmanip.md")
  (include "crypto.md")
+ (include "sync.md")
