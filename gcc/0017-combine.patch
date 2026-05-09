@@ -1,0 +1,72 @@
+
+
+In combine_simplify_rtx, CLOBBER can be returned, which is propagated to
+make_compound_operation.
+When make_compound_operation_int then calls simplify_subreg, it triggers a
+gcc_assert, because the mode is neither inner, nor void. This results in
+an ICE.
+
+We fix this by checking if we got CLOBBER before calling simplify_subreg
+from make_compound_operation and bail out; we return NULL_RTX.
+
+Testcase from the bug report by Zhendong Su.
+
+Bootstrapped and tested on x86_64-linux-gnu.
+
+	PR rtl-optimization/125209
+
+2026-05-08  Boudewijn van der Heide  <boudewijn@delta-utec.com>
+
+gcc/
+	* combine.cc (make_compound_operation_int): Return NULL_RTX if we got CLOBBER.
+
+gcc/testsuite/
+	* gcc.dg/pr125209.c: New test.
+
+Signed-off-by: Boudewijn van der Heide <boudewijn@delta-utec.com>
+---
+ gcc/combine.cc                  |  6 ++++++
+ gcc/testsuite/gcc.dg/pr125209.c | 13 +++++++++++++
+ 2 files changed, 19 insertions(+)
+ create mode 100644 gcc/testsuite/gcc.dg/pr125209.c
+
+diff --git a/gcc/combine.cc b/gcc/combine.cc
+index d401ca100..f98c36cf0 100644
+--- a/gcc/combine.cc
++++ b/gcc/combine.cc
+@@ -8390,6 +8390,12 @@ make_compound_operation_int (scalar_int_mode mode, rtx *x_ptr,
+ 
+ 	tem = make_compound_operation (inner, subreg_code);
+ 
++	/* TEM's code might be CLOBBER if combine_simplify_rtx
++	   could not transform a subexpression, e.g. a volatile MEM.
++	   simplify_subreg cannot be called with clobber, so bail out.  */
++	if (GET_CODE (tem) == CLOBBER)
++	  return NULL_RTX;
++
+ 	simplified
+ 	  = simplify_subreg (mode, tem, GET_MODE (inner), SUBREG_BYTE (x));
+ 	if (simplified)
+diff --git a/gcc/testsuite/gcc.dg/pr125209.c b/gcc/testsuite/gcc.dg/pr125209.c
+new file mode 100644
+index 000000000..8fb81cc82
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/pr125209.c
+@@ -0,0 +1,13 @@
++/* PR rtl-optimization/125209 */
++/* { dg-do compile } */
++/* { dg-options "-O1 -fno-tree-sink" } */
++
++int a, b;
++volatile unsigned c;
++extern void d(unsigned short);
++int e(long f) { return a ? f : 0; }
++int main() {
++  int g = e(c ^ !b);
++  d(g);
++  return 0;
++}
+-- 
+2.53.0
+
+
