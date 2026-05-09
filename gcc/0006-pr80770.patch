@@ -1,109 +1,206 @@
 diff --git a/gcc/simplify-rtx.cc b/gcc/simplify-rtx.cc
-index bf625cdaf608..365bb9db1930 100644
+index ee3d9ec32082..08ae224847b1 100644
 --- a/gcc/simplify-rtx.cc
 +++ b/gcc/simplify-rtx.cc
-@@ -3897,6 +3897,101 @@ simplify_context::simplify_binary_operation_1 (rtx_code code,
+@@ -3900,6 +3900,83 @@ simplify_context::simplify_binary_operation_1 (rtx_code code,
  	  && negated_ops_p (XEXP (op0, 0), op1))
  	return simplify_gen_binary (IOR, mode, XEXP (op0, 1), op1);
  
-+      /* (ior (and (A C1) (and (not (A) C2))) can be converted
-+	 into (and (xor (A C2) (C1 + C2))) when there are no bits
-+	 in common between C1 and C2.  */
-+      if (GET_CODE (op0) == AND
-+	  && GET_CODE (op1) == AND
-+	  && GET_CODE (XEXP (op1, 0)) == NOT
-+	  && rtx_equal_p (XEXP (op0, 0), XEXP (XEXP (op1, 0), 0))
-+	  && CONST_INT_P (XEXP (op0, 1))
-+	  && CONST_INT_P (XEXP (op1, 1))
-+	  && (INTVAL (XEXP (op0, 1)) & INTVAL (XEXP (op1, 1))) == 0)
-+	{
-+	  rtx c = GEN_INT (INTVAL (XEXP (op0, 1)) + INTVAL (XEXP (op1, 1)));
++      {
++	rtx top0 = op0;
++	rtx top1 = op1;
++	for (int i = 0; i < 2; i++)
++	  {
++	    /* The outer IOR is commutative so try op0/op1 in their
++	       original position and reversed.  */
++	    if (i == 1)
++	      std::swap (top0, top1);
 +
-+	  tem = simplify_gen_binary (XOR, mode, XEXP (op0, 0), XEXP (op1, 1));
-+	  if (tem)
-+	    {
-+	      tem = simplify_gen_binary (AND, mode, tem, c);
-+	      if (tem)
-+		return tem;
-+	    }
-+	}
++	    /* (ior X (plus/xor X C)) can be simplified into (ior X C) when
++	       X and C have no bits in common.  */
++	    if ((GET_CODE (top1) == PLUS || GET_CODE (top1) == XOR)
++		&& rtx_equal_p (top0, XEXP (top1, 0))
++		&& ((nonzero_bits (top0, GET_MODE (top0))
++		    & nonzero_bits (XEXP (top1, 1), GET_MODE (top1))) == 0)
++		&& !side_effects_p (top1))
++	      return simplify_gen_binary (IOR, mode, top0, XEXP (top1, 1));
 +
-+      /* Same thing, but operand order is reversed for the outer IOR.  */
-+      if (GET_CODE (op0) == AND
-+	  && GET_CODE (op1) == AND
-+	  && GET_CODE (XEXP (op0, 0)) == NOT
-+	  && rtx_equal_p (XEXP (op1, 0), XEXP (XEXP (op0, 0), 0))
-+	  && CONST_INT_P (XEXP (op0, 1))
-+	  && CONST_INT_P (XEXP (op1, 1))
-+	  && (INTVAL (XEXP (op0, 1)) & INTVAL (XEXP (op1, 1))) == 0)
-+	{
-+	  rtx c = GEN_INT (INTVAL (XEXP (op0, 1)) + INTVAL (XEXP (op1, 1)));
++	    /* (ior (and A C1) (and (not A) C2)) can be converted
++	       into (and (xor A C2) (C1 + C2)) when there are no bits
++	       in common between C1 and C2.  */
++	    if (GET_CODE (top0) == AND
++		&& GET_CODE (top1) == AND
++		&& GET_CODE (XEXP (top1, 0)) == NOT
++		&& rtx_equal_p (XEXP (top0, 0), XEXP (XEXP (top1, 0), 0))
++		&& CONST_INT_P (XEXP (top0, 1))
++		&& CONST_INT_P (XEXP (top1, 1))
++		&& (INTVAL (XEXP (top0, 1)) & INTVAL (XEXP (top1, 1))) == 0)
++	      {
++		rtx c = GEN_INT (INTVAL (XEXP (top0, 1)) + INTVAL (XEXP (top1, 1)));
 +
-+	  tem = simplify_gen_binary (XOR, mode, XEXP (op1, 0), XEXP (op0, 1));
-+	  if (tem)
-+	    {
-+	      tem = simplify_gen_binary (AND, mode, tem, c);
-+	      if (tem)
-+		return tem;
-+	    }
-+	}
++		tem = simplify_gen_binary (XOR, mode, XEXP (top0, 0), XEXP (top1, 1));
++		if (tem)
++		  {
++		    tem = simplify_gen_binary (AND, mode, tem, c);
 +
-+      /* Another variant seen on some backends, particularly those with
-+	 sub-word operations.  For these cases we have to know there is no
-+	 carry from the PLUS into relevant bits.  In practice that means
-+	 it's only valid for the uppermost bit.  */
-+      if (GET_CODE (op0) == AND
-+	  && GET_CODE (op1) == PLUS
-+	  && GET_CODE (XEXP (op1, 0)) == AND
-+	  && rtx_equal_p (XEXP (op0, 0), XEXP (XEXP (op1, 0), 0))
-+	  && CONST_INT_P (XEXP (op0, 1))
-+	  && CONST_INT_P (XEXP (op1, 1))
-+	  && CONST_INT_P (XEXP (XEXP (op1, 0), 1))
-+	  && INTVAL (XEXP (op1, 1)) == INTVAL (XEXP (XEXP (op1, 0), 1))
-+	  && GET_MODE_BITSIZE (GET_MODE (op1)).is_constant ()
-+	  && ((INTVAL (XEXP (op1, 1)) & GET_MODE_MASK (GET_MODE (op1)))
-+	      == HOST_WIDE_INT_1U << (GET_MODE_BITSIZE (GET_MODE (op1)).to_constant () - 1))
-+	  && (INTVAL (XEXP (op0, 1)) & INTVAL (XEXP (op1, 1))) == 0)
-+	{
-+	  rtx c = GEN_INT (INTVAL (XEXP (op0, 1)) + INTVAL (XEXP (op1, 1)));
++		    if (tem)
++		      return tem;
++		  }
++	      }
 +
-+	  tem = simplify_gen_binary (XOR, mode, XEXP (op0, 0), XEXP (op1, 1));
-+	  if (tem)
-+	    {
-+	      tem = simplify_gen_binary (AND, mode, tem, c);
-+	      if (tem)
-+		return tem;
-+	    }
-+	}
++	    /* Another variant seen on some target particularly those with
++	       sub-word operations.
 +
-+      /* And its variant with the operands of the outer AND reversed.  */
-+      if (GET_CODE (op1) == AND
-+	  && GET_CODE (op0) == PLUS
-+	  && GET_CODE (XEXP (op0, 0)) == AND
-+	  && rtx_equal_p (XEXP (op1, 0), XEXP (XEXP (op0, 0), 0))
-+	  && CONST_INT_P (XEXP (op1, 1))
-+	  && CONST_INT_P (XEXP (op0, 1))
-+	  && CONST_INT_P (XEXP (XEXP (op0, 0), 1))
-+	  && INTVAL (XEXP (op0, 1)) == INTVAL (XEXP (XEXP (op0, 0), 1))
-+	  && GET_MODE_BITSIZE (GET_MODE (op0)).is_constant ()
-+	  && ((INTVAL (XEXP (op0, 1)) & GET_MODE_MASK (GET_MODE (op0)))
-+	      == HOST_WIDE_INT_1U << (GET_MODE_BITSIZE (GET_MODE (op0)).to_constant () - 1))
-+	  && (INTVAL (XEXP (op1, 1)) & INTVAL (XEXP (op0, 1))) == 0)
-+	{
-+	  rtx c = GEN_INT (INTVAL (XEXP (op1, 1)) + INTVAL (XEXP (op0, 1)));
++	       (ior (and A C1) (plus (and A C2) C2)) can be simplified into
++	       (and (xor (A C2) (C1 + C2).
 +
-+	  tem = simplify_gen_binary (XOR, mode, XEXP (op1, 0), XEXP (op0, 1));
-+	  if (tem)
-+	    {
-+	      tem = simplify_gen_binary (AND, mode, tem, c);
-+	      if (tem)
-+		return tem;
-+	    }
-+	}
++	       Where C2 is the sign bit for A's mode.  So 0x80 for QI,
++	       0x8000 for HI, etc.  In this case we know there is no carry
++	       from the PLUS into relevant bits of the output.  */
++	    if (GET_CODE (top0) == AND
++		&& GET_CODE (top1) == PLUS
++		&& GET_CODE (XEXP (top1, 0)) == AND
++		&& rtx_equal_p (XEXP (top0, 0), XEXP (XEXP (top1, 0), 0))
++		&& CONST_INT_P (XEXP (top0, 1))
++		&& CONST_INT_P (XEXP (top1, 1))
++		&& CONST_INT_P (XEXP (XEXP (top1, 0), 1))
++		&& INTVAL (XEXP (top1, 1)) == INTVAL (XEXP (XEXP (top1, 0), 1))
++		&& GET_MODE_BITSIZE (GET_MODE (top1)).is_constant ()
++		&& ((INTVAL (XEXP (top1, 1)) & GET_MODE_MASK (GET_MODE (top1)))
++		    == HOST_WIDE_INT_1U << (GET_MODE_BITSIZE (GET_MODE (top1)).to_constant () - 1))
++		&& (INTVAL (XEXP (top0, 1)) & INTVAL (XEXP (top1, 1))) == 0)
++	      {
++		rtx c = GEN_INT (INTVAL (XEXP (top0, 1)) + INTVAL (XEXP (top1, 1)));
++
++		tem = simplify_gen_binary (XOR, mode, XEXP (top0, 0), XEXP (top1, 1));
++		if (tem)
++		  {
++		    tem = simplify_gen_binary (AND, mode, tem, c);
++		    if (tem)
++		      return tem;
++		  }
++	      }
++	  }
++      }
 +
        tem = simplify_with_subreg_not (code, mode, op0, op1);
        if (tem)
  	return tem;
+diff --git a/gcc/testsuite/gcc.target/h8300/pr80770-2.c b/gcc/testsuite/gcc.target/h8300/pr80770-2.c
+new file mode 100644
+index 000000000000..d2b491ed24e3
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/h8300/pr80770-2.c
+@@ -0,0 +1,11 @@
++/* { dg-do compile } */
++/* { dg-additional-options "-O2 -std=gnu99 -mint32" } */
++
++
++int foop(int x) { x &= 0xf; x |= (x + 0x80); return x; }
++int foox(int x) { x &= 0xf; x |= (x ^ 0x80); return x; }
++
++/* { dg-final { scan-assembler-not "add" } } */
++/* { dg-final { scan-assembler-not "xor" } } */
++/* { dg-final { scan-assembler-times "and" 2 } } */
++/* { dg-final { scan-assembler-times "or" 2 } } */
+diff --git a/gcc/testsuite/gcc.target/h8300/pr80770.c b/gcc/testsuite/gcc.target/h8300/pr80770.c
+new file mode 100644
+index 000000000000..bccf2ff66c66
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/h8300/pr80770.c
+@@ -0,0 +1,75 @@
++/* { dg-do compile } */
++/* { dg-additional-options "-O2 -std=gnu99 -mint32" } */
++
++
++struct S {
++  _Bool b0: 1;
++  _Bool b1: 1;
++  _Bool b2: 1;
++  _Bool b3: 1;
++  _Bool b4: 1;
++  _Bool b5: 1;
++  _Bool b6: 1;
++  _Bool b7: 1;
++  _Bool b8: 1;
++  _Bool b9: 1;
++  _Bool b10: 1;
++  _Bool b11: 1;
++  _Bool b12: 1;
++  _Bool b13: 1;
++  _Bool b14: 1;
++  _Bool b15: 1;
++  _Bool b16: 1;
++  _Bool b17: 1;
++  _Bool b18: 1;
++  _Bool b19: 1;
++  _Bool b20: 1;
++  _Bool b21: 1;
++  _Bool b22: 1;
++  _Bool b23: 1;
++  _Bool b24: 1;
++  _Bool b25: 1;
++  _Bool b26: 1;
++  _Bool b27: 1;
++  _Bool b28: 1;
++  _Bool b29: 1;
++  _Bool b30: 1;
++  _Bool b31: 1;
++};
++
++#define T(N) void fb##N (struct S *s) { s->b##N = !s->b##N; }
++
++T(0)
++T(1)
++T(2)
++T(3)
++T(4)
++T(5)
++T(6)
++T(7)
++T(8)
++T(9)
++T(10)
++T(11)
++T(12)
++T(13)
++T(14)
++T(15)
++T(16)
++T(17)
++T(18)
++T(19)
++T(20)
++T(21)
++T(22)
++T(23)
++T(24)
++T(25)
++T(26)
++T(27)
++T(28)
++T(29)
++T(30)
++T(31)
++
++/* { dg-final { scan-assembler-times "xor\t|add.b\t|bnot\t" 32 } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/pr80770-2.c b/gcc/testsuite/gcc.target/riscv/pr80770-2.c
+new file mode 100644
+index 000000000000..1514a49c5605
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr80770-2.c
+@@ -0,0 +1,11 @@
++/* { dg-do compile } */
++/* { dg-additional-options "-O2 -std=gnu99" } */
++
++
++int foop(int x) { x &= 0xf; x |= (x + 0x80); return x; }
++int foox(int x) { x &= 0xf; x |= (x ^ 0x80); return x; }
++
++/* { dg-final { scan-assembler-not "add" } } */
++/* { dg-final { scan-assembler-not "xor" } } */
++/* { dg-final { scan-assembler-times "andi\t" 2 } } */
++/* { dg-final { scan-assembler-times "ori\t" 2 } } */
 diff --git a/gcc/testsuite/gcc.target/riscv/pr80770.c b/gcc/testsuite/gcc.target/riscv/pr80770.c
 new file mode 100644
 index 000000000000..4dafe3955f05
