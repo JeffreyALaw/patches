@@ -1,0 +1,510 @@
+
+
+The LRA was confused and looping due to the definition of the register class.
+The LRA yielded incorrect results because the manipulation of stack frames
+and the movement of double words relied heavily on existing reloads.
+These changes ensure that the correct code is generated even when the "-mlra"
+option is specified.
+
+v4 changes.
+- Use post_ra_split_completed in addsi3_lra and ashlsi3_lra.
+- revert -mlra option.
+- Unnecessary changes have been reverted.
+- some clean up.
+
+	PR113948
+ChangeLog:
+        * gcc/config/rx/rx-protos.h (rx_split_double_move): New helper prototype.
+        (rx_relax_double_operands): Likewise.
+        * gcc/config/rx/rx.cc (rx_legitimize_address): Add expand complex case.
+	(rx_is_legitimate_address): Add double word case.
+	(rx_gen_move_template): Fix operation size in unsigned extend.
+        (rx_gen_move_template): Remove DImode and DFmode.
+	(rx_get_stack_layout): Fix for frame size calculation.
+	(rx_initial_elimination_offset): The calculation method has been changed to one that supports LRA.
+	(rx_hard_regno_nregs): Use CEIL.
+        (rx_hard_regno_mode_ok): Add ATTRIBUTE_UNUSED.
+        (rx_modes_tieable_p): Add int case.
+        (rx_get_subword): New. Double word move helper.
+        (rx_split_double_move): Likewise.
+        (rx_relax_double_operands): Likewise.
+	* gcc/config/rx/rx.h (reg_class): Add CC for all regsisters.
+	(CLASS_MAX_NREGS): Remove.
+        * gcc/config/rx/rx.md (mov<register_modes:mode>):
+	Replace copy_to_mode_reg to force_reg.
+        (movdi): Limit the arguments to make register allocation easier.
+        (movdf): Likewise.
+        (movdi_internal): New.
+        (movdf_internal): New.
+        (addsi3_pid): New. Handling UNSPEC_PID_ADDR.
+        (addsi3_lra): New. alternative addptrsi3.
+        (ashlsi3_lra): likewise.
+
+Signed-off-by: Yoshinori Sato <yoshinori.sato@nifty.com>
+---
+ gcc/config/rx/rx-protos.h |   2 +
+ gcc/config/rx/rx.cc       | 163 +++++++++++++++++++++++++++++---------
+ gcc/config/rx/rx.h        |   5 +-
+ gcc/config/rx/rx.md       | 122 ++++++++++++++++++++++------
+ 4 files changed, 224 insertions(+), 68 deletions(-)
+
+diff --git a/gcc/config/rx/rx-protos.h b/gcc/config/rx/rx-protos.h
+index 829882b0bc8..5a36ef26948 100644
+--- a/gcc/config/rx/rx-protos.h
++++ b/gcc/config/rx/rx-protos.h
+@@ -70,6 +70,8 @@ extern void rx_copy_reg_dead_or_unused_notes (rtx reg, const rtx_insn* src,
+ 
+ extern bool rx_fuse_in_memory_bitop (rtx* operands, rtx_insn* curr_insn,
+ 				     rtx (*gen_insn)(rtx, rtx));
++extern void rx_split_double_move (rtx* operands, machine_mode mode);
++extern void rx_relax_double_operands (rtx* operands, machine_mode mode);
+ 
+ /* Result value of rx_find_set_of_reg.  */
+ struct set_of_reg
+diff --git a/gcc/config/rx/rx.cc b/gcc/config/rx/rx.cc
+index 902e756a34e..637988168e0 100644
+--- a/gcc/config/rx/rx.cc
++++ b/gcc/config/rx/rx.cc
+@@ -148,17 +148,28 @@ rx_legitimize_address (rtx x,
+ 		       rtx oldx ATTRIBUTE_UNUSED,
+ 		       machine_mode mode ATTRIBUTE_UNUSED)
+ {
++  rtx op0 = XEXP (x, 0);
++  rtx op1 = XEXP (x, 1);
++
+   if (rx_pid_data_operand (x) == PID_UNENCODED)
+     {
+       rtx rv = gen_pid_addr (gen_rtx_REG (SImode, rx_pid_base_regnum ()), x);
+       return rv;
+     }
+ 
+-  if (GET_CODE (x) == PLUS
+-      && GET_CODE (XEXP (x, 0)) == PLUS
+-      && REG_P (XEXP (XEXP (x, 0), 0))
+-      && REG_P (XEXP (x, 1)))
+-    return force_reg (SImode, x);
++  if (GET_CODE (x) == PLUS)
++    {
++      if (GET_CODE (op0) == PLUS
++	  && REG_P (XEXP (op0, 0))
++	  && CONST_INT_P (op1))
++	{
++	  rtx base = XEXP (op0, 0);
++	  rtx index = XEXP (op0, 1);
++
++	  rtx new_base = force_reg (Pmode, gen_rtx_PLUS (Pmode, base, op1));
++	  return simplify_gen_binary (PLUS, Pmode, new_base, index);
++	}
++    }
+ 
+   return x;
+ }
+@@ -194,6 +205,29 @@ rx_is_legitimate_address (machine_mode mode, rtx x,
+        Post-increment Register Indirect.  */
+     return RTX_OK_FOR_BASE (XEXP (x, 0), strict);
+ 
++  if (GET_MODE_SIZE (mode) == 8)
++    {
++      /*
++	Since double-word memory access is split into multiple parts,
++	only simple indirect addresses are accepted.
++      */
++      if (GET_CODE (x) == PRE_DEC || GET_CODE (x) == POST_INC)
++	return false;
++
++      if (GET_CODE (x) == PLUS)
++	{
++	  rtx base = XEXP (x, 0);
++	  rtx index = XEXP (x, 1);
++
++	  if (!REG_P (base) || !CONST_INT_P (index))
++	    return false;
++
++	  if (!IN_RANGE (INTVAL (index), 0, (0x10000 * 4) - 1 - 4)
++	      || (INTVAL (index) % 4) != 0)
++	    return false;
++	}
++    }
++
+   switch (rx_pid_data_operand (x))
+     {
+     case PID_UNENCODED:
+@@ -970,7 +1004,8 @@ rx_gen_move_template (rtx * operands, bool is_movu)
+   rtx          src  = operands[1];
+ 
+   /* Decide which extension, if any, should be given to the move instruction.  */
+-  switch (CONST_INT_P (src) ? GET_MODE (dest) : GET_MODE (src))
++  /* When zero-extending, always check the size of the source. */
++  switch ((is_movu || MEM_P (src)) ? GET_MODE (src) : GET_MODE (dest))
+     {
+     case E_QImode:
+       /* The .B extension is not valid when
+@@ -984,10 +1019,9 @@ rx_gen_move_template (rtx * operands, bool is_movu)
+ 	   loading an immediate into a register.  */
+ 	extension = ".W";
+       break;
+-    case E_DFmode:
+-    case E_DImode:
+     case E_SFmode:
+     case E_SImode:
++      gcc_assert (!is_movu);
+       extension = ".L";
+       break;
+     case E_VOIDmode:
+@@ -1025,18 +1059,8 @@ rx_gen_move_template (rtx * operands, bool is_movu)
+   else
+     dst_template = "%0";
+ 
+-  if (GET_MODE (dest) == DImode || GET_MODE (dest) == DFmode)
+-    {
+-      gcc_assert (! is_movu);
+-
+-      if (REG_P (src) && REG_P (dest) && (REGNO (dest) == REGNO (src) + 1))
+-	sprintf (out_template, "mov.L\t%%H1, %%H0 ! mov.L\t%%1, %%0");
+-      else
+-	sprintf (out_template, "mov.L\t%%1, %%0 ! mov.L\t%%H1, %%H0");
+-    }
+-  else
+-    sprintf (out_template, "%s%s\t%s, %s", is_movu ? "movu" : "mov",
+-	     extension, src_template, dst_template);
++  sprintf (out_template, "%s%s\t%s, %s", is_movu ? "movu" : "mov",
++	   extension, src_template, dst_template);
+   return out_template;
+ }
+ 
+@@ -1568,12 +1592,9 @@ rx_get_stack_layout (unsigned int * lowest,
+       * register_mask = 0;
+     }
+ 
+-  * frame_size = rx_round_up
+-    (get_frame_size (), STACK_BOUNDARY / BITS_PER_UNIT);
+-
+-  if (crtl->args.size > 0)
+-    * frame_size += rx_round_up
+-      (crtl->args.size, STACK_BOUNDARY / BITS_PER_UNIT);
++  * frame_size = rx_round_up (
++      get_frame_size () + crtl->args.pretend_args_size,
++      STACK_BOUNDARY / BITS_PER_UNIT);
+ 
+   * stack_size = rx_round_up
+     (crtl->outgoing_args_size, STACK_BOUNDARY / BITS_PER_UNIT);
+@@ -2221,26 +2242,27 @@ rx_initial_elimination_offset (int from, int to)
+   unsigned int frame_size;
+   unsigned int stack_size;
+   unsigned int mask;
++  unsigned int saved_regs_size = 0;
+ 
+   rx_get_stack_layout (& low, & high, & mask, & frame_size, & stack_size);
+ 
++  if (mask != 0)
++    /* multiple push reg */
++    saved_regs_size = bit_count (mask) * UNITS_PER_WORD;
++  else if (low != 0)
++    /* pushm low - high */
++    saved_regs_size = (high - low + 1) * UNITS_PER_WORD;
++
+   if (from == ARG_POINTER_REGNUM)
+     {
+-      /* Extend the computed size of the stack frame to
+-	 include the registers pushed in the prologue.  */
+-      if (low)
+-	frame_size += ((high - low) + 1) * UNITS_PER_WORD;
+-      else
+-	frame_size += bit_count (mask) * UNITS_PER_WORD;
+-
+       /* Remember to include the return address.  */
+-      frame_size += 1 * UNITS_PER_WORD;
++      frame_size += UNITS_PER_WORD;
+ 
+       if (to == FRAME_POINTER_REGNUM)
+-	return frame_size;
++	return frame_size + saved_regs_size;
+ 
+       gcc_assert (to == STACK_POINTER_REGNUM);
+-      return frame_size + stack_size;
++      return frame_size + stack_size + saved_regs_size;
+     }
+ 
+   gcc_assert (from == FRAME_POINTER_REGNUM && to == STACK_POINTER_REGNUM);
+@@ -3611,13 +3633,13 @@ rx_fuse_in_memory_bitop (rtx* operands, rtx_insn* curr_insn,
+ static unsigned int
+ rx_hard_regno_nregs (unsigned int, machine_mode mode)
+ {
+-  return CLASS_MAX_NREGS (0, mode);
++  return CEIL (GET_MODE_SIZE (mode), UNITS_PER_WORD);
+ }
+ 
+ /* Implement TARGET_HARD_REGNO_MODE_OK.  */
+ 
+ static bool
+-rx_hard_regno_mode_ok (unsigned int regno, machine_mode)
++rx_hard_regno_mode_ok (unsigned int regno, machine_mode mode ATTRIBUTE_UNUSED)
+ {
+   return REGNO_REG_CLASS (regno) == GR_REGS;
+ }
+@@ -3627,7 +3649,9 @@ rx_hard_regno_mode_ok (unsigned int regno, machine_mode)
+ static bool
+ rx_modes_tieable_p (machine_mode mode1, machine_mode mode2)
+ {
+-  return ((GET_MODE_CLASS (mode1) == MODE_FLOAT
++  return (GET_MODE_CLASS (mode1) == MODE_INT
++	  && GET_MODE_CLASS (mode2) == MODE_INT)
++	  || ((GET_MODE_CLASS (mode1) == MODE_FLOAT
+ 	   || GET_MODE_CLASS (mode1) == MODE_COMPLEX_FLOAT)
+ 	  == (GET_MODE_CLASS (mode2) == MODE_FLOAT
+ 	      || GET_MODE_CLASS (mode2) == MODE_COMPLEX_FLOAT));
+@@ -3644,7 +3668,68 @@ rx_c_mode_for_floating_type (enum tree_index ti)
+     return TARGET_64BIT_DOUBLES ? DFmode : SFmode;
+   return default_mode_for_floating_type (ti);
+ }
++
++static rtx
++rx_get_subword (rtx op, machine_mode mode, int reg_offset)
++{
++  unsigned int mem_offset = reg_offset * 4;
++  if (TARGET_BIG_ENDIAN_DATA)
++    mem_offset = 4 - mem_offset;
++
++  if (MEM_P (op))
++    return adjust_address (op, SImode, mem_offset);
++  else
++    return simplify_gen_subreg (SImode, op, mode, mem_offset);
++}
++
++void
++rx_split_double_move (rtx * operands, machine_mode mode)
++{
++  rtx dest = operands[0];
++  rtx src  = operands[1];
++
++  rtx dest_low, dest_high, src_low, src_high;
++
++  src_low  = rx_get_subword (src, mode, 0);
++  src_high = rx_get_subword (src, mode, 1);
++
++  dest_low  = rx_get_subword (dest, mode, 0);
++  dest_high = rx_get_subword (dest, mode, 1);
++
++  if (REG_P (operands[0]) && reg_overlap_mentioned_p (dest_low, operands[1]))
++    {
++      emit_move_insn (dest_high, src_high);
++      emit_move_insn (dest_low, src_low);
++    }
++  else
++    {
++      emit_move_insn (dest_low, src_low);
++      emit_move_insn (dest_high, src_high);
++    }
++}
++
++void
++rx_relax_double_operands(rtx * operands, machine_mode mode)
++{
++  if (MEM_P (operands[0]) && !rx_restricted_mem_operand (operands[0], mode))
++    {
++      rtx addr = XEXP (operands[0], 0);
++      addr = force_reg (Pmode, addr);
++      operands[0] = replace_equiv_address (operands[0], addr);
++    }
++
++  if (MEM_P (operands[1]) && !rx_restricted_mem_operand (operands[1], mode))
++    {
++      rtx addr = XEXP (operands[1], 0);
++      addr = force_reg (Pmode, addr);
++      operands[1] = replace_equiv_address (operands[1], addr);
++    }
++
++  if (MEM_P (operands[0]) && !REG_P (operands[1]))
++      operands[1] = force_reg (mode, operands[1]);
++}
+ 
+
++
+ #undef  TARGET_NARROW_VOLATILE_BITFIELD
+ #define TARGET_NARROW_VOLATILE_BITFIELD		rx_narrow_volatile_bitfield
+ 
+diff --git a/gcc/config/rx/rx.h b/gcc/config/rx/rx.h
+index a363a3caaad..f78c103fcb2 100644
+--- a/gcc/config/rx/rx.h
++++ b/gcc/config/rx/rx.h
+@@ -195,13 +195,10 @@ enum reg_class
+ {							\
+   { 0x00000000 },	/* No registers,  */		\
+   { 0x0000ffff },	/* Integer registers.  */	\
+-  { 0x0000ffff }	/* All registers.  */		\
++  { 0x0001ffff }	/* All registers. */		\
+ }
+ 
+ #define N_REG_CLASSES			(int) LIM_REG_CLASSES
+-#define CLASS_MAX_NREGS(CLASS, MODE)    ((GET_MODE_SIZE (MODE) \
+-					  + UNITS_PER_WORD - 1) \
+-					 / UNITS_PER_WORD)
+ 
+ #define GENERAL_REGS			GR_REGS
+ #define BASE_REG_CLASS  		GR_REGS
+diff --git a/gcc/config/rx/rx.md b/gcc/config/rx/rx.md
+index 83aab0f14b2..160e0205fe1 100644
+--- a/gcc/config/rx/rx.md
++++ b/gcc/config/rx/rx.md
+@@ -575,17 +575,11 @@
+   ""
+   {
+     if (MEM_P (operands[0]) && MEM_P (operands[1]))
+-      operands[1] = copy_to_mode_reg (<register_modes:MODE>mode, operands[1]);
++      operands[1] = force_reg (<register_modes:MODE>mode, operands[1]);
+     operands[0] = rx_maybe_pidify_operand (operands[0], 0);
+     operands[1] = rx_maybe_pidify_operand (operands[1], 0);
+-    if (GET_CODE (operands[0]) != REG
+-	&& GET_CODE (operands[1]) == PLUS)
+-      operands[1] = copy_to_mode_reg (<register_modes:MODE>mode, operands[1]);
+-    if (GET_CODE (operands[1]) == PLUS && GET_MODE (operands[1]) == SImode)
+-      {
+-        emit_insn (gen_addsi3 (operands[0], XEXP (operands[1], 0), XEXP (operands[1], 1)));
+-        DONE;
+-      }
++    if (MEM_P (operands[0]) && GET_CODE (operands[1]) == PLUS)
++      operands[1] = force_reg (<register_modes:MODE>mode, operands[1]);
+     if (CONST_INT_P (operand1)
+         && ! rx_is_legitimate_constant (<register_modes:MODE>mode, operand1))
+       FAIL;
+@@ -603,6 +597,58 @@
+    (set_attr "timings" "11,11,11,11,11,12,11,11,11,11,11,11")]
+ )
+ 
++(define_expand "movdi"
++  [(set (match_operand:DI 0 "nonimmediate_operand" "")
++        (match_operand:DI 1 "general_operand" ""))]
++  ""
++  {
++    rx_relax_double_operands(operands, DImode);
++
++    emit_insn (gen_movdi_internal (operands[0], operands[1]));
++    DONE;
++  }
++)
++
++(define_insn_and_split "movdi_internal"
++  [(set (match_operand:DI 0 "nonimmediate_operand" "=r,r,m")
++        (match_operand:DI 1 "general_operand"  "ri,m,r"))]
++  ""
++  "#"
++  "reload_completed"
++  [(const_int 0)]
++  {
++    rx_split_double_move (operands, DImode);
++    DONE;
++  }
++  [(set_attr "length" "8")]
++)
++
++(define_expand "movdf"
++  [(set (match_operand:DF 0 "nonimmediate_operand" "")
++        (match_operand:DF 1 "general_operand" ""))]
++  ""
++  {
++    rx_relax_double_operands(operands, DFmode);
++
++    emit_insn (gen_movdf_internal (operands[0], operands[1]));
++    DONE;
++  }
++)
++
++(define_insn_and_split "movdf_internal"
++  [(set (match_operand:DF 0 "nonimmediate_operand" "=r,r,m")
++        (match_operand:DF 1 "general_operand"  "rF,m,r"))]
++  ""
++  "#"
++  "reload_completed"
++  [(const_int 0)]
++  {
++    rx_split_double_move (operands, DFmode);
++    DONE;
++  }
++  [(set_attr "length" "8")]
++)
++
+ (define_insn "extend<small_int_modes:mode>si2"
+   [(set (match_operand:SI 0 "register_operand"    "=r,r")
+         (sign_extend:SI (match_operand:small_int_modes
+@@ -975,6 +1021,18 @@
+    (set_attr "length"   "3,4,5,6,7,6")]
+ )
+ 
++(define_insn "addsi3_pid"
++  [(set (match_operand:SI 0 "register_operand" "=r")
++        (plus:SI (match_operand:SI 1 "register_operand" "%0")
++                 (const:SI (unspec:SI [(match_operand:SI 2 "immediate_operand" "i")] UNSPEC_PID_ADDR))))
++    (clobber (reg:CC CC_REG))]
++
++  ""
++  "add\t%2, %0"
++  [(set_attr "length" "6")
++   (set_attr "timings" "11")]
++)
++
+ ;; Peepholes to match:
+ ;;   (set (reg A) (reg B))
+ ;;   (set (CC) (compare:CC (reg A/reg B) (const_int 0)))
+@@ -1938,6 +1996,7 @@
+   [(set_attr "timings" "33")
+    (set_attr "length"  "5")] ;; This length is corrected in rx_adjust_insn_length
+ )
++
+ 
+
+ ;; Floating Point Instructions
+ 
+@@ -2872,20 +2931,33 @@
+   ""
+ )
+ 
+-(define_insn "movdi"
+-  [(set (match_operand:DI 0 "nonimmediate_operand" "=rm")
+-        (match_operand:DI 1 "general_operand"      "rmi"))]
+-  "TARGET_ENABLE_LRA"
+-  { return rx_gen_move_template (operands, false); }
+-  [(set_attr "length" "16")
+-   (set_attr "timings" "22")]
+-)
+-
+-(define_insn "movdf"
+-  [(set (match_operand:DF 0 "nonimmediate_operand" "=rm")
+-        (match_operand:DF 1 "general_operand"      "rmi"))]
+-  "TARGET_ENABLE_LRA"
+-  { return rx_gen_move_template (operands, false); }
+-  [(set_attr "length" "16")
+-   (set_attr "timings" "22")]
++;; RX does not allow addition without destroying CC.
++;; As an alternative to addptrsi3, we define addsi3, which hides changes to CC.
++(define_insn_and_split "*addsi3_lra"
++  [(set (match_operand:SI 0 "register_operand" "=r,r")
++        (plus:SI (match_operand:SI 1 "register_operand" "0,r")
++                 (match_operand:SI 2 "rx_source_operand" "ri,ri")))]
++  "!post_ra_split_completed"
++  "#"
++  "&& 1"
++  [(parallel [
++     (set (match_dup 0) (plus:SI (match_dup 1) (match_dup 2)))
++     (clobber (reg:CC 16))
++   ])]
++)
++
++(define_insn_and_split "*ashlsi3_lra"
++  [(set (match_operand:SI 0 "register_operand" "=r,r,r")
++        (ashift:SI (match_operand:SI 1 "register_operand" "%0,0,r")
++                   (match_operand:SI 2 "rx_shift_operand" "r,i,i")))]
++  "!post_ra_split_completed"
++  "@
++   shll\t%2, %0
++   shll\t%2, %0
++   shll\t%2, %1, %0"
++  "&& 1"
++  [(parallel [
++     (set (match_dup 0) (ashift:SI (match_dup 1) (match_dup 2)))
++     (clobber (reg:CC CC_REG))
++   ])]
+ )
+-- 
+2.47.3
+
+
