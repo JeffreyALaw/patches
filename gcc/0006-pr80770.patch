@@ -1,87 +1,118 @@
+diff --git a/gcc/.simplify-rtx.cc.swo b/gcc/.simplify-rtx.cc.swo
+new file mode 100644
+index 000000000000..222aa1003969
+Binary files /dev/null and b/gcc/.simplify-rtx.cc.swo differ
+diff --git a/gcc/rtl.h b/gcc/rtl.h
+index c1051f48984d..d60587dc5ce0 100644
+--- a/gcc/rtl.h
++++ b/gcc/rtl.h
+@@ -3496,6 +3496,7 @@ public:
+ 				  rtx, rtx, rtx);
+   rtx simplify_relational_operation (rtx_code, machine_mode, machine_mode,
+ 				     rtx, rtx);
++  rtx simplify_ior_with_common_term (machine_mode, rtx, rtx);
+   rtx simplify_subreg (machine_mode, rtx, machine_mode, poly_uint64);
+ 
+   rtx lowpart_subreg (machine_mode, rtx, machine_mode);
 diff --git a/gcc/simplify-rtx.cc b/gcc/simplify-rtx.cc
-index ee3d9ec32082..08ae224847b1 100644
+index ee3d9ec32082..3481e4c40adb 100644
 --- a/gcc/simplify-rtx.cc
 +++ b/gcc/simplify-rtx.cc
-@@ -3900,6 +3900,83 @@ simplify_context::simplify_binary_operation_1 (rtx_code code,
+@@ -2734,6 +2734,78 @@ simplify_context::simplify_logical_relational_operation (rtx_code code,
+   return simplify_gen_relational (code, mode, VOIDmode, op0, op1);
+ }
+ 
++rtx
++simplify_context::foo (machine_mode mode, rtx op0, rtx op1)
++{
++  /* (ior X (plus/xor X C)) can be simplified into (ior X C) when
++     X and C have no bits in common.  */
++  if ((GET_CODE (op1) == PLUS || GET_CODE (op1) == XOR)
++      && rtx_equal_p (op0, XEXP (op1, 0))
++      && ((nonzero_bits (op0, GET_MODE (op0))
++	  & nonzero_bits (XEXP (op1, 1), GET_MODE (op1))) == 0)
++      && !side_effects_p (op1))
++    return simplify_gen_binary (IOR, mode, op0, XEXP (op1, 1));
++
++  /* (ior (and A C1) (and (not A) C2)) can be converted
++     into (and (xor A C2) (C1 + C2)) when there are no bits
++     in common between C1 and C2.  */
++  if (GET_CODE (op0) == AND
++      && GET_CODE (op1) == AND
++      && GET_CODE (XEXP (op1, 0)) == NOT
++      && rtx_equal_p (XEXP (op0, 0), XEXP (XEXP (op1, 0), 0))
++      && CONST_INT_P (XEXP (op0, 1))
++      && CONST_INT_P (XEXP (op1, 1))
++      && (INTVAL (XEXP (op0, 1)) & INTVAL (XEXP (op1, 1))) == 0)
++    {
++      rtx c = GEN_INT (INTVAL (XEXP (op0, 1)) + INTVAL (XEXP (op1, 1)));
++
++      rtx tem = simplify_gen_binary (XOR, mode, XEXP (op0, 0), XEXP (op1, 1));
++      if (tem)
++	{
++	  tem = simplify_gen_binary (AND, mode, tem, c);
++
++	  if (tem)
++	    return tem;
++	}
++    }
++
++  /* Another variant seen on some target particularly those with
++     sub-word operations.
++
++     (ior (and A C1) (plus (and A C2) C2)) can be simplified into
++     (and (xor (A C2) (C1 + C2).
++
++     Where C2 is the sign bit for A's mode.  So 0x80 for QI,
++     0x8000 for HI, etc.  In this case we know there is no carry
++     from the PLUS into relevant bits of the output.  */
++  if (GET_CODE (op0) == AND
++      && GET_CODE (op1) == PLUS
++      && GET_CODE (XEXP (op1, 0)) == AND
++      && rtx_equal_p (XEXP (op0, 0), XEXP (XEXP (op1, 0), 0))
++      && CONST_INT_P (XEXP (op0, 1))
++      && CONST_INT_P (XEXP (op1, 1))
++      && CONST_INT_P (XEXP (XEXP (op1, 0), 1))
++      && INTVAL (XEXP (op1, 1)) == INTVAL (XEXP (XEXP (op1, 0), 1))
++      && GET_MODE_BITSIZE (GET_MODE (op1)).is_constant ()
++      && ((INTVAL (XEXP (op1, 1)) & GET_MODE_MASK (GET_MODE (op1)))
++	  == HOST_WIDE_INT_1U << (GET_MODE_BITSIZE (GET_MODE (op1)).to_constant () - 1))
++      && (INTVAL (XEXP (op0, 1)) & INTVAL (XEXP (op1, 1))) == 0)
++    {
++      rtx c = GEN_INT (INTVAL (XEXP (op0, 1)) + INTVAL (XEXP (op1, 1)));
++
++      rtx tem = simplify_gen_binary (XOR, mode, XEXP (op0, 0), XEXP (op1, 1));
++      if (tem)
++        {
++	  tem = simplify_gen_binary (AND, mode, tem, c);
++	  if (tem)
++	    return tem;
++	}
++    }
++  return NULL_RTX;
++}
++
++
++
+ /* Simplify a binary operation CODE with result mode MODE, operating on OP0
+    and OP1.  Return 0 if no simplification is possible.
+ 
+@@ -3900,6 +3972,19 @@ simplify_context::simplify_binary_operation_1 (rtx_code code,
  	  && negated_ops_p (XEXP (op0, 0), op1))
  	return simplify_gen_binary (IOR, mode, XEXP (op0, 1), op1);
  
-+      {
-+	rtx top0 = op0;
-+	rtx top1 = op1;
-+	for (int i = 0; i < 2; i++)
-+	  {
-+	    /* The outer IOR is commutative so try op0/op1 in their
-+	       original position and reversed.  */
-+	    if (i == 1)
-+	      std::swap (top0, top1);
++      /* op0/op1 may have a common term which in turn may allow simplification
++	 of the the outer IOR.  There are likely other cases we should
++	 handle for the outer code as well as the form of the operands.  */
++      tem = simplify_ior_with_common_term (mode, op0, op1);
++      if (tem)
++	return tem;
 +
-+	    /* (ior X (plus/xor X C)) can be simplified into (ior X C) when
-+	       X and C have no bits in common.  */
-+	    if ((GET_CODE (top1) == PLUS || GET_CODE (top1) == XOR)
-+		&& rtx_equal_p (top0, XEXP (top1, 0))
-+		&& ((nonzero_bits (top0, GET_MODE (top0))
-+		    & nonzero_bits (XEXP (top1, 1), GET_MODE (top1))) == 0)
-+		&& !side_effects_p (top1))
-+	      return simplify_gen_binary (IOR, mode, top0, XEXP (top1, 1));
-+
-+	    /* (ior (and A C1) (and (not A) C2)) can be converted
-+	       into (and (xor A C2) (C1 + C2)) when there are no bits
-+	       in common between C1 and C2.  */
-+	    if (GET_CODE (top0) == AND
-+		&& GET_CODE (top1) == AND
-+		&& GET_CODE (XEXP (top1, 0)) == NOT
-+		&& rtx_equal_p (XEXP (top0, 0), XEXP (XEXP (top1, 0), 0))
-+		&& CONST_INT_P (XEXP (top0, 1))
-+		&& CONST_INT_P (XEXP (top1, 1))
-+		&& (INTVAL (XEXP (top0, 1)) & INTVAL (XEXP (top1, 1))) == 0)
-+	      {
-+		rtx c = GEN_INT (INTVAL (XEXP (top0, 1)) + INTVAL (XEXP (top1, 1)));
-+
-+		tem = simplify_gen_binary (XOR, mode, XEXP (top0, 0), XEXP (top1, 1));
-+		if (tem)
-+		  {
-+		    tem = simplify_gen_binary (AND, mode, tem, c);
-+
-+		    if (tem)
-+		      return tem;
-+		  }
-+	      }
-+
-+	    /* Another variant seen on some target particularly those with
-+	       sub-word operations.
-+
-+	       (ior (and A C1) (plus (and A C2) C2)) can be simplified into
-+	       (and (xor (A C2) (C1 + C2).
-+
-+	       Where C2 is the sign bit for A's mode.  So 0x80 for QI,
-+	       0x8000 for HI, etc.  In this case we know there is no carry
-+	       from the PLUS into relevant bits of the output.  */
-+	    if (GET_CODE (top0) == AND
-+		&& GET_CODE (top1) == PLUS
-+		&& GET_CODE (XEXP (top1, 0)) == AND
-+		&& rtx_equal_p (XEXP (top0, 0), XEXP (XEXP (top1, 0), 0))
-+		&& CONST_INT_P (XEXP (top0, 1))
-+		&& CONST_INT_P (XEXP (top1, 1))
-+		&& CONST_INT_P (XEXP (XEXP (top1, 0), 1))
-+		&& INTVAL (XEXP (top1, 1)) == INTVAL (XEXP (XEXP (top1, 0), 1))
-+		&& GET_MODE_BITSIZE (GET_MODE (top1)).is_constant ()
-+		&& ((INTVAL (XEXP (top1, 1)) & GET_MODE_MASK (GET_MODE (top1)))
-+		    == HOST_WIDE_INT_1U << (GET_MODE_BITSIZE (GET_MODE (top1)).to_constant () - 1))
-+		&& (INTVAL (XEXP (top0, 1)) & INTVAL (XEXP (top1, 1))) == 0)
-+	      {
-+		rtx c = GEN_INT (INTVAL (XEXP (top0, 1)) + INTVAL (XEXP (top1, 1)));
-+
-+		tem = simplify_gen_binary (XOR, mode, XEXP (top0, 0), XEXP (top1, 1));
-+		if (tem)
-+		  {
-+		    tem = simplify_gen_binary (AND, mode, tem, c);
-+		    if (tem)
-+		      return tem;
-+		  }
-+	      }
-+	  }
-+      }
++      /* IOR is commutative and we can't rely on canonicalization at this point,
++	 so try again to simplify with the operands reversed.  */
++      tem = simplify_ior_with_common_term (mode, op1, op0);
++      if (tem)
++	return tem;
 +
        tem = simplify_with_subreg_not (code, mode, op0, op1);
        if (tem)
