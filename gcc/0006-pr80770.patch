@@ -23,7 +23,7 @@ index ee3d9ec32082..3481e4c40adb 100644
  }
  
 +rtx
-+simplify_context::simpify_ior_with_common_term (machine_mode mode, rtx op0, rtx op1)
++simplify_context::simplify_ior_with_common_term (machine_mode mode, rtx op0, rtx op1)
 +{
 +  /* (ior X (plus/xor X C)) can be simplified into (ior X C) when
 +     X and C have no bits in common.  */
