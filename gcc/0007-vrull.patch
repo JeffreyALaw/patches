@@ -26,6 +26,7 @@ gcc/testsuite/
 	* gcc.target/riscv/amo/zalasr-rvwmo-load-relaxed.c: Accept lh or lhu.
 	* gcc.target/riscv/amo/zalasr-ztso-load-relaxed.c: Accept lh or lhu.
 
+
 diff --git a/gcc/config/riscv/predicates.md b/gcc/config/riscv/predicates.md
 index 47e634ad87f..df1a76049f4 100644
 --- a/gcc/config/riscv/predicates.md
@@ -73,7 +74,7 @@ index 681b816d248..cb29c541a42 100644
        if (TARGET_ZBB
  	  && GET_CODE (XEXP (x, 0)) == NOT)
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index 869061e18ae..4ea46d03b6a 100644
+index 869061e18ae..322910c577b 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
 @@ -1858,33 +1858,41 @@ (define_expand "zero_extendsidi2"
@@ -237,7 +238,7 @@ index 869061e18ae..4ea46d03b6a 100644
 +  unsigned HOST_WIDE_INT mask = INTVAL (operands[3]);
 +  int leading  = clz_hwi (mask);
 +  int trailing = ctz_hwi (mask);
-+  
++ 
 +  operands[5] = GEN_INT (leading + trailing);
 +  operands[6] = GEN_INT (leading);
 +})
@@ -296,6 +297,48 @@ index ce2c41563a4..e38f5d32894 100644
  **	sh\t[atx][0-9]+,0\(a1\)
  **	ret
  */
+diff --git a/gcc/testsuite/gcc.target/riscv/shift-shift-6.c b/gcc/testsuite/gcc.target/riscv/shift-shift-6.c
+new file mode 100644
+index 00000000000..083f5c4688c
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/shift-shift-6.c
+@@ -0,0 +1,14 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc -mabi=lp64" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" } } */
++
++/* Test for zero_extendsidi2_shifted handling arbitrary mask widths
++   (not just 32 bits). */
++unsigned sub1(unsigned a, unsigned b)
++{
++  b = (b << 2) >> 2;
++  return a + (b << 1);
++}
++
++/* { dg-final { scan-assembler-times "slli" 1 } } */
++/* { dg-final { scan-assembler-times "srli" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/shift-shift-7.c b/gcc/testsuite/gcc.target/riscv/shift-shift-7.c
+new file mode 100644
+index 00000000000..3ecd9ebdc39
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/shift-shift-7.c
+@@ -0,0 +1,16 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc -mabi=lp64" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" } } */
++
++/* Test for zero_extendsidi2_shifted handling arbitrary mask widths
++   (not just 32 bits). */
++unsigned long f(unsigned int a, unsigned long b)
++{
++  a = a << 1;
++  unsigned long c = (unsigned long) a;
++  c = b + (c<<4);
++  return c;
++}
++
++/* { dg-final { scan-assembler-times "slli" 1 } } */
++/* { dg-final { scan-assembler-times "srli" 1 } } */
 diff --git a/gcc/testsuite/gcc.target/riscv/slt-1.c b/gcc/testsuite/gcc.target/riscv/slt-1.c
 index 29a64066081..7a1eaf51f43 100644
 --- a/gcc/testsuite/gcc.target/riscv/slt-1.c
