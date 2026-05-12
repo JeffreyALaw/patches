@@ -28,7 +28,7 @@ gcc/testsuite/
 
 
 diff --git a/gcc/config/riscv/predicates.md b/gcc/config/riscv/predicates.md
-index 47e634ad87f..df1a76049f4 100644
+index 47e634ad87f1..df1a76049f40 100644
 --- a/gcc/config/riscv/predicates.md
 +++ b/gcc/config/riscv/predicates.md
 @@ -231,6 +231,10 @@ (define_predicate "zcmp_mv_sreg_operand"
@@ -43,7 +43,7 @@ index 47e634ad87f..df1a76049f4 100644
  (define_predicate "branch_on_bit_operand"
    (and (match_code "const_int")
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 681b816d248..cb29c541a42 100644
+index 681b816d248e..cb29c541a42b 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
 @@ -4435,6 +4435,26 @@ riscv_rtx_costs (rtx x, machine_mode mode, int outer_code, int opno ATTRIBUTE_UN
@@ -74,7 +74,7 @@ index 681b816d248..cb29c541a42 100644
        if (TARGET_ZBB
  	  && GET_CODE (XEXP (x, 0)) == NOT)
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index 869061e18ae..322910c577b 100644
+index 869061e18ae1..322910c577b1 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
 @@ -1858,33 +1858,41 @@ (define_expand "zero_extendsidi2"
@@ -246,7 +246,7 @@ index 869061e18ae..322910c577b 100644
  ;; Handle logical AND feeding an equality test against zero where an operand
  ;; to the AND is a constant requiring synthesis.  Because we only care about
 diff --git a/gcc/testsuite/gcc.target/riscv/amo/a-rvwmo-load-relaxed.c b/gcc/testsuite/gcc.target/riscv/amo/a-rvwmo-load-relaxed.c
-index 01a1e3c5c86..bee32d07a62 100644
+index 01a1e3c5c863..bee32d07a624 100644
 --- a/gcc/testsuite/gcc.target/riscv/amo/a-rvwmo-load-relaxed.c
 +++ b/gcc/testsuite/gcc.target/riscv/amo/a-rvwmo-load-relaxed.c
 @@ -30,7 +30,7 @@ void atomic_load_int_relaxed (int* bar, int* baz)
@@ -259,7 +259,7 @@ index 01a1e3c5c86..bee32d07a62 100644
  **	ret
  */
 diff --git a/gcc/testsuite/gcc.target/riscv/amo/a-ztso-load-relaxed.c b/gcc/testsuite/gcc.target/riscv/amo/a-ztso-load-relaxed.c
-index 2ee094679eb..4090afa5bc8 100644
+index 2ee094679eb4..4090afa5bc84 100644
 --- a/gcc/testsuite/gcc.target/riscv/amo/a-ztso-load-relaxed.c
 +++ b/gcc/testsuite/gcc.target/riscv/amo/a-ztso-load-relaxed.c
 @@ -30,7 +30,7 @@ void atomic_load_int_relaxed (int* bar, int* baz)
@@ -272,7 +272,7 @@ index 2ee094679eb..4090afa5bc8 100644
  **	ret
  */
 diff --git a/gcc/testsuite/gcc.target/riscv/amo/zalasr-rvwmo-load-relaxed.c b/gcc/testsuite/gcc.target/riscv/amo/zalasr-rvwmo-load-relaxed.c
-index eee5f8d5bb9..44551776753 100644
+index eee5f8d5bb98..44551776753b 100644
 --- a/gcc/testsuite/gcc.target/riscv/amo/zalasr-rvwmo-load-relaxed.c
 +++ b/gcc/testsuite/gcc.target/riscv/amo/zalasr-rvwmo-load-relaxed.c
 @@ -30,7 +30,7 @@ void atomic_load_int_relaxed (int* bar, int* baz)
@@ -285,7 +285,7 @@ index eee5f8d5bb9..44551776753 100644
  **	ret
  */
 diff --git a/gcc/testsuite/gcc.target/riscv/amo/zalasr-ztso-load-relaxed.c b/gcc/testsuite/gcc.target/riscv/amo/zalasr-ztso-load-relaxed.c
-index ce2c41563a4..e38f5d32894 100644
+index ce2c41563a47..e38f5d32894d 100644
 --- a/gcc/testsuite/gcc.target/riscv/amo/zalasr-ztso-load-relaxed.c
 +++ b/gcc/testsuite/gcc.target/riscv/amo/zalasr-ztso-load-relaxed.c
 @@ -30,7 +30,7 @@ void atomic_load_int_relaxed (int* bar, int* baz)
@@ -297,9 +297,46 @@ index ce2c41563a4..e38f5d32894 100644
  **	sh\t[atx][0-9]+,0\(a1\)
  **	ret
  */
+diff --git a/gcc/testsuite/gcc.target/riscv/core_list_init.c b/gcc/testsuite/gcc.target/riscv/core_list_init.c
+index eec3a817d80c..48f16bd081e3 100644
+--- a/gcc/testsuite/gcc.target/riscv/core_list_init.c
++++ b/gcc/testsuite/gcc.target/riscv/core_list_init.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-fext-dce -fdump-rtl-ext_dce" } */
++/* { dg-options "-fext-dce -fdump-rtl-ext_dce -mbranch-cost=4" } */
+ /* { dg-final { scan-rtl-dump {Successfully transformed} "ext_dce" } } */
+ /* { dg-skip-if "" { *-*-* } { "-O0"} } */
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/pr105314-rtl.c b/gcc/testsuite/gcc.target/riscv/pr105314-rtl.c
+index 570918f9d9ab..027b65fe17fd 100644
+--- a/gcc/testsuite/gcc.target/riscv/pr105314-rtl.c
++++ b/gcc/testsuite/gcc.target/riscv/pr105314-rtl.c
+@@ -2,7 +2,7 @@
+ /* { dg-do compile } */
+ /* { dg-require-effective-target rv64 } */
+ /* { dg-skip-if "" { *-*-* } { "-march=*zicond*" "-O0" "-Og" "-Os" "-Oz" "-flto" } } */
+-/* { dg-options "-fdump-rtl-ce1" } */
++/* { dg-options "-fdump-rtl-ce1 -mbranch-cost=4" } */
+ 
+ long __RTL (startwith ("ce1"))
+ foo (long a, long b, long c)
+diff --git a/gcc/testsuite/gcc.target/riscv/pr105314.c b/gcc/testsuite/gcc.target/riscv/pr105314.c
+index 75f6ecda2bbe..861ac7b25515 100644
+--- a/gcc/testsuite/gcc.target/riscv/pr105314.c
++++ b/gcc/testsuite/gcc.target/riscv/pr105314.c
+@@ -1,7 +1,7 @@
+ /* PR rtl-optimization/105314 */
+ /* { dg-do compile } */
+ /* { dg-skip-if "" { *-*-* } { "-march=*zicond*" "-O0" "-Og" "-Os" "-Oz" } } */
+-/* { dg-options "-fdump-rtl-ce1" } */
++/* { dg-options "-fdump-rtl-ce1 -mbranch-cost=4" } */
+ 
+ long
+ foo (long a, long b, long c)
 diff --git a/gcc/testsuite/gcc.target/riscv/shift-shift-6.c b/gcc/testsuite/gcc.target/riscv/shift-shift-6.c
 new file mode 100644
-index 00000000000..083f5c4688c
+index 000000000000..083f5c4688c3
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/shift-shift-6.c
 @@ -0,0 +1,14 @@
@@ -319,7 +356,7 @@ index 00000000000..083f5c4688c
 +/* { dg-final { scan-assembler-times "srli" 1 } } */
 diff --git a/gcc/testsuite/gcc.target/riscv/shift-shift-7.c b/gcc/testsuite/gcc.target/riscv/shift-shift-7.c
 new file mode 100644
-index 00000000000..3ecd9ebdc39
+index 000000000000..3ecd9ebdc39c
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/shift-shift-7.c
 @@ -0,0 +1,16 @@
@@ -340,19 +377,20 @@ index 00000000000..3ecd9ebdc39
 +/* { dg-final { scan-assembler-times "slli" 1 } } */
 +/* { dg-final { scan-assembler-times "srli" 1 } } */
 diff --git a/gcc/testsuite/gcc.target/riscv/slt-1.c b/gcc/testsuite/gcc.target/riscv/slt-1.c
-index 29a64066081..7a1eaf51f43 100644
+index 29a640660810..5711757e706d 100644
 --- a/gcc/testsuite/gcc.target/riscv/slt-1.c
 +++ b/gcc/testsuite/gcc.target/riscv/slt-1.c
 @@ -1,6 +1,6 @@
  /* { dg-do compile } */
- /* { dg-options "-march=rv64gc -mabi=lp64d" } */
+-/* { dg-options "-march=rv64gc -mabi=lp64d" } */
 -/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
++/* { dg-options "-march=rv64gc -mabi=lp64d -mbranch-cost=4" } */
 +/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" "-Os" "-Oz" } } */
  
  #include <stdint.h>
  
 diff --git a/gcc/testsuite/gcc.target/riscv/zba-shNadd-04.c b/gcc/testsuite/gcc.target/riscv/zba-shNadd-04.c
-index 48e225d3f1e..ca80e874e8d 100644
+index 48e225d3f1e7..ca80e874e8d1 100644
 --- a/gcc/testsuite/gcc.target/riscv/zba-shNadd-04.c
 +++ b/gcc/testsuite/gcc.target/riscv/zba-shNadd-04.c
 @@ -1,5 +1,5 @@
@@ -363,7 +401,7 @@ index 48e225d3f1e..ca80e874e8d 100644
  
  long long sub1(unsigned long long a, unsigned long long b)
 diff --git a/gcc/testsuite/gcc.target/riscv/zba-slliuw.c b/gcc/testsuite/gcc.target/riscv/zba-slliuw.c
-index 69914db95a2..1e100b555c2 100644
+index 69914db95a2c..1e100b555c2e 100644
 --- a/gcc/testsuite/gcc.target/riscv/zba-slliuw.c
 +++ b/gcc/testsuite/gcc.target/riscv/zba-slliuw.c
 @@ -1,5 +1,5 @@
@@ -374,7 +412,7 @@ index 69914db95a2..1e100b555c2 100644
  
  long
 diff --git a/gcc/testsuite/gcc.target/riscv/zbs-zext.c b/gcc/testsuite/gcc.target/riscv/zbs-zext.c
-index 5773b15d298..1bebc36c31c 100644
+index 5773b15d2987..1bebc36c31c8 100644
 --- a/gcc/testsuite/gcc.target/riscv/zbs-zext.c
 +++ b/gcc/testsuite/gcc.target/riscv/zbs-zext.c
 @@ -1,5 +1,5 @@
