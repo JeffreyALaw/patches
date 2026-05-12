@@ -1,32 +1,3 @@
-gcc/
-
-	* config/riscv/riscv.cc (riscv_rtx_costs): Properly cost pack insns
-	for Zbkb.
-	* config/riscv/riscv.md (zero_extendsidi2): Expand into shift pairs
-	when the appropriate instructions are not available.
-	(zero_extendhi<GPR:mode>2): Simlarly.
-	(*zero_extendsidi2_internal): Make a simple define_insn.  Only handle
-	MEM sources.
-	(*zero_extendhi<GPR2:mode>2): Similarly.
-	(zero_extendsidi2_shifted): Turn into a define_split.
-	* config/riscv/predicates.md (dimode_shift_operand): New predicate.
-	* config/riscv/riscv.md (zero_extendsidi2_shifted): Generalize for
-	more constants.
-
-gcc/testsuite/
-
-	* gcc.target/riscv/slt-1.c: Skip for -Oz as well.
-	* gcc.target/riscv/zba-shNadd-04.c: Add Zbb to command line switches.
-	* gcc.target/riscv/zba-slliuw.c: Add Zbs to command line switches.
-	* gcc.target/riscv/zbs-zext.c: Add Zbs to command line switches.
-	* gcc.target/riscv/shift-shift-6.c: New test.
-	* gcc.target/riscv/shift-shift-7.c: New test.
-	* gcc.target/riscv/amo/a-rvwmo-load-relaxed.c: Accept lh or lhu.
-	* gcc.target/riscv/amo/a-ztso-load-relaxed.c: Accept lh or lhu.
-	* gcc.target/riscv/amo/zalasr-rvwmo-load-relaxed.c: Accept lh or lhu.
-	* gcc.target/riscv/amo/zalasr-ztso-load-relaxed.c: Accept lh or lhu.
-
-
 diff --git a/gcc/config/riscv/predicates.md b/gcc/config/riscv/predicates.md
 index 47e634ad87f1..df1a76049f40 100644
 --- a/gcc/config/riscv/predicates.md
@@ -245,6 +216,30 @@ index 869061e18ae1..322910c577b1 100644
  
  ;; Handle logical AND feeding an equality test against zero where an operand
  ;; to the AND is a constant requiring synthesis.  Because we only care about
+diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
+index d75f7e48574c..d9d136a7b572 100644
+--- a/gcc/ext-dce.cc
++++ b/gcc/ext-dce.cc
+@@ -966,6 +966,19 @@ carry_backpropagate (unsigned HOST_WIDE_INT mask, enum rtx_code code, rtx x)
+       /* Recurse into the operand.  */
+       return carry_backpropagate (mask, GET_CODE (XEXP (x, 0)), XEXP (x, 0));
+ 
++    /* If an AND/IOR unconditionally clears/sets bits in the output, then
++       we do not care about the liveness of those bits in the inputs. 
++
++       So AND MASK with the constant for AND and with the complemented constant
++       for IOR.  */
++    case AND:
++    case IOR:
++      if (CONST_INT_P (XEXP (x, 1)))
++	mask &= (code == AND
++		 ? UINTVAL (XEXP (x, 1))
++		 : ~UINTVAL (XEXP (x, 1)));
++      return mask;
++
+     /* We propagate for the shifted operand, but not the shift
+        count.  The count is handled specially.  */
+     case SS_ASHIFT:
 diff --git a/gcc/testsuite/gcc.target/riscv/amo/a-rvwmo-load-relaxed.c b/gcc/testsuite/gcc.target/riscv/amo/a-rvwmo-load-relaxed.c
 index 01a1e3c5c863..bee32d07a624 100644
 --- a/gcc/testsuite/gcc.target/riscv/amo/a-rvwmo-load-relaxed.c
@@ -297,17 +292,6 @@ index ce2c41563a47..e38f5d32894d 100644
  **	sh\t[atx][0-9]+,0\(a1\)
  **	ret
  */
-diff --git a/gcc/testsuite/gcc.target/riscv/core_list_init.c b/gcc/testsuite/gcc.target/riscv/core_list_init.c
-index eec3a817d80c..48f16bd081e3 100644
---- a/gcc/testsuite/gcc.target/riscv/core_list_init.c
-+++ b/gcc/testsuite/gcc.target/riscv/core_list_init.c
-@@ -1,5 +1,5 @@
- /* { dg-do compile } */
--/* { dg-options "-fext-dce -fdump-rtl-ext_dce" } */
-+/* { dg-options "-fext-dce -fdump-rtl-ext_dce -mbranch-cost=4" } */
- /* { dg-final { scan-rtl-dump {Successfully transformed} "ext_dce" } } */
- /* { dg-skip-if "" { *-*-* } { "-O0"} } */
- 
 diff --git a/gcc/testsuite/gcc.target/riscv/pr105314-rtl.c b/gcc/testsuite/gcc.target/riscv/pr105314-rtl.c
 index 570918f9d9ab..027b65fe17fd 100644
 --- a/gcc/testsuite/gcc.target/riscv/pr105314-rtl.c
