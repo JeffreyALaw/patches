@@ -1,0 +1,66 @@
+From ced589300731f25e5d64474eeafe38138d223af4 Mon Sep 17 00:00:00 2001
+From: Yoshinori Sato <yoshinori.sato@nifty.com>
+Date: Sat, 16 May 2026 22:59:09 +0900
+Subject: [PATCH] RX: The size of the mov instruction will be corrected
+
+When expanding `extendqisi2` or `extendhisi2`, incorrect operation size
+instructions were sometimes output.
+This update ensures that the operation size is determined reliably.
+
+gcc/config/rx/ChangeLog:
+
+* rx.cc (rx_gen_move_template): Select the mode with the smallest size for the mov instruction.
+
+Sigened-off-by: Yoshinori Sato <yoshinori.sato@nifty.com>
+---
+ gcc/config/rx/rx.cc | 25 +++++++++++++++++++------
+ 1 file changed, 19 insertions(+), 6 deletions(-)
+
+diff --git a/gcc/config/rx/rx.cc b/gcc/config/rx/rx.cc
+index 69f4b214fee..4078580f6ad 100644
+--- a/gcc/config/rx/rx.cc
++++ b/gcc/config/rx/rx.cc
+@@ -1000,10 +1000,26 @@ rx_gen_move_template (rtx * operands, bool is_movu)
+   const char * dst_template;
+   rtx          dest = operands[0];
+   rtx          src  = operands[1];
++  machine_mode mode;
++  machine_mode src_mode;
+ 
+-  /* Decide which extension, if any, should be given to the move instruction.  */
+-  /* When zero-extending, always check the size of the source. */
+-  switch ((is_movu || MEM_P (src)) ? GET_MODE (src) : GET_MODE (dest))
++  /* Determine the size to transfer.  */
++  if (CONST_INT_P (src))
++    /* Since constants have no size, the destination is used.  */
++    mode = GET_MODE (dest);
++  else
++    {
++      /* Otherwise, use the smaller size.  */
++      if (GET_MODE (src) == SIGN_EXTEND || GET_MODE (src) == ZERO_EXTEND)
++	/* When expanding, the original size will be used. */
++	src_mode = GET_MODE (XEXP (src, 0));
++      else
++	src_mode = GET_MODE (src);
++      mode = (GET_MODE_SIZE (src_mode) < GET_MODE_SIZE(GET_MODE(dest)))
++	 ? src_mode : GET_MODE(dest);
++    }
++
++  switch (mode)
+     {
+     case E_QImode:
+       /* The .B extension is not valid when
+@@ -1022,9 +1038,6 @@ rx_gen_move_template (rtx * operands, bool is_movu)
+       gcc_assert (!is_movu);
+       extension = ".L";
+       break;
+-    case E_VOIDmode:
+-      /* This mode is used by constants.  */
+-      break;
+     default:
+       debug_rtx (src);
+       gcc_unreachable ();
+-- 
+2.47.3
+
+
