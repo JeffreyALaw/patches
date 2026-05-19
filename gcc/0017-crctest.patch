@@ -1,0 +1,70 @@
+
+
+Before r17-567 ("middle-end: Optimize reversed CRC table-based
+implementation"), a reversed CRC without a crc_rev optab was
+expanded as: reflect the input, run the non-reversed CRC table,
+then reflect the result.  So the table that got emitted was the
+non-reversed one, and the dump printed:
+
+  ;; emitting crc table crc_<N>_polynomial_<P> ...
+
+After that patch, the middle end builds a reversed CRC table
+directly and the dump prints:
+
+  ;; emitting reversed crc table crc_<N>_polynomial_<P> ...
+
+Any target without a crc_rev optab hits the new path.  For example,
+RISC-V's bitmanip.md defines crc_rev<ANYI1:mode><ANYI:mode>4 with
+no TARGET_ guard, so the optab is always there and the dump still
+says "using optab for ..." -- the test passes.  But x86's
+crc_rev<SWI124:mode>si4 needs TARGET_CRC32, so a default x86 build
+(no SSE4.2 / -march=cascadelake) has no optab, falls back to the
+table, and prints the new "emitting reversed crc table" message.
+
+The old regex only accepted "emitting crc table", so x86 fails.
+These tests only call __builtin_rev_crc*, which always take the
+reversed path, so the non-reversed "emitting crc table" message
+cannot appear here.  Just replace it with the new wording.
+
+gcc/testsuite/ChangeLog:
+
+	* gcc.dg/crc-builtin-rev-target32.c: Match the new
+	"emitting reversed crc table" dump message.
+	* gcc.dg/crc-builtin-rev-target64.c: Likewise.
+---
+ gcc/testsuite/gcc.dg/crc-builtin-rev-target32.c | 6 +++---
+ gcc/testsuite/gcc.dg/crc-builtin-rev-target64.c | 6 +++---
+ 2 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/gcc/testsuite/gcc.dg/crc-builtin-rev-target32.c b/gcc/testsuite/gcc.dg/crc-builtin-rev-target32.c
+index f2b63db7fd1..25dc9a226c3 100644
+--- a/gcc/testsuite/gcc.dg/crc-builtin-rev-target32.c
++++ b/gcc/testsuite/gcc.dg/crc-builtin-rev-target32.c
+@@ -34,6 +34,6 @@ int32_t rev_crc32_data32 ()
+   return __builtin_rev_crc32_data32 (0xffffffff, 0x123546ff, 0x4002123);
+ }
+ 
+-/* { dg-final { scan-rtl-dump ";; (?:using optab for|emitting crc table) crc_8_polynomial_0x12" "expand" } } */
+-/* { dg-final { scan-rtl-dump ";; (?:using optab for|emitting crc table) crc_16_polynomial_0x1021" "expand" } } */
+-/* { dg-final { scan-rtl-dump ";; (?:using optab for|emitting crc table) crc_32_polynomial_0x4002123" "expand" } } */
++/* { dg-final { scan-rtl-dump ";; (?:using optab for|emitting reversed crc table) crc_8_polynomial_0x12" "expand" } } */
++/* { dg-final { scan-rtl-dump ";; (?:using optab for|emitting reversed crc table) crc_16_polynomial_0x1021" "expand" } } */
++/* { dg-final { scan-rtl-dump ";; (?:using optab for|emitting reversed crc table) crc_32_polynomial_0x4002123" "expand" } } */
+diff --git a/gcc/testsuite/gcc.dg/crc-builtin-rev-target64.c b/gcc/testsuite/gcc.dg/crc-builtin-rev-target64.c
+index 97e80004d37..bc9dfa5b619 100644
+--- a/gcc/testsuite/gcc.dg/crc-builtin-rev-target64.c
++++ b/gcc/testsuite/gcc.dg/crc-builtin-rev-target64.c
+@@ -58,6 +58,6 @@ int64_t rev_crc64_data64 ()
+ 				     0x40021234002123);
+ }
+ 
+-/* { dg-final { scan-rtl-dump ";; (?:using optab for|emitting crc table) crc_8_polynomial_0x12" "expand" } } */
+-/* { dg-final { scan-rtl-dump ";; (?:using optab for|emitting crc table) crc_16_polynomial_0x1021" "expand" } } */
+-/* { dg-final { scan-rtl-dump ";; (?:using optab for|emitting crc table) crc_32_polynomial_0x4002123" "expand" } } */
++/* { dg-final { scan-rtl-dump ";; (?:using optab for|emitting reversed crc table) crc_8_polynomial_0x12" "expand" } } */
++/* { dg-final { scan-rtl-dump ";; (?:using optab for|emitting reversed crc table) crc_16_polynomial_0x1021" "expand" } } */
++/* { dg-final { scan-rtl-dump ";; (?:using optab for|emitting reversed crc table) crc_32_polynomial_0x4002123" "expand" } } */
+-- 
+2.52.0
+
+
