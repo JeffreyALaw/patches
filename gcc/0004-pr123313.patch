@@ -1,8 +1,8 @@
 diff --git a/gcc/ifcvt.cc b/gcc/ifcvt.cc
-index c151146c1b22..c6452d5a7242 100644
+index c151146c1b22..fe4354ff822a 100644
 --- a/gcc/ifcvt.cc
 +++ b/gcc/ifcvt.cc
-@@ -1778,6 +1778,66 @@ noce_try_store_flag_constants (struct noce_if_info *if_info)
+@@ -1778,6 +1778,69 @@ noce_try_store_flag_constants (struct noce_if_info *if_info)
    return false;
  }
  
@@ -20,6 +20,9 @@ index c151146c1b22..c6452d5a7242 100644
 +  machine_mode mode = GET_MODE (dest);
 +
 +  if (STORE_FLAG_VALUE != -1 && STORE_FLAG_VALUE != 1)
++    return false;
++
++  if (!noce_simple_bbs (if_info))
 +    return false;
 +
 +  bool swapped = false;
@@ -69,7 +72,7 @@ index c151146c1b22..c6452d5a7242 100644
  /* Convert "if (test) foo++" into "foo += (test != 0)", and
     similarly for "foo--".  */
  
-@@ -4481,6 +4541,9 @@ noce_process_if_block (struct noce_if_info *if_info)
+@@ -4481,6 +4544,9 @@ noce_process_if_block (struct noce_if_info *if_info)
    if (!targetm.have_conditional_execution ()
        && noce_try_store_flag_constants (if_info))
      goto success;
