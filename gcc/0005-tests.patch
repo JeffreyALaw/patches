@@ -1,3 +1,93 @@
+diff --git a/gcc/testsuite/gcc.target/riscv/cpymem-64-ooo.c b/gcc/testsuite/gcc.target/riscv/cpymem-64-ooo.c
+index 147324093cb1..77d38d5e5733 100644
+--- a/gcc/testsuite/gcc.target/riscv/cpymem-64-ooo.c
++++ b/gcc/testsuite/gcc.target/riscv/cpymem-64-ooo.c
+@@ -22,9 +22,9 @@ void copy_aligned_##N (void *to, void *from)		\
+ /*
+ **copy_7:
+ **    ...
+-**    lw\t[at][0-9],0\([at][0-9]\)
++**    (lwu|lw)\t[at][0-9],0\([at][0-9]\)
+ **    sw\t[at][0-9],0\([at][0-9]\)
+-**    lw\t[at][0-9],3\([at][0-9]\)
++**    (lwu|lw)\t[at][0-9],3\([at][0-9]\)
+ **    sw\t[at][0-9],3\([at][0-9]\)
+ **    ...
+ */
+@@ -33,9 +33,9 @@ COPY_N(7)
+ /*
+ **copy_aligned_7:
+ **    ...
+-**    lw\t[at][0-9],0\([at][0-9]\)
++**    (lwu|lw)\t[at][0-9],0\([at][0-9]\)
+ **    sw\t[at][0-9],0\([at][0-9]\)
+-**    lw\t[at][0-9],3\([at][0-9]\)
++**    (lwu|lw)\t[at][0-9],3\([at][0-9]\)
+ **    sw\t[at][0-9],3\([at][0-9]\)
+ **    ...
+ */
+@@ -64,7 +64,7 @@ COPY_ALIGNED_N(8)
+ **    ...
+ **    ld\t[at][0-9],0\([at][0-9]\)
+ **    sd\t[at][0-9],0\([at][0-9]\)
+-**    lw\t[at][0-9],7\([at][0-9]\)
++**    (lwu|lw)\t[at][0-9],7\([at][0-9]\)
+ **    sw\t[at][0-9],7\([at][0-9]\)
+ **    ...
+ */
+@@ -75,7 +75,7 @@ COPY_N(11)
+ **    ...
+ **    ld\t[at][0-9],0\([at][0-9]\)
+ **    sd\t[at][0-9],0\([at][0-9]\)
+-**    lw\t[at][0-9],7\([at][0-9]\)
++**    (lwu|lw)\t[at][0-9],7\([at][0-9]\)
+ **    sw\t[at][0-9],7\([at][0-9]\)
+ **    ...
+ */
+@@ -110,7 +110,7 @@ COPY_ALIGNED_N(15)
+ **    ...
+ **    sd\t[at][0-9],16\([at][0-9]\)
+ **    ...
+-**    lw\t[at][0-9],23\([at][0-9]\)
++**    (lwu|lw)\t[at][0-9],23\([at][0-9]\)
+ **    sw\t[at][0-9],23\([at][0-9]\)
+ **    ...
+ */
+@@ -123,7 +123,7 @@ COPY_N(27)
+ **    ...
+ **    sd\t[at][0-9],16\([at][0-9]\)
+ **    ...
+-**    lw\t[at][0-9],23\([at][0-9]\)
++**    (lwu|lw)\t[at][0-9],23\([at][0-9]\)
+ **    sw\t[at][0-9],23\([at][0-9]\)
+ **    ...
+ */
+diff --git a/gcc/testsuite/gcc.target/riscv/cpymem-64.c b/gcc/testsuite/gcc.target/riscv/cpymem-64.c
+index c91b0154a298..df3a679f1592 100644
+--- a/gcc/testsuite/gcc.target/riscv/cpymem-64.c
++++ b/gcc/testsuite/gcc.target/riscv/cpymem-64.c
+@@ -35,7 +35,7 @@ COPY_N(7)
+ /*
+ **copy_aligned_7:
+ **    ...
+-**    lw\t[at][0-9],0\([at][0-9]\)
++**    (lwu|lw)\t[at][0-9],0\([at][0-9]\)
+ **    sw\t[at][0-9],0\([at][0-9]\)
+ **    ...
+ **    lbu\t[at][0-9],6\([at][0-9]\)
+diff --git a/gcc/testsuite/gcc.target/riscv/memcpy-nonoverlapping.c b/gcc/testsuite/gcc.target/riscv/memcpy-nonoverlapping.c
+index 1c99e13fc269..62f1497adf83 100644
+--- a/gcc/testsuite/gcc.target/riscv/memcpy-nonoverlapping.c
++++ b/gcc/testsuite/gcc.target/riscv/memcpy-nonoverlapping.c
+@@ -44,7 +44,7 @@ COPY_N(31)
+ /* { dg-final { scan-assembler-times "ld\t" 17 } } */
+ /* { dg-final { scan-assembler-times "sd\t" 17 } } */
+ 
+-/* { dg-final { scan-assembler-times "lw\t" 6 } } */
++/* { dg-final { scan-assembler-times "(lwu|lw)\t" 6 } } */
+ /* { dg-final { scan-assembler-times "sw\t" 6 } } */
+ 
+ /* { dg-final { scan-assembler-times "lhu\t" 7 } } */
 diff --git a/gcc/testsuite/gcc.target/riscv/pr67731.c b/gcc/testsuite/gcc.target/riscv/pr67731.c
 index 6f254fc68f5f..4e6f609e24df 100644
 --- a/gcc/testsuite/gcc.target/riscv/pr67731.c
