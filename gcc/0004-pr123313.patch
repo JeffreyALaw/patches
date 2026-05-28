@@ -82,15 +82,3 @@ index c151146c1b22..fe4354ff822a 100644
    if (noce_try_sign_bit_splat (if_info))
      goto success;
    if (HAVE_conditional_move
-diff --git a/gcc/testsuite/gcc.target/riscv/pr67731.c b/gcc/testsuite/gcc.target/riscv/pr67731.c
-index 6f254fc68f5f..a41925614bc6 100644
---- a/gcc/testsuite/gcc.target/riscv/pr67731.c
-+++ b/gcc/testsuite/gcc.target/riscv/pr67731.c
-@@ -20,6 +20,6 @@ _Bool test_01 (S* s)
- {
-   return s->b | s->c | s->d;
- }
--/* { dg-final { scan-assembler-times {\tlw\ta0,0\(a0\).*?\n\tandi\ta0,a0,\d+.*?\n\tsnez\ta0,a0.*?\n\tret} 2 } } */
-+/* { dg-final { scan-assembler-times {\tlwu?\ta0,0\(a0\).*?\n\tandi\ta0,a0,\d+.*?\n\tsnez\ta0,a0.*?\n\tret} 2 } } */
- /* { dg-final { scan-assembler-not {\tor} } } */
- /* { dg-final { scan-assembler-not {\tbexti} } } */
