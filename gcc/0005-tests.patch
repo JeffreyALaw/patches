@@ -101,3 +101,159 @@ index 6f254fc68f5f..4e6f609e24df 100644
 +/* { dg-final { scan-assembler-times {\tlwu\ta0,0\(a0\).*?\n\tandi\ta0,a0,\d+.*?\n\tsnez\ta0,a0.*?\n\tret} 2 { target rv64 } } } */
  /* { dg-final { scan-assembler-not {\tor} } } */
  /* { dg-final { scan-assembler-not {\tbexti} } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/amo/a-rvwmo-store-compat-seq-cst.c b/gcc/testsuite/gcc.target/riscv/amo/a-rvwmo-store-compat-seq-cst.c
+index b3ec4e1061b1..25d1110829a6 100644
+--- a/gcc/testsuite/gcc.target/riscv/amo/a-rvwmo-store-compat-seq-cst.c
++++ b/gcc/testsuite/gcc.target/riscv/amo/a-rvwmo-store-compat-seq-cst.c
+@@ -22,7 +22,7 @@ void atomic_store_long_seq_cst (long* bar, long* baz)
+ 
+ /*
+ ** atomic_store_int_seq_cst:
+-**	lw\t[atx][0-9]+,0\(a1\)
++**	(lwu|lw)\t[atx][0-9]+,0\(a1\)
+ **	fence\trw,w
+ **	sw\t[atx][0-9]+,0\(a0\)
+ **	fence\trw,rw
+diff --git a/gcc/testsuite/gcc.target/riscv/amo/a-rvwmo-store-relaxed.c b/gcc/testsuite/gcc.target/riscv/amo/a-rvwmo-store-relaxed.c
+index 2f224f993de4..87b0f2fead58 100644
+--- a/gcc/testsuite/gcc.target/riscv/amo/a-rvwmo-store-relaxed.c
++++ b/gcc/testsuite/gcc.target/riscv/amo/a-rvwmo-store-relaxed.c
+@@ -19,7 +19,7 @@ void atomic_store_long_relaxed (long* bar, long* baz)
+ 
+ /*
+ ** atomic_store_int_relaxed:
+-**	lw\t[atx][0-9]+,0\(a1\)
++**	(lwu|lw)\t[atx][0-9]+,0\(a1\)
+ **	sw\t[atx][0-9]+,0\(a0\)
+ **	ret
+ */
+diff --git a/gcc/testsuite/gcc.target/riscv/amo/a-rvwmo-store-release.c b/gcc/testsuite/gcc.target/riscv/amo/a-rvwmo-store-release.c
+index 6daca225d240..9e75c8d3b4d7 100644
+--- a/gcc/testsuite/gcc.target/riscv/amo/a-rvwmo-store-release.c
++++ b/gcc/testsuite/gcc.target/riscv/amo/a-rvwmo-store-release.c
+@@ -20,7 +20,7 @@ void atomic_store_long_release (long* bar, long* baz)
+ 
+ /*
+ ** atomic_store_int_release:
+-**	lw\t[atx][0-9]+,0\(a1\)
++**	(lwu|lw)\t[atx][0-9]+,0\(a1\)
+ **	fence\trw,w
+ **	sw\t[atx][0-9]+,0\(a0\)
+ **	ret
+diff --git a/gcc/testsuite/gcc.target/riscv/amo/a-ztso-store-compat-seq-cst.c b/gcc/testsuite/gcc.target/riscv/amo/a-ztso-store-compat-seq-cst.c
+index a1cefbb11097..ff96ab7fa18b 100644
+--- a/gcc/testsuite/gcc.target/riscv/amo/a-ztso-store-compat-seq-cst.c
++++ b/gcc/testsuite/gcc.target/riscv/amo/a-ztso-store-compat-seq-cst.c
+@@ -21,7 +21,7 @@ void atomic_store_long_seq_cst (long* bar, long* baz)
+ 
+ /*
+ ** atomic_store_int_seq_cst:
+-**	lw\t[atx][0-9]+,0\(a1\)
++**	(lwu|lw)\t[atx][0-9]+,0\(a1\)
+ **	sw\t[atx][0-9]+,0\(a0\)
+ **	fence\trw,rw
+ **	ret
+diff --git a/gcc/testsuite/gcc.target/riscv/amo/a-ztso-store-relaxed.c b/gcc/testsuite/gcc.target/riscv/amo/a-ztso-store-relaxed.c
+index 939ad7574625..41e081b768ba 100644
+--- a/gcc/testsuite/gcc.target/riscv/amo/a-ztso-store-relaxed.c
++++ b/gcc/testsuite/gcc.target/riscv/amo/a-ztso-store-relaxed.c
+@@ -19,7 +19,7 @@ void atomic_store_long_relaxed (long* bar, long* baz)
+ 
+ /*
+ ** atomic_store_int_relaxed:
+-**	lw\t[atx][0-9]+,0\(a1\)
++**	(lwu|lw)\t[atx][0-9]+,0\(a1\)
+ **	sw\t[atx][0-9]+,0\(a0\)
+ **	ret
+ */
+diff --git a/gcc/testsuite/gcc.target/riscv/amo/a-ztso-store-release.c b/gcc/testsuite/gcc.target/riscv/amo/a-ztso-store-release.c
+index bb97b8a6d524..f55e4a127957 100644
+--- a/gcc/testsuite/gcc.target/riscv/amo/a-ztso-store-release.c
++++ b/gcc/testsuite/gcc.target/riscv/amo/a-ztso-store-release.c
+@@ -19,7 +19,7 @@ void atomic_store_long_release (long* bar, long* baz)
+ 
+ /*
+ ** atomic_store_int_release:
+-**	lw\t[atx][0-9]+,0\(a1\)
++**	(lwu|lw)\t[atx][0-9]+,0\(a1\)
+ **	sw\t[atx][0-9]+,0\(a0\)
+ **	ret
+ */
+diff --git a/gcc/testsuite/gcc.target/riscv/amo/zalasr-rvwmo-store-compat-seq-cst.c b/gcc/testsuite/gcc.target/riscv/amo/zalasr-rvwmo-store-compat-seq-cst.c
+index 7f40d443bd0c..03324eed14fe 100644
+--- a/gcc/testsuite/gcc.target/riscv/amo/zalasr-rvwmo-store-compat-seq-cst.c
++++ b/gcc/testsuite/gcc.target/riscv/amo/zalasr-rvwmo-store-compat-seq-cst.c
+@@ -20,7 +20,7 @@ void atomic_store_long_seq_cst (long* bar, long* baz)
+ 
+ /*
+ ** atomic_store_int_seq_cst:
+-**	lw\t[atx][0-9]+,0\(a1\)
++**	(lwu|lw)\t[atx][0-9]+,0\(a1\)
+ **	sw.rl\t[atx][0-9]+,0\(a0\)
+ **	ret
+ */
+diff --git a/gcc/testsuite/gcc.target/riscv/amo/zalasr-rvwmo-store-relaxed.c b/gcc/testsuite/gcc.target/riscv/amo/zalasr-rvwmo-store-relaxed.c
+index d0127e53baa2..daefe4582ed0 100644
+--- a/gcc/testsuite/gcc.target/riscv/amo/zalasr-rvwmo-store-relaxed.c
++++ b/gcc/testsuite/gcc.target/riscv/amo/zalasr-rvwmo-store-relaxed.c
+@@ -19,7 +19,7 @@ void atomic_store_long_relaxed (long* bar, long* baz)
+ 
+ /*
+ ** atomic_store_int_relaxed:
+-**	lw\t[atx][0-9]+,0\(a1\)
++**	(lwu|lw)\t[atx][0-9]+,0\(a1\)
+ **	sw\t[atx][0-9]+,0\(a0\)
+ **	ret
+ */
+diff --git a/gcc/testsuite/gcc.target/riscv/amo/zalasr-rvwmo-store-release.c b/gcc/testsuite/gcc.target/riscv/amo/zalasr-rvwmo-store-release.c
+index 6174718fe2dd..2b26a24f950b 100644
+--- a/gcc/testsuite/gcc.target/riscv/amo/zalasr-rvwmo-store-release.c
++++ b/gcc/testsuite/gcc.target/riscv/amo/zalasr-rvwmo-store-release.c
+@@ -19,7 +19,7 @@ void atomic_store_long_release (long* bar, long* baz)
+ 
+ /*
+ ** atomic_store_int_release:
+-**	lw\t[atx][0-9]+,0\(a1\)
++**	(lwu|lw)\t[atx][0-9]+,0\(a1\)
+ **	sw.rl\t[atx][0-9]+,0\(a0\)
+ **	ret
+ */
+diff --git a/gcc/testsuite/gcc.target/riscv/amo/zalasr-ztso-store-compat-seq-cst.c b/gcc/testsuite/gcc.target/riscv/amo/zalasr-ztso-store-compat-seq-cst.c
+index 085f94e5d42f..c53c0f0a424d 100644
+--- a/gcc/testsuite/gcc.target/riscv/amo/zalasr-ztso-store-compat-seq-cst.c
++++ b/gcc/testsuite/gcc.target/riscv/amo/zalasr-ztso-store-compat-seq-cst.c
+@@ -20,7 +20,7 @@ void atomic_store_long_seq_cst (long* bar, long* baz)
+ 
+ /*
+ ** atomic_store_int_seq_cst:
+-**	lw\t[atx][0-9]+,0\(a1\)
++**	(lwu|lw)\t[atx][0-9]+,0\(a1\)
+ **	sw.rl\t[atx][0-9]+,0\(a0\)
+ **	ret
+ */
+diff --git a/gcc/testsuite/gcc.target/riscv/amo/zalasr-ztso-store-relaxed.c b/gcc/testsuite/gcc.target/riscv/amo/zalasr-ztso-store-relaxed.c
+index cb68849291b0..c637da07810a 100644
+--- a/gcc/testsuite/gcc.target/riscv/amo/zalasr-ztso-store-relaxed.c
++++ b/gcc/testsuite/gcc.target/riscv/amo/zalasr-ztso-store-relaxed.c
+@@ -19,7 +19,7 @@ void atomic_store_long_relaxed (long* bar, long* baz)
+ 
+ /*
+ ** atomic_store_int_relaxed:
+-**	lw\t[atx][0-9]+,0\(a1\)
++**	(lwu|lw)\t[atx][0-9]+,0\(a1\)
+ **	sw\t[atx][0-9]+,0\(a0\)
+ **	ret
+ */
+diff --git a/gcc/testsuite/gcc.target/riscv/amo/zalasr-ztso-store-release.c b/gcc/testsuite/gcc.target/riscv/amo/zalasr-ztso-store-release.c
+index b5cc2e967d2a..01c86adf4bd6 100644
+--- a/gcc/testsuite/gcc.target/riscv/amo/zalasr-ztso-store-release.c
++++ b/gcc/testsuite/gcc.target/riscv/amo/zalasr-ztso-store-release.c
+@@ -19,7 +19,7 @@ void atomic_store_long_release (long* bar, long* baz)
+ 
+ /*
+ ** atomic_store_int_release:
+-**	lw\t[atx][0-9]+,0\(a1\)
++**	(lwu|lw)\t[atx][0-9]+,0\(a1\)
+ **	sw\t[atx][0-9]+,0\(a0\)
+ **	ret
+ */
