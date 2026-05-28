@@ -82,3 +82,16 @@ index c151146c1b22..fe4354ff822a 100644
    if (noce_try_sign_bit_splat (if_info))
      goto success;
    if (HAVE_conditional_move
+diff --git a/gcc/testsuite/gcc.target/riscv/pr124009.c b/gcc/testsuite/gcc.target/riscv/pr124009.c
+index 6f541cacbb85..25a3bc93499b 100644
+--- a/gcc/testsuite/gcc.target/riscv/pr124009.c
++++ b/gcc/testsuite/gcc.target/riscv/pr124009.c
+@@ -5,7 +5,7 @@
+ int foo(int x, int y) { return (y < x) ? 1 : -1; }
+ 
+ 
+-/* { dg-final { scan-assembler-times {slli\t} 1 } } */
++/* { dg-final { scan-assembler-times {(slli|ori)\t} 1 } } */
+ /* { dg-final { scan-assembler-times {addi\t} 1 } } */
+ /* { dg-final { scan-assembler-not {czero.eqz\t} } } */
+ 
