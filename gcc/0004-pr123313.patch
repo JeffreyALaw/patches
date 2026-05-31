@@ -1,8 +1,8 @@
 diff --git a/gcc/ifcvt.cc b/gcc/ifcvt.cc
-index c151146c1b22..01585de515f1 100644
+index c80a02b2255b..37e757461934 100644
 --- a/gcc/ifcvt.cc
 +++ b/gcc/ifcvt.cc
-@@ -1778,6 +1778,69 @@ noce_try_store_flag_constants (struct noce_if_info *if_info)
+@@ -1778,6 +1778,75 @@ noce_try_store_flag_constants (struct noce_if_info *if_info)
    return false;
  }
  
@@ -34,6 +34,12 @@ index c151146c1b22..01585de515f1 100644
 +    }
 +
 +  if (b != CONSTM1_RTX (GET_MODE (dest)))
++    return false;
++
++  /* If the other arm is not a REG/SUBREG, then punt.  This is primarily to
++     let the target handle the constant case, which it can likely do better.
++     It also means we don't have to worry about non terminal expressions.  */
++  if (!REG_P (a) && !SUBREG_P (a))
 +    return false;
 +
 +  /* At this point we've got dest = cond ? a : -1.  Emit the store flag and
@@ -72,7 +78,7 @@ index c151146c1b22..01585de515f1 100644
  /* Convert "if (test) foo++" into "foo += (test != 0)", and
     similarly for "foo--".  */
  
-@@ -4483,6 +4546,9 @@ noce_process_if_block (struct noce_if_info *if_info)
+@@ -4483,6 +4552,9 @@ noce_process_if_block (struct noce_if_info *if_info)
      goto success;
    if (noce_try_sign_bit_splat (if_info))
      goto success;
@@ -82,6 +88,28 @@ index c151146c1b22..01585de515f1 100644
    if (HAVE_conditional_move
        && noce_try_cmove (if_info))
      goto success;
+diff --git a/gcc/testsuite/gcc.target/riscv/pr123313.c b/gcc/testsuite/gcc.target/riscv/pr123313.c
+new file mode 100644
+index 000000000000..c50478c87bf3
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr123313.c
+@@ -0,0 +1,16 @@
++/* { dg-do compile } */
++/* { dg-additional-options "-march=rv64gcb_zicond -mabi=lp64d -mbranch-cost=4" { target rv64 } } */
++/* { dg-additional-options "-march=rv32gcb_zicond -mabi=ilp32 -mbranch-cost=4" { target rv32 } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Os" "-Og" "-Oz" } } */
++
++#define TEST(TYPE, NAME) TYPE f##NAME(TYPE a, TYPE b, TYPE c) { a = -1; if (c < 10) a = b; return a; }
++
++TEST(signed char, sc)
++TEST(signed short, ss)
++TEST(signed int, si)
++TEST(signed long, sl)
++
++/* { dg-final { scan-assembler-times "slti\t" 4 } } */
++/* { dg-final { scan-assembler-times "addi\t" 4 } } */
++/* { dg-final { scan-assembler-times "or\t" 4 } } */
++/* { dg-final { scan-assembler-not "czero" } } */
 diff --git a/gcc/testsuite/gcc.target/riscv/pr124009.c b/gcc/testsuite/gcc.target/riscv/pr124009.c
 index 6f541cacbb85..25a3bc93499b 100644
 --- a/gcc/testsuite/gcc.target/riscv/pr124009.c
