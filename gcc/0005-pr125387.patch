@@ -21,7 +21,7 @@ index a2730a90ca8b..99e1e4b3d8d2 100644
 +	  && (GET_CODE (XEXP (x, 1)) == CONST_INT
 +	      && INTVAL (XEXP (x, 1)) == BITS_PER_WORD))
 +	{
-+	  *total = COSTS_N_INSNS (tune_param->int_mul[mode == TImode]);
++	  *total = tune_param->int_mul[mode == TImode];
 +	  return true;
 +	}
 +	/* Fall through.  */
