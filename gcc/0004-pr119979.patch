@@ -1,0 +1,83 @@
+
+
+TARGET_PROMOTE_PROTOTYPES is an optimization, not an ABI requirement.
+TARGET_PROMOTE_FUNCTION_MODE should be used for ABI requirement.  Like
+xtensa, iq2000 ABI requires sign extension of signed 8/16-bit integer
+arguments to 32 bits and zero extension of unsigned integer 8/16-bit
+arguments to 32 bits:
+
+1. Remove TARGET_PROMOTE_PROTOTYPES and define TARGET_PROMOTE_FUNCTION_MODE
+with default_promote_function_mode_sign_extend for iq2000.
+2. Update gcc.dg/sign-extend.c to scan sign_extend in final for iq2000
+since iq2000 expands extendqisi2 to ashift + ashiftrt.
+
+gcc/
+
+	PR target/119979
+	* config/iq2000/iq2000.cc (TARGET_PROMOTE_FUNCTION_MODE): Changed
+	to default_promote_function_mode_sign_extend.
+	(TARGET_PROMOTE_PROTOTYPES): Removed.
+
+gcc/testsuite/
+
+	PR target/119979
+	* gcc.dg/sign-extend.c: Enable for iq2000.  Pass -fdump-rtl-final
+	and scan sign_extend in final for iq2000.
+	* gcc.dg/zero-extend.c: Enable for iq2000.
+
+Signed-off-by: H.J. Lu <hjl.tools@gmail.com>
+---
+ gcc/config/iq2000/iq2000.cc        | 4 +---
+ gcc/testsuite/gcc.dg/sign-extend.c | 7 ++++---
+ gcc/testsuite/gcc.dg/zero-extend.c | 2 +-
+ 3 files changed, 6 insertions(+), 7 deletions(-)
+
+diff --git a/gcc/config/iq2000/iq2000.cc b/gcc/config/iq2000/iq2000.cc
+index 9945423affc..294e1b62bd8 100644
+--- a/gcc/config/iq2000/iq2000.cc
++++ b/gcc/config/iq2000/iq2000.cc
+@@ -209,9 +209,7 @@ static HOST_WIDE_INT iq2000_starting_frame_offset (void);
+ #define TARGET_PRINT_OPERAND_PUNCT_VALID_P iq2000_print_operand_punct_valid_p
+ 
+ #undef  TARGET_PROMOTE_FUNCTION_MODE
+-#define TARGET_PROMOTE_FUNCTION_MODE	default_promote_function_mode_always_promote
+-#undef  TARGET_PROMOTE_PROTOTYPES
+-#define TARGET_PROMOTE_PROTOTYPES	hook_bool_const_tree_true
++#define TARGET_PROMOTE_FUNCTION_MODE	default_promote_function_mode_sign_extend
+ 
+ #undef TARGET_FUNCTION_VALUE
+ #define TARGET_FUNCTION_VALUE 		iq2000_function_value
+diff --git a/gcc/testsuite/gcc.dg/sign-extend.c b/gcc/testsuite/gcc.dg/sign-extend.c
+index 3ded5050d17..29a487ea4ef 100644
+--- a/gcc/testsuite/gcc.dg/sign-extend.c
++++ b/gcc/testsuite/gcc.dg/sign-extend.c
+@@ -1,5 +1,5 @@
+-/* { dg-do compile { target mcore-*-* xtensa-*-* } } */
+-/* { dg-options "-O1 -fdump-rtl-expand" } */
++/* { dg-do compile { target iq2000-*-* mcore-*-* xtensa-*-* } } */
++/* { dg-options "-O1 -fdump-rtl-expand -fdump-rtl-final" } */
+ 
+ void s8(signed char c);
+ void cs8(signed char *p)
+@@ -7,5 +7,6 @@ void cs8(signed char *p)
+   s8(*p);
+ }
+ 
+-/* { dg-final { scan-rtl-dump "sign_extend" "expand" } } */
++/* { dg-final { scan-rtl-dump "sign_extend" "expand" { target !iq2000-*-* } } } */
++/* { dg-final { scan-rtl-dump "sign_extend" "final" { target iq2000-*-* } } } */
+ /* { dg-final { scan-rtl-dump-not "zero_extend" "expand" } } */
+diff --git a/gcc/testsuite/gcc.dg/zero-extend.c b/gcc/testsuite/gcc.dg/zero-extend.c
+index 22671e56897..6d2519bbdb7 100644
+--- a/gcc/testsuite/gcc.dg/zero-extend.c
++++ b/gcc/testsuite/gcc.dg/zero-extend.c
+@@ -1,4 +1,4 @@
+-/* { dg-do compile { target mcore-*-* xtensa-*-* } } */
++/* { dg-do compile { target iq2000-*-* mcore-*-* xtensa-*-* } } */
+ /* { dg-options "-O1 -fdump-rtl-expand" } */
+ 
+ void u8(unsigned char c);
+-- 
+2.53.0
+
+
