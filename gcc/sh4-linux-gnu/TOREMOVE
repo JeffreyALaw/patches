@@ -5,7 +5,6 @@ gcc/testsuite/gcc.target/sh/pr49263-1.c
 gcc/testsuite/gcc.target/sh/pr49263-2.c
 gcc/testsuite/gcc.target/sh/pr49263-3.c
 gcc/testsuite/gcc.target/sh/pr49263-4.c
-gcc/testsuite/g++.dg/modules/compile-std1.C
 gcc/testsuite/gfortran.dg/bind-c-contiguous-3.f90
 gcc/testsuite/gfortran.dg/bind-c-contiguous-4.f90
 gcc/testsuite/gfortran.dg/bind-c-contiguous-5.f90

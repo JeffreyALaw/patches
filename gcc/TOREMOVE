@@ -115,3 +115,6 @@ gcc/testsuite/gfortran.dg/maxloc_with_dim_and_mask_1.f90
 
 # These seem to be flakey, tripping failures in binutils
 gcc/testsuite/gcc.dg/lto/pr122515*
+
+# Seem to be pretty flakey
+gcc/testsuite/g++.dg/modules/compile-std1.C
