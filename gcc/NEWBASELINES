@@ -2,5 +2,12 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 sh4eb-linux-gnu
-arm-linux-gnueabihf
-aarch64-linux-gnu
+cris-elf
+h8300-elf
+iq2000-elf
+mcore-elf
+moxie-elf
+pru-elf
+rx-elf
+v850e-elf
+x86_64-linux-gnu
