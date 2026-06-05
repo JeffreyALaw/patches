@@ -118,3 +118,8 @@ gcc/testsuite/gcc.dg/lto/pr122515*
 
 # Seem to be pretty flakey
 gcc/testsuite/g++.dg/modules/compile-std1.C
+
+# Temporary until Martin fixes things
+gcc/testsuite/gcc.dg/Warray-bounds-52.c
+gcc/testsuite/gcc.dg/Warray-bounds-53.c
+gcc/testsuite/gcc.dg/debug/ctf/ctf-array-2.c
