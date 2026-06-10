@@ -1,0 +1,1933 @@
+From 8f8c8f4dbd5598cbaacba2ae9cdf68ab82bd49ea Mon Sep 17 00:00:00 2001
+From: Kyrylo Tkachov <ktkachov@nvidia.com>
+Date: Mon, 8 Jun 2026 18:03:35 +0000
+Subject: [PATCH] Speed up native bootstrap by caching configure results across
+ stages
+
+A native "make bootstrap" runs every subdirectory's autoconf configure
+three times, once per stage, because each stage is built in a fresh
+directory (stageN-MODULE is created empty and renamed to MODULE), so the
+per-directory config.cache that the build system already requests with
+--cache-file=./config.cache starts out empty in every stage.  The
+configure scripts are serial, and the host-module configures are
+serialized with respect to each other, so on a machine with many cores
+the configure phases leave it almost completely idle.
+
+Measured on a large multi-core aarch64 machine, a --enable-languages=c,c++
+bootstrap spends about 30% of its wall time in configure and is
+configure-bound at under 15% machine utilization for about 41% of the
+build; the single largest contributor is stage 2 gcc/configure, which
+compiles its test programs with the not-yet-optimized stage 1 compiler.
+
+For a native bootstrap build == host == target, so a module's configure
+test results do not change between stages.  This makes the bootstrapped
+host modules whose configure only probes the host system reuse a
+per-module config.cache across the three stages instead of recomputing
+everything.  The cache file is an absolute path under the build tree
+(stage-config-cache/MODULE.cache) shared by every stage's build
+directory; because the stages run sequentially and each module has its
+own file there is never a concurrent writer.  The ac_cv_env_* environment
+snapshot is stripped before each load so that autoconf's "environment
+changed" check does not abort when CC/CXX/... legitimately differ between
+stages.
+
+Only modules flagged bootstrap_cache in Makefile.def are cached, and only
+for a native build (the recipe compares build/host/target aliases).  The
+in-tree prerequisite libraries (gmp, mpfr, mpc, isl) and gettext are
+intentionally excluded: their configure runs perform cross-library ABI
+link tests and record the compiler version, which do change once the
+bootstrap compiler replaces the system one.  Target libraries are not
+bootstrapped host modules and are unaffected; --disable-bootstrap is
+unaffected as the non-bootstrap configure recipe is untouched.
+
+This roughly halves the time spent in configure (about a 43% reduction)
+and cuts the overall bootstrap wall time by about 15%, with no change in
+the generated configuration: the produced config headers are identical to
+a non-cached build and the stage 2 / stage 3 comparison still succeeds.
+Verified with "make bootstrap" (the default bootstrap-debug build config,
+which performs the stage comparison); cross, Canadian and
+--disable-bootstrap builds are unaffected by construction.
+
+Bootstrapped and tested on aarch64-none-linux-gnu.
+
+Signed-off-by: Kyrylo Tkachov <ktkachov@nvidia.com>
+
+ChangeLog:
+
+        * Makefile.def: Add bootstrap_cache to the bootstrapped host modules
+        whose configure only probes the host system (gcc, libcpp, libiberty,
+        libdecnumber, libcody, fixincludes, lto-plugin, libbacktrace).
+        * Makefile.tpl: For a bootstrap_cache module in a native bootstrap,
+        point --cache-file at a per-module config.cache shared across stages
+        and strip ac_cv_env_* from it before reuse.  Remove the cache directory
+        in local-distclean.
+        * Makefile.in: Regenerate.
+---
+ Makefile.def |  16 +-
+ Makefile.in  | 865 ++++++++++++++++++++++++++++++++++++++++++++++-----
+ Makefile.tpl |  15 +-
+ 3 files changed, 814 insertions(+), 82 deletions(-)
+
+diff --git a/Makefile.def b/Makefile.def
+index 549763de837..6f60038fb28 100644
+--- a/Makefile.def
++++ b/Makefile.def
+@@ -41,12 +41,12 @@ host_modules= { module= cgen; };
+ host_modules= { module= dejagnu; };
+ host_modules= { module= etc; };
+ host_modules= { module= fastjar; no_check_cross= true; };
+-host_modules= { module= fixincludes; bootstrap=true;
++host_modules= { module= fixincludes; bootstrap_cache=true; bootstrap=true;
+ 		missing= TAGS;
+ 		missing= install-dvi; };
+ host_modules= { module= flex; no_check_cross= true; };
+ host_modules= { module= gas; bootstrap=true; };
+-host_modules= { module= gcc; bootstrap=true; 
++host_modules= { module= gcc; bootstrap_cache=true; bootstrap=true; 
+ 		extra_make_flags="$(EXTRA_GCC_FLAGS)";
+ 		extra_configure_flags='@gcc_host_pie@'; };
+ host_modules= { module= gmp; lib_path=.libs; bootstrap=true;
+@@ -95,10 +95,10 @@ host_modules= { module= tcl;
+                 missing=mostlyclean; };
+ host_modules= { module= itcl; };
+ host_modules= { module= ld; bootstrap=true; };
+-host_modules= { module= libbacktrace; bootstrap=true; };
+-host_modules= { module= libcpp; bootstrap=true; };
++host_modules= { module= libbacktrace; bootstrap_cache=true; bootstrap=true; };
++host_modules= { module= libcpp; bootstrap_cache=true; bootstrap=true; };
+ // As with libiconv, don't install any of libcody
+-host_modules= { module= libcody; bootstrap=true;
++host_modules= { module= libcody; bootstrap_cache=true; bootstrap=true;
+ 		no_install= true;
+ 		missing= pdf;
+ 		missing= html;
+@@ -109,10 +109,10 @@ host_modules= { module= libcody; bootstrap=true;
+ 		missing= install-info;
+ 		missing= install-dvi;
+ 		missing=TAGS; };
+-host_modules= { module= libdecnumber; bootstrap=true;
++host_modules= { module= libdecnumber; bootstrap_cache=true; bootstrap=true;
+ 		missing=TAGS; };
+ host_modules= { module= libgui; };
+-host_modules= { module= libiberty; bootstrap=true;
++host_modules= { module= libiberty; bootstrap_cache=true; bootstrap=true;
+ 	        extra_configure_flags='@extra_host_libiberty_configure_flags@';};
+ // Linker plugins may need their own build of libiberty; see
+ // gcc/doc/install.texi.  We take care that this build of libiberty doesn't get
+@@ -157,7 +157,7 @@ host_modules= { module= utils; no_check=true; };
+ host_modules= { module= c++tools;
+                 missing=TAGS; };
+ host_modules= { module= gnattools; };
+-host_modules= { module= lto-plugin; bootstrap=true;
++host_modules= { module= lto-plugin; bootstrap_cache=true; bootstrap=true;
+ 		extra_configure_flags='--enable-shared @extra_linker_plugin_flags@ @extra_linker_plugin_configure_flags@';
+ 		extra_make_flags='@extra_linker_plugin_flags@'; };
+ host_modules= { module= libcc1; extra_configure_flags=--enable-shared; };
+diff --git a/Makefile.in b/Makefile.in
+index f34142cc077..d0c02417eb4 100644
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -2807,6 +2807,7 @@ local-clean:
+ 
+ local-distclean:
+ 	-rm -f Makefile config.status config.cache mh-frag mt-frag
++	-rm -rf stage-config-cache
+ 	-rm -f maybedep.tmp serdep.tmp stage_final
+ 	-if [ "$(TARGET_SUBDIR)" != "." ]; then \
+ 	  rm -rf $(TARGET_SUBDIR); \
+@@ -9509,12 +9510,22 @@ configure-stage1-fixincludes:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=fixincludes; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/fixincludes.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	   \
+-	  $(STAGE1_CONFIGURE_FLAGS)
++	  $(STAGE1_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif fixincludes-bootstrap
+ 
+ .PHONY: configure-stage2-fixincludes maybe-configure-stage2-fixincludes
+@@ -9542,12 +9553,22 @@ configure-stage2-fixincludes:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=fixincludes; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/fixincludes.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGE2_CONFIGURE_FLAGS)
++	  $(STAGE2_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif fixincludes-bootstrap
+ 
+ .PHONY: configure-stage3-fixincludes maybe-configure-stage3-fixincludes
+@@ -9575,12 +9596,22 @@ configure-stage3-fixincludes:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=fixincludes; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/fixincludes.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGE3_CONFIGURE_FLAGS)
++	  $(STAGE3_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif fixincludes-bootstrap
+ 
+ .PHONY: configure-stage4-fixincludes maybe-configure-stage4-fixincludes
+@@ -9608,12 +9639,22 @@ configure-stage4-fixincludes:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=fixincludes; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/fixincludes.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGE4_CONFIGURE_FLAGS)
++	  $(STAGE4_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif fixincludes-bootstrap
+ 
+ .PHONY: configure-stageprofile-fixincludes maybe-configure-stageprofile-fixincludes
+@@ -9641,12 +9682,22 @@ configure-stageprofile-fixincludes:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=fixincludes; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/fixincludes.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGEprofile_CONFIGURE_FLAGS)
++	  $(STAGEprofile_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif fixincludes-bootstrap
+ 
+ .PHONY: configure-stagetrain-fixincludes maybe-configure-stagetrain-fixincludes
+@@ -9674,12 +9725,22 @@ configure-stagetrain-fixincludes:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=fixincludes; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/fixincludes.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGEtrain_CONFIGURE_FLAGS)
++	  $(STAGEtrain_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif fixincludes-bootstrap
+ 
+ .PHONY: configure-stagefeedback-fixincludes maybe-configure-stagefeedback-fixincludes
+@@ -9707,12 +9768,22 @@ configure-stagefeedback-fixincludes:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=fixincludes; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/fixincludes.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGEfeedback_CONFIGURE_FLAGS)
++	  $(STAGEfeedback_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif fixincludes-bootstrap
+ 
+ .PHONY: configure-stageautoprofile-fixincludes maybe-configure-stageautoprofile-fixincludes
+@@ -9740,12 +9811,22 @@ configure-stageautoprofile-fixincludes:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=fixincludes; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/fixincludes.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGEautoprofile_CONFIGURE_FLAGS)
++	  $(STAGEautoprofile_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif fixincludes-bootstrap
+ 
+ .PHONY: configure-stageautofeedback-fixincludes maybe-configure-stageautofeedback-fixincludes
+@@ -9773,12 +9854,22 @@ configure-stageautofeedback-fixincludes:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=fixincludes; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/fixincludes.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGEautofeedback_CONFIGURE_FLAGS)
++	  $(STAGEautofeedback_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif fixincludes-bootstrap
+ 
+ 
+@@ -12230,13 +12321,23 @@ configure-stage1-gcc:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=gcc; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/gcc.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	   \
+ 	  $(STAGE1_CONFIGURE_FLAGS) \
+-	  @gcc_host_pie@
++	  @gcc_host_pie@ \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif gcc-bootstrap
+ 
+ .PHONY: configure-stage2-gcc maybe-configure-stage2-gcc
+@@ -12265,13 +12366,23 @@ configure-stage2-gcc:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=gcc; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/gcc.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+ 	  $(STAGE2_CONFIGURE_FLAGS) \
+-	  @gcc_host_pie@
++	  @gcc_host_pie@ \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif gcc-bootstrap
+ 
+ .PHONY: configure-stage3-gcc maybe-configure-stage3-gcc
+@@ -12300,13 +12411,23 @@ configure-stage3-gcc:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=gcc; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/gcc.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+ 	  $(STAGE3_CONFIGURE_FLAGS) \
+-	  @gcc_host_pie@
++	  @gcc_host_pie@ \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif gcc-bootstrap
+ 
+ .PHONY: configure-stage4-gcc maybe-configure-stage4-gcc
+@@ -12335,13 +12456,23 @@ configure-stage4-gcc:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=gcc; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/gcc.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+ 	  $(STAGE4_CONFIGURE_FLAGS) \
+-	  @gcc_host_pie@
++	  @gcc_host_pie@ \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif gcc-bootstrap
+ 
+ .PHONY: configure-stageprofile-gcc maybe-configure-stageprofile-gcc
+@@ -12370,13 +12501,23 @@ configure-stageprofile-gcc:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=gcc; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/gcc.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+ 	  $(STAGEprofile_CONFIGURE_FLAGS) \
+-	  @gcc_host_pie@
++	  @gcc_host_pie@ \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif gcc-bootstrap
+ 
+ .PHONY: configure-stagetrain-gcc maybe-configure-stagetrain-gcc
+@@ -12405,13 +12546,23 @@ configure-stagetrain-gcc:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=gcc; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/gcc.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+ 	  $(STAGEtrain_CONFIGURE_FLAGS) \
+-	  @gcc_host_pie@
++	  @gcc_host_pie@ \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif gcc-bootstrap
+ 
+ .PHONY: configure-stagefeedback-gcc maybe-configure-stagefeedback-gcc
+@@ -12440,13 +12591,23 @@ configure-stagefeedback-gcc:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=gcc; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/gcc.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+ 	  $(STAGEfeedback_CONFIGURE_FLAGS) \
+-	  @gcc_host_pie@
++	  @gcc_host_pie@ \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif gcc-bootstrap
+ 
+ .PHONY: configure-stageautoprofile-gcc maybe-configure-stageautoprofile-gcc
+@@ -12475,13 +12636,23 @@ configure-stageautoprofile-gcc:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=gcc; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/gcc.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+ 	  $(STAGEautoprofile_CONFIGURE_FLAGS) \
+-	  @gcc_host_pie@
++	  @gcc_host_pie@ \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif gcc-bootstrap
+ 
+ .PHONY: configure-stageautofeedback-gcc maybe-configure-stageautofeedback-gcc
+@@ -12510,13 +12681,23 @@ configure-stageautofeedback-gcc:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=gcc; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/gcc.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+ 	  $(STAGEautofeedback_CONFIGURE_FLAGS) \
+-	  @gcc_host_pie@
++	  @gcc_host_pie@ \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif gcc-bootstrap
+ 
+ 
+@@ -23079,12 +23260,22 @@ configure-stage1-libbacktrace:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libbacktrace; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libbacktrace.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	   \
+-	  $(STAGE1_CONFIGURE_FLAGS)
++	  $(STAGE1_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libbacktrace-bootstrap
+ 
+ .PHONY: configure-stage2-libbacktrace maybe-configure-stage2-libbacktrace
+@@ -23112,12 +23303,22 @@ configure-stage2-libbacktrace:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libbacktrace; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libbacktrace.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGE2_CONFIGURE_FLAGS)
++	  $(STAGE2_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libbacktrace-bootstrap
+ 
+ .PHONY: configure-stage3-libbacktrace maybe-configure-stage3-libbacktrace
+@@ -23145,12 +23346,22 @@ configure-stage3-libbacktrace:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libbacktrace; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libbacktrace.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGE3_CONFIGURE_FLAGS)
++	  $(STAGE3_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libbacktrace-bootstrap
+ 
+ .PHONY: configure-stage4-libbacktrace maybe-configure-stage4-libbacktrace
+@@ -23178,12 +23389,22 @@ configure-stage4-libbacktrace:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libbacktrace; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libbacktrace.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGE4_CONFIGURE_FLAGS)
++	  $(STAGE4_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libbacktrace-bootstrap
+ 
+ .PHONY: configure-stageprofile-libbacktrace maybe-configure-stageprofile-libbacktrace
+@@ -23211,12 +23432,22 @@ configure-stageprofile-libbacktrace:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libbacktrace; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libbacktrace.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGEprofile_CONFIGURE_FLAGS)
++	  $(STAGEprofile_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libbacktrace-bootstrap
+ 
+ .PHONY: configure-stagetrain-libbacktrace maybe-configure-stagetrain-libbacktrace
+@@ -23244,12 +23475,22 @@ configure-stagetrain-libbacktrace:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libbacktrace; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libbacktrace.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGEtrain_CONFIGURE_FLAGS)
++	  $(STAGEtrain_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libbacktrace-bootstrap
+ 
+ .PHONY: configure-stagefeedback-libbacktrace maybe-configure-stagefeedback-libbacktrace
+@@ -23277,12 +23518,22 @@ configure-stagefeedback-libbacktrace:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libbacktrace; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libbacktrace.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGEfeedback_CONFIGURE_FLAGS)
++	  $(STAGEfeedback_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libbacktrace-bootstrap
+ 
+ .PHONY: configure-stageautoprofile-libbacktrace maybe-configure-stageautoprofile-libbacktrace
+@@ -23310,12 +23561,22 @@ configure-stageautoprofile-libbacktrace:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libbacktrace; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libbacktrace.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGEautoprofile_CONFIGURE_FLAGS)
++	  $(STAGEautoprofile_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libbacktrace-bootstrap
+ 
+ .PHONY: configure-stageautofeedback-libbacktrace maybe-configure-stageautofeedback-libbacktrace
+@@ -23343,12 +23604,22 @@ configure-stageautofeedback-libbacktrace:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libbacktrace; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libbacktrace.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGEautofeedback_CONFIGURE_FLAGS)
++	  $(STAGEautofeedback_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libbacktrace-bootstrap
+ 
+ 
+@@ -24219,12 +24490,22 @@ configure-stage1-libcpp:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libcpp; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libcpp.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	   \
+-	  $(STAGE1_CONFIGURE_FLAGS)
++	  $(STAGE1_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libcpp-bootstrap
+ 
+ .PHONY: configure-stage2-libcpp maybe-configure-stage2-libcpp
+@@ -24252,12 +24533,22 @@ configure-stage2-libcpp:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libcpp; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libcpp.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGE2_CONFIGURE_FLAGS)
++	  $(STAGE2_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libcpp-bootstrap
+ 
+ .PHONY: configure-stage3-libcpp maybe-configure-stage3-libcpp
+@@ -24285,12 +24576,22 @@ configure-stage3-libcpp:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libcpp; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libcpp.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGE3_CONFIGURE_FLAGS)
++	  $(STAGE3_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libcpp-bootstrap
+ 
+ .PHONY: configure-stage4-libcpp maybe-configure-stage4-libcpp
+@@ -24318,12 +24619,22 @@ configure-stage4-libcpp:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libcpp; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libcpp.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGE4_CONFIGURE_FLAGS)
++	  $(STAGE4_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libcpp-bootstrap
+ 
+ .PHONY: configure-stageprofile-libcpp maybe-configure-stageprofile-libcpp
+@@ -24351,12 +24662,22 @@ configure-stageprofile-libcpp:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libcpp; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libcpp.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGEprofile_CONFIGURE_FLAGS)
++	  $(STAGEprofile_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libcpp-bootstrap
+ 
+ .PHONY: configure-stagetrain-libcpp maybe-configure-stagetrain-libcpp
+@@ -24384,12 +24705,22 @@ configure-stagetrain-libcpp:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libcpp; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libcpp.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGEtrain_CONFIGURE_FLAGS)
++	  $(STAGEtrain_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libcpp-bootstrap
+ 
+ .PHONY: configure-stagefeedback-libcpp maybe-configure-stagefeedback-libcpp
+@@ -24417,12 +24748,22 @@ configure-stagefeedback-libcpp:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libcpp; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libcpp.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGEfeedback_CONFIGURE_FLAGS)
++	  $(STAGEfeedback_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libcpp-bootstrap
+ 
+ .PHONY: configure-stageautoprofile-libcpp maybe-configure-stageautoprofile-libcpp
+@@ -24450,12 +24791,22 @@ configure-stageautoprofile-libcpp:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libcpp; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libcpp.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGEautoprofile_CONFIGURE_FLAGS)
++	  $(STAGEautoprofile_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libcpp-bootstrap
+ 
+ .PHONY: configure-stageautofeedback-libcpp maybe-configure-stageautofeedback-libcpp
+@@ -24483,12 +24834,22 @@ configure-stageautofeedback-libcpp:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libcpp; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libcpp.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGEautofeedback_CONFIGURE_FLAGS)
++	  $(STAGEautofeedback_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libcpp-bootstrap
+ 
+ 
+@@ -25359,12 +25720,22 @@ configure-stage1-libcody:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libcody; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libcody.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	   \
+-	  $(STAGE1_CONFIGURE_FLAGS)
++	  $(STAGE1_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libcody-bootstrap
+ 
+ .PHONY: configure-stage2-libcody maybe-configure-stage2-libcody
+@@ -25392,12 +25763,22 @@ configure-stage2-libcody:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libcody; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libcody.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGE2_CONFIGURE_FLAGS)
++	  $(STAGE2_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libcody-bootstrap
+ 
+ .PHONY: configure-stage3-libcody maybe-configure-stage3-libcody
+@@ -25425,12 +25806,22 @@ configure-stage3-libcody:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libcody; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libcody.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGE3_CONFIGURE_FLAGS)
++	  $(STAGE3_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libcody-bootstrap
+ 
+ .PHONY: configure-stage4-libcody maybe-configure-stage4-libcody
+@@ -25458,12 +25849,22 @@ configure-stage4-libcody:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libcody; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libcody.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGE4_CONFIGURE_FLAGS)
++	  $(STAGE4_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libcody-bootstrap
+ 
+ .PHONY: configure-stageprofile-libcody maybe-configure-stageprofile-libcody
+@@ -25491,12 +25892,22 @@ configure-stageprofile-libcody:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libcody; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libcody.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGEprofile_CONFIGURE_FLAGS)
++	  $(STAGEprofile_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libcody-bootstrap
+ 
+ .PHONY: configure-stagetrain-libcody maybe-configure-stagetrain-libcody
+@@ -25524,12 +25935,22 @@ configure-stagetrain-libcody:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libcody; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libcody.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGEtrain_CONFIGURE_FLAGS)
++	  $(STAGEtrain_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libcody-bootstrap
+ 
+ .PHONY: configure-stagefeedback-libcody maybe-configure-stagefeedback-libcody
+@@ -25557,12 +25978,22 @@ configure-stagefeedback-libcody:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libcody; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libcody.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGEfeedback_CONFIGURE_FLAGS)
++	  $(STAGEfeedback_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libcody-bootstrap
+ 
+ .PHONY: configure-stageautoprofile-libcody maybe-configure-stageautoprofile-libcody
+@@ -25590,12 +26021,22 @@ configure-stageautoprofile-libcody:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libcody; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libcody.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGEautoprofile_CONFIGURE_FLAGS)
++	  $(STAGEautoprofile_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libcody-bootstrap
+ 
+ .PHONY: configure-stageautofeedback-libcody maybe-configure-stageautofeedback-libcody
+@@ -25623,12 +26064,22 @@ configure-stageautofeedback-libcody:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libcody; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libcody.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGEautofeedback_CONFIGURE_FLAGS)
++	  $(STAGEautofeedback_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libcody-bootstrap
+ 
+ 
+@@ -26348,12 +26799,22 @@ configure-stage1-libdecnumber:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libdecnumber; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libdecnumber.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	   \
+-	  $(STAGE1_CONFIGURE_FLAGS)
++	  $(STAGE1_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libdecnumber-bootstrap
+ 
+ .PHONY: configure-stage2-libdecnumber maybe-configure-stage2-libdecnumber
+@@ -26381,12 +26842,22 @@ configure-stage2-libdecnumber:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libdecnumber; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libdecnumber.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGE2_CONFIGURE_FLAGS)
++	  $(STAGE2_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libdecnumber-bootstrap
+ 
+ .PHONY: configure-stage3-libdecnumber maybe-configure-stage3-libdecnumber
+@@ -26414,12 +26885,22 @@ configure-stage3-libdecnumber:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libdecnumber; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libdecnumber.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGE3_CONFIGURE_FLAGS)
++	  $(STAGE3_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libdecnumber-bootstrap
+ 
+ .PHONY: configure-stage4-libdecnumber maybe-configure-stage4-libdecnumber
+@@ -26447,12 +26928,22 @@ configure-stage4-libdecnumber:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libdecnumber; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libdecnumber.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGE4_CONFIGURE_FLAGS)
++	  $(STAGE4_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libdecnumber-bootstrap
+ 
+ .PHONY: configure-stageprofile-libdecnumber maybe-configure-stageprofile-libdecnumber
+@@ -26480,12 +26971,22 @@ configure-stageprofile-libdecnumber:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libdecnumber; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libdecnumber.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGEprofile_CONFIGURE_FLAGS)
++	  $(STAGEprofile_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libdecnumber-bootstrap
+ 
+ .PHONY: configure-stagetrain-libdecnumber maybe-configure-stagetrain-libdecnumber
+@@ -26513,12 +27014,22 @@ configure-stagetrain-libdecnumber:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libdecnumber; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libdecnumber.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGEtrain_CONFIGURE_FLAGS)
++	  $(STAGEtrain_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libdecnumber-bootstrap
+ 
+ .PHONY: configure-stagefeedback-libdecnumber maybe-configure-stagefeedback-libdecnumber
+@@ -26546,12 +27057,22 @@ configure-stagefeedback-libdecnumber:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libdecnumber; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libdecnumber.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGEfeedback_CONFIGURE_FLAGS)
++	  $(STAGEfeedback_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libdecnumber-bootstrap
+ 
+ .PHONY: configure-stageautoprofile-libdecnumber maybe-configure-stageautoprofile-libdecnumber
+@@ -26579,12 +27100,22 @@ configure-stageautoprofile-libdecnumber:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libdecnumber; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libdecnumber.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGEautoprofile_CONFIGURE_FLAGS)
++	  $(STAGEautoprofile_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libdecnumber-bootstrap
+ 
+ .PHONY: configure-stageautofeedback-libdecnumber maybe-configure-stageautofeedback-libdecnumber
+@@ -26612,12 +27143,22 @@ configure-stageautofeedback-libdecnumber:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libdecnumber; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libdecnumber.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+-	  $(STAGEautofeedback_CONFIGURE_FLAGS)
++	  $(STAGEautofeedback_CONFIGURE_FLAGS) \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libdecnumber-bootstrap
+ 
+ 
+@@ -27941,13 +28482,23 @@ configure-stage1-libiberty:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libiberty; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libiberty.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	   \
+ 	  $(STAGE1_CONFIGURE_FLAGS) \
+-	  @extra_host_libiberty_configure_flags@
++	  @extra_host_libiberty_configure_flags@ \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libiberty-bootstrap
+ 
+ .PHONY: configure-stage2-libiberty maybe-configure-stage2-libiberty
+@@ -27975,13 +28526,23 @@ configure-stage2-libiberty:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libiberty; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libiberty.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+ 	  $(STAGE2_CONFIGURE_FLAGS) \
+-	  @extra_host_libiberty_configure_flags@
++	  @extra_host_libiberty_configure_flags@ \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libiberty-bootstrap
+ 
+ .PHONY: configure-stage3-libiberty maybe-configure-stage3-libiberty
+@@ -28009,13 +28570,23 @@ configure-stage3-libiberty:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libiberty; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libiberty.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+ 	  $(STAGE3_CONFIGURE_FLAGS) \
+-	  @extra_host_libiberty_configure_flags@
++	  @extra_host_libiberty_configure_flags@ \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libiberty-bootstrap
+ 
+ .PHONY: configure-stage4-libiberty maybe-configure-stage4-libiberty
+@@ -28043,13 +28614,23 @@ configure-stage4-libiberty:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libiberty; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libiberty.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+ 	  $(STAGE4_CONFIGURE_FLAGS) \
+-	  @extra_host_libiberty_configure_flags@
++	  @extra_host_libiberty_configure_flags@ \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libiberty-bootstrap
+ 
+ .PHONY: configure-stageprofile-libiberty maybe-configure-stageprofile-libiberty
+@@ -28077,13 +28658,23 @@ configure-stageprofile-libiberty:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libiberty; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libiberty.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+ 	  $(STAGEprofile_CONFIGURE_FLAGS) \
+-	  @extra_host_libiberty_configure_flags@
++	  @extra_host_libiberty_configure_flags@ \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libiberty-bootstrap
+ 
+ .PHONY: configure-stagetrain-libiberty maybe-configure-stagetrain-libiberty
+@@ -28111,13 +28702,23 @@ configure-stagetrain-libiberty:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libiberty; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libiberty.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+ 	  $(STAGEtrain_CONFIGURE_FLAGS) \
+-	  @extra_host_libiberty_configure_flags@
++	  @extra_host_libiberty_configure_flags@ \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libiberty-bootstrap
+ 
+ .PHONY: configure-stagefeedback-libiberty maybe-configure-stagefeedback-libiberty
+@@ -28145,13 +28746,23 @@ configure-stagefeedback-libiberty:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libiberty; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libiberty.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+ 	  $(STAGEfeedback_CONFIGURE_FLAGS) \
+-	  @extra_host_libiberty_configure_flags@
++	  @extra_host_libiberty_configure_flags@ \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libiberty-bootstrap
+ 
+ .PHONY: configure-stageautoprofile-libiberty maybe-configure-stageautoprofile-libiberty
+@@ -28179,13 +28790,23 @@ configure-stageautoprofile-libiberty:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libiberty; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libiberty.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+ 	  $(STAGEautoprofile_CONFIGURE_FLAGS) \
+-	  @extra_host_libiberty_configure_flags@
++	  @extra_host_libiberty_configure_flags@ \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libiberty-bootstrap
+ 
+ .PHONY: configure-stageautofeedback-libiberty maybe-configure-stageautofeedback-libiberty
+@@ -28213,13 +28834,23 @@ configure-stageautofeedback-libiberty:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=libiberty; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/libiberty.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+ 	  $(STAGEautofeedback_CONFIGURE_FLAGS) \
+-	  @extra_host_libiberty_configure_flags@
++	  @extra_host_libiberty_configure_flags@ \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif libiberty-bootstrap
+ 
+ 
+@@ -39802,13 +40433,23 @@ configure-stage1-lto-plugin:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=lto-plugin; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/lto-plugin.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	   \
+ 	  $(STAGE1_CONFIGURE_FLAGS) \
+-	  --enable-shared @extra_linker_plugin_flags@ @extra_linker_plugin_configure_flags@
++	  --enable-shared @extra_linker_plugin_flags@ @extra_linker_plugin_configure_flags@ \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif lto-plugin-bootstrap
+ 
+ .PHONY: configure-stage2-lto-plugin maybe-configure-stage2-lto-plugin
+@@ -39836,13 +40477,23 @@ configure-stage2-lto-plugin:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=lto-plugin; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/lto-plugin.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+ 	  $(STAGE2_CONFIGURE_FLAGS) \
+-	  --enable-shared @extra_linker_plugin_flags@ @extra_linker_plugin_configure_flags@
++	  --enable-shared @extra_linker_plugin_flags@ @extra_linker_plugin_configure_flags@ \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif lto-plugin-bootstrap
+ 
+ .PHONY: configure-stage3-lto-plugin maybe-configure-stage3-lto-plugin
+@@ -39870,13 +40521,23 @@ configure-stage3-lto-plugin:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=lto-plugin; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/lto-plugin.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+ 	  $(STAGE3_CONFIGURE_FLAGS) \
+-	  --enable-shared @extra_linker_plugin_flags@ @extra_linker_plugin_configure_flags@
++	  --enable-shared @extra_linker_plugin_flags@ @extra_linker_plugin_configure_flags@ \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif lto-plugin-bootstrap
+ 
+ .PHONY: configure-stage4-lto-plugin maybe-configure-stage4-lto-plugin
+@@ -39904,13 +40565,23 @@ configure-stage4-lto-plugin:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=lto-plugin; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/lto-plugin.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+ 	  $(STAGE4_CONFIGURE_FLAGS) \
+-	  --enable-shared @extra_linker_plugin_flags@ @extra_linker_plugin_configure_flags@
++	  --enable-shared @extra_linker_plugin_flags@ @extra_linker_plugin_configure_flags@ \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif lto-plugin-bootstrap
+ 
+ .PHONY: configure-stageprofile-lto-plugin maybe-configure-stageprofile-lto-plugin
+@@ -39938,13 +40609,23 @@ configure-stageprofile-lto-plugin:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=lto-plugin; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/lto-plugin.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+ 	  $(STAGEprofile_CONFIGURE_FLAGS) \
+-	  --enable-shared @extra_linker_plugin_flags@ @extra_linker_plugin_configure_flags@
++	  --enable-shared @extra_linker_plugin_flags@ @extra_linker_plugin_configure_flags@ \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif lto-plugin-bootstrap
+ 
+ .PHONY: configure-stagetrain-lto-plugin maybe-configure-stagetrain-lto-plugin
+@@ -39972,13 +40653,23 @@ configure-stagetrain-lto-plugin:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=lto-plugin; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/lto-plugin.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+ 	  $(STAGEtrain_CONFIGURE_FLAGS) \
+-	  --enable-shared @extra_linker_plugin_flags@ @extra_linker_plugin_configure_flags@
++	  --enable-shared @extra_linker_plugin_flags@ @extra_linker_plugin_configure_flags@ \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif lto-plugin-bootstrap
+ 
+ .PHONY: configure-stagefeedback-lto-plugin maybe-configure-stagefeedback-lto-plugin
+@@ -40006,13 +40697,23 @@ configure-stagefeedback-lto-plugin:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=lto-plugin; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/lto-plugin.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+ 	  $(STAGEfeedback_CONFIGURE_FLAGS) \
+-	  --enable-shared @extra_linker_plugin_flags@ @extra_linker_plugin_configure_flags@
++	  --enable-shared @extra_linker_plugin_flags@ @extra_linker_plugin_configure_flags@ \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif lto-plugin-bootstrap
+ 
+ .PHONY: configure-stageautoprofile-lto-plugin maybe-configure-stageautoprofile-lto-plugin
+@@ -40040,13 +40741,23 @@ configure-stageautoprofile-lto-plugin:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=lto-plugin; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/lto-plugin.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+ 	  $(STAGEautoprofile_CONFIGURE_FLAGS) \
+-	  --enable-shared @extra_linker_plugin_flags@ @extra_linker_plugin_configure_flags@
++	  --enable-shared @extra_linker_plugin_flags@ @extra_linker_plugin_configure_flags@ \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif lto-plugin-bootstrap
+ 
+ .PHONY: configure-stageautofeedback-lto-plugin maybe-configure-stageautofeedback-lto-plugin
+@@ -40074,13 +40785,23 @@ configure-stageautofeedback-lto-plugin:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=lto-plugin; \
++	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/lto-plugin.cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
+ 	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+ 	  --target=${target_alias} \
+ 	  --with-build-libsubdir=$(HOST_SUBDIR) \
+ 	  $(STAGEautofeedback_CONFIGURE_FLAGS) \
+-	  --enable-shared @extra_linker_plugin_flags@ @extra_linker_plugin_configure_flags@
++	  --enable-shared @extra_linker_plugin_flags@ @extra_linker_plugin_configure_flags@ \
++	  $${cfgcache:+--cache-file=$$cfgcache}
+ @endif lto-plugin-bootstrap
+ 
+ 
+diff --git a/Makefile.tpl b/Makefile.tpl
+index 5891b67b697..6ea39bc2d8c 100644
+--- a/Makefile.tpl
++++ b/Makefile.tpl
+@@ -998,6 +998,7 @@ local-clean:
+ 
+ local-distclean:
+ 	-rm -f Makefile config.status config.cache mh-frag mt-frag
++	-rm -rf stage-config-cache
+ 	-rm -f maybedep.tmp serdep.tmp stage_final
+ 	-if [ "$(TARGET_SUBDIR)" != "." ]; then \
+ 	  rm -rf $(TARGET_SUBDIR); \
+@@ -1286,13 +1287,23 @@ configure-stage[+id+]-[+prefix+][+module+]:
+ 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+ 	esac; \
+ 	module_srcdir=[+? module_srcdir (get "module_srcdir") (get "module")+]; \
+-	$(SHELL) $$s/$$module_srcdir/configure \
++[+ IF bootstrap_cache +]	cfgcache=; \
++	if test x"${build_alias}" = x"${host_alias}" && test x"${host_alias}" = x"${target_alias}"; then \
++	  cfgcache=$$r/stage-config-cache/[+module+].cache; \
++	  mkdir -p $$r/stage-config-cache; \
++	  if test -f $$cfgcache; then \
++	    sed -e '/^ac_cv_env_/d' $$cfgcache > $$cfgcache.tmp$$$$ \
++	      && mv -f $$cfgcache.tmp$$$$ $$cfgcache; \
++	  fi; \
++	fi; \
++[+ ENDIF bootstrap_cache +]	$(SHELL) $$s/$$module_srcdir/configure \
+ 	  --srcdir=$${topdir}/$$module_srcdir \
+ 	  [+args+] --build=${build_alias} --host=[+host_alias+] \
+ 	  --target=[+target_alias+] \
+ 	  [+ IF prev +]--with-build-libsubdir=$(HOST_SUBDIR)[+ ENDIF prev +] \
+ 	  $(STAGE[+id+]_CONFIGURE_FLAGS)[+ IF extra_configure_flags +] \
+-	  [+extra_configure_flags+][+ ENDIF extra_configure_flags +]
++	  [+extra_configure_flags+][+ ENDIF extra_configure_flags +][+ IF bootstrap_cache +] \
++	  $${cfgcache:+--cache-file=$$cfgcache}[+ ENDIF bootstrap_cache +]
+ @endif [+prefix+][+module+]-bootstrap
+ [+ ENDFOR bootstrap_stage +]
+ [+ ENDIF bootstrap +]
+-- 
+2.50.1 (Apple Git-155)
+
