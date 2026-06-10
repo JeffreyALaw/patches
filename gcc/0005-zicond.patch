@@ -1,3 +1,6 @@
+	* config/riscv/zicond.md (combined sCC splitters): Avoid using
+	PUT_MODE to change existing RTL.  Instead just generate a new node.
+
 diff --git a/gcc/config/riscv/zicond.md b/gcc/config/riscv/zicond.md
 index 34fe2ce29c6d..346ab1b64b32 100644
 --- a/gcc/config/riscv/zicond.md
