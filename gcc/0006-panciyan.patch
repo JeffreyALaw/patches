@@ -1,0 +1,35 @@
+
+
+This patch would like to Fix data type iterator of pack rs reg
+
+Signed-off-by: Ciyan Pan <panciyan@eswincomputing.com>
+gcc/ChangeLog:
+
+        * config/riscv/crypto.md:
+
+---
+ gcc/config/riscv/crypto.md | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/gcc/config/riscv/crypto.md b/gcc/config/riscv/crypto.md
+index b9ea899e18b2..2f3cc7e43b04 100644
+--- a/gcc/config/riscv/crypto.md
++++ b/gcc/config/riscv/crypto.md
+@@ -95,10 +95,10 @@
+   "unzip\t%0,%1"
+   [(set_attr "type" "crypto")])
+ 
+-(define_insn "riscv_pack_<X:mode><HISI:mode>"
++(define_insn "riscv_pack_<X:mode><HX:mode>"
+   [(set (match_operand:X 0 "register_operand" "=r")
+-        (unspec:X [(match_operand:HISI 1 "register_operand" "r")
+-                  (match_operand:HISI 2 "register_operand" "r")]
++        (unspec:X [(match_operand:HX 1 "register_operand" "r")
++                  (match_operand:HX 2 "register_operand" "r")]
+                   UNSPEC_PACK))]
+   "TARGET_ZBKB"
+   "pack\t%0,%1,%2"
+-- 
+2.43.0
+
+
