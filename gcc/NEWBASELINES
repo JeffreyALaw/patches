@@ -15,3 +15,6 @@ bfin-elf
 avr-elf
 cris-elf
 xstormy16-elf
+alpha-linux-gnu
+aarch64-linux-gnu
+arm-linux-gnueabihi
