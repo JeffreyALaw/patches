@@ -1,0 +1,234 @@
+
+
+The restrict_cost_classes function builds a "narrow" list of register
+classes for IRA cost computation.  When iterating over classes, it skips
+a class if it is a subset of an already-added class.  However, it does
+not handle the reverse case: when a newly encountered class is a
+superset of an already-added class.
+
+Per GCC internals Section 19.8, subclasses should have lower class
+numbers than their parent classes ("Order the classes so that if class x
+is contained in class y then x has a lower class number than y").  This
+means subclasses are enumerated first and may be added to the narrow
+list before their parent class is encountered.  When the parent class
+arrives, it is not a subset of the subclass, so it is also added,
+resulting in both classes coexisting in the narrow list.
+
+This causes problems for targets with constrained register subsets.
+For example, on RISC-V, RVC_FP_REGS (8 registers, f8-f15) appears
+before FP_REGS (32 registers) in enum reg_class.  Both end up in the
+narrow list, and since their register move costs are equal, the
+allocator may choose the smaller RVC_FP_REGS as the cost class.  This
+overestimates register pressure (8 vs 32 available registers), leading
+to unnecessary spills and suboptimal instruction scheduling.  This was
+observed as a 6.3% performance regression in lmbench's double bogo
+benchmark on the C907 rv32 platform.
+
+Similarly, on AArch64, FP_LO8_REGS (8 registers) appears before
+FP_LO_REGS (16 registers) and FP_REGS (32 registers), and could
+exhibit the same issue.
+
+Fix this by removing existing subset classes from the narrow list when
+a superset class is added.  This ensures the narrow list result is
+independent of the enumeration order of reg_class, and the allocator
+always uses the largest applicable class for pressure estimation.
+
+gcc/ChangeLog:
+
+	* ira-costs.cc (restrict_cost_classes): When adding a new class
+	to the narrow list, remove any existing classes that are subsets
+	of the new class.  Update the map array to reflect the removal.
+
+gcc/testsuite/ChangeLog:
+
+	* gcc.target/riscv/ira-cost-class-subset.c: New test.
+	* gcc.target/aarch64/ira-cost-class-subset.c: New test.
+---
+ gcc/ira-costs.cc                              | 47 +++++++++++++++++
+ .../aarch64/ira-cost-class-subset.c           | 50 +++++++++++++++++++
+ .../gcc.target/riscv/ira-cost-class-subset.c  | 50 +++++++++++++++++++
+ 3 files changed, 147 insertions(+)
+ create mode 100644 gcc/testsuite/gcc.target/aarch64/ira-cost-class-subset.c
+ create mode 100644 gcc/testsuite/gcc.target/riscv/ira-cost-class-subset.c
+
+diff --git a/gcc/ira-costs.cc b/gcc/ira-costs.cc
+index 8a731422761..a24ef87537f 100644
+--- a/gcc/ira-costs.cc
++++ b/gcc/ira-costs.cc
+@@ -285,6 +285,8 @@ restrict_cost_classes (cost_classes_t full, machine_mode mode,
+ 	 union-based definition would lose the extra restrictions
+ 	 placed on FR_REGS.  GR_AND_FR_REGS is therefore only useful
+ 	 for cases where GR_REGS and FP_REGS are both valid.  */
++      /* Check if the current class is a subset of an existing class
++	 in the narrow list.  If so, skip it.  */
+       int pos;
+       for (pos = 0; pos < narrow.num; ++pos)
+ 	{
+@@ -300,6 +302,51 @@ restrict_cost_classes (cost_classes_t full, machine_mode mode,
+ 	  enum reg_class cl2 = ira_allocno_class_translate[cl];
+ 	  if (ira_class_hard_regs_num[cl] == ira_class_hard_regs_num[cl2])
+ 	    cl = cl2;
++
++	  /* Remove any existing classes in the narrow list that are
++	     subsets of the new class CL.  Per GCC internals Section
++	     19.8 Register Classes, subclasses have lower class numbers
++	     and may appear earlier in the enumeration.  Without this
++	     removal, both the subclass and superclass would remain in
++	     the narrow list, causing the register pressure computation
++	     to use the smaller subclass (fewer registers) and overestimate
++	     pressure.  */
++	  int old_num = narrow.num;
++	  int remap[N_REG_CLASSES];
++	  int new_num = 0;
++	  for (int j = 0; j < old_num; ++j)
++	    {
++	      if (hard_reg_set_subset_p (reg_class_contents[narrow.classes[j]],
++					 reg_class_contents[cl]))
++		{
++		  remap[j] = -1;
++		  continue;
++		}
++	      remap[j] = new_num;
++	      narrow.classes[new_num++] = narrow.classes[j];
++	    }
++
++	  if (new_num < old_num)
++	    {
++	      narrow.num = new_num;
++
++	      /* Fix up map entries for previously processed classes
++		 whose narrow positions shifted due to the removal.
++		 Entries that pointed to a removed subclass now point
++		 to the parent class CL at position narrow.num.  */
++	      for (int k = 0; k < i; ++k)
++		{
++		  if (map[k] >= 0 && map[k] < old_num)
++		    {
++		      if (remap[map[k]] == -1)
++			map[k] = narrow.num;
++		      else
++			map[k] = remap[map[k]];
++		    }
++		}
++	    }
++
++	  map[i] = narrow.num;
+ 	  narrow.classes[narrow.num++] = cl;
+ 	}
+     }
+diff --git a/gcc/testsuite/gcc.target/aarch64/ira-cost-class-subset.c b/gcc/testsuite/gcc.target/aarch64/ira-cost-class-subset.c
+new file mode 100644
+index 00000000000..a0bb8dadd51
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/ira-cost-class-subset.c
+@@ -0,0 +1,50 @@
++/* Verify that the IRA cost class computation does not overestimate register
++   pressure due to FP subset classes (FP_LO8_REGS / FP_LO_REGS) appearing
++   before their parent class FP_REGS in enum reg_class.  The
++   restrict_cost_classes function should eliminate subset classes when a
++   superset class is present, regardless of enumeration order.
++
++   This test is derived from lmbench's do_double_bogomflops, which exercises
++   heavy FP register pressure.  Without the fix, the compiler may treat the
++   8-register FP_LO8_REGS as the bottleneck, causing unnecessary spills.  */
++
++/* { dg-do compile } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Og" "-Os" "-Oz" } } */
++/* { dg-options "-O2 -fschedule-insns -fdump-rtl-sched1-details" } */
++
++struct _state
++{
++  int N;
++  int M;
++  int K;
++  double *data;
++};
++
++void do_double_bogomflops(unsigned long int iterations, void *cookie)
++{
++  struct _state *pState = (struct _state *)cookie;
++  register int i;
++  register int M = pState->M / 10;
++
++  while (iterations-- > 0)
++  {
++    register double *x = (double *)pState->data;
++    for (i = 0; i < M; ++i)
++    {
++      x[0] = (1.0f + x[0]) * (1.5f - x[0]) / x[0];
++      x[1] = (1.0f + x[1]) * (1.5f - x[1]) / x[1];
++      x[2] = (1.0f + x[2]) * (1.5f - x[2]) / x[2];
++      x[3] = (1.0f + x[3]) * (1.5f - x[3]) / x[3];
++      x[4] = (1.0f + x[4]) * (1.5f - x[4]) / x[4];
++      x[5] = (1.0f + x[5]) * (1.5f - x[5]) / x[5];
++      x[6] = (1.0f + x[6]) * (1.5f - x[6]) / x[6];
++      x[7] = (1.0f + x[7]) * (1.5f - x[7]) / x[7];
++      x[8] = (1.0f + x[8]) * (1.5f - x[8]) / x[8];
++      x[9] = (1.0f + x[9]) * (1.5f - x[9]) / x[9];
++      x += 10;
++    }
++  }
++}
++
++/* { dg-final { scan-rtl-dump-not "FP_LO8_REGS" "sched1" } } */
++/* { dg-final { scan-rtl-dump-not "FP_LO_REGS" "sched1" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/ira-cost-class-subset.c b/gcc/testsuite/gcc.target/riscv/ira-cost-class-subset.c
+new file mode 100644
+index 00000000000..b28176726a9
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/ira-cost-class-subset.c
+@@ -0,0 +1,50 @@
++/* Verify that the IRA cost class computation does not overestimate register
++   pressure due to RVC subset classes (RVC_FP_REGS / RVC_GR_REGS) appearing
++   before their parent classes in enum reg_class.  The restrict_cost_classes
++   function should eliminate subset classes when a superset class is present,
++   regardless of enumeration order.
++
++   This test is derived from lmbench's do_double_bogomflops, which exercises
++   heavy FP register pressure.  Without the fix, the compiler treats the
++   8-register RVC_FP_REGS as the bottleneck, causing unnecessary spills.  */
++
++/* { dg-do compile } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-O3" "-Og" "-Os" "-Oz" "-flto" } } */
++/* { dg-options "-O2 -fschedule-insns -fdump-rtl-sched1-details" } */
++
++struct _state
++{
++  int N;
++  int M;
++  int K;
++  double *data;
++};
++
++void do_double_bogomflops(unsigned long int iterations, void *cookie)
++{
++  struct _state *pState = (struct _state *)cookie;
++  register int i;
++  register int M = pState->M / 10;
++
++  while (iterations-- > 0)
++  {
++    register double *x = (double *)pState->data;
++    for (i = 0; i < M; ++i)
++    {
++      x[0] = (1.0f + x[0]) * (1.5f - x[0]) / x[0];
++      x[1] = (1.0f + x[1]) * (1.5f - x[1]) / x[1];
++      x[2] = (1.0f + x[2]) * (1.5f - x[2]) / x[2];
++      x[3] = (1.0f + x[3]) * (1.5f - x[3]) / x[3];
++      x[4] = (1.0f + x[4]) * (1.5f - x[4]) / x[4];
++      x[5] = (1.0f + x[5]) * (1.5f - x[5]) / x[5];
++      x[6] = (1.0f + x[6]) * (1.5f - x[6]) / x[6];
++      x[7] = (1.0f + x[7]) * (1.5f - x[7]) / x[7];
++      x[8] = (1.0f + x[8]) * (1.5f - x[8]) / x[8];
++      x[9] = (1.0f + x[9]) * (1.5f - x[9]) / x[9];
++      x += 10;
++    }
++  }
++}
++
++/* { dg-final { scan-rtl-dump-not "RVC_GR_REGS" "sched1" } } */
++/* { dg-final { scan-rtl-dump-not "RVC_FP_REGS" "sched1" } } */
+-- 
+2.52.0
+
+
