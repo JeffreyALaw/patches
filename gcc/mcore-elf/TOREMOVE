@@ -2,3 +2,6 @@ gcc/testsuite/gcc.c-torture/execute/ffs-2.c
 
 # Problems with uleb128
 gcc/testsuite/gcc.dg/pr94589-6.c
+
+# Takes absurd amounts of time
+gcc.c-torture/execute/nestfunc-3.c
