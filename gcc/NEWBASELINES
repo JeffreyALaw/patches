@@ -3,11 +3,7 @@
 # reset.  
 sh4eb-linux-gnu
 sh3eb-linux-gnu
-ft32-elf
-fr30-elf
 lm32-elf
 cris-elf
-msp430-elf
-nds32le-elf
+nds32be-elf
 h8300-elf
-csky-linux-gnu
