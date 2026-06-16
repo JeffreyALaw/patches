@@ -4,3 +4,7 @@
 sh4eb-linux-gnu
 bfin-elf
 v850e-elf
+mcore-elf
+rx-elf
+iq2000-elf
+
