@@ -7,4 +7,8 @@ v850e-elf
 mcore-elf
 rx-elf
 iq2000-elf
-
+avr-elf
+pru-elf
+sh3-linux-gnu
+sh3eb-linux-gnu
+mn10300-elf
