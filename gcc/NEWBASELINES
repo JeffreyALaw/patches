@@ -10,4 +10,4 @@ cris-elf
 msp430-elf
 nds32le-elf
 h8300-elf
-
+csky-linux-gnu
