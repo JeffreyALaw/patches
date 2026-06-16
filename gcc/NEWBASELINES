@@ -2,18 +2,12 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 sh4eb-linux-gnu
-bfin-elf
-v850e-elf
-mcore-elf
-rx-elf
-iq2000-elf
-avr-elf
-pru-elf
-sh3-linux-gnu
 sh3eb-linux-gnu
-mn10300-elf
-moxie-elf
-c6x-elf
-m32r-elf
-visium-elf
-xstormy16-elf
+ft32-elf
+fr30-elf
+lm32-elf
+cris-elf
+msp430-elf
+nds32le-elf
+h8300-elf
+
