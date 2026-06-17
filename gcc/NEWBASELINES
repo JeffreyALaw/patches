@@ -2,7 +2,5 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 sh4eb-linux-gnu
-m32r-elf
-msp430-elf
-mn10300-elf
-arc-elf
+riscv64-elf
+riscv32-elf
