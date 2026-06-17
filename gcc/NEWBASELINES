@@ -2,8 +2,7 @@
 # should be empty, but we can place a target in here if it needs a baseline
 # reset.  
 sh4eb-linux-gnu
-sh3eb-linux-gnu
-lm32-elf
-cris-elf
-nds32be-elf
-h8300-elf
+m32r-elf
+msp430-elf
+mn10300-elf
+arc-elf
