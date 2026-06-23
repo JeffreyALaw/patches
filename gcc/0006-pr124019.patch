@@ -1,8 +1,8 @@
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index b90bfe0745a9..1d06a9954fc2 100644
+index b90bfe0745a9..07bd5866f30d 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
-@@ -5356,6 +5356,36 @@ (define_split
+@@ -5356,6 +5356,35 @@ (define_split
     (set (match_dup 0) (any_eq:X (match_dup 0) (const_int 0)))]
  { operands[2] = GEN_INT (-UINTVAL (operands[2])); })
  
@@ -29,12 +29,11 @@ index b90bfe0745a9..1d06a9954fc2 100644
 +   (set (match_dup 0) (plus:X (match_dup 0) (match_dup 3)))
 +   (set (match_dup 0) (any_eq:X (match_dup 0) (const_int 0)))]
 +{
-+  operands[3] = GEN_INT (-(INTVAL (operands[3]) >> INTVAL (operands[2])));
++  operands[3] = GEN_INT ((INTVAL (operands[3]) >> INTVAL (operands[2])));
 +  operands[2] = GEN_INT (0xff >> INTVAL (operands[2]));
 +}
 +  [(set_attr "type" "slt")
 +   (set_attr "mode" "<X:MODE>")])
-+  
 +
  (include "bitmanip.md")
  (include "crypto.md")
@@ -79,7 +78,7 @@ index 000000000000..fb5067cb3c29
 +/* The signed char, and degenerate unsigned tests have slli[w].  */
 +/* { dg-final { scan-assembler-times {\tslli} 5 } } */
 +
-+/* The signed short will need an sext.  */
++/* The signed short will neext an sext.  */
 +/* { dg-final { scan-assembler-times {\tsext.h} 1 } } */
 +
 +
