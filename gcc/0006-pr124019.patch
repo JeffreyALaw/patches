@@ -79,7 +79,7 @@ index 000000000000..fb5067cb3c29
 +/* The signed char, and degenerate unsigned tests have slli[w].  */
 +/* { dg-final { scan-assembler-times {\tslli} 5 } } */
 +
-+/* The signed short will neext an sext.  */
++/* The signed short will need an sext.  */
 +/* { dg-final { scan-assembler-times {\tsext.h} 1 } } */
 +
 +
