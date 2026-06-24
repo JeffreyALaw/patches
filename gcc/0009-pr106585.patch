@@ -52,3 +52,61 @@ index bd2aaf0587eb..760a8ff669e7 100644
  ;; Similarly two patterns for AND generating bclr to
  ;; manipulate a bit in a register
  (define_insn_and_split ""
+diff --git a/gcc/testsuite/gcc.target/riscv/pr123884-a.c b/gcc/testsuite/gcc.target/riscv/pr123884-a.c
+new file mode 100644
+index 000000000000..fb36da04052e
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr123884-a.c
+@@ -0,0 +1,13 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc_zbs -mabi=lp64d" { target rv64 } } */
++/* { dg-options "-march=rv32gc_zbs -mabi=ilp32" { target rv32 } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og"} } */
++ 
++int foo(int dst, int a)
++{
++    dst ^= (1 << a);
++    return dst;
++}
++ 
++/* { dg-final { scan-assembler-times "binv" 1 } } */
++/* { dg-final { scan-assembler-times "sext.w" 1 { target rv64 } } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/pr123884-b.c b/gcc/testsuite/gcc.target/riscv/pr123884-b.c
+new file mode 100644
+index 000000000000..8ea33cbb32dd
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr123884-b.c
+@@ -0,0 +1,14 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc_zbs -mabi=lp64d" { target rv64 } } */
++/* { dg-options "-march=rv32gc_zbs -mabi=ilp32" { target rv32 } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" "-O1" } } */
++
++int x264_macroblock_encode_p8x8(int dst, int a)
++{
++    dst &= ~(1 << a);
++    return dst;
++}
++
++/* { dg-final { scan-assembler-times "bclr" 1 } } */
++/* { dg-final { scan-assembler-times "sext.w" 1 { target rv64 } } } */
++ 
+diff --git a/gcc/testsuite/gcc.target/riscv/pr123884-c.c b/gcc/testsuite/gcc.target/riscv/pr123884-c.c
+new file mode 100644
+index 000000000000..10f42a305457
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr123884-c.c
+@@ -0,0 +1,13 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc_zbs -mabi=lp64d" { target rv64 } } */
++/* { dg-options "-march=rv32gc_zbs -mabi=ilp32" { target rv32 } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og"} } */
++
++int foo2(int dst, int a)
++{
++    dst |= (1 << a);
++    return dst;
++}
++ 
++/* { dg-final { scan-assembler-times "bset" 1 } } */
++/* { dg-final { scan-assembler-times "sext.w" 1 { target rv64} } } */
