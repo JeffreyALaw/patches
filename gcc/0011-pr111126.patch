@@ -1,0 +1,18 @@
+diff --git a/gcc/expr.cc b/gcc/expr.cc
+index de73215ccc66..7d072d61f4b2 100644
+--- a/gcc/expr.cc
++++ b/gcc/expr.cc
+@@ -10503,6 +10503,13 @@ expand_expr_real_2 (const_sepops ops, rtx target, machine_mode tmode,
+ 	  bool bit0_p = expr_has_boolean_range (treeop0, currently_expanding_gimple_stmt);
+ 	  bool bit1_p = expr_has_boolean_range (treeop1, currently_expanding_gimple_stmt);
+ 
++	  if (can_conditionally_move_p (mode))
++	    {
++	      temp = expand_cond_expr_using_cmove (treeop0, treeop1, integer_zero_node);
++	      if (temp)
++		return temp;
++	    }
++
+ 	  /* Expand X*Y as X&Y when both X and Y must be zero or one.  */
+ 	  if (bit0_p && bit1_p)
+ 	    return REDUCE_BIT_FIELD (expand_and (mode, op0, op1, target));
