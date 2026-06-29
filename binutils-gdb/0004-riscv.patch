@@ -1,0 +1,19 @@
+diff --git a/bfd/elfxx-riscv.c b/bfd/elfxx-riscv.c
+index 961c44a9206..1ee697a0be6 100644
+--- a/bfd/elfxx-riscv.c
++++ b/bfd/elfxx-riscv.c
+@@ -3757,6 +3757,14 @@ riscv_merge_arch_attr_info (bfd *ibfd, char *in_arch, char *out_arch,
+   merged_arch_str = riscv_arch_str (arch_size, &merged_subsets,
+ 				    false/* update */);
+ 
++  /* Check if the merged ISA string is conflicting.  */
++  riscv_subset_list_t subsets = {NULL, NULL, NULL};
++  unsigned xlen;
++  riscv_parse_subset_t riscv_rps_merged =
++    {&subsets, _bfd_error_handler, &xlen, NULL, false};
++  if (!riscv_parse_subset (&riscv_rps_merged, merged_arch_str))
++    return NULL;
++
+   /* Release the subset lists.  */
+   riscv_release_subset_list (&in_subsets);
+   riscv_release_subset_list (&out_subsets);
