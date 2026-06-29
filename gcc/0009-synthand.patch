@@ -1,7 +1,3 @@
-diff --git a/gcc/config/riscv/.riscv.cc.swo b/gcc/config/riscv/.riscv.cc.swo
-new file mode 100644
-index 000000000000..16a4d8d7fe3b
-Binary files /dev/null and b/gcc/config/riscv/.riscv.cc.swo differ
 diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
 index fd0f85d10f39..992e949a0990 100644
 --- a/gcc/config/riscv/bitmanip.md
