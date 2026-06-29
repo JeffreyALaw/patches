@@ -1,8 +1,8 @@
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index 74df72b588e0..9046e7fcf99e 100644
+index dda17887019d..10f11d5f4007 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
-@@ -15806,6 +15806,32 @@ synthesize_ior_xor (rtx_code code, rtx operands[3])
+@@ -15831,6 +15831,32 @@ synthesize_ior_xor (rtx_code code, rtx operands[3])
       is complete. */
    if (budget < 0)
      {
@@ -35,7 +35,7 @@ index 74df72b588e0..9046e7fcf99e 100644
        rtx x = force_reg (word_mode, operands[2]);
        x = gen_rtx_fmt_ee (code, word_mode, operands[1], x);
        emit_insn (gen_rtx_SET (operands[0], x));
-@@ -16039,6 +16065,21 @@ synthesize_and (rtx operands[3])
+@@ -16064,6 +16090,21 @@ synthesize_and (rtx operands[3])
       patch in the series is enabled.  */
    if (ival || budget < 0)
      {
@@ -57,3 +57,22 @@ index 74df72b588e0..9046e7fcf99e 100644
        rtx x = force_reg (word_mode, operands[2]);
        x = gen_rtx_AND (word_mode, operands[1], x);
        emit_insn (gen_rtx_SET (operands[0], x));
+diff --git a/gcc/testsuite/gcc.target/riscv/and-synthesis-2.c b/gcc/testsuite/gcc.target/riscv/and-synthesis-2.c
+new file mode 100644
+index 000000000000..e56a672dc2a2
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/and-synthesis-2.c
+@@ -0,0 +1,13 @@
++/* { dg-do compile { target rv64 } } */
++/* { dg-options "-march=rv64gcb -mabi=lp64d" } */
++
++unsigned long xor(unsigned long x) { return x ^ 0xfff0000000000fffULL; }
++unsigned long ior(unsigned long x) { return x | 0xfff0000000000fffULL; }
++unsigned long and(unsigned long x) { return x & 0xfff0000000000fffULL; }
++
++/* { dg-final { scan-assembler-times "\\tli\\t" 3 } } */
++/* { dg-final { scan-assembler-times "\\tsrli\t" 3 } } */
++
++/* { dg-final { scan-assembler-times "\\txnor\t" 1 } } */
++/* { dg-final { scan-assembler-times "\\torn\t" 1 } } */
++/* { dg-final { scan-assembler-times "\\tandn\t" 1 } } */
