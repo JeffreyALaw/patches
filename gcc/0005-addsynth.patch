@@ -1,3 +1,17 @@
+gcc/
+
+	* config/risc/bitmanip.md (xor_for_plus_minint): New pattern.
+	* config/riscv/riscv.cc (synthesize_add): Handle INT_MIN as
+	bit inversion.  Add support for add.uw.  Use riscv_integer_cost
+	rather than riscv_const_insns.
+	(synthesize_add_extended): Use riscv_integer_cost rather than
+	riscv_const_insns.
+
+gcc/testsuite/
+
+	* gcc.target/riscv/add-synthesis-3.c: New test.
+	* gcc.target/riscv/xor-synthesis-2.c: No longer xfail.
+
 diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
 index 992e949a0990..786072035601 100644
 --- a/gcc/config/riscv/bitmanip.md
@@ -6,7 +20,7 @@ index 992e949a0990..786072035601 100644
    "<bit_optab>i\t%0,%1,%S2"
    [(set_attr "type" "bitmanip")])
  
-+;; This form can be created by combine.  */
++;; This form can be created by combine.
 +(define_insn "*xor_for_plus_minint"
 +  [(set (match_operand:X 0 "register_operand" "=r")
 +	(plus:X (match_operand:X 1 "register_operand" "r")
