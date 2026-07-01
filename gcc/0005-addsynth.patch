@@ -24,10 +24,10 @@ index 992e949a0990..786072035601 100644
  (define_split
    [(set (match_operand:DI 0 "register_operand")
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index d5eab5421318..c205440ee634 100644
+index d5eab5421318..74cbca077147 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
-@@ -16166,10 +16215,19 @@ synthesize_add (rtx operands[3])
+@@ -16166,10 +16215,20 @@ synthesize_add (rtx operands[3])
    if (SMALL_OPERAND (INTVAL (operands[2])))
      return false;
  
@@ -40,8 +40,9 @@ index d5eab5421318..c205440ee634 100644
 +
 +  /* If the constant is MIN_INT for the target, then it's just a bit flip
 +     of the highest bit.  */
-+  if (TARGET_ZBS
-+      && ival == sext_hwi ((HOST_WIDE_INT_1U << (BITS_PER_WORD - 1)), BITS_PER_WORD))
++  HOST_WIDE_INT sextval = sext_hwi ((HOST_WIDE_INT_1U << (BITS_PER_WORD - 1)),
++				    BITS_PER_WORD));
++  if (TARGET_ZBS && ival == sextval)
 +    {
 +      rtx x = gen_rtx_XOR (word_mode, operands[1], operands[2]);
 +      emit_insn (gen_rtx_SET (operands[0], x));
@@ -50,7 +51,7 @@ index d5eab5421318..c205440ee634 100644
  
    /* If we can emit two addi insns then that's better than synthesizing
       the constant into a temporary, then adding the temporary to the
-@@ -16200,11 +16258,11 @@ synthesize_add (rtx operands[3])
+@@ -16200,11 +16259,11 @@ synthesize_add (rtx operands[3])
    ival = INTVAL (operands[2]);
    if (TARGET_ZBA
        && (((ival % 2) == 0 && budget1
@@ -65,7 +66,7 @@ index d5eab5421318..c205440ee634 100644
      {
        // Load the shifted constant into a temporary
        int shct = ctz_hwi (ival);
-@@ -16225,6 +16283,24 @@ synthesize_add (rtx operands[3])
+@@ -16225,6 +16284,24 @@ synthesize_add (rtx operands[3])
        return true;
      }
  
@@ -77,10 +78,10 @@ index d5eab5421318..c205440ee634 100644
 +      && riscv_integer_cost (sext_hwi (ival, 32), true) < budget1)
 +    {
 +      /* Load the sign extended constant into a temporary.  */
-+      rtx tempreg = gen_reg_rtx (word_mode);
-+      emit_insn (gen_rtx_SET (tempreg, GEN_INT (sext_hwi (ival, 32))));
++      rtx tempreg = force_reg (word_mode, GEN_INT (sext_hwi (ival, 32)));
 +
-+      /* Add the temporary to the other input.  */
++      /* Add the zero-extended temporary to the other input to construct
++	 the add.uw insn.  */
 +      rtx x = gen_rtx_ZERO_EXTEND (word_mode, gen_lowpart (SImode, tempreg));
 +      x = gen_rtx_PLUS (word_mode, x, operands[1]);
 +      emit_insn (gen_rtx_SET (operands[0], x));
@@ -90,7 +91,7 @@ index d5eab5421318..c205440ee634 100644
    /* If the negated constant is cheaper than the original, then negate
       the constant and use sub.  */
    if (budget2 < budget1)
-@@ -16272,8 +16348,8 @@ synthesize_add_extended (rtx operands[3])
+@@ -16272,8 +16349,8 @@ synthesize_add_extended (rtx operands[3])
      return false;
  
    HOST_WIDE_INT ival = INTVAL (operands[2]);
