@@ -115,3 +115,17 @@ index 000000000000..e10b4032d464
 +
 +/* { dg-final { scan-assembler-times "\\tadd.uw\\t" 1 } } */
 +/* { dg-final { scan-assembler-times "\\tbinvi\t" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/xor-synthesis-2.c b/gcc/testsuite/gcc.target/riscv/xor-synthesis-2.c
+index 25457d260750..b250cc2e6d6c 100644
+--- a/gcc/testsuite/gcc.target/riscv/xor-synthesis-2.c
++++ b/gcc/testsuite/gcc.target/riscv/xor-synthesis-2.c
+@@ -4,7 +4,6 @@
+ 
+ unsigned long foo(unsigned long src) { return src ^ 0x8800000000000007; }
+ 
+-/* xfailed until we remove mvconst_internal.  */
+-/* { dg-final { scan-assembler-times "\\sbinvi\t" 2 { xfail *-*-* } } } */
+-/* { dg-final { scan-assembler-times "\\sxori\t" 1 { xfail *-*-* } } } */
++/* { dg-final { scan-assembler-times "\\sbinvi\t" 2 } } */
++/* { dg-final { scan-assembler-times "\\sxori\t" 1 } } */
+ 
