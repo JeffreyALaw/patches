@@ -40,8 +40,8 @@ index d5eab5421318..74cbca077147 100644
 +
 +  /* If the constant is MIN_INT for the target, then it's just a bit flip
 +     of the highest bit.  */
-+  HOST_WIDE_INT sextval = sext_hwi ((HOST_WIDE_INT_1U << (BITS_PER_WORD - 1)),
-+				    BITS_PER_WORD));
++  HOST_WIDE_INT sextval = sext_hwi (HOST_WIDE_INT_1U << (BITS_PER_WORD - 1),
++				    BITS_PER_WORD);
 +  if (TARGET_ZBS && ival == sextval)
 +    {
 +      rtx x = gen_rtx_XOR (word_mode, operands[1], operands[2]);
