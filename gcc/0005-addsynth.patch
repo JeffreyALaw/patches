@@ -1,6 +1,6 @@
 gcc/
 
-	* config/risc/bitmanip.md (xor_for_plus_minint): New pattern.
+	* config/riscv/bitmanip.md (xor_for_plus_minint): New pattern.
 	* config/riscv/riscv.cc (synthesize_add): Handle INT_MIN as
 	bit inversion.  Add support for add.uw.  Use riscv_integer_cost
 	rather than riscv_const_insns.
@@ -128,8 +128,8 @@ index 000000000000..e10b4032d464
 +long F1 (long x) { return x + 0xffffffff; }
 +long F2 (long x) { return x + (1UL << (sizeof (long) * 8 - 1) ); }
 +
-+/* { dg-final { scan-assembler-times "\\tadd.uw\\t" 1 } } */
-+/* { dg-final { scan-assembler-times "\\tbinvi\t" 1 } } */
++/* { dg-final { scan-assembler-times "\\tadd\\.uw\\t" 1 } } */
++/* { dg-final { scan-assembler-times "\\tbinvi\\t" 1 } } */
 diff --git a/gcc/testsuite/gcc.target/riscv/xor-synthesis-2.c b/gcc/testsuite/gcc.target/riscv/xor-synthesis-2.c
 index 25457d260750..b250cc2e6d6c 100644
 --- a/gcc/testsuite/gcc.target/riscv/xor-synthesis-2.c
