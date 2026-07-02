@@ -16,7 +16,7 @@ diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
 index 992e949a0990..786072035601 100644
 --- a/gcc/config/riscv/bitmanip.md
 +++ b/gcc/config/riscv/bitmanip.md
-@@ -899,6 +899,20 @@ (define_insn "*<bit_optab>i<mode>"
+@@ -899,6 +899,17 @@ (define_insn "*<bit_optab>i<mode>"
    "<bit_optab>i\t%0,%1,%S2"
    [(set_attr "type" "bitmanip")])
  
@@ -28,10 +28,7 @@ index 992e949a0990..786072035601 100644
 +  "(TARGET_ZBS
 +    && (INTVAL (operands[2])
 +	== sext_hwi ((HOST_WIDE_INT_1U << (BITS_PER_WORD - 1)), BITS_PER_WORD)))"
-+{
-+  operands[2] = GEN_INT (BITS_PER_WORD - 1);
-+  return "binvi\t%0,%1,%2";
-+}
++  "binvi\t%0,%1,%S2"
 +  [(set_attr "type" "bitmanip")])
 +
  ;; We can easily handle zero extensions
