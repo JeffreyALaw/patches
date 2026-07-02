@@ -1,14 +1,14 @@
 gcc/
 
-	* config/riscv/riscv.cc (synthesize_ior_xor): Use riscv_integer_cost
-	rather than riscv_const_insns.
+       * config/riscv/riscv.cc (synthesize_ior_xor): Use riscv_integer_cost
+       rather than riscv_const_insns.
 
 gcc/testsuite
 
-	* gcc.target/riscv/xor-synthesis-4.c: New test.
+       * gcc.target/riscv/xor-synthesis-4.c: New test.
 
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index d5eab5421318..74cbca077147 100644
+index 09dc41930aa..d31d4a8aeab 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
 @@ -15687,7 +15687,7 @@ synthesize_ior_xor (rtx_code code, rtx operands[3])
@@ -29,27 +29,25 @@ index d5eab5421318..74cbca077147 100644
      {
        ival = INTVAL (operands[2]);
        /* First see if the constant trivially fits into 11 bits in the LSB.  */
-@@ -15840,9 +15840,9 @@ synthesize_ior_xor (rtx_code code, rtx operands[3])
+@@ -15840,9 +15840,8 @@ synthesize_ior_xor (rtx_code code, rtx operands[3])
  	 we have Zbb, then we have XNOR and ORN.  So if the inverted constant
  	 is cheaper, invert it and use XNOR/ORN.  */
        if (TARGET_ZBB
 -	  && riscv_const_insns (GEN_INT (~UINTVAL (operands[2])), true) > 0
 -	  && (riscv_const_insns (operands[2], true)
 -	      > riscv_const_insns (GEN_INT (~UINTVAL (operands[2])), true)))
-+	  && riscv_integer_cost (~UINTVAL (operands[2]), true) > 0
 +	  && (riscv_integer_cost (INTVAL (operands[2]), true)
 +	      > riscv_integer_cost (~UINTVAL (operands[2]), true)))
  	{
  	  rtx x = force_reg (word_mode, GEN_INT (~UINTVAL (operands[2])));
  
- 
 diff --git a/gcc/testsuite/gcc.target/riscv/xor-synthesis-4.c b/gcc/testsuite/gcc.target/riscv/xor-synthesis-4.c
 new file mode 100644
-index 000000000000..609a125a92f4
+index 00000000000..4fc6c526faf
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/xor-synthesis-4.c
 @@ -0,0 +1,19 @@
-+/* { dg-do "compile" { target rv64 } } */
++/* { dg-do compile { target rv64 } } */
 +/* { dg-options "-march=rv64gcb -mabi=lp64d" } */
 +
 +
@@ -67,4 +65,4 @@ index 000000000000..609a125a92f4
 +/* Each test above is better handled by inverting the constant
 +   and using xnor.  */
 +
-+/* { dg-final { scan-assembler-times "xnor\t" 7 } } */
++/* { dg-final { scan-assembler-times "\\txnor\\t" 7 } } */
