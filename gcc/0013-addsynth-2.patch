@@ -34,7 +34,7 @@ index d5eab5421318..c2211aeb0276 100644
 +	  && (ival & HOST_WIDE_INT_C (0xfffffff800000000)) == 0)
 +	{
 +	  mask = GEN_INT (HOST_WIDE_INT_C (0x7fffffff8));
-+	  shcount = 2;
++	  shcount = 3;
 +	}
 +
 +      if (shcount != 0)
