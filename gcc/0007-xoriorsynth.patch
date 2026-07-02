@@ -1,3 +1,12 @@
+gcc/
+
+	* config/riscv/riscv.cc (synthesize_ior_xor): Use riscv_integer_cost
+	rather than riscv_const_insns.
+
+gcc/testsuite
+
+	* gcc.target/riscv/xor-synthesis-4.c: New test.
+
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
 index d5eab5421318..74cbca077147 100644
 --- a/gcc/config/riscv/riscv.cc
