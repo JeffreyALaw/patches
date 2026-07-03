@@ -1,0 +1,81 @@
+diff --git a/gcc/ifcvt.cc b/gcc/ifcvt.cc
+index 37e757461934..224001097aba 100644
+--- a/gcc/ifcvt.cc
++++ b/gcc/ifcvt.cc
+@@ -3189,12 +3189,14 @@ noce_cond_zero_binary_op_supported (rtx op)
+     otherwise NULL_RTX for other RTX_CODE.  */
+ 
+ static rtx
+-get_base_reg (rtx exp)
++get_base_reg_or_const_int (rtx exp)
+ {
+   if (REG_P (exp))
+     return exp;
+   else if (SUBREG_P (exp))
+     return SUBREG_REG (exp);
++  else if (CONST_INT_P (exp))
++    return exp;
+ 
+   return NULL_RTX;
+ }
+@@ -3269,26 +3271,30 @@ noce_try_cond_arith (struct noce_if_info *if_info)
+   op = GET_CODE (a);
+ 
+   /* Canonicalize x = (z op y) : y to x = (y op z) : y */
+-  a_op1 = get_base_reg (XEXP (a, 1));
++  a_op1 = get_base_reg_or_const_int (XEXP (a, 1));
+   if (a_op1 && rtx_equal_p (a_op1, b) && COMMUTATIVE_ARITH_P (a))
+     {
+       std::swap (XEXP (a, 0), XEXP (a, 1));
+-      a_op1 = get_base_reg (XEXP (a, 1));
++      a_op1 = get_base_reg_or_const_int (XEXP (a, 1));
+     }
+ 
+   if (a_op1 == NULL_RTX)
+     goto fail;
+ 
+   /* Ensure the cond is of form: x = (y op z) : y */
+-  a_op0 = get_base_reg (XEXP (a, 0));
++  a_op0 = get_base_reg_or_const_int (XEXP (a, 0));
+   if (!(a_op0 && rtx_equal_p (a_op0, b)))
+     goto fail;
+ 
+   start_sequence ();
+ 
+-  target = gen_reg_rtx (GET_MODE (XEXP (a, op != AND)));
+-
+-  /* AND requires !cond, instead we swap ops around.  */
++  /* AND requires !cond, instead we swap ops around.
++     This uses the destination mode directly rather than taking
++     the mode from the input operands.  That avoids problems
++     with CONST_INTs being modeless.  If we were to end up with
++     mismatched modes the insn won't match and we'll throw away
++     the sequence.  */
++  target = gen_reg_rtx (mode);
+   target = noce_emit_cmove (if_info, target, code,
+ 			    XEXP (cond, 0), XEXP (cond, 1),
+ 			    op != AND ? XEXP (a, 1) : const0_rtx,
+diff --git a/gcc/testsuite/gcc.target/riscv/pr125731.c b/gcc/testsuite/gcc.target/riscv/pr125731.c
+new file mode 100644
+index 000000000000..d041f900d50a
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr125731.c
+@@ -0,0 +1,18 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gcb_zicond -mabi=lp64d" { target rv64 } } */
++/* { dg-options "-march=rv32gcb_zicond -mabi=ilp32" { target rv32 } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og"} } */
++
++long fun_not1 (int a, long b)
++{
++    if (!(a & 1))
++        b ^= 8;
++    return b;
++}
++
++
++/* { dg-final { scan-assembler-times "\\tczero" 1 } } */
++/* { dg-final { scan-assembler-not "\\tbeq\\t" } } */
++/* { dg-final { scan-assembler-not "\\tbne\\t" } } */
++
++
