@@ -1,8 +1,8 @@
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index d5eab5421318..e6f5af199809 100644
+index d31d4a8aeabf..6a576e119ce1 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
-@@ -15950,7 +15950,7 @@ synthesize_and (rtx operands[3])
+@@ -15949,7 +15949,7 @@ synthesize_and (rtx operands[3])
       execution and fusion in the constant synthesis those would naturally
       decrease the budget.  It also does not account for the AND at
       the end of the sequence which would increase the budget. */
@@ -11,7 +11,7 @@ index d5eab5421318..e6f5af199809 100644
    rtx input = NULL_RTX;
    rtx output = NULL_RTX;
  
-@@ -16038,6 +16038,54 @@ synthesize_and (rtx operands[3])
+@@ -16037,6 +16037,54 @@ synthesize_and (rtx operands[3])
        return true;
      }
  
@@ -66,7 +66,7 @@ index d5eab5421318..e6f5af199809 100644
    /* If there are all zeros, except for a run of 1s somewhere in the middle
       of the constant, then this is at worst 3 shifts.  */
    t = INTVAL (operands[2]);
-@@ -16099,9 +16147,9 @@ synthesize_and (rtx operands[3])
+@@ -16098,9 +16146,9 @@ synthesize_and (rtx operands[3])
  	 we have Zbb, then we have ANDN.  So if the inverted constant
  	 is cheaper, invert it and use ANDN.  */
        if (TARGET_ZBB
@@ -79,4 +79,32 @@ index d5eab5421318..e6f5af199809 100644
  	{
  	  rtx x = force_reg (word_mode, GEN_INT (~UINTVAL (operands[2])));
  	  x = gen_rtx_NOT (word_mode, x);
- 
+diff --git a/gcc/testsuite/gcc.target/riscv/and-synthesis-3.c b/gcc/testsuite/gcc.target/riscv/and-synthesis-3.c
+new file mode 100644
+index 000000000000..c9b63aeec09d
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/and-synthesis-3.c
+@@ -0,0 +1,23 @@
++/* { dg-do compile { target rv64 } } */
++/* { dg-options "-march=rv64gcb -mabi=lp64d" } */
++
++
++
++#define T(X) long andn##X(long x) { return x & X; }
++
++T(0x000200c3233fffffUL)
++T(0x300000000003ffffUL)
++T(0x00004f10000a0fffUL)
++T(0x0000c7f3801fefffUL)
++T(0xe00000000000fc00UL)
++T(0x0eef7ffffffbbfffUL)
++T(0xff0000000000ff00UL)
++T(0xff000000000000ffUL)
++T(0xfffff00000000fffUL)
++T(0xf00000000000000fUL)
++
++/* { dg-final { scan-assembler-times "\\tandn\\t" 7 } } */
++/* { dg-final { scan-assembler-times "\\trori\\t" 6 } } */
++/* { dg-final { scan-assembler-times "\\tzext.h\\t" 1 } } */
++/* { dg-final { scan-assembler-times "\\tzext.w\\t" 1 } } */
++/* { dg-final { scan-assembler-times "\\tandi\\t" 1 } } */
