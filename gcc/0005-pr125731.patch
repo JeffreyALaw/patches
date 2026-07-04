@@ -1,5 +1,5 @@
 diff --git a/gcc/ifcvt.cc b/gcc/ifcvt.cc
-index 37e757461934..224001097aba 100644
+index 37e75746193..37f7d4d0daf 100644
 --- a/gcc/ifcvt.cc
 +++ b/gcc/ifcvt.cc
 @@ -3189,12 +3189,14 @@ noce_cond_zero_binary_op_supported (rtx op)
@@ -18,7 +18,15 @@ index 37e757461934..224001097aba 100644
  
    return NULL_RTX;
  }
-@@ -3269,26 +3271,30 @@ noce_try_cond_arith (struct noce_if_info *if_info)
+@@ -3232,6 +3234,7 @@ noce_try_cond_arith (struct noce_if_info *if_info)
+   rtx_insn *seq;
+   rtx_code op;
+   machine_mode mode = GET_MODE (if_info->x);
++  machine_mode tmp_mode;
+ 
+   /* Scalar integral modes are only supported here.
+      Could support scalar floating point but that
+@@ -3269,24 +3272,29 @@ noce_try_cond_arith (struct noce_if_info *if_info)
    op = GET_CODE (a);
  
    /* Canonicalize x = (z op y) : y to x = (y op z) : y */
@@ -43,21 +51,18 @@ index 37e757461934..224001097aba 100644
    start_sequence ();
  
 -  target = gen_reg_rtx (GET_MODE (XEXP (a, op != AND)));
--
--  /* AND requires !cond, instead we swap ops around.  */
-+  /* AND requires !cond, instead we swap ops around.
-+     This uses the destination mode directly rather than taking
-+     the mode from the input operands.  That avoids problems
-+     with CONST_INTs being modeless.  If we were to end up with
-+     mismatched modes the insn won't match and we'll throw away
-+     the sequence.  */
-+  target = gen_reg_rtx (mode);
++  /* XEXP (a, op != AND) might be a CONST_INT and thus VOIDmode.  In
++     that case fall back to WORD_MODE and hope for the best.  The worry
++     is asserts in the various move paths tripping on a mode mismatch.  */
++  tmp_mode = GET_MODE (XEXP (a, op != AND));
++  tmp_mode = tmp_mode == VOIDmode ? word_mode : tmp_mode;
++  target = gen_reg_rtx (tmp_mode);
+ 
+   /* AND requires !cond, instead we swap ops around.  */
    target = noce_emit_cmove (if_info, target, code,
- 			    XEXP (cond, 0), XEXP (cond, 1),
- 			    op != AND ? XEXP (a, 1) : const0_rtx,
 diff --git a/gcc/testsuite/gcc.target/riscv/pr125731.c b/gcc/testsuite/gcc.target/riscv/pr125731.c
 new file mode 100644
-index 000000000000..d041f900d50a
+index 00000000000..d041f900d50
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/pr125731.c
 @@ -0,0 +1,18 @@
