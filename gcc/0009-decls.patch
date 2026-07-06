@@ -1,0 +1,76 @@
+
+Good evening,
+
+The two declarations mentioned below are not used.
+This patch removes them from the code.
+
+ * current_succs was introduced in e855c69, and
+   it is not used since then. Perhaps a previous
+   working version of the code used it and was
+   refactored away. One may note that there is
+   only one commit for 'git log -S current_succs',
+   and that it was featured on Jan's "Unused Vars"
+   e-mail from the year after it was added:
+
+   https://gcc.gnu.org/legacy-ml/gcc/2010-05/msg00688.html
+
+   If I might speculate, the comment suggests it was
+   supposed to hold the value of compute_succs_info,
+   but in the productive code, the value is simply
+   returned.
+
+ * ggc_force_collect is an old variable, which
+   was made into a parameter of ggc_collect in
+   0edf2e81. An 'extern' declaration for it was
+   later added in 1eee94d, when merging the gm2
+   front-end into this repository.
+
+Bootstrapped successfully on my machine.
+
+gcc/m2/ChangeLog:
+
+    * plugin/m2rte.cc: Removed unused extern bool
+          ggc_force_collect.
+
+gcc/ChangeLog:
+
+    * sel-sched-ir.cc (struct succs_info): Removed
+          unused variable current_succs.
+
+Signed-off-by: Léo Hardt <leom.hardt@inf.ufrgs.br>
+---
+ gcc/m2/plugin/m2rte.cc | 1 -
+ gcc/sel-sched-ir.cc    | 3 ---
+ 2 files changed, 4 deletions(-)
+
+diff --git a/gcc/m2/plugin/m2rte.cc b/gcc/m2/plugin/m2rte.cc
+index 96659b9ae0c..c003487182d 100644
+--- a/gcc/m2/plugin/m2rte.cc
++++ b/gcc/m2/plugin/m2rte.cc
+@@ -41,7 +41,6 @@ along with GNU Modula-2; see the file COPYING3.  If not see
+ #include "context.h"
+
+ #include "rtegraph.h"
+-extern bool ggc_force_collect;
+ extern void ggc_collect (void);
+
+ #undef DEBUG_BASICBLOCK
+diff --git a/gcc/sel-sched-ir.cc b/gcc/sel-sched-ir.cc
+index 48651a81bba..75713501b65 100644
+--- a/gcc/sel-sched-ir.cc
++++ b/gcc/sel-sched-ir.cc
+@@ -53,9 +53,6 @@ vec<sel_region_bb_info_def> sel_region_bb_info;
+ /* A pool for allocating all lists.  */
+ object_allocator<_list_node> sched_lists_pool ("sel-sched-lists");
+
+-/* This contains information about successors for compute_av_set.  */
+-struct succs_info current_succs;
+-
+ /* Data structure to describe interaction with the generic scheduler utils.  */
+ static struct common_sched_info_def sel_common_sched_info;
+
+-- 
+2.39.5
+
+
+
