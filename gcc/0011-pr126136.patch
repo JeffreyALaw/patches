@@ -17,3 +17,33 @@ index 37e757461934..1df5d54efa36 100644
      }
  
    if (b != CONSTM1_RTX (GET_MODE (dest)))
+diff --git a/gcc/testsuite/gcc.dg/torture/pr126136.c b/gcc/testsuite/gcc.dg/torture/pr126136.c
+new file mode 100644
+index 000000000000..cc270f51ca2d
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/torture/pr126136.c
+@@ -0,0 +1,24 @@
++/* { dg-do run } */
++
++int i;
++
++__attribute__ ((noipa,noclone,noinline))
++char foo(char val)
++{
++  i++;
++  if (i > 1)
++    return -1;
++  else
++    return val;
++}
++
++int
++main(void)
++{
++  i = 0;
++  if (foo (10) != 10)
++    __builtin_abort ();
++  i += 2;
++  if (foo (10) != -1)
++    __builtin_abort ();
++}
