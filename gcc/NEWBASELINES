@@ -4,3 +4,4 @@
 sh4eb-linux-gnu
 riscv64-elf
 riscv32-elf
+mn10300-elf
