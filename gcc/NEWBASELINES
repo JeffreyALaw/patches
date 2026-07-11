@@ -3,5 +3,3 @@
 # reset.  
 sh4eb-linux-gnu
 riscv64-k1-linux-gnu
-riscv64-linux-gnu
-hppa-linux-gnu
