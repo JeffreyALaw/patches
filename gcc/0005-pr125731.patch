@@ -1,8 +1,65 @@
 diff --git a/gcc/ifcvt.cc b/gcc/ifcvt.cc
-index 37e75746193..37f7d4d0daf 100644
+index 1df5d54efa36..7c2d27fc66a3 100644
 --- a/gcc/ifcvt.cc
 +++ b/gcc/ifcvt.cc
-@@ -3189,12 +3189,14 @@ noce_cond_zero_binary_op_supported (rtx op)
+@@ -1595,6 +1595,30 @@ noce_try_store_flag_constants (struct noce_if_info *if_info)
+       b = XEXP (b, 1);
+     }
+ 
++  /* Handle conditional add.  We're narrowly focused right now on cases
++     where the constant is a power of two which enables us to shift left
++     the result of the comparison and unconditionally add that to the
++     common term.  */
++  if (GET_CODE (a) == PLUS
++      && GET_CODE (b) == REG
++      && rtx_equal_p (XEXP (a, 0), b)
++      && CONST_INT_P (XEXP (a, 1)))
++    {
++      common = XEXP (a, 0);
++      a = XEXP (a, 1);
++      b = CONST0_RTX (GET_MODE (common));
++    }
++
++  if (GET_CODE (b) == PLUS
++      && GET_CODE (a) == REG
++      && rtx_equal_p (XEXP (b, 0), a)
++      && CONST_INT_P (XEXP (b, 1)))
++    {
++      common = XEXP (b, 0);
++      b = XEXP (b, 1);
++      a = CONST0_RTX (GET_MODE (common));
++    }
++
+   if (!noce_simple_bbs (if_info))
+     return false;
+ 
+@@ -1725,6 +1749,25 @@ noce_try_store_flag_constants (struct noce_if_info *if_info)
+ 					gen_int_mode (ifalse, mode), target,
+ 					if_info->x, 0, OPTAB_WIDEN);
+ 	}
++      else if (STORE_FLAG_VALUE == 1
++	       && common
++	       && pow2p_hwi (diff))
++	{
++	  /* Right now TARGET has the value 1/0.  A left shift will produce
++	     DIFF.  */
++	  target = expand_simple_binop (mode, ASHIFT, target,
++				        GEN_INT (exact_log2 (diff)),
++					NULL_RTX, 0, OPTAB_WIDEN);
++
++	  /* Now we just need to add to common part.  If TARGET is NULL,
++	     we'll end the sequence and return failure below.  Similarly
++	     if this expansion step fails.  */
++	  if (target)
++	    target = expand_simple_binop (mode, PLUS,
++					  target, common,
++					  NULL_RTX, 0, OPTAB_WIDEN);
++	}
++ 
+       /* Other cases are not beneficial when the original A and B are PLUS
+ 	 expressions.  */
+       else if (common)
+@@ -3189,12 +3232,14 @@ noce_cond_zero_binary_op_supported (rtx op)
      otherwise NULL_RTX for other RTX_CODE.  */
  
  static rtx
@@ -18,7 +75,7 @@ index 37e75746193..37f7d4d0daf 100644
  
    return NULL_RTX;
  }
-@@ -3232,6 +3234,7 @@ noce_try_cond_arith (struct noce_if_info *if_info)
+@@ -3232,6 +3277,7 @@ noce_try_cond_arith (struct noce_if_info *if_info)
    rtx_insn *seq;
    rtx_code op;
    machine_mode mode = GET_MODE (if_info->x);
@@ -26,7 +83,7 @@ index 37e75746193..37f7d4d0daf 100644
  
    /* Scalar integral modes are only supported here.
       Could support scalar floating point but that
-@@ -3269,24 +3272,29 @@ noce_try_cond_arith (struct noce_if_info *if_info)
+@@ -3269,24 +3315,29 @@ noce_try_cond_arith (struct noce_if_info *if_info)
    op = GET_CODE (a);
  
    /* Canonicalize x = (z op y) : y to x = (y op z) : y */
