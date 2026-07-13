@@ -10,7 +10,7 @@ index 1df5d54efa36..d58d4dfba98a 100644
  static bool noce_try_store_flag_mask (struct noce_if_info *);
  static rtx noce_emit_cmove (struct noce_if_info *, rtx, enum rtx_code, rtx,
  			    rtx, rtx, rtx, rtx = NULL, rtx = NULL);
-@@ -1558,6 +1559,155 @@ noce_try_inverse_constants (struct noce_if_info *if_info)
+@@ -1558,6 +1559,154 @@ noce_try_inverse_constants (struct noce_if_info *if_info)
    return false;
  }
  
@@ -48,7 +48,6 @@ index 1df5d54efa36..d58d4dfba98a 100644
 +  rtx_insn *seq;
 +  bool reversep;
 +  HOST_WIDE_INT itrue, ifalse;
-+  int normalize;
 +  bool can_reverse;
 +  machine_mode mode = GET_MODE (if_info->x);
 +  rtx common = NULL_RTX;
