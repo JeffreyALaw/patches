@@ -256,3 +256,12 @@ index 1df5d54efa36..d58d4dfba98a 100644
    if (noce_try_sign_bit_splat (if_info))
      goto success;
    if (!targetm.have_conditional_execution ()
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/vsetvl-15.c b/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/vsetvl-15.c
+index e42f77deaef9..2f193ef82993 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/vsetvl-15.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/vsetvl-15.c
+@@ -19,4 +19,3 @@ void foo(int32_t *in1, int32_t *in2, int32_t *in3, int32_t *out, size_t n, int c
+ }
+ 
+ /* { dg-final { scan-assembler-times {vsetvli} 2 { target { no-opts "-O0" no-opts "-O1" no-opts "-Os" no-opts "-g" no-opts "-funroll-loops" } } } } */
+-/* { dg-final { scan-assembler-times {srli\s+[a-x0-9]+,\s*[a-x0-9]+,\s*4} 1 { target { no-opts "-O0" no-opts "-g" no-opts "-funroll-loops" } } } } */
