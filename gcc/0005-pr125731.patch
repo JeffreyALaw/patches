@@ -91,8 +91,8 @@ index 1df5d54efa36..bfada993db2c 100644
 +  if (code == UNKNOWN || !noce_simple_bbs (if_info))
 +    return false;
 +
-+  ifalse = INTVAL (a);
-+  itrue = INTVAL (b);
++  itrue = INTVAL (a);
++  ifalse = INTVAL (b);
 +
 +  can_reverse = noce_reversed_cond_code (if_info) != UNKNOWN;
 +  reversep = false;
