@@ -17,8 +17,8 @@ index f10a08460acf..35beb6618d48 100644
 -	(match_operator:SI 1 "ordered_comparison_operator"
 -	    [(match_operand:GPR 2 "register_operand")
 -	     (match_operand:GPR 3 "nonmemory_operand")]))]
-+  [(set (match_operand:ANYI 0 "register_operand")
-+	(match_operator:ANYI 1 "ordered_comparison_operator"
++  [(set (match_operand:GPR 0 "register_operand")
++	(match_operator:GPR 1 "ordered_comparison_operator"
 +	    [(match_operand 2 "register_operand")
 +	     (match_operand 3 "nonmemory_operand")]))]
    ""
