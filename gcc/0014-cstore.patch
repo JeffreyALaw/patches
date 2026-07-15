@@ -1,77 +1,17 @@
-diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index f10a08460acf..35beb6618d48 100644
---- a/gcc/config/riscv/riscv.md
-+++ b/gcc/config/riscv/riscv.md
-@@ -3659,30 +3659,38 @@ (define_insn_and_split "*branch_on_bit_range<X:mode>"
- ;;
- ;;  ....................
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index 873defc5a5b5..3b150d34893d 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -5200,6 +5200,12 @@ riscv_noce_conversion_profitable_p (rtx_insn *seq,
+ 	      riscv_if_info.original_cost += COSTS_N_INSNS (1);
+ 	      riscv_if_info.max_seq_cost += COSTS_N_INSNS (1);
+ 	    }
++	  else if (REG_P (src) && REG_P (dest))
++	    {
++	      /* Trivial copies likely just get propagated away.  */
++	      riscv_if_info.original_cost += COSTS_N_INSNS (1);
++	      riscv_if_info.max_seq_cost += COSTS_N_INSNS (1);
++	    }
+ 	  else
+ 	    last_dest = NULL_RTX;
  
--;; Destination is always set in SI mode.
-+;; The destination can be any integer mode since the result is 0/1 and
-+;; the instruction writes the full regsiter.  By allowing any mode for
-+;; the output, we can avoid conversions which generates better code,
-+;; including for the if-conversion costing.
- 
- (define_expand "cstore<mode>4"
--  [(set (match_operand:SI 0 "register_operand")
--	(match_operator:SI 1 "ordered_comparison_operator"
--	    [(match_operand:GPR 2 "register_operand")
--	     (match_operand:GPR 3 "nonmemory_operand")]))]
-+  [(set (match_operand:GPR 0 "register_operand")
-+	(match_operator:GPR 1 "ordered_comparison_operator"
-+	    [(match_operand 2 "register_operand")
-+	     (match_operand 3 "nonmemory_operand")]))]
-   ""
- {
--  riscv_expand_int_scc (operands[0], GET_CODE (operands[1]), operands[2],
--			operands[3]);
--  DONE;
--})
-+  enum machine_mode mode2 = GET_MODE (operands[2]);
-+  enum machine_mode mode3 = GET_MODE (operands[3]);
-+  if (mode2 != mode3)
-+    FAIL;
- 
--(define_expand "cstore<mode>4"
--  [(set (match_operand:SI 0 "register_operand")
--	(match_operator:SI 1 "fp_scc_comparison"
--	     [(match_operand:ANYF 2 "register_operand")
--	      (match_operand:ANYF 3 "register_operand")]))]
--  "TARGET_HARD_FLOAT || TARGET_ZFINX"
--{
--  riscv_expand_float_scc (operands[0], GET_CODE (operands[1]), operands[2],
--			  operands[3]);
--  DONE;
-+  if (SCALAR_INT_MODE_P (mode2)
-+      && ordered_comparison_operator (operands[1], GET_MODE (operands[1])))
-+    {
-+      riscv_expand_int_scc (operands[0], GET_CODE (operands[1]),
-+			    operands[2], operands[3]);
-+      DONE;
-+    }
-+  else if (SCALAR_FLOAT_MODE_P (mode2)
-+	   && fp_scc_comparison (operands[1], GET_MODE (operands[1])))
-+    {
-+      riscv_expand_float_scc (operands[0], GET_CODE (operands[1]),
-+			      operands[2], operands[3]);
-+      DONE;
-+    }
-+  FAIL;
- })
- 
- (define_insn "*cstore<ANYF:mode><X:mode>4"
-@@ -3790,7 +3798,13 @@ (define_expand "<FCLASS_MASK:fclass_optab><ANYF:mode>2"
- 
-   riscv_emit_binary (AND, t, t, GEN_INT (<FCLASS_MASK>));
-   rtx cmp = gen_rtx_NE (word_mode, t, const0_rtx);
--  emit_insn (gen_cstore<mode>4 (t_op0, cmp, t, const0_rtx));
-+  if (word_mode == SImode)
-+    emit_insn (gen_cstoresi4 (t_op0, cmp, t, const0_rtx));
-+  else if (word_mode == DImode)
-+    emit_insn (gen_cstoredi4 (t_op0, cmp, t, const0_rtx));
-+  else
-+    gcc_unreachable ();
-+    
- 
-   if (TARGET_64BIT)
-     {
