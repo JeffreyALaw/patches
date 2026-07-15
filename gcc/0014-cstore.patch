@@ -1,3 +1,8 @@
+gcc/
+
+	* config/riscv/riscv.cc (riscv_noce_conversion_profitable_p): Ignore
+	reg->reg copies too.
+
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
 index 873defc5a5b5..3b150d34893d 100644
 --- a/gcc/config/riscv/riscv.cc
