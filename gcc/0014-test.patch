@@ -1,0 +1,13 @@
+diff --git a/gcc/testsuite/gcc.dg/torture/pr126136.c b/gcc/testsuite/gcc.dg/torture/pr126136.c
+index cc270f51ca2..0ab01a45d49 100644
+--- a/gcc/testsuite/gcc.dg/torture/pr126136.c
++++ b/gcc/testsuite/gcc.dg/torture/pr126136.c
+@@ -3,7 +3,7 @@
+ int i;
+ 
+ __attribute__ ((noipa,noclone,noinline))
+-char foo(char val)
++signed char foo(signed char val)
+ {
+   i++;
+   if (i > 1)
