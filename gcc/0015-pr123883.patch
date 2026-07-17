@@ -19,7 +19,7 @@ index a7cec25dbad..521c62a3766 100644
 + *  but keep the shift in the wider type to avoid introducing
 + *  undefined behaviour.  */
 +(simplify
-+ (bit_and
++ (bit_and:c
 +  (convert? (lshift@2 integer_onep@1 @0))
 +  (convert? (lshift@3 integer_onep@4 @0)))
 + (with
