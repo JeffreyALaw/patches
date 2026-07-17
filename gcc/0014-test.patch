@@ -1,3 +1,7 @@
+gcc/testsuite
+
+	* gcc.dg/torture/pr126126: Make chars explicitly signed.
+
 diff --git a/gcc/testsuite/gcc.dg/torture/pr126136.c b/gcc/testsuite/gcc.dg/torture/pr126136.c
 index cc270f51ca2..0ab01a45d49 100644
 --- a/gcc/testsuite/gcc.dg/torture/pr126136.c
