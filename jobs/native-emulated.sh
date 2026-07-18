@@ -35,6 +35,11 @@ make -j $NPROC -l $NPROC all-gas all-binutils all-ld  >> $LOGFILE 2>&1
 make install-gas install-binutils install-ld >> $LOGFILE 2>&1
 popd
 
+# For RISC-V there's a stronger need to keep the assembler and compiler
+# in sync.  So just overwrite the system assembler.  We're in a docker
+# container, so it should be safe.
+cp obj/binutils-gdb/gas/as-new /usr/bin/as
+
 # MIPS is always multiarch
 if [ $TARGET == mips64el-linux-gnuabi64 ]; then
   ENABLE_MULTIARCH=--enable-multiarch
