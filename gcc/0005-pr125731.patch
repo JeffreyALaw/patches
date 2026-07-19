@@ -10,7 +10,7 @@ index 1df5d54efa36..fb6393c99953 100644
  static bool noce_try_store_flag_mask (struct noce_if_info *);
  static rtx noce_emit_cmove (struct noce_if_info *, rtx, enum rtx_code, rtx,
  			    rtx, rtx, rtx, rtx = NULL, rtx = NULL);
-@@ -1558,6 +1559,146 @@ noce_try_inverse_constants (struct noce_if_info *if_info)
+@@ -1558,6 +1559,145 @@ noce_try_inverse_constants (struct noce_if_info *if_info)
    return false;
  }
  
@@ -90,7 +90,6 @@ index 1df5d54efa36..fb6393c99953 100644
 +      code = GET_CODE (b);
 +      common = XEXP (b, 0);
 +      shiftval = exact_log2 (INTVAL (XEXP (b, 1)));
-+      reversed = true;
 +    }
 +
 +
