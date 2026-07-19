@@ -1,83 +1,8 @@
-
-In PR 124741, we have a testcase:
-
-typedef struct
-{
-  int x;
-  unsigned repr;
-} atomic_u_t;
-
-unsigned
-atomic_load_u (const atomic_u_t *a)
-{
-  unsigned result;
-  __atomic_load (&a->repr, &result, 0);
-  return result;
-}
-
-When compiled with rv64, it outputs:
-
-addi    a5,a0,4
-lw      a0,0(a5)
-sext.w  a0,a0
-ret
-
-Here we have a redundant sign extension and inefficient address arithmetic.
-This can be simplified into two instructions, a load and a return.
-
-The lw insn is already doing a sign extension from 32 to 64 bits, making
-the separate sext.w unnecessary. Adding a copy of the pattern that
-explicitly shows the sign extension in the RTL, with the modes adjusted
-accordingly, no longer emits the sext.w insn. I also generalized the pattern to
-support both sign and zero extension. These changes have been reflected
-on the total store ordering memory consistency model as well. As Zalrsc
-doesn't support zero extending load-acquire instructions, I introduced a new
-iterator, ensuring zero extend is limited to !TARGET_ZALRSC for load.
-
-The addi and lw are combined into lw a0,4(a5) by adjusting the memory
-operand constraint to handle offsets in the load patterns. The validity of
-the memory operand constraint depends on the value of operand 2 - the
-memory model. I introduced new constraint alternatives, such that the
-behavior of the memory operand constraint is triggered on whether the
-memory model acquire is being used or not and the Zalrsc or non-Zalrsc
-targets accordingly. Similar changes were made for the store patterns
-where the inefficient address arithmetic problem was also present.
-
-PR target/124741
-
-gcc/
-    * config/riscv/constraints.md: Added new constraints to trigger
-        memory operand constraint behavior.
-    * config/riscv/iterators.md: Added an iterator to support the
-        conditional zero extend.
-    * config/riscv/sync-rvwmo.md: Adjusted constraints; new pattern
-        to handle extensions.
-    * config/riscv/sync-ztso.md: New pattern to handle extensions.
-
-gcc/testsuite/
-    * gcc.target/riscv/load-zalasr.c: Testcases for atomic load compiled
-        with rv64 and zalasr ext.
-    * gcc.target/riscv/load.c: Testcases for atomic load compiled with
-        rv64.
-    * gcc.target/riscv/load32-zalasr.c: Testcases for atomic load
-        compiled with rv32 and zalasr ext.
-    * gcc.target/riscv/load32.c: Testcases for atomic load compiled with
-        rv32.
-    * gcc.target/riscv/store-zalasr.c: Testcases for atomic store
-        compiled with rv64 and zalasr ext.
-    * gcc.target/riscv/store.c: Testcases for atomic store compiled
-        with rv64.
-    * gcc.target/riscv/store32-zalasr.c: Testcases for atomic store
-        compiled with rv32 and zalasr ext.
-    * gcc.target/riscv/store32.c: Testcases for atomic store compiled
-        with rv32.
-
-
 diff --git a/gcc/config/riscv/constraints.md b/gcc/config/riscv/constraints.md
-index 1f285a342ba..e8cf6fcf456 100644
+index 8051c1e330b1..b2b47986f645 100644
 --- a/gcc/config/riscv/constraints.md
 +++ b/gcc/config/riscv/constraints.md
-@@ -145,6 +145,32 @@
+@@ -145,6 +145,32 @@ (define_memory_constraint "A"
    (and (match_code "mem")
         (match_test "GET_CODE(XEXP(op,0)) == REG")))
  
@@ -111,10 +36,10 @@ index 1f285a342ba..e8cf6fcf456 100644
    "A constraint that matches an absolute symbolic address."
    (match_operand 0 "absolute_symbolic_operand"))
 diff --git a/gcc/config/riscv/iterators.md b/gcc/config/riscv/iterators.md
-index 076911e5e7f..dc25dfd2e99 100644
+index 076911e5e7f1..dc25dfd2e99d 100644
 --- a/gcc/config/riscv/iterators.md
 +++ b/gcc/config/riscv/iterators.md
-@@ -207,6 +207,9 @@
+@@ -207,6 +207,9 @@ (define_mode_attr slot12_offset [(SI "-52") (DI "-104")])
  ;; This code iterator allows signed and unsigned widening multiplications
  ;; to use the same template.
  (define_code_iterator any_extend [sign_extend zero_extend])
@@ -125,10 +50,10 @@ index 076911e5e7f..dc25dfd2e99 100644
    (sign_extend "extend") (zero_extend "zero_extend")
  ])
 diff --git a/gcc/config/riscv/sync-rvwmo.md b/gcc/config/riscv/sync-rvwmo.md
-index 3d409388837..f089dd9cc70 100644
+index 3d4093888376..eebdcb1fb271 100644
 --- a/gcc/config/riscv/sync-rvwmo.md
 +++ b/gcc/config/riscv/sync-rvwmo.md
-@@ -47,10 +47,10 @@
+@@ -47,10 +47,10 @@ (define_insn "mem_thread_fence_rvwmo"
  ;; Atomic memory operations.
  
  (define_insn "atomic_load_rvwmo<mode>"
@@ -142,7 +67,7 @@ index 3d409388837..f089dd9cc70 100644
  	 UNSPECV_ATOMIC_LOAD))]
    "!TARGET_ZTSO"
    {
-@@ -74,13 +74,43 @@
+@@ -74,13 +74,43 @@ (define_insn "atomic_load_rvwmo<mode>"
  		      : is_mm_acquire (memmodel_from_int (INTVAL (operands[2]))) ? 8
  		      : 4)"))])
  
@@ -189,7 +114,7 @@ index 3d409388837..f089dd9cc70 100644
  	 UNSPECV_ATOMIC_STORE))]
    "!TARGET_ZTSO"
    {
-@@ -90,7 +120,6 @@
+@@ -90,7 +120,6 @@ (define_insn "atomic_store_rvwmo<mode>"
      if (TARGET_ZALASR
  	&& (model == MEMMODEL_RELEASE || model == MEMMODEL_SEQ_CST))
        return "<store>.rl\t%z1,%0";
@@ -198,10 +123,10 @@ index 3d409388837..f089dd9cc70 100644
        return "fence\trw,w\;"
  	     "<store>\t%z1,%0\;"
 diff --git a/gcc/config/riscv/sync-ztso.md b/gcc/config/riscv/sync-ztso.md
-index 9bdd9e291d9..00bd53dd7b0 100644
+index 9bdd9e291d92..d6e1b8e52d89 100644
 --- a/gcc/config/riscv/sync-ztso.md
 +++ b/gcc/config/riscv/sync-ztso.md
-@@ -43,7 +43,7 @@
+@@ -43,7 +43,7 @@ (define_insn "mem_thread_fence_ztso"
  (define_insn "atomic_load_ztso<mode>"
    [(set (match_operand:ANYI 0 "register_operand" "=r")
  	(unspec_volatile:ANYI
@@ -210,7 +135,7 @@ index 9bdd9e291d9..00bd53dd7b0 100644
  	     (match_operand:SI 2 "const_int_operand")]  ;; model
  	 UNSPECV_ATOMIC_LOAD))]
    "TARGET_ZTSO"
-@@ -64,9 +64,32 @@
+@@ -64,9 +64,32 @@ (define_insn "atomic_load_ztso<mode>"
  	(symbol_ref "(is_mm_seq_cst (memmodel_from_int (INTVAL (operands[2]))) ? 8
  		      : 4)"))])
  
@@ -246,13 +171,14 @@ index 9bdd9e291d9..00bd53dd7b0 100644
  	     (match_operand:SI 2 "const_int_operand")]  ;; model
 diff --git a/gcc/testsuite/gcc.target/riscv/load-zalasr.c b/gcc/testsuite/gcc.target/riscv/load-zalasr.c
 new file mode 100644
-index 00000000000..c6f2e61c00f
+index 000000000000..10638b8a738b
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/load-zalasr.c
 @@ -0,0 +1,201 @@
 +/* { dg-do compile { target rv64 } } */
-+/* { dg-options "-O2 -march=rv64gc_zalasr -mabi=lp64d" } */
++/* { dg-options "-march=rv64gc_zalasr -mabi=lp64d" } */
 +/* { dg-final { check-function-bodies "**" "" } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-Og" "-Oz" } } */
 +
 +
 +typedef struct
@@ -295,7 +221,7 @@ index 00000000000..c6f2e61c00f
 +
 +/*
 +**atomic_load_qi_zero:
-+**	lb	[a-z][0-9]+,1([a-z][0-9]+)
++**	lb	[a-z][0-9]+,1\([a-z][0-9]+\)
 +**	andi	[a-z][0-9]+,[a-z][0-9]+,0xff
 +**	ret
 +*/
@@ -308,7 +234,7 @@ index 00000000000..c6f2e61c00f
 +
 +/*
 +**atomic_load_qi_sign:
-+**	lb	[a-z][0-9]+,1([a-z][0-9]+)
++**	lb	[a-z][0-9]+,1\([a-z][0-9]+\)
 +**	ret
 +*/
 +int atomic_load_qi_sign (const qi_sign_t *a) {
@@ -320,7 +246,7 @@ index 00000000000..c6f2e61c00f
 +
 +/*
 +**atomic_load_hi_zero:
-+**	lh	[a-z][0-9]+,2([a-z][0-9]+)
++**	lh	[a-z][0-9]+,2\([a-z][0-9]+\)
 +**	slli	[a-z][0-9]+,[a-z][0-9]+,48
 +**	srli	[a-z][0-9]+,[a-z][0-9]+,48
 +**	ret
@@ -334,7 +260,7 @@ index 00000000000..c6f2e61c00f
 +
 +/*
 +**atomic_load_hi_sign:
-+**	lh	[a-z][0-9]+,2([a-z][0-9]+)
++**	lh	[a-z][0-9]+,2\([a-z][0-9]+\)
 +**	ret
 +*/
 +int atomic_load_hi_sign (const hi_sign_t *a) {
@@ -346,7 +272,7 @@ index 00000000000..c6f2e61c00f
 +
 +/*
 +**atomic_load_si_sign:
-+**	lw	[a-z][0-9]+,4([a-z][0-9]+)
++**	lw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	ret
 +*/
 +int atomic_load_si_sign (const si_sign_t *a) {
@@ -358,7 +284,7 @@ index 00000000000..c6f2e61c00f
 +
 +/*
 +**atomic_load_si_zero:
-+**	lw	[a-z][0-9]+,4([a-z][0-9]+)
++**	lw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	ret
 +*/
 +unsigned atomic_load_si_zero (const si_zero_t *a) {
@@ -384,7 +310,7 @@ index 00000000000..c6f2e61c00f
 +
 +/*
 +**atomic_load_di:
-+**	ld	[a-z][0-9]+,8([a-z][0-9]+)
++**	ld	[a-z][0-9]+,8\([a-z][0-9]+\)
 +**	ret
 +*/
 +unsigned long long atomic_load_di (const di_t *a) {
@@ -396,7 +322,7 @@ index 00000000000..c6f2e61c00f
 +
 +/*
 +**atomic_load_qi_di:
-+**	lb	[a-z][0-9]+,4([a-z][0-9]+)
++**	lb	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	andi	[a-z][0-9]+,[a-z][0-9]+,0xff
 +**	ret
 +*/
@@ -416,7 +342,7 @@ index 00000000000..c6f2e61c00f
 +
 +/*
 +**atomic_load_relaxed:
-+**	lw	[a-z][0-9]+,4([a-z][0-9]+)
++**	lw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	ret
 +*/
 +unsigned atomic_load_relaxed (const t *a) {
@@ -429,7 +355,7 @@ index 00000000000..c6f2e61c00f
 +/*
 +**atomic_load_acquire:
 +**	addi	[a-z][0-9]+,[a-z][0-9]+,4
-+**	lw.aq	[a-z][0-9]+,0([a-z][0-9]+)
++**	lw.aq	[a-z][0-9]+,0\([a-z][0-9]+\)
 +**	ret
 +*/
 +unsigned atomic_load_acquire (const t *a) {
@@ -438,11 +364,10 @@ index 00000000000..c6f2e61c00f
 +  return r;
 +}
 +
-+
 +/*
-+**atomic_load_seqcs:
++**atomic_load_seqcst:
 +**	fence	rw,rw
-+**	lw	[a-z][0-9]+,4([a-z][0-9]+)
++**	lw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	fence	r,rw
 +**	ret
 +*/
@@ -453,14 +378,14 @@ index 00000000000..c6f2e61c00f
 +}
 diff --git a/gcc/testsuite/gcc.target/riscv/load.c b/gcc/testsuite/gcc.target/riscv/load.c
 new file mode 100644
-index 00000000000..145f6440b9b
+index 000000000000..8a917888203e
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/load.c
 @@ -0,0 +1,197 @@
 +/* { dg-do compile { target rv64 } } */
-+/* { dg-options "-O2 -march=rv64gc -mabi=lp64d" } */
++/* { dg-options "-march=rv64gc -mabi=lp64d" } */
 +/* { dg-final { check-function-bodies "**" "" } } */
-+
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-Os" "-Og" "-Oz" } } */
 +
 +typedef struct
 +{
@@ -502,7 +427,7 @@ index 00000000000..145f6440b9b
 +
 +/*
 +**atomic_load_qi_zero:
-+**	lbu	[a-z][0-9]+,1([a-z][0-9]+)
++**	lbu	[a-z][0-9]+,1\([a-z][0-9]+\)
 +**	ret
 +*/
 +unsigned atomic_load_qi_zero (const qi_zero_t *a) {
@@ -514,7 +439,7 @@ index 00000000000..145f6440b9b
 +
 +/*
 +**atomic_load_qi_sign:
-+**	lb	[a-z][0-9]+,1([a-z][0-9]+)
++**	lb	[a-z][0-9]+,1\([a-z][0-9]+\)
 +**	ret
 +*/
 +int atomic_load_qi_sign (const qi_sign_t *a) {
@@ -526,7 +451,7 @@ index 00000000000..145f6440b9b
 +
 +/*
 +**atomic_load_hi_zero:
-+**	lhu	[a-z][0-9]+,2([a-z][0-9]+)
++**	lhu	[a-z][0-9]+,2\([a-z][0-9]+\)
 +**	ret
 +*/
 +unsigned atomic_load_hi_zero (const hi_zero_t *a) {
@@ -538,7 +463,7 @@ index 00000000000..145f6440b9b
 +
 +/*
 +**atomic_load_hi_sign:
-+**	lh	[a-z][0-9]+,2([a-z][0-9]+)
++**	lh	[a-z][0-9]+,2\([a-z][0-9]+\)
 +**	ret
 +*/
 +int atomic_load_hi_sign (const hi_sign_t *a) {
@@ -550,7 +475,7 @@ index 00000000000..145f6440b9b
 +
 +/*
 +**atomic_load_si_sign:
-+**	lw	[a-z][0-9]+,4([a-z][0-9]+)
++**	lw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	ret
 +*/
 +int atomic_load_si_sign (const si_sign_t *a) {
@@ -562,7 +487,7 @@ index 00000000000..145f6440b9b
 +
 +/*
 +**atomic_load_si_zero:
-+**	lw	[a-z][0-9]+,4([a-z][0-9]+)
++**	lw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	ret
 +*/
 +unsigned atomic_load_si_zero (const si_zero_t *a) {
@@ -588,7 +513,7 @@ index 00000000000..145f6440b9b
 +
 +/*
 +**atomic_load_di:
-+**	ld	[a-z][0-9]+,8([a-z][0-9]+)
++**	ld	[a-z][0-9]+,8\([a-z][0-9]+\)
 +**	ret
 +*/
 +unsigned long long atomic_load_di (const di_t *a) {
@@ -600,7 +525,7 @@ index 00000000000..145f6440b9b
 +
 +/*
 +**atomic_load_qi_di:
-+**	lbu	[a-z][0-9]+,4([a-z][0-9]+)
++**	lbu	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	ret
 +*/
 +unsigned long long atomic_load_qi_di (const qi_di_t *a) {
@@ -619,7 +544,7 @@ index 00000000000..145f6440b9b
 +
 +/*
 +**atomic_load_relaxed:
-+**	lw	[a-z][0-9]+,4([a-z][0-9]+)
++**	lw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	ret
 +*/
 +unsigned atomic_load_relaxed (const t *a) {
@@ -631,7 +556,7 @@ index 00000000000..145f6440b9b
 +
 +/*
 +**atomic_load_acquire:
-+**	lw	[a-z][0-9]+,4([a-z][0-9]+)
++**	lw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	fence	r,rw
 +**	ret
 +*/
@@ -643,9 +568,9 @@ index 00000000000..145f6440b9b
 +
 +
 +/*
-+**atomic_load_seqcs:
++**atomic_load_seqcst:
 +**	fence	rw,rw
-+**	lw	[a-z][0-9]+,4([a-z][0-9]+)
++**	lw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	fence	r,rw
 +**	ret
 +*/
@@ -656,13 +581,14 @@ index 00000000000..145f6440b9b
 +}
 diff --git a/gcc/testsuite/gcc.target/riscv/load32-zalasr.c b/gcc/testsuite/gcc.target/riscv/load32-zalasr.c
 new file mode 100644
-index 00000000000..c45ded9496e
+index 000000000000..9a3756fb66a8
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/load32-zalasr.c
-@@ -0,0 +1,160 @@
+@@ -0,0 +1,161 @@
 +/* { dg-do compile { target rv32 } } */
-+/* { dg-options "-O2 -march=rv32gc_zalasr -mabi=ilp32" } */
++/* { dg-options "-march=rv32gc_zalasr -mabi=ilp32" } */
 +/* { dg-final { check-function-bodies "**" "" } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Os" "-Oz" } } */
 +
 +typedef struct
 +{
@@ -703,7 +629,7 @@ index 00000000000..c45ded9496e
 +
 +/*
 +**atomic_load_qi_zero:
-+**	lb	[a-z][0-9]+,1([a-z][0-9]+)
++**	lb	[a-z][0-9]+,1\([a-z][0-9]+\)
 +**	andi	[a-z][0-9]+,[a-z][0-9]+,0xff
 +**	ret
 +*/
@@ -716,7 +642,7 @@ index 00000000000..c45ded9496e
 +
 +/*
 +**atomic_load_qi_sign:
-+**	lb	[a-z][0-9]+,1([a-z][0-9]+)
++**	lb	[a-z][0-9]+,1\([a-z][0-9]+\)
 +**	ret
 +*/
 +int atomic_load_qi_sign (const qi_sign_t *a) {
@@ -728,7 +654,7 @@ index 00000000000..c45ded9496e
 +
 +/*
 +**atomic_load_hi_zero:
-+**	lh	[a-z][0-9]+,2([a-z][0-9]+)
++**	lh	[a-z][0-9]+,2\([a-z][0-9]+\)
 +**	slli	[a-z][0-9]+,[a-z][0-9]+,16
 +**	srli	[a-z][0-9]+,[a-z][0-9]+,16
 +**	ret
@@ -742,7 +668,7 @@ index 00000000000..c45ded9496e
 +
 +/*
 +**atomic_load_hi_sign:
-+**	lh	[a-z][0-9]+,2([a-z][0-9]+)
++**	lh	[a-z][0-9]+,2\([a-z][0-9]+\)
 +**	ret
 +*/
 +int atomic_load_hi_sign (const hi_sign_t *a) {
@@ -754,7 +680,7 @@ index 00000000000..c45ded9496e
 +
 +/*
 +**atomic_load_si_sign:
-+**	lw	[a-z][0-9]+,4([a-z][0-9]+)
++**	lw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	ret
 +*/
 +int atomic_load_si_sign (const si_sign_t *a) {
@@ -766,7 +692,7 @@ index 00000000000..c45ded9496e
 +
 +/*
 +**atomic_load_si_zero:
-+**	lw	[a-z][0-9]+,4([a-z][0-9]+)
++**	lw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	ret
 +*/
 +unsigned atomic_load_si_zero (const si_zero_t *a) {
@@ -785,7 +711,7 @@ index 00000000000..c45ded9496e
 +
 +/*
 +**atomic_load_relaxed:
-+**	lw	[a-z][0-9]+,4([a-z][0-9]+)
++**	lw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	ret
 +*/
 +unsigned atomic_load_relaxed (const t *a) {
@@ -798,7 +724,7 @@ index 00000000000..c45ded9496e
 +/*
 +**atomic_load_acquire:
 +**	addi	[a-z][0-9]+,[a-z][0-9]+,4
-+**	lw.aq	[a-z][0-9]+,0([a-z][0-9]+)
++**	lw.aq	[a-z][0-9]+,0\([a-z][0-9]+\)
 +**	ret
 +*/
 +unsigned atomic_load_acquire (const t *a) {
@@ -811,7 +737,7 @@ index 00000000000..c45ded9496e
 +/*
 +**atomic_load_seqcst:
 +**	fence	rw,rw
-+**	lw	[a-z][0-9]+,4([a-z][0-9]+)
++**	lw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	fence	r,rw
 +**	ret
 +*/
@@ -822,14 +748,14 @@ index 00000000000..c45ded9496e
 +}
 diff --git a/gcc/testsuite/gcc.target/riscv/load32.c b/gcc/testsuite/gcc.target/riscv/load32.c
 new file mode 100644
-index 00000000000..057d22aeb03
+index 000000000000..a0729ffd3cd2
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/load32.c
 @@ -0,0 +1,157 @@
 +/* { dg-do compile { target rv32 } } */
-+/* { dg-options "-O2 -march=rv32gc -mabi=ilp32" } */
++/* { dg-options "-march=rv32gc -mabi=ilp32" } */
 +/* { dg-final { check-function-bodies "**" "" } } */
-+
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Os" "-Og" "-Oz" } } */
 +typedef struct
 +{
 +  char pad;
@@ -869,7 +795,7 @@ index 00000000000..057d22aeb03
 +
 +/*
 +**atomic_load_qi_zero:
-+**	lbu	[a-z][0-9]+,1([a-z][0-9]+)
++**	lbu	[a-z][0-9]+,1\([a-z][0-9]+\)
 +**	ret
 +*/
 +unsigned atomic_load_qi_zero (const qi_zero_t *a) {
@@ -881,7 +807,7 @@ index 00000000000..057d22aeb03
 +
 +/*
 +**atomic_load_qi_sign:
-+**	lb	[a-z][0-9]+,1([a-z][0-9]+)
++**	lb	[a-z][0-9]+,1\([a-z][0-9]+\)
 +**	ret
 +*/
 +int atomic_load_qi_sign (const qi_sign_t *a) {
@@ -893,7 +819,7 @@ index 00000000000..057d22aeb03
 +
 +/*
 +**atomic_load_hi_zero:
-+**	lhu	[a-z][0-9]+,2([a-z][0-9]+)
++**	lhu	[a-z][0-9]+,2\([a-z][0-9]+\)
 +**	ret
 +*/
 +unsigned atomic_load_hi_zero (const hi_zero_t *a) {
@@ -905,7 +831,7 @@ index 00000000000..057d22aeb03
 +
 +/*
 +**atomic_load_hi_sign:
-+**	lh	[a-z][0-9]+,2([a-z][0-9]+)
++**	lh	[a-z][0-9]+,2\([a-z][0-9]+\)
 +**	ret
 +*/
 +int atomic_load_hi_sign (const hi_sign_t *a) {
@@ -917,7 +843,7 @@ index 00000000000..057d22aeb03
 +
 +/*
 +**atomic_load_si_sign:
-+**	lw	[a-z][0-9]+,4([a-z][0-9]+)
++**	lw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	ret
 +*/
 +int atomic_load_si_sign (const si_sign_t *a) {
@@ -929,7 +855,7 @@ index 00000000000..057d22aeb03
 +
 +/*
 +**atomic_load_si_zero:
-+**	lw	[a-z][0-9]+,4([a-z][0-9]+)
++**	lw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	ret
 +*/
 +unsigned atomic_load_si_zero (const si_zero_t *a) {
@@ -948,7 +874,7 @@ index 00000000000..057d22aeb03
 +
 +/*
 +**atomic_load_relaxed:
-+**	lw	[a-z][0-9]+,4([a-z][0-9]+)
++**	lw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	ret
 +*/
 +unsigned atomic_load_relaxed (const t *a) {
@@ -960,7 +886,7 @@ index 00000000000..057d22aeb03
 +
 +/*
 +**atomic_load_acquire:
-+**	lw	[a-z][0-9]+,4([a-z][0-9]+)
++**	lw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	fence	r,rw
 +**	ret
 +*/
@@ -974,7 +900,7 @@ index 00000000000..057d22aeb03
 +/*
 +**atomic_load_seqcst:
 +**	fence	rw,rw
-+**	lw	[a-z][0-9]+,4([a-z][0-9]+)
++**	lw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	fence	r,rw
 +**	ret
 +*/
@@ -985,13 +911,14 @@ index 00000000000..057d22aeb03
 +}
 diff --git a/gcc/testsuite/gcc.target/riscv/store-zalasr.c b/gcc/testsuite/gcc.target/riscv/store-zalasr.c
 new file mode 100644
-index 00000000000..fdc084ef0fe
+index 000000000000..d2f5f0103750
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/store-zalasr.c
-@@ -0,0 +1,121 @@
+@@ -0,0 +1,122 @@
 +/* { dg-do compile { target rv64 } } */
-+/* { dg-options "-O2 -march=rv64gc_zalasr -mabi=lp64d" } */
++/* { dg-options "-march=rv64gc_zalasr -mabi=lp64d" } */
 +/* { dg-final { check-function-bodies "**" "" } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Os" "-Oz" } } */
 +
 +typedef struct
 +{
@@ -1014,7 +941,7 @@ index 00000000000..fdc084ef0fe
 +
 +/*
 +**atomic_store_qi:
-+**	sb	[a-z][0-9]+,1([a-z][0-9]+)
++**	sb	[a-z][0-9]+,1\([a-z][0-9]+\)
 +**	ret
 +*/
 +void
@@ -1026,7 +953,7 @@ index 00000000000..fdc084ef0fe
 +
 +/*
 +**atomic_store_hi:
-+**	sh	[a-z][0-9]+,2([a-z][0-9]+)
++**	sh	[a-z][0-9]+,2\([a-z][0-9]+\)
 +**	ret
 +*/
 +void
@@ -1038,7 +965,7 @@ index 00000000000..fdc084ef0fe
 +
 +/*
 +**atomic_store_si:
-+**	sw	[a-z][0-9]+,4([a-z][0-9]+)
++**	sw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	ret
 +*/
 +void
@@ -1057,7 +984,7 @@ index 00000000000..fdc084ef0fe
 +
 +/*
 +**atomic_store_di:
-+**	sd	[a-z][0-9]+,8([a-z][0-9]+)
++**	sd	[a-z][0-9]+,8\([a-z][0-9]+\)
 +**	ret
 +*/
 +void
@@ -1076,7 +1003,7 @@ index 00000000000..fdc084ef0fe
 +
 +/*
 +**atomic_store_relaxed:
-+**	sw	[a-z][0-9]+,4([a-z][0-9]+)
++**	sw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	ret
 +*/
 +void
@@ -1089,7 +1016,7 @@ index 00000000000..fdc084ef0fe
 +/*
 +**atomic_store_release:
 +**	addi	[a-z][0-9]+,[a-z][0-9]+,4
-+**	sw.rl	[a-z][0-9]+,0([a-z][0-9]+)
++**	sw.rl	[a-z][0-9]+,0\([a-z][0-9]+\)
 +**	ret
 +*/
 +void
@@ -1102,7 +1029,7 @@ index 00000000000..fdc084ef0fe
 +/*
 +**atomic_store_seqcst:
 +**	addi	[a-z][0-9]+,[a-z][0-9]+,4
-+**	sw.rl	[a-z][0-9]+,0([a-z][0-9]+)
++**	sw.rl	[a-z][0-9]+,0\([a-z][0-9]+\)
 +**	ret
 +*/
 +void
@@ -1112,14 +1039,14 @@ index 00000000000..fdc084ef0fe
 +}
 diff --git a/gcc/testsuite/gcc.target/riscv/store.c b/gcc/testsuite/gcc.target/riscv/store.c
 new file mode 100644
-index 00000000000..ecc4cb5d3f6
+index 000000000000..d71756e92682
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/store.c
 @@ -0,0 +1,122 @@
 +/* { dg-do compile { target rv64 } } */
-+/* { dg-options "-O2 -march=rv64gc -mabi=lp64d" } */
++/* { dg-options "-march=rv64gc -mabi=lp64d" } */
 +/* { dg-final { check-function-bodies "**" "" } } */
-+
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Os" "-Oz" } } */
 +typedef struct
 +{
 +  char pad;
@@ -1141,7 +1068,7 @@ index 00000000000..ecc4cb5d3f6
 +
 +/*
 +**atomic_store_qi:
-+**	sb	[a-z][0-9]+,1([a-z][0-9]+)
++**	sb	[a-z][0-9]+,1\([a-z][0-9]+\)
 +**	ret
 +*/
 +void
@@ -1153,7 +1080,7 @@ index 00000000000..ecc4cb5d3f6
 +
 +/*
 +**atomic_store_hi:
-+**	sh	[a-z][0-9]+,2([a-z][0-9]+)
++**	sh	[a-z][0-9]+,2\([a-z][0-9]+\)
 +**	ret
 +*/
 +void
@@ -1165,7 +1092,7 @@ index 00000000000..ecc4cb5d3f6
 +
 +/*
 +**atomic_store_si:
-+**	sw	[a-z][0-9]+,4([a-z][0-9]+)
++**	sw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	ret
 +*/
 +void
@@ -1184,7 +1111,7 @@ index 00000000000..ecc4cb5d3f6
 +
 +/*
 +**atomic_store_di:
-+**	sd	[a-z][0-9]+,8([a-z][0-9]+)
++**	sd	[a-z][0-9]+,8\([a-z][0-9]+\)
 +**	ret
 +*/
 +void
@@ -1203,7 +1130,7 @@ index 00000000000..ecc4cb5d3f6
 +
 +/*
 +**atomic_store_relaxed:
-+**	sw	[a-z][0-9]+,4([a-z][0-9]+)
++**	sw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	ret
 +*/
 +void
@@ -1216,7 +1143,7 @@ index 00000000000..ecc4cb5d3f6
 +/*
 +**atomic_store_release:
 +**	fence	rw,w
-+**	sw	[a-z][0-9]+,4([a-z][0-9]+)
++**	sw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	ret
 +*/
 +void
@@ -1229,7 +1156,7 @@ index 00000000000..ecc4cb5d3f6
 +/*
 +**atomic_store_seqcst:
 +**	fence	rw,w
-+**	sw	[a-z][0-9]+,4([a-z][0-9]+)
++**	sw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	fence	rw,rw
 +**	ret
 +*/
@@ -1240,13 +1167,14 @@ index 00000000000..ecc4cb5d3f6
 +}
 diff --git a/gcc/testsuite/gcc.target/riscv/store32-zalasr.c b/gcc/testsuite/gcc.target/riscv/store32-zalasr.c
 new file mode 100644
-index 00000000000..cfef89a7d45
+index 000000000000..d4e37e7169f3
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/store32-zalasr.c
-@@ -0,0 +1,104 @@
+@@ -0,0 +1,105 @@
 +/* { dg-do compile { target rv32 } } */
-+/* { dg-options "-O2 -march=rv32gc_zalasr -mabi=ilp32" } */
++/* { dg-options "-march=rv32gc_zalasr -mabi=ilp32" } */
 +/* { dg-final { check-function-bodies "**" "" } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Os" "-Oz" } } */
 +
 +typedef struct
 +{
@@ -1269,7 +1197,7 @@ index 00000000000..cfef89a7d45
 +
 +/*
 +**atomic_store_qi:
-+**	sb	[a-z][0-9]+,1([a-z][0-9]+)
++**	sb	[a-z][0-9]+,1\([a-z][0-9]+\)
 +**	ret
 +*/
 +void
@@ -1281,7 +1209,7 @@ index 00000000000..cfef89a7d45
 +
 +/*
 +**atomic_store_hi:
-+**	sh	[a-z][0-9]+,2([a-z][0-9]+)
++**	sh	[a-z][0-9]+,2\([a-z][0-9]+\)
 +**	ret
 +*/
 +void
@@ -1293,7 +1221,7 @@ index 00000000000..cfef89a7d45
 +
 +/*
 +**atomic_store_si:
-+**	sw	[a-z][0-9]+,4([a-z][0-9]+)
++**	sw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	ret
 +*/
 +void
@@ -1314,7 +1242,7 @@ index 00000000000..cfef89a7d45
 +
 +/*
 +**atomic_store_relaxed:
-+**	sw	[a-z][0-9]+,4([a-z][0-9]+)
++**	sw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	ret
 +*/
 +void
@@ -1327,7 +1255,7 @@ index 00000000000..cfef89a7d45
 +/*
 +**atomic_store_release:
 +**	addi	[a-z][0-9]+,[a-z][0-9]+,4
-+**	sw.rl	[a-z][0-9]+,0([a-z][0-9]+)
++**	sw.rl	[a-z][0-9]+,0\([a-z][0-9]+\)
 +**	ret
 +*/
 +void
@@ -1340,7 +1268,7 @@ index 00000000000..cfef89a7d45
 +/*
 +**atomic_store_seqcst:
 +**	addi	[a-z][0-9]+,[a-z][0-9]+,4
-+**	sw.rl	[a-z][0-9]+,0([a-z][0-9]+)
++**	sw.rl	[a-z][0-9]+,0\([a-z][0-9]+\)
 +**	ret
 +*/
 +void
@@ -1350,13 +1278,14 @@ index 00000000000..cfef89a7d45
 +}
 diff --git a/gcc/testsuite/gcc.target/riscv/store32.c b/gcc/testsuite/gcc.target/riscv/store32.c
 new file mode 100644
-index 00000000000..b5ffc1a1a5b
+index 000000000000..7818852f9094
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/store32.c
-@@ -0,0 +1,105 @@
+@@ -0,0 +1,106 @@
 +/* { dg-do compile { target rv32 } } */
-+/* { dg-options "-O2 -march=rv32gc -mabi=ilp32" } */
++/* { dg-options "-march=rv32gc -mabi=ilp32" } */
 +/* { dg-final { check-function-bodies "**" "" } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Os" "-Oz" } } */
 +
 +typedef struct
 +{
@@ -1379,7 +1308,7 @@ index 00000000000..b5ffc1a1a5b
 +
 +/*
 +**atomic_store_qi:
-+**	sb	[a-z][0-9]+,1([a-z][0-9]+)
++**	sb	[a-z][0-9]+,1\([a-z][0-9]+\)
 +**	ret
 +*/
 +void
@@ -1391,7 +1320,7 @@ index 00000000000..b5ffc1a1a5b
 +
 +/*
 +**atomic_store_hi:
-+**	sh	[a-z][0-9]+,2([a-z][0-9]+)
++**	sh	[a-z][0-9]+,2\([a-z][0-9]+\)
 +**	ret
 +*/
 +void
@@ -1403,7 +1332,7 @@ index 00000000000..b5ffc1a1a5b
 +
 +/*
 +**atomic_store_si:
-+**	sw	[a-z][0-9]+,4([a-z][0-9]+)
++**	sw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	ret
 +*/
 +void
@@ -1424,7 +1353,7 @@ index 00000000000..b5ffc1a1a5b
 +
 +/*
 +**atomic_store_relaxed:
-+**	sw	[a-z][0-9]+,4([a-z][0-9]+)
++**	sw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	ret
 +*/
 +void
@@ -1437,7 +1366,7 @@ index 00000000000..b5ffc1a1a5b
 +/*
 +**atomic_store_release:
 +**	fence	rw,w
-+**	sw	[a-z][0-9]+,4([a-z][0-9]+)
++**	sw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	ret
 +*/
 +void
@@ -1450,7 +1379,7 @@ index 00000000000..b5ffc1a1a5b
 +/*
 +**atomic_store_seqcst:
 +**	fence	rw,w
-+**	sw	[a-z][0-9]+,4([a-z][0-9]+)
++**	sw	[a-z][0-9]+,4\([a-z][0-9]+\)
 +**	fence	rw,rw
 +**	ret
 +*/
