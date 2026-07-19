@@ -152,7 +152,7 @@ index 3d409388837..f089dd9cc70 100644
 +	    (unspec_volatile:SUBX
 +		[(match_operand:SUBX 1 "memory_operand" "m,A")
 +		(match_operand:SUBX 2 "const_int_operand" "B2,B1")]
-+	    UNSPEC_ATOMIC_LOAD)))]
++	    UNSPECV_ATOMIC_LOAD)))]
 +  "!TARGET_ZTSO"
 +  {
 +    enum memmodel model = (enum memmodel) INTVAL (operands[2]);
@@ -220,7 +220,7 @@ index 9bdd9e291d9..00bd53dd7b0 100644
 +	    (unspec_volatile:SUBX
 +		[(match_operand:SUBX 1 "memory_operand" "m")
 +		(match_operand:SUBX 2 "const_int_operand")]
-+	    UNSPEC_ATOMIC_LOAD)))]
++	    UNSPECV_ATOMIC_LOAD)))]
 +  "TARGET_ZTSO"
 +  {
 +    enum memmodel model = (enum memmodel) INTVAL (operands[2]);
