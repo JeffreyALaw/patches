@@ -1,5 +1,5 @@
 diff --git a/gcc/config/riscv/constraints.md b/gcc/config/riscv/constraints.md
-index 8051c1e330b1..b2b47986f645 100644
+index 8051c1e330b1..d9fc9704ef57 100644
 --- a/gcc/config/riscv/constraints.md
 +++ b/gcc/config/riscv/constraints.md
 @@ -145,6 +145,32 @@ (define_memory_constraint "A"
@@ -10,7 +10,7 @@ index 8051c1e330b1..b2b47986f645 100644
 +  "Memory models that can match with A for load."
 +  (and (match_code "const_int")
 +       (and (match_test "ival == MEMMODEL_ACQUIRE")
-+            (match_test "TARGET_ZALASR"))))
++	    (match_test "TARGET_ZALASR"))))
 +
 +(define_constraint "B2"
 +  "Memory models that can match with m for load."
@@ -22,7 +22,7 @@ index 8051c1e330b1..b2b47986f645 100644
 +  "Memory models that can match with A for store."
 +  (and (match_code "const_int")
 +       (and (ior (match_test "ival == MEMMODEL_RELEASE")
-+                (match_test "ival == MEMMODEL_SEQ_CST"))
++		 (match_test "ival == MEMMODEL_SEQ_CST"))
 +            (match_test "TARGET_ZALASR"))))
 +
 +(define_constraint "B4"
@@ -50,7 +50,7 @@ index 076911e5e7f1..dc25dfd2e99d 100644
    (sign_extend "extend") (zero_extend "zero_extend")
  ])
 diff --git a/gcc/config/riscv/sync-rvwmo.md b/gcc/config/riscv/sync-rvwmo.md
-index 3d4093888376..eebdcb1fb271 100644
+index 3d4093888376..5519f2ac015d 100644
 --- a/gcc/config/riscv/sync-rvwmo.md
 +++ b/gcc/config/riscv/sync-rvwmo.md
 @@ -47,10 +47,10 @@ (define_insn "mem_thread_fence_rvwmo"
@@ -85,21 +85,21 @@ index 3d4093888376..eebdcb1fb271 100644
 +
 +    if (model == MEMMODEL_SEQ_CST)
 +      return "fence\trw,rw\;"
-+             "<SUBX:load><u>\t%0,%1\;"
-+             "fence\tr,rw";
++	     "<SUBX:load><u>\t%0,%1\;"
++	     "fence\tr,rw";
 +    if (TARGET_ZALASR && model == MEMMODEL_ACQUIRE)
 +      return "<SUBX:load><u>.aq\t%0,%1";
 +    if (model == MEMMODEL_ACQUIRE)
 +      return "<SUBX:load><u>\t%0,%1\;"
-+             "fence\tr,rw";
++	     "fence\tr,rw";
 +    else
 +      return "<SUBX:load><u>\t%0,%1";
 +  }
 +  [(set_attr "type" "multi")
 +   (set (attr "length")
-+        (symbol_ref "(is_mm_seq_cst (memmodel_from_int (INTVAL (operands[2]))) ? 12
-+                      : is_mm_acquire (memmodel_from_int (INTVAL (operands[2]))) ? 8
-+                      : 4)"))])
++	(symbol_ref "(is_mm_seq_cst (memmodel_from_int (INTVAL (operands[2]))) ? 12
++		      : is_mm_acquire (memmodel_from_int (INTVAL (operands[2]))) ? 8
++		      : 4)"))])
 +
  ;; Implement atomic stores with conservative fences.
  ;; This allows us to be compatible with the ISA manual Table A.6 and Table A.7.
@@ -123,7 +123,7 @@ index 3d4093888376..eebdcb1fb271 100644
        return "fence\trw,w\;"
  	     "<store>\t%z1,%0\;"
 diff --git a/gcc/config/riscv/sync-ztso.md b/gcc/config/riscv/sync-ztso.md
-index 9bdd9e291d92..d6e1b8e52d89 100644
+index 9bdd9e291d92..154ff1a91af4 100644
 --- a/gcc/config/riscv/sync-ztso.md
 +++ b/gcc/config/riscv/sync-ztso.md
 @@ -43,7 +43,7 @@ (define_insn "mem_thread_fence_ztso"
@@ -135,7 +135,7 @@ index 9bdd9e291d92..d6e1b8e52d89 100644
  	     (match_operand:SI 2 "const_int_operand")]  ;; model
  	 UNSPECV_ATOMIC_LOAD))]
    "TARGET_ZTSO"
-@@ -64,9 +64,32 @@ (define_insn "atomic_load_ztso<mode>"
+@@ -64,12 +64,35 @@ (define_insn "atomic_load_ztso<mode>"
  	(symbol_ref "(is_mm_seq_cst (memmodel_from_int (INTVAL (operands[2]))) ? 8
  		      : 4)"))])
  
@@ -165,10 +165,15 @@ index 9bdd9e291d92..d6e1b8e52d89 100644
  
  (define_insn "atomic_store_ztso<mode>"
 -  [(set (match_operand:ANYI 0 "memory_operand" "=A")
-+  [(set (match_operand:ANYI 0 "memory_operand" "=m")
++  [(set (match_operand:ANYI 0 "memory_operand" "=m,A")
  	(unspec_volatile:ANYI
- 	    [(match_operand:ANYI 1 "reg_or_0_operand" "rJ")
- 	     (match_operand:SI 2 "const_int_operand")]  ;; model
+-	    [(match_operand:ANYI 1 "reg_or_0_operand" "rJ")
+-	     (match_operand:SI 2 "const_int_operand")]  ;; model
++	    [(match_operand:ANYI 1 "reg_or_0_operand" "rJ,rJ")
++	     (match_operand:SI 2 "const_int_operand" "B4,B3")]  ;; model
+ 	 UNSPECV_ATOMIC_STORE))]
+   "TARGET_ZTSO"
+   {
 diff --git a/gcc/testsuite/gcc.target/riscv/load-zalasr.c b/gcc/testsuite/gcc.target/riscv/load-zalasr.c
 new file mode 100644
 index 000000000000..10638b8a738b
