@@ -1,0 +1,23 @@
+diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
+index 9e4b0a429b07..670b5231bf7f 100644
+--- a/gcc/ext-dce.cc
++++ b/gcc/ext-dce.cc
+@@ -1142,7 +1142,7 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj,
+ 		{
+ 		  rtx inner = XEXP (src, 0);
+ 		  unsigned HOST_WIDE_INT src_mask
+-		    = GET_MODE_MASK (GET_MODE_INNER (GET_MODE (inner)));
++		    = GET_MODE_MASK (GET_MODE (inner));
+ 
+ 		  /* DST_MASK could be zero if we had something in the SET
+ 		     that we couldn't handle.  */
+@@ -1335,8 +1335,7 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj,
+ 			 propagate destination liveness through, then just
+ 			 set the mask to the mode's mask.  */
+ 		      if (!safe_for_live_propagation (code))
+-			tmp_mask
+-			  = GET_MODE_MASK (GET_MODE_INNER (GET_MODE (y)));
++			tmp_mask = GET_MODE_MASK (GET_MODE (y));
+ 
+ 		      if (tmp_mask & 0xff)
+ 			bitmap_set_bit (livenow, rn);
