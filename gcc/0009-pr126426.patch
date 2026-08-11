@@ -23,7 +23,7 @@ index 9e4b0a429b07..d5e2f9ca5412 100644
 +    return GET_MODE_MASK (GET_MODE (x));
 +    
 +
-+  enum machine_mode mode = GET_MODE (GET_MODE (x));
++  enum machine_mode mode = GET_MODE (x);
    unsigned HOST_WIDE_INT mmask = GET_MODE_MASK (mode);
  
    /* While we don't try to optimize operations on types larger
