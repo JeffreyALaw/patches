@@ -1,8 +1,45 @@
 diff --git a/gcc/ext-dce.cc b/gcc/ext-dce.cc
-index 9e4b0a429b07..670b5231bf7f 100644
+index 9e4b0a429b07..d5e2f9ca5412 100644
 --- a/gcc/ext-dce.cc
 +++ b/gcc/ext-dce.cc
-@@ -1142,7 +1142,7 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj,
+@@ -920,7 +920,23 @@ carry_backpropagate (unsigned HOST_WIDE_INT mask, enum rtx_code code, rtx x)
+   if (mask == 0)
+     return 0;
+ 
+-  enum machine_mode mode = GET_MODE_INNER (GET_MODE (x));
++  /* Consider a vector operation, the bits live are the element bits live
++     broadcasted across the vector.  So there can be holes (consider a
++     logical shift).
++
++     Vector modes aren't likely to represent cases we can optimize with
++     any regularity.  It seems sensible to just punt that case in a
++     conservatively correct way.
++
++     The conservatively corect choice here would be to return the mode
++     mask for the outer mode.  We're already doing that for modes larger
++     than HOST_BITS_PER_WIDE_INT, so it should be safe for larger vectors
++     as well as something like V2HI.  */
++  if (VECTOR_MODE_P (GET_MODE (x)) || COMPLEX_MODE_P (GET_MODE (x)))
++    return GET_MODE_MASK (GET_MODE (x));
++    
++
++  enum machine_mode mode = GET_MODE (GET_MODE (x));
+   unsigned HOST_WIDE_INT mmask = GET_MODE_MASK (mode);
+ 
+   /* While we don't try to optimize operations on types larger
+@@ -994,6 +1010,11 @@ carry_backpropagate (unsigned HOST_WIDE_INT mask, enum rtx_code code, rtx x)
+ 	  || !GET_MODE_BITSIZE (GET_MODE (XEXP (x, 0))).is_constant ())
+ 	return -1;
+ 
++      /* See note about vector modes near the start of this function.  */
++      if (VECTOR_MODE_P (GET_MODE (XEXP (x, 0)))
++	  || COMPLEX_MODE_P (GET_MODE (XEXP (x, 0))))
++	return GET_MODE_MASK (GET_MODE (XEXP (x, 0)));
++
+       /* We want the mode of the inner object.  We need to ensure its
+ 	 sign bit is on in MASK.  */
+       mode = GET_MODE_INNER (GET_MODE (XEXP (x, 0)));
+@@ -1142,7 +1163,7 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj,
  		{
  		  rtx inner = XEXP (src, 0);
  		  unsigned HOST_WIDE_INT src_mask
@@ -11,7 +48,7 @@ index 9e4b0a429b07..670b5231bf7f 100644
  
  		  /* DST_MASK could be zero if we had something in the SET
  		     that we couldn't handle.  */
-@@ -1335,8 +1335,7 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj,
+@@ -1335,8 +1356,7 @@ ext_dce_process_uses (rtx_insn *insn, rtx obj,
  			 propagate destination liveness through, then just
  			 set the mask to the mode's mask.  */
  		      if (!safe_for_live_propagation (code))
