@@ -65,8 +65,8 @@ index 00000000000..e7819d61d62
 +++ b/gcc/testsuite/gcc.target/riscv/pr126426.c
 @@ -0,0 +1,43 @@
 +/* { dg-do run } */
-+/* { dg-additional-options "-march=rv64gcb" { target rv64 } } */
-+/* { dg-additional-options "-march=rv32gcb" { target rv32 } } */
++/* { dg-additional-options "--std=gnu99 -march=rv64gcb" { target rv64 } } */
++/* { dg-additional-options "--std=gnu99 -march=rv32gcb" { target rv32 } } */
 +
 +typedef union {
 +  short mv[2];
