@@ -1,0 +1,1557 @@
+diff --git a/config/picflag.m4 b/config/picflag.m4
+index 3f3ac744c96..d9befbfa238 100644
+--- a/config/picflag.m4
++++ b/config/picflag.m4
+@@ -66,6 +66,10 @@ case "${$2}" in
+     sh*-*-netbsd*)
+ 	$1=-fpic
+ 	;;
++    rx-*-linux*)
++	$1=-mfdpic
++	;;
++
+     # Default to -fPIC unless specified otherwise.
+     *)
+ 	$1=-fPIC
+diff --git a/gcc/config/rx/linux.h b/gcc/config/rx/linux.h
+index 9ee484af886..2a5eb262d07 100644
+--- a/gcc/config/rx/linux.h
++++ b/gcc/config/rx/linux.h
+@@ -45,6 +45,11 @@
+       if (ALLOW_RX_FPU_INSNS)			\
+ 	builtin_define ("__RX_FPU_INSNS__");	\
+ 						\
++      if (TARGET_FDPIC)				\
++	{					\
++	  builtin_define ("__FDPIC__");		\
++	  builtin_define ("__RX_FDPIC__");	\
++	}					\
+     }                                           \
+   while (0)
+ 
+@@ -52,6 +57,12 @@
+ #define CC1_SPEC "\
+   %{mcpu=rx200:%{fpu:%erx200 cpu does not have FPU hardware}}"
+ 
++#undef  STARTFILE_SPEC
++#define STARTFILE_SPEC "%{mfdpic:crtreloc.o%s} %{!shared: crt1.o%s} crti.o%s "
++
++#undef  ENDFILE_SPEC
++#define ENDFILE_SPEC "crtn.o%s"
++
+ #undef  ASM_SPEC
+ #define ASM_SPEC "\
+ %{mbig-endian-data:-mbig-endian-data} \
+@@ -59,8 +70,25 @@
+ %{!m64bit-doubles:-m32bit-doubles} \
+ %{msmall-data-limit*:-msmall-data-limit} \
+ %{mrelax:-relax} \
++%{mfdpic:--fdpic} \
++"
++
++#undef  LIB_SPEC
++#define LIB_SPEC "					\
++--start-group						\
++-lc							\
++--end-group					   	\
+ "
+ 
++#undef LINK_SPEC
++#define LINK_SPEC \
++  "%{!shared: %{!static: \
++   %{rdynamic:-export-dynamic} \
++   %{!dynamic-linker:-dynamic-linker " UCLIBC_DYNAMIC_LINKER "}} \
++   %{static}} \
++   %{mfdpic:%{!shared:-pie}} \
++   %{shared:-shared}"
++
+ #undef DATA_SECTION_ASM_OP
+ #define DATA_SECTION_ASM_OP	      			\
+    "\t.section .data,\"aw\",@progbits\n\t.p2align 2"
+@@ -226,6 +254,36 @@
+   while (0)
+ 
+ #undef  PREFERRED_DEBUGGING_TYPE
++#define PREFERRED_DEBUGGING_TYPE DWARF2_DEBUG
+ 
+ #undef TARGET_AS100_SYNTAX
+ #define TARGET_AS100_SYNTAX 0
++
++#define PIC_REG 13
++#define GOT_SYMBOL_NAME "*_GLOBAL_OFFSET_TABLE_"
++
++/* Register to hold the addressing base for position independent
++   code access to data items.  */
++#define PIC_OFFSET_TABLE_REGNUM	(flag_pic ? PIC_REG : INVALID_REGNUM)
++
++/* For FDPIC, the FDPIC register is call-clobbered (otherwise PLT
++   entries would need to handle saving and restoring it).  */
++#define PIC_OFFSET_TABLE_REG_CALL_CLOBBERED TARGET_FDPIC
++
++#define TARGET_ASM_FILE_END file_end_indicate_exec_stack
++
++#define NO_FUNCTION_CSE (flag_pic)
++
++/* Position Independent Code.  */
++
++/* We can't directly access anything that contains a symbol,
++   nor can we indirect via the constant pool.  */
++#define LEGITIMATE_PIC_OPERAND_P(X)		\
++  rx_legitimate_pic_operand_p (X)
++
++#define SYMBOLIC_CONST_P(X)	\
++((GET_CODE (X) == SYMBOL_REF || GET_CODE (X) == LABEL_REF)	\
++  && nonpic_symbol_mentioned_p (X))
++
++#define EPILOGUE_USES(REGNO) \
++  (TARGET_FDPIC ? ((REGNO) == PIC_OFFSET_TABLE_REGNUM) : 0)
+diff --git a/gcc/config/rx/predicates.md b/gcc/config/rx/predicates.md
+index aa926be31ac..a02c0400f13 100644
+--- a/gcc/config/rx/predicates.md
++++ b/gcc/config/rx/predicates.md
+@@ -307,3 +307,15 @@ (define_predicate "rx_fp_comparison_operator"
+ (define_predicate "rshift_operator"
+   (match_code "ashiftrt,lshiftrt")
+ )
++
++(define_predicate "rx_pcrel_label_operand"
++  (match_code "const")
++{
++  rtx unspec = XEXP (op, 0);
++
++  return (GET_CODE (unspec) == UNSPEC) && (XINT (unspec, 1) == UNSPEC_PCREL);
++})
++
++(define_predicate "rx_plt_call_operand"
++  (match_code "const")
++)
+diff --git a/gcc/config/rx/rx-protos.h b/gcc/config/rx/rx-protos.h
+index 5a36ef26948..1a8926fb0db 100644
+--- a/gcc/config/rx/rx-protos.h
++++ b/gcc/config/rx/rx-protos.h
+@@ -58,7 +58,7 @@ extern bool		rx_is_legitimate_constant (machine_mode, rtx);
+ extern bool		rx_is_restricted_memory_address (rtx,
+ 							 machine_mode);
+ extern bool		rx_match_ccmode (rtx, machine_mode);
+-extern rtx		rx_maybe_pidify_operand (rtx, int);
++extern rtx		rx_maybe_legitimize_pi_operand (rtx, int);
+ extern void		rx_notice_update_cc (rtx, rtx);
+ extern void		rx_split_cbranch (machine_mode, enum rtx_code,
+ 					  rtx, rtx, rtx);
+@@ -173,4 +173,10 @@ rx_find_use_of_reg (rtx reg, rtx_insn* insn, F stepfunc)
+ 
+ #endif
+ 
++bool nonpic_symbol_mentioned_p (rtx x);
++bool rx_legitimate_pic_operand_p (rtx x);
++rtx rx_get_fdpic_reg_initial_val (void);
++bool rx_is_unspec_offset (rtx x);
++bool rx_expand_pcrel (rtx operands[], int sidx);
++
+ #endif /* GCC_RX_PROTOS_H */
+diff --git a/gcc/config/rx/rx.cc b/gcc/config/rx/rx.cc
+index 038f93431f4..23116fdb918 100644
+--- a/gcc/config/rx/rx.cc
++++ b/gcc/config/rx/rx.cc
+@@ -143,11 +143,100 @@ rx_pid_data_operand (rtx op)
+   return PID_NOT_PID;
+ }
+ 
++/* Determine whether x is a local, read-only variable.  */
++static bool
++rx_is_local_readonly_data_p (rtx x)
++{
++  return (SYMBOL_REF_P (x)
++	  && SYMBOL_REF_DECL (x)
++	  && TREE_READONLY (SYMBOL_REF_DECL (x))
++	  && !SYMBOL_REF_EXTERNAL_P (x)
++	  && !SYMBOL_REF_FUNCTION_P (x));
++}
++
++/* Convert a non-PIC address in `orig' to a PIC address using @GOT or
++   @GOTOFF in `reg'.  */
++static rtx
++legitimize_pic_address (rtx x, rtx orig)
++{
++  rtx reg;
++  rtx inner = x;
++
++  if (GET_CODE (x) == CONST)
++    inner = XEXP (x, 0);
++
++  if ((GET_CODE (inner) == UNSPEC && XINT (inner, 1) == UNSPEC_PCREL)
++      && (!SYMBOL_REF_P (x) && !LABEL_REF_P (x) && GET_CODE (x) != CONST))
++    return x;
++
++  reg = gen_reg_rtx (Pmode);
++
++  if (flag_plt && (GET_CODE (orig) == LABEL_REF
++		   || (GET_CODE (orig) == SYMBOL_REF
++		       && !SYMBOL_REF_LOCAL_P (orig))))
++    {
++      if (TARGET_FDPIC)
++	{
++	  if (GET_CODE (orig) == SYMBOL_REF && SYMBOL_REF_FUNCTION_P (orig))
++	    {
++	      if (SYMBOL_REF_LOCAL_P (orig))
++		emit_insn (gen_symGOTOFFFUNCDESC2reg (reg, orig));
++	      else
++		emit_insn (gen_symGOTFUNCDESC2reg (reg, orig));
++	    }
++	  else
++	    emit_insn (gen_symGOT2reg (reg, orig));
++	}
++      crtl->uses_pic_offset_table = 1;
++      return reg;
++    }
++  else if (GET_CODE (orig) == SYMBOL_REF)
++    {
++      if (TARGET_FDPIC && SYMBOL_REF_FUNCTION_P (orig))
++	{
++	  if (SYMBOL_REF_LOCAL_P (orig))
++	    emit_insn (gen_symGOTOFFFUNCDESC2reg (reg, orig));
++	  else
++	    emit_insn (gen_symGOTFUNCDESC2reg (reg, orig));
++	}
++      else
++	{
++	  if (SYMBOL_REF_LOCAL_P (orig))
++	    {
++	      if (!rx_is_local_readonly_data_p (orig))
++		emit_insn (gen_symGOTOFF2reg (reg, orig));
++	      else
++		emit_insn (gen_movsi_pcrel (reg, orig));
++	    }
++	  else
++	    emit_insn (gen_symGOT2reg (reg, orig));
++	}
++      crtl->uses_pic_offset_table = 1;
++      return reg;
++    }
++  else if (flag_pic && rx_pcrel_label_operand (x, Pmode))
++    {
++      emit_insn (gen_movsi_pcrel (reg, orig));
++      return reg;
++    }
++  return x;
++}
++
+ static rtx
+ rx_legitimize_address (rtx x,
+ 		       rtx oldx ATTRIBUTE_UNUSED,
+ 		       machine_mode mode ATTRIBUTE_UNUSED)
+ {
++  rtx op0 = XEXP (x, 0);
++  rtx op1 = XEXP (x, 1);
++
++  if (flag_pic)
++    {
++      rtx newx = legitimize_pic_address (x, oldx);
++      if (newx != oldx)
++	return newx;
++    }
++
+   if (rx_pid_data_operand (x) == PID_UNENCODED)
+     {
+       rtx rv = gen_pid_addr (gen_rtx_REG (SImode, rx_pid_base_regnum ()), x);
+@@ -156,9 +245,6 @@ rx_legitimize_address (rtx x,
+ 
+   if (GET_CODE (x) == PLUS)
+     {
+-      rtx op0 = XEXP (x, 0);
+-      rtx op1 = XEXP (x, 1);
+-
+       if (GET_CODE (op0) == PLUS
+ 	  && REG_P (XEXP (op0, 0))
+ 	  && CONST_INT_P (op1))
+@@ -188,6 +274,15 @@ rx_small_data_operand (rtx op)
+   return false;
+ }
+ 
++/* Determine whether x is an operand that may involve relocation.  */
++static bool
++rx_is_relocatable_operand_p (rtx x)
++{
++  return (GET_CODE (x) == UNSPEC
++	  || SYMBOL_REF_P (x)
++	  || LABEL_REF_P (x));
++}
++
+ static bool
+ rx_is_legitimate_address (machine_mode mode, rtx x,
+ 			  bool strict ATTRIBUTE_UNUSED,
+@@ -212,6 +307,10 @@ rx_is_legitimate_address (machine_mode mode, rtx x,
+       if (GET_CODE (x) == PRE_DEC || GET_CODE (x) == POST_INC)
+ 	return false;
+ 
++      /* Cannot relocate the address of the high-order word.  */
++      if (flag_pic)
++	return false;
++
+       if (GET_CODE (x) == PLUS)
+ 	{
+ 	  rtx base = XEXP (x, 0);
+@@ -249,6 +348,22 @@ rx_is_legitimate_address (machine_mode mode, rtx x,
+       else
+ 	return false;
+ 
++      if (flag_pic && GET_CODE (arg2) == CONST)
++	{
++	  rtx inner = XEXP (arg2, 0);
++
++	  /* Cannot relocate the address of the high-order word.  */
++	  if (GET_MODE_SIZE (mode) == UNITS_PER_WORD * 2)
++	    return false;
++
++	  /* TODO:
++	    Reject "mov.L symbol@GOTFUNCDESC[reg],reg"
++	    because ld cannot relocate it.  */
++	  if (GET_CODE (inner) == UNSPEC
++	      && XINT (inner, 1) == UNSPEC_GOTFUNCDESC)
++	    return false;
++	}
++
+       switch (GET_CODE (index))
+ 	{
+ 	case CONST_INT:
+@@ -294,16 +409,88 @@ rx_is_legitimate_address (machine_mode mode, rtx x,
+ 	      && CONST_INT_P (factor)
+ 	      && GET_MODE_SIZE (mode) == INTVAL (factor);
+ 	  }
+-
++	case CONST:
++	  if (!flag_pic)
++	    return false;
++	  else
++	    {
++	      rtx inner = XEXP (index, 0);
++	      if (GET_CODE (inner) == PLUS)
++		{
++		  rtx op0 = XEXP (inner, 0);
++		  rtx op1 = XEXP (inner, 1);
++		  if (rx_is_relocatable_operand_p (op0)
++		      || rx_is_relocatable_operand_p (op1))
++		    return false;
++		}
++	      return !rx_is_unspec_offset (index);
++	    }
+ 	default:
+ 	  return false;
+ 	}
+     }
++  if (flag_pic && GET_CODE (x) == CONST
++      && GET_CODE (XEXP (x, 0)) == UNSPEC
++      && XINT (XEXP (x, 0), 1) == UNSPEC_PCREL)
++    return true;
+ 
+   /* Small data area accesses turn into register relative offsets.  */
+   return rx_small_data_operand (x);
+ }
+ 
++/* Check if the x is PIC.  */
++static bool
++rx_is_pic_unspec_p (rtx x)
++{
++  if (GET_CODE (x) != UNSPEC)
++    return false;
++  switch (XINT (x, 1))
++    {
++    case UNSPEC_PIC:
++    case UNSPEC_GOT:
++    case UNSPEC_GOTOFF:
++    case UNSPEC_PLT:
++    case UNSPEC_GOTFUNCDESC:
++    case UNSPEC_GOTOFFFUNCDESC:
++    case UNSPEC_PCREL:
++      return true;
++    default:
++      return false;
++    }
++}
++
++/* Return TRUE if X references a SYMBOL_REF or LABEL_REF whose symbol
++   isn't protected by a PIC unspec.  */
++bool
++nonpic_symbol_mentioned_p (rtx x)
++{
++  if (GET_CODE (x) == PC)
++    return true;
++
++  /* We don't want to look into the possible MEM location of a
++     CONST_DOUBLE, since we're not going to use it, in general.  */
++  if (GET_CODE (x) == CONST_DOUBLE)
++    return false;
++
++  if (rx_is_pic_unspec_p (x))
++    return false;
++
++  const char* fmt = GET_RTX_FORMAT (GET_CODE (x));
++  for (int i = GET_RTX_LENGTH (GET_CODE (x)) - 1; i >= 0; i--)
++    {
++      if (fmt[i] == 'E')
++       {
++	  for (int j = XVECLEN (x, i) - 1; j >= 0; j--)
++	    if (nonpic_symbol_mentioned_p (XVECEXP (x, i, j)))
++	      return true;
++       }
++      else if (fmt[i] == 'e' && nonpic_symbol_mentioned_p (XEXP (x, i)))
++       return true;
++    }
++
++  return false;
++}
++
+ /* Returns TRUE for simple memory addresses, ie ones
+    that do not involve register indirect addressing
+    or pre/post increment/decrement.  */
+@@ -419,6 +606,21 @@ rx_mode_dependent_address_p (const_rtx addr, addr_space_t as ATTRIBUTE_UNUSED)
+    assembler syntax for an instruction operand that is a memory
+    reference whose address is ADDR.  */
+ 
++static void
++rx_print_operand_with_attrib (FILE * file, const char *attrib,
++			      rtx addr, bool immediate)
++{
++  if (SYMBOL_REF_P (addr))
++    {
++      if (immediate)
++	fprintf (file, "#");
++      output_addr_const (file, addr);
++      fprintf (file, "@%s", attrib);
++    }
++  else
++    rx_print_operand (file, addr, 0);
++}
++
+ static void
+ rx_print_operand_address (FILE * file, machine_mode /*mode*/, rtx addr)
+ {
+@@ -453,7 +655,7 @@ rx_print_operand_address (FILE * file, machine_mode /*mode*/, rtx addr)
+ 	else if (REG_P (arg2) && RTX_OK_FOR_BASE (arg2, true))
+ 	  base = arg2, index = arg1;
+ 	else
+-	  {
++	  { /* symbol + offset[Rn] */
+ 	    rx_print_operand (file, arg1, 0);
+ 	    fprintf (file, " + ");
+ 	    rx_print_operand (file, arg2, 0);
+@@ -461,13 +663,19 @@ rx_print_operand_address (FILE * file, machine_mode /*mode*/, rtx addr)
+ 	  }
+ 
+ 	if (REG_P (index) || GET_CODE (index) == MULT)
+-	  {
++	  { /* [Ri, Rb] */
+ 	    fprintf (file, "[");
+ 	    rx_print_operand (file, index, 'A');
+ 	    fprintf (file, ",");
+ 	  }
+-	else /* GET_CODE (index) == CONST_INT  */
+-	  {
++	else
++	  { /* dsp[Rn] */
++	    if (GET_CODE (index) == CONST
++		&& GET_CODE (XEXP (index, 0)) == UNSPEC
++		&& (XINT (XEXP (index, 0), 1) == UNSPEC_GOTOFF
++		    || XINT (XEXP (index, 0), 1) == UNSPEC_GOTOFFFUNCDESC))
++	      /* Only simple offsets are accepted here.  */
++	      gcc_unreachable ();
+ 	    rx_print_operand (file, index, 'A');
+ 	    fprintf (file, "[");
+ 	  }
+@@ -493,8 +701,33 @@ rx_print_operand_address (FILE * file, machine_mode /*mode*/, rtx addr)
+       break;
+ 
+     case UNSPEC:
+-      addr = XVECEXP (addr, 0, 0);
+-      /* Fall through.  */
++      {
++	int post = XINT (addr, 1);
++	addr = XVECEXP (addr, 0, 0);
++
++	switch (post)
++	  {
++	  case UNSPEC_GOT:
++	    rx_print_operand_with_attrib (file, "GOT", addr, false);
++	    break;
++	  case UNSPEC_GOTOFF:
++	    rx_print_operand_with_attrib (file, "GOTOFF", addr, true);
++	    break;
++	  case UNSPEC_GOTFUNCDESC:
++	    rx_print_operand_with_attrib (file, "GOTFUNCDESC", addr, true);
++	    break;
++	  case UNSPEC_GOTOFFFUNCDESC:
++	    rx_print_operand_with_attrib (file, "GOTOFFFUNCDESC", addr, true);
++	    break;
++	  case UNSPEC_PLT:
++	    rx_print_operand_with_attrib (file, "PLT", addr, false);
++	    break;
++	  case UNSPEC_PCREL:
++	    output_addr_const (file, addr);
++	    break;
++	  }
++	break;
++      }
+     case LABEL_REF:
+     case SYMBOL_REF:
+       fprintf (file, "#");
+@@ -522,6 +755,15 @@ rx_assemble_integer (rtx x, unsigned int size, int is_aligned)
+ {
+   const char *  op = integer_asm_op (size, is_aligned);
+ 
++    if (TARGET_FDPIC && size == UNITS_PER_WORD
++      && GET_CODE (x) == SYMBOL_REF && SYMBOL_REF_FUNCTION_P (x))
++    {
++      fputs (op, asm_out_file);
++      output_addr_const (asm_out_file, x);
++      fputs ("@FUNCDESC\n", asm_out_file);
++      return true;
++    }
++
+   if (! CONST_INT_P (x))
+     return default_assemble_integer (x, size, is_aligned);
+ 
+@@ -949,6 +1191,11 @@ rx_print_operand (FILE * file, rtx op, int letter)
+ 		fprintf (file, ")");
+ 		return;
+ 	      }
++	    case UNSPEC_PCREL:
++	      if (print_hash)
++		fprintf (file, "#");
++	      output_addr_const (file, XVECEXP (op, 0, 0));
++	      return;
+ 	    }
+ 	  /* Fall through */
+ 
+@@ -966,10 +1213,10 @@ rx_print_operand (FILE * file, rtx op, int letter)
+     }
+ }
+ 
+-/* Maybe convert an operand into its PID format.  */
++/* Maybe convert an operand into its PI (PIC/PID) format.  */
+ 
+ rtx
+-rx_maybe_pidify_operand (rtx op, int copy_to_reg)
++rx_maybe_legitimize_pi_operand (rtx op, int copy_to_reg)
+ {
+   if (rx_pid_data_operand (op) == PID_UNENCODED)
+     {
+@@ -986,6 +1233,105 @@ rx_maybe_pidify_operand (rtx op, int copy_to_reg)
+       if (copy_to_reg)
+ 	op = copy_to_mode_reg (GET_MODE (op), op);
+     }
++  else if (flag_pic)
++    {
++      rtx picreg = gen_rtx_REG (Pmode, PIC_REG);
++      rtx t;
++
++      switch (GET_CODE (op))
++	{
++	case CONST:
++	  {
++	    rtx base, offset;
++	    split_const (op, &base, &offset);
++
++	    if (SYMBOL_REF_P (base) || LABEL_REF_P (base))
++	      {
++		tree decl = SYMBOL_REF_P (base)
++		  ? SYMBOL_REF_DECL (base) : NULL_TREE;
++		bool is_local_var = (decl
++				     && TREE_CODE (decl) == VAR_DECL
++				     && !TREE_PUBLIC (decl));
++
++		t = gen_reg_rtx (GET_MODE (op));
++
++		if (is_local_var || LABEL_REF_P (base))
++		  {
++		    /* PC relative with offset.  */
++		    rtx label = gen_sym2pcrel (base);
++		    emit_insn (gen_movsi_pcrel (t, label));
++		  }
++		else
++		  {
++		    crtl->uses_pic_offset_table = true;
++		    if (SYMBOL_REF_LOCAL_P (base)
++			&& !rx_is_local_readonly_data_p (base))
++		      {
++			rtx gotoffsym = gen_sym2GOTOFF (base);
++			rtx src = gen_rtx_PLUS (Pmode, picreg, gotoffsym);
++			emit_move_insn (t, src);
++		      }
++		    else
++		      {
++			rtx gotsym = gen_sym2GOT (base);
++			rtx got_addr = gen_rtx_PLUS (Pmode, picreg, gotsym);
++			rtx src = gen_rtx_MEM (GET_MODE (op), got_addr);
++			emit_move_insn (t, src);
++		    }
++		  }
++
++		if (offset != const0_rtx)
++		  emit_insn (gen_addsi3 (t, t, offset));
++
++		return t;
++	      }
++	    break;
++	  }
++	case SYMBOL_REF:
++	case LABEL_REF:
++	  {
++	    /* Local read-only symbols are accessed
++	      using PC-relative addresses.  */
++	    if (GET_CODE (op) == LABEL_REF || rx_is_local_readonly_data_p (op))
++	      return gen_sym2pcrel (op);
++
++	    /* funcdesc case.  */
++	    if (TARGET_FDPIC
++		&& SYMBOL_REF_FUNCTION_P (op)
++		&& !RTX_FLAG (op, frame_related))
++	      {
++		rtx t = gen_reg_rtx (Pmode);
++		rtx funcsym;
++		funcsym = SYMBOL_REF_LOCAL_P (op)
++		  ? gen_sym2GOTOFFFUNCDESC (op) : gen_sym2GOTFUNCDESC (op);
++		emit_insn (gen_addsi3 (t, picreg, funcsym));
++		return t;
++	      }
++	    /* variable case.  */
++	    if (SYMBOL_REF_LOCAL_P (op))
++	      {
++		if (rx_is_local_readonly_data_p (op))
++		  return op;
++
++		rtx gotoffsym = gen_sym2GOTOFF (op);
++		return gen_rtx_PLUS (Pmode, picreg, gotoffsym);
++	      }
++	    else
++	      {
++		crtl->uses_pic_offset_table = true;
++		rtx gotsym = gen_sym2GOT (op);
++		machine_mode mode = GET_MODE (op) != VOIDmode
++		  ? GET_MODE (op) : Pmode;
++		return gen_rtx_MEM (mode,
++				    gen_rtx_PLUS (Pmode, picreg, gotsym));
++	      }
++	  }
++	  break;
++	default:
++	  /* Nothing do.  */
++	  break;
++	}
++    }
+   return op;
+ }
+ 
+@@ -1010,7 +1356,7 @@ rx_gen_move_template (rtx * operands, bool is_movu)
+   else
+     {
+       /* Otherwise, use the smaller size.  */
+-      if (GET_MODE (src) == SIGN_EXTEND || GET_MODE (src) == ZERO_EXTEND)
++      if (GET_CODE (src) == SIGN_EXTEND || GET_CODE (src) == ZERO_EXTEND)
+ 	/* When expanding, the original size will be used. */
+ 	src_mode = GET_MODE (XEXP (src, 0));
+       else
+@@ -1336,6 +1682,9 @@ rx_conditional_register_usage (void)
+ 
+       using_fixed_regs = use_fixed_regs;
+     }
++
++  if (flag_pic)
++    call_used_regs[PIC_REG] = 1;
+ }
+ 
+ struct decl_chain
+@@ -1531,7 +1880,8 @@ rx_get_stack_layout (unsigned int * lowest,
+ 		 to call-used by rx_conditional_register_usage.  If so then
+ 		 they can be used in the fast interrupt handler without
+ 		 saving them on the stack.  */
+-	      || (is_fast_interrupt_func (NULL_TREE)
++	      || is_fast_interrupt_func (NULL_TREE)
++	      || ((flag_pic && reg == PIC_REG)
+ 		  && ! IN_RANGE (reg, 10, 13))))
+ 	{
+ 	  if (low == 0)
+@@ -1864,6 +2214,14 @@ rx_expand_prologue (void)
+ 		    GEN_INT ((HOST_WIDE_INT) stack_size),
+ 		    true);
+     }
++  if (crtl->uses_pic_offset_table && !TARGET_FDPIC)
++    {
++      rtx got_base = gen_rtx_SYMBOL_REF (Pmode, "_GLOBAL_OFFSET_TABLE_");
++      rtx picreg = gen_rtx_REG (Pmode, PIC_REG);
++
++      got_base = gen_sym2pcrel (got_base);
++      emit_insn (gen_movsi_pcrel (picreg, got_base));
++    }
+ }
+ 
+ static void
+@@ -2231,6 +2589,12 @@ rx_expand_epilogue (bool is_sibcall)
+ 		    GEN_INT (total_size), false);
+     }
+ 
++  if (flag_pic)
++    {
++      rtx picreg = gen_rtx_REG (Pmode, PIC_REG);
++      emit_use (picreg);
++    }
++
+   if (low)
+     emit_jump_insn (gen_pop_and_return (GEN_INT (regs_size),
+ 					gen_rx_rtsd_vector (regs_size,
+@@ -2714,7 +3078,14 @@ rx_elf_asm_cdtor (rtx symbol, int priority, bool is_ctor)
+ 
+   switch_to_section (s);
+   assemble_align (POINTER_SIZE);
+-  assemble_integer (symbol, POINTER_SIZE / BITS_PER_UNIT, POINTER_SIZE, 1);
++  if (!TARGET_FDPIC)
++    assemble_integer (symbol, POINTER_SIZE / BITS_PER_UNIT, POINTER_SIZE, 1);
++  else
++    {
++      fputs ("\t.long\t", asm_out_file);
++      output_addr_const (asm_out_file, symbol);
++      fputs ("\n", asm_out_file);
++    }
+ }
+ 
+ static void
+@@ -2865,6 +3236,13 @@ rx_option_override (void)
+   if (flag_strict_volatile_bitfields < 0 && abi_version_at_least(2))
+     flag_strict_volatile_bitfields = 1;
+ 
++  /* FDPIC code is a special form of PIC, and the vast majority of code
++     generation constraints that apply to PIC also apply to FDPIC, so we
++     set flag_pic to avoid the need to check TARGET_FDPIC everywhere
++     flag_pic is checked.  */
++  if (TARGET_FDPIC && !flag_pic)
++    flag_pic = 2;
++
+   rx_override_options_after_change ();
+ 
+   /* These values are bytes, not log.  */
+@@ -2912,7 +3290,7 @@ rx_warn_func_return (tree decl)
+ static bool
+ rx_function_ok_for_sibcall (tree decl, tree exp ATTRIBUTE_UNUSED)
+ {
+-  if (TARGET_JSR)
++  if (TARGET_JSR || TARGET_FDPIC)
+     return false;
+ 
+   /* Do not allow indirect tailcalls.  The
+@@ -2949,6 +3327,25 @@ rx_is_ms_bitfield_layout (const_tree record_type ATTRIBUTE_UNUSED)
+ bool
+ rx_is_legitimate_constant (machine_mode mode ATTRIBUTE_UNUSED, rtx x)
+ {
++  if (flag_pic)
++    {
++      if (SYMBOL_REF_P (x) || LABEL_REF_P (x))
++	return false;
++      if (GET_CODE (x) == CONST
++	  && GET_CODE (XEXP (x, 0)) == PLUS
++	  && GET_CODE (XEXP (XEXP (x, 0), 0)) == UNSPEC)
++	{
++	  rtx x0 = XVECEXP (XEXP (XEXP (x, 0), 0), 0, 0);
++	  if (SYMBOL_REF_P (x0) || LABEL_REF_P (x0))
++	    return false;
++	}
++
++      if (GET_CODE (x) == CONST
++	  && GET_CODE (XEXP (x, 0)) == UNSPEC
++	  && XINT (XEXP (x, 0), 1) == UNSPEC_PCREL)
++	return false;
++    }
++
+   switch (GET_CODE (x))
+     {
+     case CONST:
+@@ -2969,10 +3366,28 @@ rx_is_legitimate_constant (machine_mode mode ATTRIBUTE_UNUSED, rtx x)
+ 	{
+ 	case LABEL_REF:
+ 	case SYMBOL_REF:
+-	  return true;
++	  return !flag_pic;
+ 
+ 	case UNSPEC:
+-	  return XINT (x, 1) == UNSPEC_CONST || XINT (x, 1) == UNSPEC_PID_ADDR;
++	  switch (XINT (x, 1))
++	    {
++	    case UNSPEC_PCREL:
++	      {
++		rtx xx = XVECEXP (x, 0, 0);
++		return !(GET_CODE (xx) == CONST || GET_CODE (xx) == UNSPEC);
++	      }
++	    case UNSPEC_CONST:
++	    case UNSPEC_PID_ADDR:
++	    case UNSPEC_GOT:
++	    case UNSPEC_GOTOFF:
++	    case UNSPEC_GOTFUNCDESC:
++	    case UNSPEC_GOTOFFFUNCDESC:
++	    case UNSPEC_PLT:
++	      return true;
++	    default:
++	      return false;
++	    }
++	  break;
+ 
+ 	default:
+ 	  /* FIXME: Can this ever happen ?  */
+@@ -3663,7 +4078,9 @@ rx_modes_tieable_p (machine_mode mode1, machine_mode mode2)
+   return ((GET_MODE_CLASS (mode1) == MODE_FLOAT
+ 	   || GET_MODE_CLASS (mode1) == MODE_COMPLEX_FLOAT)
+ 	  == (GET_MODE_CLASS (mode2) == MODE_FLOAT
+-	      || GET_MODE_CLASS (mode2) == MODE_COMPLEX_FLOAT));
++	      || GET_MODE_CLASS (mode2) == MODE_COMPLEX_FLOAT))
++	  || (GET_MODE_CLASS (mode1) == MODE_INT
++	      && GET_MODE_CLASS (mode2) == MODE_INT);
+ }
+ 
+ /* Implement TARGET_C_MODE_FOR_FLOATING_TYPE.  Return SFmode or DFmode
+@@ -3722,6 +4139,113 @@ rx_split_double_move (rtx * operands, machine_mode mode)
+     }
+ }
+ 
++/* Implement LEGITIMATE_PIC_OPERAND_P.  */
++bool
++rx_legitimate_pic_operand_p (rtx x)
++{
++  return (! nonpic_symbol_mentioned_p (x)
++	  && GET_CODE (x) != SYMBOL_REF);
++}
++
++/* Return an rtx holding the initial value of the FDPIC register (the
++   FDPIC pointer passed in from the caller).  */
++rtx
++rx_get_fdpic_reg_initial_val (void)
++{
++  return get_hard_reg_initial_val (Pmode, PIC_REG);
++}
++
++/* Implement TARGET_ASM_OUTPUT_ADDR_CONST_EXTRA.  */
++static bool
++rx_asm_output_addr_const_extra (FILE *file ATTRIBUTE_UNUSED,
++				rtx x ATTRIBUTE_UNUSED)
++{
++  return false;
++}
++
++/* Implement TARGET_CONST_NOT_OK_FOR_DEBUG_P.  */
++static bool
++rx_const_not_ok_for_debug_p (rtx p)
++{
++  return (GET_CODE (p) == SYMBOL_REF);
++}
++
++/* Implement TARGET_CANNOT_FORCE_CONST_MEM.  */
++bool
++rx_cannot_force_const_mem_p (machine_mode mode ATTRIBUTE_UNUSED,
++			     rtx x ATTRIBUTE_UNUSED)
++{
++  return flag_pic;
++}
++
++/* Determine whether x is a valid UNSPEC as an offset.  */
++bool
++rx_is_unspec_offset (rtx x)
++{
++  if (!flag_pic
++      || GET_CODE (x) != CONST
++      || GET_CODE (XEXP (x, 0)) != UNSPEC)
++    return false;
++
++  switch (XINT (XEXP (x, 0), 1))
++    {
++    case UNSPEC_PID_ADDR:
++    case UNSPEC_GOTOFF:
++    case UNSPEC_GOTOFFFUNCDESC:
++    case UNSPEC_PCREL:
++      return true;
++    default:
++      return false;
++    }
++}
++
++/* Implement TARGET_DELEGITIMIZE_ADDRESS.  */
++static rtx
++rx_delegitimize_address (rtx x)
++{
++  x = delegitimize_mem_from_attrs (x);
++  if (rx_pcrel_label_operand (x, Pmode))
++    return XVECEXP (XEXP (x, 0), 0, 0);
++
++  return x;
++}
++
++/* expand for pc relative address load.  */
++bool
++rx_expand_pcrel (rtx operands[], int sidx)
++{
++  rtx src = operands[sidx];
++  rtx dest = operands[0];
++  rtx pcrel_src = NULL_RTX;
++
++  if (!flag_pic)
++    return false;
++
++  if (rx_pcrel_label_operand (src, Pmode))
++    src = gen_rtx_CONST (Pmode,
++			 gen_rtx_UNSPEC (Pmode, gen_rtvec (1, src),
++					 UNSPEC_PCREL));
++  if (CONSTANT_P (src))
++    {
++      rtx inner = (GET_CODE (src) == CONST)
++	? XEXP (src, 0) : src;
++      if (GET_CODE (inner) == UNSPEC && XINT (inner, 1) == UNSPEC_PCREL)
++	pcrel_src = XVECEXP (inner, 0, 0);
++    }
++
++  if (pcrel_src != NULL_RTX)
++    {
++      if (!REG_P (dest))
++	dest = gen_reg_rtx (Pmode);
++      emit_insn (gen_movsi_pcrel (dest, pcrel_src));
++      if (dest != operands[0])
++	emit_move_insn (operands[0], dest);
++      return true;
++    }
++  return false;
++}
++
++
+ /* Adjust the operands of a doubleword move. OPERANDS gives the operands and
+    MODE gives the mode of the operands.  */
+ void
+@@ -3896,6 +4420,18 @@ rx_relax_double_operands(rtx * operands, machine_mode mode)
+ #undef TARGET_DOCUMENTATION_NAME
+ #define TARGET_DOCUMENTATION_NAME "RX"
+ 
++#undef TARGET_ASM_OUTPUT_ADDR_CONST_EXTRA
++#define TARGET_ASM_OUTPUT_ADDR_CONST_EXTRA rx_asm_output_addr_const_extra
++
++#undef TARGET_CONST_NOT_OK_FOR_DEBUG_P
++#define TARGET_CONST_NOT_OK_FOR_DEBUG_P	rx_const_not_ok_for_debug_p
++
++#undef TARGET_CANNOT_FORCE_CONST_MEM
++#define TARGET_CANNOT_FORCE_CONST_MEM rx_cannot_force_const_mem_p
++
++#undef  TARGET_DELEGITIMIZE_ADDRESS
++#define TARGET_DELEGITIMIZE_ADDRESS rx_delegitimize_address
++
+ struct gcc_target targetm = TARGET_INITIALIZER;
+ 
+ #include "gt-rx.h"
+diff --git a/gcc/config/rx/rx.h b/gcc/config/rx/rx.h
+index f78c103fcb2..7241d7108d7 100644
+--- a/gcc/config/rx/rx.h
++++ b/gcc/config/rx/rx.h
+@@ -119,7 +119,9 @@
+ "
+ 
+ #undef  LINK_SPEC
+-#define LINK_SPEC "%{mbig-endian-data:--oformat elf32-rx-be} %{mrelax:-relax}"
++#define LINK_SPEC "%{mbig-endian-data:--oformat elf32-rx-be} \
++		   %{mrelax:-relax} %{shared:-shared}"
++ 
+ 
+ 
+ #define BITS_BIG_ENDIAN 		0
+diff --git a/gcc/config/rx/rx.md b/gcc/config/rx/rx.md
+index 1bd80fd3e2e..23f820de59b 100644
+--- a/gcc/config/rx/rx.md
++++ b/gcc/config/rx/rx.md
+@@ -35,6 +35,7 @@ (define_mode_iterator register_modes
+ (define_constants
+   [
+    (SP_REG 0)
++   (PIC_REG		   13)
+    (CC_REG 		   16)
+ 
+    (UNSPEC_LOW_REG         0)
+@@ -76,6 +77,14 @@ (define_constants
+ 
+    (UNSPEC_PID_ADDR	   52)
+ 
++   (UNSPEC_PIC		   60)
++   (UNSPEC_GOT		   61)
++   (UNSPEC_GOTOFF	   62)
++   (UNSPEC_PLT		   63)
++   (UNSPEC_GOTFUNCDESC     64)
++   (UNSPEC_GOTOFFFUNCDESC  65)
++   (UNSPEC_PCREL	   66)
++
+    (CTRLREG_PSW		    0)
+    (CTRLREG_PC		    1)
+    (CTRLREG_USP		    2)
+@@ -342,9 +351,9 @@ (define_insn "tablejump"
+ 	(match_operand:SI          0 "register_operand" "r"))
+    (use (label_ref (match_operand  1 "" "")))]
+   ""
+-  { return TARGET_PID ? (TARGET_AS100_SYNTAX ? "\n?:\tbra\t%0"
+-					     : "\n1:\tbra\t%0")
+-	                                     : "\n1:jmp\t%0";
++  { return TARGET_PID || flag_pic ? (TARGET_AS100_SYNTAX ? "\n?:\tbra\t%0"
++							 : "\n1:\tbra\t%0")
++							 : "\n1:jmp\t%0";
+   }
+   [(set_attr "timings" "33")
+    (set_attr "length" "2")]
+@@ -425,14 +434,24 @@ (define_insn "naked_return"
+ 
+ (define_expand "call"
+   [(call (match_operand:QI 0 "general_operand")
+-	 (match_operand:SI 1 "general_operand"))]
++	 (match_operand:SI 1 "general_operand"))
++	 (use (match_operand 2 "" ""))
++	 (use (reg:SI PIC_REG))]
+   ""
+   {
+     rtx dest = XEXP (operands[0], 0);
+ 
+-    if (! rx_call_operand (dest, Pmode))
+-      dest = force_reg (Pmode, dest);
+-    emit_call_insn (gen_call_internal (dest));
++    if (!TARGET_FDPIC)
++      {
++	if (! rx_call_operand (dest, Pmode))
++	  dest = force_reg (Pmode, dest);
++	emit_call_insn (gen_call_internal (dest));
++      }
++    else
++      {
++	emit_call_insn (gen_call_fdpic (operands[0],
++					operands[1], operands[2]));
++      }
+     DONE;
+   }
+ )
+@@ -440,7 +459,8 @@ (define_expand "call"
+ (define_insn "call_internal"
+   [(call (mem:QI (match_operand:SI 0 "rx_call_operand" "r,CALL_OP_SYMBOL_REF"))
+ 	 (const_int 0))
+-   (clobber (reg:CC CC_REG))]
++   (clobber (reg:CC CC_REG))
++   (use (reg:SI PIC_REG))]
+   ""
+   "@
+   jsr\t%0
+@@ -450,16 +470,27 @@ (define_insn "call_internal"
+ )
+ 
+ (define_expand "call_value"
+-  [(set (match_operand          0 "register_operand")
++  [(set (match_operand		0 "register_operand")
+ 	(call (match_operand:QI 1 "general_operand")
+-	      (match_operand:SI 2 "general_operand")))]
++	      (match_operand:SI 2 "general_operand")))
++	 (use (match_operand 3 "" ""))
++	 (use (reg:SI PIC_REG))]
+   ""
+   {
+     rtx dest = XEXP (operands[1], 0);
+ 
+-    if (! rx_call_operand (dest, Pmode))
+-      dest = force_reg (Pmode, dest);
+-    emit_call_insn (gen_call_value_internal (operands[0], dest));
++    if (!TARGET_FDPIC
++	|| (SYMBOL_REF_P (dest) && SYMBOL_REF_LOCAL_P (dest)))
++      {
++	if (! rx_call_operand (dest, Pmode))
++	  dest = force_reg (Pmode, dest);
++	emit_call_insn (gen_call_value_internal (operands[0], dest));
++      }
++    else
++      {
++	emit_call_insn (gen_call_value_fdpic (operands[0],
++					      operands[1], operands[2]));
++      }
+     DONE;
+   }
+ )
+@@ -468,7 +499,8 @@ (define_insn "call_value_internal"
+   [(set (match_operand                  0 "register_operand" "=r,r")
+ 	(call (mem:QI (match_operand:SI 1 "rx_call_operand"   "r,CALL_OP_SYMBOL_REF"))
+ 	      (const_int 0)))
+-   (clobber (reg:CC CC_REG))]
++   (clobber (reg:CC CC_REG))
++   (use (reg:SI PIC_REG))]
+   ""
+   "@
+   jsr\t%1
+@@ -576,13 +608,18 @@ (define_expand "mov<register_modes:mode>"
+   {
+     if (MEM_P (operands[0]) && MEM_P (operands[1]))
+       operands[1] = force_reg (<register_modes:MODE>mode, operands[1]);
+-    operands[0] = rx_maybe_pidify_operand (operands[0], 0);
+-    operands[1] = rx_maybe_pidify_operand (operands[1], 0);
++
++    operands[0] = rx_maybe_legitimize_pi_operand (operands[0], 0);
++    operands[1] = rx_maybe_legitimize_pi_operand (operands[1], 0);
++
+     if (MEM_P (operands[0]) && GET_CODE (operands[1]) == PLUS)
+       operands[1] = force_reg (<register_modes:MODE>mode, operands[1]);
+     if (CONST_INT_P (operand1)
+         && ! rx_is_legitimate_constant (<register_modes:MODE>mode, operand1))
+       FAIL;
++
++    if (rx_expand_pcrel (operands, 1))
++      DONE;
+   }
+ )
+ 
+@@ -591,12 +628,21 @@ (define_insn "*mov<register_modes:mode>_internal"
+ 	 0 "nonimmediate_operand" "=r,r,r,r,r,r,m,Q,Q,Q,Q,r")
+ 	(match_operand:register_modes
+ 	 1 "general_operand" "Int08,Sint16,Sint24,i,r,m,r,Int08,Sint16,Sint24,i,RpdaRpid"))]
+-  ""
++  "!rx_is_unspec_offset (operands[1])"
+   { return rx_gen_move_template (operands, false); }
+   [(set_attr "length" "3,4,5,6,2,4,6,5,6,7,8,8")
+    (set_attr "timings" "11,11,11,11,11,12,11,11,11,11,11,11")]
+ )
+ 
++(define_insn "movsi_pcrel"
++  [(set (match_operand:SI 0 "register_operand" "=r")
++	(const:SI (unspec:SI [(match_operand:SI 1 "" "")] UNSPEC_PCREL)))
++   (clobber (reg:CC CC_REG))]
++  "flag_pic"
++  "mvfc\tpc, %0 ! add\t%1 - . + 3, %0"
++  [(set_attr "length" "6")]
++)
++
+ (define_expand "movdi"
+   [(set (match_operand:DI 0 "nonimmediate_operand" "")
+         (match_operand:DI 1 "general_operand" ""))]
+@@ -608,8 +654,23 @@ (define_expand "movdi"
+ 
+ (define_insn_and_split "movdi_internal"
+   [(set (match_operand:DI 0 "nonimmediate_operand" "=r,r,m")
+-        (match_operand:DI 1 "general_operand"  "ri,m,r"))]
+-  ""
++		(match_operand:DI 1 "general_operand"  "ri,m,r"))]
++  "!flag_pic"
++  "#"
++  "reload_completed"
++  [(const_int 0)]
++  {
++    rx_split_double_move (operands, DImode);
++    DONE;
++  }
++  [(set_attr "length" "8")]
++)
++
++;; PIC case have strict address constraints.
++(define_insn_and_split "movdi_internal_pic"
++  [(set (match_operand:DI 0 "nonimmediate_operand" "=r,r,o")
++		(match_operand:DI 1 "general_operand"  "ri,o,r"))]
++  "flag_pic"
+   "#"
+   "reload_completed"
+   [(const_int 0)]
+@@ -631,8 +692,22 @@ (define_expand "movdf"
+ 
+ (define_insn_and_split "movdf_internal"
+   [(set (match_operand:DF 0 "nonimmediate_operand" "=r,r,m")
+-        (match_operand:DF 1 "general_operand"  "rF,m,r"))]
+-  ""
++		(match_operand:DF 1 "general_operand"  "rF,m,r"))]
++  "!flag_pic"
++  "#"
++  "reload_completed"
++  [(const_int 0)]
++  {
++    rx_split_double_move (operands, DFmode);
++    DONE;
++  }
++  [(set_attr "length" "8")]
++)
++
++(define_insn_and_split "movdf_internal_pic"
++  [(set (match_operand:DF 0 "nonimmediate_operand" "=r,r,o")
++		(match_operand:DF 1 "general_operand"  "rF,o,r"))]
++  "flag_pic"
+   "#"
+   "reload_completed"
+   [(const_int 0)]
+@@ -909,11 +984,13 @@ (define_expand "addsi3"
+ 		 (match_operand:SI 2 "rx_source_operand" "")))
+     (clobber (reg:CC CC_REG))])]
+   ""
+-  "
+-      operands[0] = rx_maybe_pidify_operand (operands[0], 1);
+-      operands[1] = rx_maybe_pidify_operand (operands[1], 1);
+-      operands[2] = rx_maybe_pidify_operand (operands[2], 1);
+-  "
++  {
++    operands[0] = rx_maybe_legitimize_pi_operand (operands[0], 1);
++    operands[1] = rx_maybe_legitimize_pi_operand (operands[1], 1);
++    operands[2] = rx_maybe_legitimize_pi_operand (operands[2], 1);
++    if (rx_expand_pcrel (operands, 2))
++      DONE;
++  }
+ )
+ 
+ (define_insn "addsi3_internal"
+@@ -1015,12 +1092,11 @@ (define_insn "*adc_flags"
+    (set_attr "length"   "3,4,5,6,7,6")]
+ )
+ 
+-(define_insn "addsi3_pid"
++(define_insn "addsi3_unspec"
+   [(set (match_operand:SI 0 "register_operand" "=r")
+         (plus:SI (match_operand:SI 1 "register_operand" "%0")
+                  (const:SI (unspec:SI [(match_operand:SI 2 "immediate_operand" "i")] UNSPEC_PID_ADDR))))
+     (clobber (reg:CC CC_REG))]
+-
+   ""
+   "add\t%2, %0"
+   [(set_attr "length" "6")
+@@ -2952,3 +3028,210 @@ (define_insn_and_split "*ashlsi3_lra"
+      (clobber (reg:CC CC_REG))
+    ])]
+ )
++
++;;-------------- PIC staff -----------------------------
++(define_expand "sym2GOT"
++ [(const:SI (unspec:SI [(match_operand 0 "" "")] UNSPEC_GOT))]
++  ""
++  "")
++
++(define_expand "symGOT2reg"
++  [(match_operand 0 "" "") (match_operand 1 "" "")]
++  ""
++  {
++    rtx mem = !can_create_pseudo_p ()
++      ? operands[0] : gen_reg_rtx (GET_MODE (operands[0]));
++    rtx gotsym = gen_sym2GOT (operands[1]);
++    rtx picreg = gen_rtx_REG (Pmode, PIC_REG);
++
++    emit_move_insn (operands[0],
++		    gen_rtx_MEM (Pmode, gen_rtx_PLUS (Pmode, picreg, gotsym)));
++    DONE;
++  }
++)
++
++(define_expand "sym2GOTOFF"
++ [(const:SI (unspec:SI [(match_operand 0 "" "")] UNSPEC_GOTOFF))]
++  ""
++  "")
++
++(define_expand "symGOTOFF2reg"
++  [(match_operand 0 "" "") (match_operand 1 "" "")]
++  ""
++  {
++    rtx picreg = gen_rtx_REG (Pmode, PIC_REG);
++
++    rtx gotoffsym = gen_sym2GOTOFF (operands[1]);
++    emit_insn (gen_addsi3 (operands[0],  picreg, gotoffsym));
++    DONE;
++  }
++)
++
++(define_expand "sym2GOTFUNCDESC"
++ [(const:SI (unspec:SI [(match_operand 0)] UNSPEC_GOTFUNCDESC))]
++  "TARGET_FDPIC")
++
++(define_expand "sym2GOTOFFFUNCDESC"
++ [(const:SI (unspec:SI [(match_operand 0)] UNSPEC_GOTOFFFUNCDESC))]
++  "TARGET_FDPIC")
++
++(define_expand "symGOTFUNCDESC2reg"
++  [(match_operand 0) (match_operand 1)]
++  "TARGET_FDPIC"
++  {
++    rtx picreg = rx_get_fdpic_reg_initial_val ();
++    rtx gotsym = gen_sym2GOTFUNCDESC (operands[1]);
++    emit_move_insn (operands[0], gen_rtx_PLUS (Pmode, picreg, gotsym));
++    DONE;
++  }
++)
++
++(define_expand "symGOTOFFFUNCDESC2reg"
++  [(match_operand 0) (match_operand 1)]
++  "TARGET_FDPIC"
++  {
++    rtx picreg = rx_get_fdpic_reg_initial_val ();
++    rtx gotsym = gen_sym2GOTOFFFUNCDESC (operands[1]);
++    emit_move_insn (operands[0], gen_rtx_PLUS (Pmode, picreg, gotsym));
++    DONE;
++  }
++)
++
++(define_expand "sym2PLT"
++  [(const (unspec [(match_operand 0 "" "")] UNSPEC_PLT))]
++  ""
++  "")
++
++(define_expand "sym2pcrel"
++  [(const (unspec [(match_operand 0 "" "")] UNSPEC_PCREL))]
++  ""
++  "")
++
++(define_expand "call_fdpic"
++  [(call (match_operand:QI 0 "general_operand")
++	 (match_operand:SI 1 "general_operand"))
++	 (use (match_operand 2 "" ""))
++	 (use (reg:SI PIC_REG))]
++  ""
++  {
++    rtx picreg = force_reg (Pmode, gen_rtx_REG (Pmode, PIC_REG));
++    rtx dest = XEXP (operands[0], 0);
++
++    if (SYMBOL_REF_P (dest) && SYMBOL_REF_LOCAL_P (dest))
++      {
++	if (! rx_call_operand (dest, Pmode))
++	  dest = force_reg (Pmode, dest);
++	emit_call_insn (gen_call_internal (dest));
++      }
++    else
++      {
++	rtx savereg = gen_reg_rtx (Pmode);
++
++	emit_move_insn (savereg, picreg);
++	if (MEM_P (operands[0]) && SYMBOL_REF_P (dest))
++	  {
++	    dest = gen_sym2PLT (dest);
++	    emit_call_insn (gen_call_internal_plt (dest));
++	  }
++	else
++	  {
++	    rtx func = gen_reg_rtx (Pmode);
++	    rtx gotaddr = plus_constant (Pmode, dest, 4);
++	    emit_move_insn (picreg, gen_rtx_MEM (Pmode, gotaddr));
++	    emit_move_insn (func, gen_rtx_MEM (Pmode, dest));
++	    emit_call_insn (gen_call_internal_fd (func));
++	  }
++	emit_move_insn (picreg, savereg);
++      }
++    DONE;
++  }
++)
++
++(define_insn "call_internal_fd"
++  [(call (mem:QI (match_operand:SI 0 "register_operand" "r"))
++	 (const_int 0))
++   (clobber (reg:CC CC_REG))
++   (clobber (reg:SI PIC_REG))
++   (use (reg:SI PIC_REG))]
++  "TARGET_FDPIC"
++  "jsr\t%A0"
++  [(set_attr "length" "2")
++   (set_attr "timings" "33")]
++)
++
++(define_insn "call_internal_plt"
++  [(call (mem:QI (match_operand 0 "rx_plt_call_operand" ""))
++	 (const_int 0))
++   (clobber (reg:CC CC_REG))
++   (clobber (reg:SI PIC_REG))
++   (use (reg:SI PIC_REG))]
++  "TARGET_FDPIC"
++  "bsr\t%A0"
++  [(set_attr "length" "4")
++   (set_attr "timings" "33")]
++)
++
++(define_expand "call_value_fdpic"
++  [(call (match_operand:QI 0 "general_operand")
++	 (match_operand:SI 1 "general_operand"))
++	 (use (match_operand 2 "" ""))
++	 (use (reg:SI PIC_REG))]
++  ""
++  {
++    rtx picreg = force_reg (Pmode, gen_rtx_REG (Pmode, PIC_REG));
++    rtx dest = XEXP (operands[1], 0);
++
++    if (SYMBOL_REF_P (dest) && SYMBOL_REF_LOCAL_P (dest))
++      {
++	if (! rx_call_operand (dest, Pmode))
++	  dest = force_reg (Pmode, dest);
++	emit_call_insn (gen_call_internal (dest));
++      }
++    else
++      {
++	rtx savereg = gen_reg_rtx (Pmode);
++	emit_move_insn (savereg, picreg);
++	if (MEM_P (operands[1]) && SYMBOL_REF_P (dest))
++	  {
++	    dest = gen_sym2PLT (dest);
++	    emit_call_insn (gen_call_value_internal_plt (operands[0], dest));
++	  }
++	else
++	  {
++	    rtx func = gen_reg_rtx (Pmode);
++	    rtx gotaddr = plus_constant (Pmode, dest, 4);
++	    emit_move_insn (picreg, gen_rtx_MEM (Pmode, gotaddr));
++	    emit_move_insn (func, gen_rtx_MEM (Pmode, dest));
++	    emit_call_insn (gen_call_value_internal_fd (operands[0], func));
++	  }
++	emit_move_insn (picreg, savereg);
++      }
++    DONE;
++  }
++)
++
++(define_insn "call_value_internal_plt"
++  [(set (match_operand		     0 "register_operand" "=r")
++	(call (mem:QI (match_operand 1 "rx_plt_call_operand" ""))
++	      (const_int 0)))
++   (clobber (reg:CC CC_REG))
++   (clobber (reg:SI PIC_REG))
++   (use (reg:SI PIC_REG))]
++  "TARGET_FDPIC"
++  "bsr\t%A1"
++  [(set_attr "length" "4")
++   (set_attr "timings" "33")]
++)
++
++(define_insn "call_value_internal_fd"
++  [(set (match_operand			0 "register_operand" "=r")
++	(call (mem:QI (match_operand:SI 1 "register_operand"   "r"))
++	      (const_int 0)))
++   (clobber (reg:CC CC_REG))
++   (clobber (reg:SI PIC_REG))
++   (use (reg:SI PIC_REG))]
++  "TARGET_FDPIC"
++  "jsr\t%1"
++  [(set_attr "length" "2")
++   (set_attr "timings" "33")]
++)
+diff --git a/gcc/config/rx/rx.opt b/gcc/config/rx/rx.opt
+index 5caad487389..0d2e31056b2 100644
+--- a/gcc/config/rx/rx.opt
++++ b/gcc/config/rx/rx.opt
+@@ -143,3 +143,9 @@ Enables or disables the use of the SMOVF, SMOVB, SMOVU, SUNTIL, SWHILE and RMPA
+ mjsr
+ Target Mask(JSR)
+ Always use JSR, never BSR, for calls.
++
++;---------------------------------------------------
++
++mfdpic
++Target Var(TARGET_FDPIC) Init(0)
++Generate ELF FDPIC code.
+diff --git a/libgcc/config.host b/libgcc/config.host
+index 319d6cfe0ef..7ba7a833c39 100644
+--- a/libgcc/config.host
++++ b/libgcc/config.host
+@@ -1382,8 +1382,9 @@ rx-*-elf)
+ 	tm_file="$tm_file rx/rx-abi.h rx/rx-lib.h"
+ 	;;
+ rx-*-linux*)
+-	tmake_file="rx/t-rx t-fdpbit"
++	tmake_file="${tmake_file} rx/t-rx t-fdpbit"
+ 	tm_file="$tm_file rx/rx-lib.h"
++	unwind_header=config/rx/unwind-linux.h
+ 	;;
+ s390x-*-linux*)
+ 	tmake_file="${tmake_file} s390/t-crtstuff s390/t-linux t-stack s390/t-stack-s390"
+diff --git a/libgcc/config/rx/rx-abi.h b/libgcc/config/rx/rx-abi.h
+index 507c4ed454b..48a090ab7fe 100644
+--- a/libgcc/config/rx/rx-abi.h
++++ b/libgcc/config/rx/rx-abi.h
+@@ -22,11 +22,16 @@
+    along with GCC; see the file COPYING3.  If not see
+    <http://www.gnu.org/licenses/>.  */
+ 
++#if defined (__RX_GCC_ABI__) || defined (__RX_ABI__)
+ /* Make __COM_<RX_NAME> an alias for __<GCC_NAME>.  */
+ #define RENAME_LIBRARY(GCC_NAME, RX_NAME)		\
+   __asm__ (".globl\t__COM_" #RX_NAME "\n"		\
+ 	   ".set\t__COM_" #RX_NAME ", ___" #GCC_NAME "\n");
+-
++#else
++#define RENAME_LIBRARY(GCC_NAME, RX_NAME)		\
++  __asm__ (".globl\t__COM_" #RX_NAME "\n"		\
++	   ".set\t__COM_" #RX_NAME ", __" #GCC_NAME "\n");
++#endif
+ 
+ /* The long-long aliases...  */
+ 
+diff --git a/libgcc/config/rx/unwind-linux.h b/libgcc/config/rx/unwind-linux.h
+new file mode 100644
+index 00000000000..66a68ebd949
+--- /dev/null
++++ b/libgcc/config/rx/unwind-linux.h
+@@ -0,0 +1,24 @@
++/* Header file for the Renesas RX unwinder.  */
++
++#ifndef UNWIND_RX_H
++#define UNWIND_RX_H
++
++#include "unwind-generic.h"
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++  static inline _Unwind_Ptr _Unwind_gnu_Find_got (_Unwind_Ptr ptr)
++{
++    _Unwind_Ptr res;
++
++    __asm volatile ("mov r13, %0":"=r" (res));
++    return res;
++}
++
++#ifdef __cplusplus
++}   /* extern "C" */
++#endif
++
++#endif
+diff --git a/libgcc/configure b/libgcc/configure
+index 3d7d65d2eca..6ae8f3c216e 100755
+--- a/libgcc/configure
++++ b/libgcc/configure
+@@ -2430,6 +2430,10 @@ case "${host}" in
+     sh*-*-netbsd*)
+ 	PICFLAG=-fpic
+ 	;;
++    rx-*-linux*)
++	PICFLAG=-mfdpic
++	;;
++
+     # Default to -fPIC unless specified otherwise.
+     *)
+ 	PICFLAG=-fPIC
+@@ -4220,7 +4224,7 @@ else
+     We can't simply define LARGE_OFF_T to be 9223372036854775807,
+     since some C++ compilers masquerading as C compilers
+     incorrectly reject 9223372036854775807.  */
+-#define LARGE_OFF_T (((off_t) 1 << 62) - 1 + ((off_t) 1 << 62))
++#define LARGE_OFF_T ((((off_t) 1 << 31) << 31) - 1 + (((off_t) 1 << 31) << 31))
+   int off_t_is_large[(LARGE_OFF_T % 2147483629 == 721
+ 		       && LARGE_OFF_T % 2147483647 == 1)
+ 		      ? 1 : -1];
+@@ -4266,7 +4270,7 @@ else
+     We can't simply define LARGE_OFF_T to be 9223372036854775807,
+     since some C++ compilers masquerading as C compilers
+     incorrectly reject 9223372036854775807.  */
+-#define LARGE_OFF_T (((off_t) 1 << 62) - 1 + ((off_t) 1 << 62))
++#define LARGE_OFF_T ((((off_t) 1 << 31) << 31) - 1 + (((off_t) 1 << 31) << 31))
+   int off_t_is_large[(LARGE_OFF_T % 2147483629 == 721
+ 		       && LARGE_OFF_T % 2147483647 == 1)
+ 		      ? 1 : -1];
+@@ -4290,7 +4294,7 @@ rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+     We can't simply define LARGE_OFF_T to be 9223372036854775807,
+     since some C++ compilers masquerading as C compilers
+     incorrectly reject 9223372036854775807.  */
+-#define LARGE_OFF_T (((off_t) 1 << 62) - 1 + ((off_t) 1 << 62))
++#define LARGE_OFF_T ((((off_t) 1 << 31) << 31) - 1 + (((off_t) 1 << 31) << 31))
+   int off_t_is_large[(LARGE_OFF_T % 2147483629 == 721
+ 		       && LARGE_OFF_T % 2147483647 == 1)
+ 		      ? 1 : -1];
+@@ -4335,7 +4339,7 @@ else
+     We can't simply define LARGE_OFF_T to be 9223372036854775807,
+     since some C++ compilers masquerading as C compilers
+     incorrectly reject 9223372036854775807.  */
+-#define LARGE_OFF_T (((off_t) 1 << 62) - 1 + ((off_t) 1 << 62))
++#define LARGE_OFF_T ((((off_t) 1 << 31) << 31) - 1 + (((off_t) 1 << 31) << 31))
+   int off_t_is_large[(LARGE_OFF_T % 2147483629 == 721
+ 		       && LARGE_OFF_T % 2147483647 == 1)
+ 		      ? 1 : -1];
+@@ -4359,7 +4363,7 @@ rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+     We can't simply define LARGE_OFF_T to be 9223372036854775807,
+     since some C++ compilers masquerading as C compilers
+     incorrectly reject 9223372036854775807.  */
+-#define LARGE_OFF_T (((off_t) 1 << 62) - 1 + ((off_t) 1 << 62))
++#define LARGE_OFF_T ((((off_t) 1 << 31) << 31) - 1 + (((off_t) 1 << 31) << 31))
+   int off_t_is_large[(LARGE_OFF_T % 2147483629 == 721
+ 		       && LARGE_OFF_T % 2147483647 == 1)
+ 		      ? 1 : -1];
