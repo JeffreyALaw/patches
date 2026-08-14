@@ -1,0 +1,38 @@
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index f79b55a0c70..a2a51c019ec 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -4773,8 +4773,17 @@ riscv_rtx_costs (rtx x, machine_mode mode, int outer_code, int opno ATTRIBUTE_UN
+       return false;
+ 
+     case LO_SUM:
++      /* The +1 at the end is to make this ever-so-slightly more
++	 expensive than a simple PLUS to encourage CSE-ing the
++	 symbolic expression with related symbolic expressions.
++
++	 While both PLUS and LO_SUM will turn into an add insn, if
++	 we can convert the LO_SUM to a constant offset from another
++	 expression, then we'll be able to eliminate the HIGH
++	 insn.  */
+       *total = (set_src_cost (XEXP (x, 0), mode, speed)
+-		+ set_src_cost (XEXP (x, 1), mode, speed));
++		+ set_src_cost (XEXP (x, 1), mode, speed)
++		+ 1);
+       return true;
+ 
+     case LT:
+diff --git a/gcc/testsuite/gcc.target/riscv/pr108031-2.c b/gcc/testsuite/gcc.target/riscv/pr108031-2.c
+new file mode 100644
+index 00000000000..2a727895346
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr108031-2.c
+@@ -0,0 +1,9 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc -mabi=lp64d " { target { rv64 } } } */
++/* { dg-options "-march=rv32gc -mabi=ilp32d " { target { rv32 } } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" } } */
++
++#include "pr108031.c"
++
++/* { dg-final { scan-assembler-times "%hi" "2" } } */
++/* { dg-final { scan-assembler-times "%lo" "2" } } */
