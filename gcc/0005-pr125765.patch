@@ -44,6 +44,25 @@ index 722cd8c1bbe2..2bfb13f0f918 100644
    /* If X and COMMON are the same, then we're going to need a temporary.  */
    if (common && rtx_equal_p (common, if_info->x))
      {
+diff --git a/gcc/testsuite/gcc.target/riscv/pr125765-1.c b/gcc/testsuite/gcc.target/riscv/pr125765-1.c
+new file mode 100644
+index 000000000000..c824d906b90f
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr125765-1.c
+@@ -0,0 +1,13 @@
++/* { dg-do compile } */
++/* { dg-additional-options "-march=rv64gcbv_zicond -mabi=lp64d -mbranch-cost=4" { target rv64 } } */
++/* { dg-additional-options "-march=rv32gcbv_zicond -mabi=ilp32 -mbranch-cost=4" { target rv32 } } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Os" "-Og" "-Oz" } } */
++
++
++int src(int c, int b, int a) {
++  int t = (a ? 0xff10 : 0xff00);
++  return t;
++}
++
++/* { dg-final { scan-assembler-not "\tczero\t" } } */
++/* { dg-final { scan-assembler-times "\tadd\t" 1 } } */
 diff --git a/gcc/testsuite/gcc.target/riscv/zicond-primitiveSemantics_return_imm_imm.c b/gcc/testsuite/gcc.target/riscv/zicond-primitiveSemantics_return_imm_imm.c
 index 62f9fb29169e..2f1ca183068c 100644
 --- a/gcc/testsuite/gcc.target/riscv/zicond-primitiveSemantics_return_imm_imm.c
