@@ -1,0 +1,46 @@
+diff --git a/gcc/ifcvt.cc b/gcc/ifcvt.cc
+index 722cd8c1bbe2..2bfb13f0f918 100644
+--- a/gcc/ifcvt.cc
++++ b/gcc/ifcvt.cc
+@@ -1609,6 +1609,31 @@ noce_try_shifted_store_flag (struct noce_if_info *if_info)
+ 
+   rtx a = if_info->a;
+   rtx b = if_info->b;
++  rtx preload_src = NULL_RTX;
++
++  /* If A and B are constants and B has all the bits set
++     in A plus one more, then this is a load of A and
++     a conditional IOR of that one bit.  */
++  if (CONST_INT_P (a) && CONST_INT_P (b)
++      && (UINTVAL (a) & UINTVAL (b)) == UINTVAL (b)
++      && pow2p_hwi (UINTVAL (a) & ~UINTVAL (b)))
++    {
++      machine_mode mode = GET_MODE (if_info->x);
++      rtx tmp1 = gen_reg_rtx (mode);
++      preload_src = b;
++      a = gen_rtx_PLUS (mode, tmp1, GEN_INT (UINTVAL (a) & ~UINTVAL (b)));
++      b = tmp1;
++    }
++  else if (CONST_INT_P (a) && CONST_INT_P (b)
++	   && (UINTVAL (a) & UINTVAL (b)) == UINTVAL (a)
++	   && pow2p_hwi (UINTVAL (b) & ~UINTVAL (a)))
++    {
++      machine_mode mode = GET_MODE (if_info->x);
++      rtx tmp1 = gen_reg_rtx (mode);
++      preload_src = a;
++      b = gen_rtx_PLUS (mode, tmp1, GEN_INT (UINTVAL (b) & ~UINTVAL (a)));
++      a = tmp1;
++    }
+ 
+   /* Most binary operators are allowed, essentially the same set
+      as the condzero arithmetic paths, with the exception of AND
+@@ -1650,6 +1675,9 @@ noce_try_shifted_store_flag (struct noce_if_info *if_info)
+ 
+   start_sequence ();
+ 
++  if (preload_src)
++    emit_move_insn (common, preload_src);
++
+   /* If X and COMMON are the same, then we're going to need a temporary.  */
+   if (common && rtx_equal_p (common, if_info->x))
+     {
