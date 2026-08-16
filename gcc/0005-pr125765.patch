@@ -44,3 +44,84 @@ index 722cd8c1bbe2..2bfb13f0f918 100644
    /* If X and COMMON are the same, then we're going to need a temporary.  */
    if (common && rtx_equal_p (common, if_info->x))
      {
+diff --git a/gcc/testsuite/gcc.target/riscv/zicond-primitiveSemantics_return_imm_imm.c b/gcc/testsuite/gcc.target/riscv/zicond-primitiveSemantics_return_imm_imm.c
+index 62f9fb29169e..2f1ca183068c 100644
+--- a/gcc/testsuite/gcc.target/riscv/zicond-primitiveSemantics_return_imm_imm.c
++++ b/gcc/testsuite/gcc.target/riscv/zicond-primitiveSemantics_return_imm_imm.c
+@@ -4,24 +4,24 @@
+ /* { dg-skip-if "" { *-*-* } {"-O0" "-Os" "-Og" "-Oz"} } */
+ 
+ long primitiveSemantics_return_imm_imm_00(long a, long b) {
+-  return a == 0 ? 4 : 6;
++  return a == 0 ? 3 : 6;
+ }
+ 
+ long primitiveSemantics_return_imm_imm_01(long a, long b) {
+-  return a != 0 ? 4 : 6;
++  return a != 0 ? 3 : 6;
+ }
+ 
+ long primitiveSemantics_return_imm_imm_02(long a, long b) {
+-  return a == 0 ? 6 : 4;
++  return a == 0 ? 6 : 3;
+ }
+ 
+ long primitiveSemantics_return_imm_imm_03(long a, long b) {
+-  return a != 0 ? 6 : 4;
++  return a != 0 ? 6 : 3;
+ }
+ 
+ long primitiveSemantics_return_imm_imm_04(long a, long b) {
+   if (a)
+-    b = 4;
++    b = 3;
+   else
+     b = 6;
+   return b;
+@@ -29,31 +29,31 @@ long primitiveSemantics_return_imm_imm_04(long a, long b) {
+ 
+ long primitiveSemantics_return_imm_imm_05(long a, long b) {
+   if (!a)
+-    b = 4;
++    b = 3;
+   else
+     b = 6;
+   return b;
+ }
+ 
+ int primitiveSemantics_return_imm_imm_06(int a, int b) {
+-  return a == 0 ? 4 : 6;
++  return a == 0 ? 3 : 6;
+ }
+ 
+ int primitiveSemantics_return_imm_imm_07(int a, int b) {
+-  return a != 0 ? 4 : 6;
++  return a != 0 ? 3 : 6;
+ }
+ 
+ int primitiveSemantics_return_imm_imm_08(int a, int b) {
+-  return a == 0 ? 6 : 4;
++  return a == 0 ? 6 : 3;
+ }
+ 
+ int primitiveSemantics_return_imm_imm_09(int a, int b) {
+-  return a != 0 ? 6 : 4;
++  return a != 0 ? 6 : 3;
+ }
+ 
+ int primitiveSemantics_return_imm_imm_10(int a, int b) {
+   if (a)
+-    b = 4;
++    b = 3;
+   else
+     b = 6;
+   return b;
+@@ -61,7 +61,7 @@ int primitiveSemantics_return_imm_imm_10(int a, int b) {
+ 
+ int primitiveSemantics_return_imm_imm_11(int a, int b) {
+   if (!a)
+-    b = 4;
++    b = 3;
+   else
+     b = 6;
+   return b;
