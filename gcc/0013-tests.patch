@@ -9,17 +9,6 @@ index 320332974eda..5732f4c772c0 100644
  
  #include "riscv_vector.h"
  
-@@ -22,8 +22,8 @@ test_float_point_dynamic_frm (vfloat32m1_t op1, vfloat32m1_t op2,
-   return result;
- }
- 
--/* { dg-final { scan-assembler-times {vfadd\.v[vf]\s+v[0-9]+,\s*v[0-9]+,\s*[fav]+[0-9]+} 4 } } */
-+/* { dg-final { scan-assembler-times {vfadd\.v[vf]\s+v[0-9]+,\s*v[0-9]+,\s*[fav]+[0-9]+} 3 } } */
- /* { dg-final { scan-assembler-times {frrm\s+[axs][0-9]+} 1 } } */
- /* { dg-final { scan-assembler-times {fsrmi\s+[01234]} 2 } } */
--/* { dg-final { scan-assembler-times {fsrm\s+[axs][0-9]+} 2 } } */
-+/* { dg-final { scan-assembler-times {fsrm\s+[axs][0-9]+} 1 } } */
- /* { dg-final { scan-assembler-not {fsrmi\s+[axs][0-9]+,\s*[01234]} } } */
 diff --git a/gcc/testsuite/gcc.target/riscv/rvv/base/float-point-dynamic-frm-13.c b/gcc/testsuite/gcc.target/riscv/rvv/base/float-point-dynamic-frm-13.c
 index 1216793425ab..01a949e805f4 100644
 --- a/gcc/testsuite/gcc.target/riscv/rvv/base/float-point-dynamic-frm-13.c
@@ -31,18 +20,6 @@ index 1216793425ab..01a949e805f4 100644
  
  #include "riscv_vector.h"
  
-@@ -22,8 +22,8 @@ test_float_point_dynamic_frm (vfloat32m1_t op1, vfloat32m1_t op2,
-   return result;
- }
- 
--/* { dg-final { scan-assembler-times {vfadd\.v[vf]\s+v[0-9]+,\s*v[0-9]+,\s*[fav]+[0-9]+} 4 } } */
-+/* { dg-final { scan-assembler-times {vfadd\.v[vf]\s+v[0-9]+,\s*v[0-9]+,\s*[fav]+[0-9]+} 3 } } */
- /* { dg-final { scan-assembler-times {frrm\s+[axs][0-9]+} 1 } } */
--/* { dg-final { scan-assembler-times {fsrm\s+[axs][0-9]+} 3 } } */
--/* { dg-final { scan-assembler-times {fsrmi\s+[01234]} 3 } } */
-+/* { dg-final { scan-assembler-times {fsrm\s+[axs][0-9]+} 2 } } */
-+/* { dg-final { scan-assembler-times {fsrmi\s+[01234]} 2 } } */
- /* { dg-final { scan-assembler-not {fsrmi\s+[axs][0-9]+,\s*[01234]} } } */
 diff --git a/gcc/testsuite/gcc.target/riscv/rvv/base/float-point-dynamic-frm-14.c b/gcc/testsuite/gcc.target/riscv/rvv/base/float-point-dynamic-frm-14.c
 index d84e4704f472..c1e65d3ed445 100644
 --- a/gcc/testsuite/gcc.target/riscv/rvv/base/float-point-dynamic-frm-14.c
