@@ -12,3 +12,7 @@ gcc/testsuite/g++.dg/modules/compile-std-1.C
 gcc/testsuite/gcc.c-torture/execute/20101011-1.c
 gcc/testsuite/gcc.dg/pr116891.c
 
+# These are definitely bouncing
+gcc/testsuite/gfortran.dg/coarray/lock_1.f90
+gcc/testsuite/g++.dg/cpp2a/constexpr-vector1.C
+
