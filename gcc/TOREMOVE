@@ -123,3 +123,6 @@ gcc/testsuite/g++.dg/modules/compile-std1.C
 gcc/testsuite/gcc.dg/Warray-bounds-52.c
 gcc/testsuite/gcc.dg/Warray-bounds-53.c
 gcc/testsuite/gcc.dg/debug/ctf/ctf-array-2.c
+
+# I just don't care about PCH.  I'm trying to identify codegen issues
+gcc/testsuite/gcc.dg/pch
