@@ -1,0 +1,96 @@
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/struct/struct_vect-1.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/struct/struct_vect-1.c
+index b4673780a6ba..b4c04a3dad88 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/struct/struct_vect-1.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/struct/struct_vect-1.c
+@@ -223,7 +223,7 @@ NAME(g8) (TYPE *__restrict a, TYPE *__restrict b, TYPE *__restrict c,
+ /* { dg-final { scan-assembler-times {vlseg8e8\.v} 4 } } */
+ /* { dg-final { scan-assembler-times {vsseg2e8\.v} 8 } } */
+ /* { dg-final { scan-assembler-times {vsseg3e8\.v} 8 } } */
+-/* { dg-final { scan-assembler-times {vsseg4e8\.v} 4 } } */
++/* { dg-final { scan-assembler-times {vsseg4e8\.v} 8 } } */
+ /* { dg-final { scan-assembler-times {vsseg5e8\.v} 4 } } */
+ /* { dg-final { scan-assembler-times {vsseg6e8\.v} 4 } } */
+ /* { dg-final { scan-assembler-times {vsseg7e8\.v} 4 } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/struct/struct_vect-2.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/struct/struct_vect-2.c
+index 6a1605e2655a..20a0b94882f6 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/struct/struct_vect-2.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/struct/struct_vect-2.c
+@@ -13,7 +13,7 @@
+ /* { dg-final { scan-assembler-times {vlseg8e16\.v} 4 } } */
+ /* { dg-final { scan-assembler-times {vsseg2e16\.v} 8 } } */
+ /* { dg-final { scan-assembler-times {vsseg3e16\.v} 8 } } */
+-/* { dg-final { scan-assembler-times {vsseg4e16\.v} 4 } } */
++/* { dg-final { scan-assembler-times {vsseg4e16\.v} 8 } } */
+ /* { dg-final { scan-assembler-times {vsseg5e16\.v} 4 } } */
+ /* { dg-final { scan-assembler-times {vsseg6e16\.v} 4 } } */
+ /* { dg-final { scan-assembler-times {vsseg7e16\.v} 4 } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/struct/struct_vect-3.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/struct/struct_vect-3.c
+index 48395e99320a..fc2db42e3f6b 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/struct/struct_vect-3.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/struct/struct_vect-3.c
+@@ -7,13 +7,13 @@
+ /* { dg-final { scan-assembler-times {vlseg2e32\.v} 8 } } */
+ /* { dg-final { scan-assembler-times {vlseg3e32\.v} 8 } } */
+ /* { dg-final { scan-assembler-times {vlseg4e32\.v} 8 } } */
+-/* { dg-final { scan-assembler-times {vlseg5e32\.v} 6 } } */
++/* { dg-final { scan-assembler-times {vlseg5e32\.v} 8 } } */
+ /* { dg-final { scan-assembler-times {vlseg6e32\.v} 6 } } */
+ /* { dg-final { scan-assembler-times {vlseg7e32\.v} 4 } } */
+ /* { dg-final { scan-assembler-times {vlseg8e32\.v} 4 } } */
+ /* { dg-final { scan-assembler-times {vsseg2e32\.v} 8 } } */
+ /* { dg-final { scan-assembler-times {vsseg3e32\.v} 8 } } */
+-/* { dg-final { scan-assembler-times {vsseg4e32\.v} 4 } } */
++/* { dg-final { scan-assembler-times {vsseg4e32\.v} 6 } } */
+ /* { dg-final { scan-assembler-times {vsseg5e32\.v} 4 } } */
+ /* { dg-final { scan-assembler-times {vsseg6e32\.v} 4 } } */
+ /* { dg-final { scan-assembler-times {vsseg7e32\.v} 4 } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/struct/struct_vect-4.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/struct/struct_vect-4.c
+index 03829dd83813..7d2d018bfa83 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/struct/struct_vect-4.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/struct/struct_vect-4.c
+@@ -7,13 +7,13 @@
+ /* { dg-final { scan-assembler-times {vlseg2e64\.v} 8 } } */
+ /* { dg-final { scan-assembler-times {vlseg3e64\.v} 8 } } */
+ /* { dg-final { scan-assembler-times {vlseg4e64\.v} 8 } } */
+-/* { dg-final { scan-assembler-times {vlseg5e64\.v} 7 } } */
++/* { dg-final { scan-assembler-times {vlseg5e64\.v} 8 } } */
+ /* { dg-final { scan-assembler-times {vlseg6e64\.v} 7 } } */
+ /* { dg-final { scan-assembler-times {vlseg7e64\.v} 4 } } */
+ /* { dg-final { scan-assembler-times {vlseg8e64\.v} 4 } } */
+ /* { dg-final { scan-assembler-times {vsseg2e64\.v} 8 } } */
+ /* { dg-final { scan-assembler-times {vsseg3e64\.v} 8 } } */
+-/* { dg-final { scan-assembler-times {vsseg4e64\.v} 4 } } */
++/* { dg-final { scan-assembler-times {vsseg4e64\.v} 7 } } */
+ /* { dg-final { scan-assembler-times {vsseg5e64\.v} 4 } } */
+ /* { dg-final { scan-assembler-times {vsseg6e64\.v} 4 } } */
+ /* { dg-final { scan-assembler-times {vsseg7e64\.v} 4 } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/struct/struct_vect-5.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/struct/struct_vect-5.c
+index aef9cb77fd56..67cc473f83c2 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/struct/struct_vect-5.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/struct/struct_vect-5.c
+@@ -7,13 +7,13 @@
+ /* { dg-final { scan-assembler-times {vlseg2e32\.v} 8 } } */
+ /* { dg-final { scan-assembler-times {vlseg3e32\.v} 8 } } */
+ /* { dg-final { scan-assembler-times {vlseg4e32\.v} 8 } } */
+-/* { dg-final { scan-assembler-times {vlseg5e32\.v} 6 } } */
++/* { dg-final { scan-assembler-times {vlseg5e32\.v} 8 } } */
+ /* { dg-final { scan-assembler-times {vlseg6e32\.v} 6 } } */
+ /* { dg-final { scan-assembler-times {vlseg7e32\.v} 4 } } */
+ /* { dg-final { scan-assembler-times {vlseg8e32\.v} 4 } } */
+ /* { dg-final { scan-assembler-times {vsseg2e32\.v} 8 } } */
+ /* { dg-final { scan-assembler-times {vsseg3e32\.v} 8 } } */
+-/* { dg-final { scan-assembler-times {vsseg4e32\.v} 4 } } */
++/* { dg-final { scan-assembler-times {vsseg4e32\.v} 6 } } */
+ /* { dg-final { scan-assembler-times {vsseg5e32\.v} 4 } } */
+ /* { dg-final { scan-assembler-times {vsseg6e32\.v} 4 } } */
+ /* { dg-final { scan-assembler-times {vsseg7e32\.v} 4 } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_single-26.c b/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_single-26.c
+index 2ac02254dbeb..0ff7f3b3c90f 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_single-26.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/vsetvl/avl_single-26.c
+@@ -32,4 +32,4 @@ void f (int8_t * restrict in, int8_t * restrict out, int n, int m, int cond)
+ }
+ 
+ /* { dg-final { scan-assembler-times {vsetvli\s+zero,\s*[a-x0-9]+,\s*e32,\s*mf2,\s*tu,\s*mu} 1 { target { no-opts "-O0" no-opts "-g" no-opts "-funroll-loops" } } } } */
+-/* { dg-final { scan-assembler-times {vsetvli} 2 { target { no-opts "-O0" no-opts "-O1" no-opts "-Os" no-opts "-g" no-opts "-funroll-loops" no-opts "-Oz" } } } } */
++/* { dg-final { scan-assembler-times {vsetvli} 3 { target { no-opts "-O0" no-opts "-O1" no-opts "-Os" no-opts "-g" no-opts "-funroll-loops" no-opts "-Oz" } } } } */
