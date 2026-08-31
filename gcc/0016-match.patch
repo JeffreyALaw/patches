@@ -1,0 +1,106 @@
+
+
+[...]
+>> +/* { dg-final { scan-tree-dump-not {__builtin_cabsl \(__builtin_cprojl} "optimized" } } */
+> This testcase will pass even before your match.pd patch.
+> Maybe the best way to write this testcase is count the number of
+> cabs/cproj used.
+
+Mine, in GIMPLE SSA there wont be nested call to match the above testcase.
+I have updated the patch, PFA it below.
+
+Thanks,
+Dipesh:q
+
+gcc/ChangeLog:
+	PR tree-optimization/126690.
+	* match.pd: Add patterns to fold CPROJ when nested inside CPROJ or CABS.
+
+gcc/testsuite/ChangeLog:
+
+	* gcc.dg/tree-ssa/pr126690.c: New test.
+---
+ gcc/match.pd                             | 10 +++++
+ gcc/testsuite/gcc.dg/tree-ssa/pr126690.c | 48 ++++++++++++++++++++++++
+ 2 files changed, 58 insertions(+)
+ create mode 100644 gcc/testsuite/gcc.dg/tree-ssa/pr126690.c
+
+diff --git a/gcc/match.pd b/gcc/match.pd
+index c7841cab459..a7bf8092d25 100644
+--- a/gcc/match.pd
++++ b/gcc/match.pd
+@@ -10186,6 +10186,16 @@ DEFINE_INT_AND_FLOAT_ROUND_FN (RINT)
+  (if (real_isinf (TREE_REAL_CST_PTR (@1)))
+   { build_complex_inf (type, TREE_REAL_CST_PTR (@1)->sign); }))
+
++/* cproj(cproj(x)) -> cproj(x).  */
++(simplify
++ (CPROJ (CPROJ @0))
++ (CPROJ @0))
++
++/* cabs(cproj(x)) -> cabs(x).  */
++(simplify
++ (CABS (CPROJ @0))
++ (CABS @0))
++
+ (for pows (POW)
+      sqrts (SQRT)
+      cbrts (CBRT)
+diff --git a/gcc/testsuite/gcc.dg/tree-ssa/pr126690.c b/gcc/testsuite/gcc.dg/tree-ssa/pr126690.c
+new file mode 100644
+index 00000000000..f40050ea145
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/tree-ssa/pr126690.c
+@@ -0,0 +1,48 @@
++/* { dg-do compile } */
++/* { dg-require-effective-target c99_runtime } */
++/* { dg-options "-O2 -fdump-tree-optimized" } */
++
++__attribute__((noinline))
++_Complex float
++cproj_idempotentf (_Complex float a)
++{
++  return __builtin_cprojf (__builtin_cprojf (a));
++}
++
++__attribute__((noinline))
++_Complex double
++cproj_idempotent (_Complex double a)
++{
++  return __builtin_cproj (__builtin_cproj (a));
++}
++
++__attribute__((noinline))
++_Complex long double
++cproj_idempotentl (_Complex long double a)
++{
++  return __builtin_cprojl (__builtin_cprojl (a));
++}
++
++__attribute__((noinline))
++float
++cabs_absorbs_cprojf (_Complex float a)
++{
++  return __builtin_cabsf (__builtin_cprojf (a));
++}
++
++__attribute__((noinline))
++double
++cabs_absorbs_cproj (_Complex double a)
++{
++  return __builtin_cabs (__builtin_cproj (a));
++}
++
++__attribute__((noinline))
++long double
++cabs_absorbs_cprojl (_Complex long double a)
++{
++  return __builtin_cabsl (__builtin_cprojl (a));
++}
++
++/* { dg-final { scan-tree-dump-times "__builtin_cproj" 3 "optimized" } } */
++/* { dg-final { scan-tree-dump-times "__builtin_cabs" 3 "optimized" } } */
+--
+2.34.1
+
+
