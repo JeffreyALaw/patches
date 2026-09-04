@@ -1,0 +1,49 @@
+
+
+Recovered scalar types are needed by the base cost hook, but they must not
+trigger vector-specific statement cost adjustments.
+
+gcc/ChangeLog:
+
+	* config/riscv/riscv-vector-costs.cc (costs::add_stmt_cost): Skip
+	statement cost adjustments for scalar costing.
+---
+When costing scalar IL, vectype is null and 32dc4bc recovers a type from
+the statement LHS.  The LHS can itself be vector-typed, however, so this
+can produce a vectype that is wrong for the scalar cost being computed.
+
+This happens for the 512-element constructor in combine-4.c.  Its root
+statement has a vector(512) long int LHS.  Recovering that type while
+computing SCALAR_COST lets adjust_stmt_cost apply M8 scaling, raising the
+scalar cost from 1 to 8.  An SLP alternative using 512-byte vectors, whose
+cost is 6, then appears profitable and expands the constructor through a
+4096-byte stack temporary.  This removes one of the four expected
+vslideup.vx instructions.
+
+Require m_cost_type != SCALAR_COST before calling adjust_stmt_cost.  The
+recovered type is still passed to builtin_vectorization_cost, but cannot
+trigger vector-specific adjustments during scalar costing.
+
+Tested the full gcc.target/riscv testsuite on rv64gcv, including execution
+tests; no new FAIL, XPASS, UNRESOLVED, or ERROR results versus 32dc4bc^.
+
+ gcc/config/riscv/riscv-vector-costs.cc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/gcc/config/riscv/riscv-vector-costs.cc b/gcc/config/riscv/riscv-vector-costs.cc
+index dfb80bee67..41a15ae220 100644
+--- a/gcc/config/riscv/riscv-vector-costs.cc
++++ b/gcc/config/riscv/riscv-vector-costs.cc
+@@ -1622,7 +1622,7 @@ costs::add_stmt_cost (int count, vect_cost_for_stmt kind,
+ 	m_unrolled_vls_stmts += count * m_unrolled_vls_niters;
+     }
+ 
+-  if (vectype)
++  if (m_cost_type != SCALAR_COST && vectype)
+     stmt_cost = adjust_stmt_cost (kind, loop_vinfo, stmt_info, node, vectype,
+ 				  stmt_cost);
+ 
+-- 
+2.47.1
+
+
