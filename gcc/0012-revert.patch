@@ -1,0 +1,76 @@
+commit 0f858780ad16e217317f1fe53cca8dee77d12c21
+Author: Jeff Law <jeffrey.law@oss.qualcomm.com>
+Date:   Fri Sep 4 07:45:16 2026 -0600
+
+    Revert "vect: Allow signed types in average fallback [PR89007]"
+    
+    This reverts commit 765ef64246da4b65ca394b29095cbf891006977d.
+
+diff --git a/gcc/testsuite/gcc.target/i386/pr89007.c b/gcc/testsuite/gcc.target/i386/pr89007.c
+deleted file mode 100644
+index 854fb54700ad..000000000000
+--- a/gcc/testsuite/gcc.target/i386/pr89007.c
++++ /dev/null
+@@ -1,20 +0,0 @@
+-/* PR tree-optimization/89007 */
+-/* { dg-do compile } */
+-/* { dg-options "-O3 -mavx512bw -mavx512vl -mprefer-vector-width=512" } */
+-
+-void
+-avg_floor (short *restrict d, short *restrict a, short *restrict b, int n)
+-{
+-  for (int i = 0; i < n; i++)
+-    d[i] = (a[i] + b[i]) >> 1;
+-}
+-
+-void
+-avg_ceil (short *restrict d, short *restrict a, short *restrict b, int n)
+-{
+-  for (int i = 0; i < n; i++)
+-    d[i] = (a[i] + b[i] + 1) >> 1;
+-}
+-
+-/* { dg-final { scan-assembler "vpsraw\[ \t\]" } } */
+-/* { dg-final { scan-assembler-not "vpsrad\[ \t\]" } } */
+diff --git a/gcc/tree-vect-patterns.cc b/gcc/tree-vect-patterns.cc
+index 58710b2a5fdf..4adfa3060afb 100644
+--- a/gcc/tree-vect-patterns.cc
++++ b/gcc/tree-vect-patterns.cc
+@@ -3630,15 +3630,17 @@ vect_recog_average_pattern (vec_info *vinfo,
+   if (!new_vectype)
+     return NULL;
+ 
+-  bool fallback_p = !direct_internal_fn_supported_p (ifn, new_vectype,
+-						      OPTIMIZE_FOR_SPEED);
+-  if (fallback_p
+-      && (!target_supports_op_p (new_vectype, RSHIFT_EXPR, optab_scalar)
+-	  || !target_supports_op_p (new_vectype, PLUS_EXPR, optab_default)
+-	  || !target_supports_op_p (new_vectype, BIT_AND_EXPR, optab_default)
+-	  || (ifn == IFN_AVG_CEIL
+-	      && !target_supports_op_p (new_vectype, BIT_IOR_EXPR,
+-					optab_default))))
++  bool fallback_p = false;
++
++  if (direct_internal_fn_supported_p (ifn, new_vectype, OPTIMIZE_FOR_SPEED))
++    ;
++  else if (TYPE_UNSIGNED (new_type)
++	   && optab_for_tree_code (RSHIFT_EXPR, new_vectype, optab_scalar)
++	   && optab_for_tree_code (PLUS_EXPR, new_vectype, optab_default)
++	   && optab_for_tree_code (BIT_IOR_EXPR, new_vectype, optab_default)
++	   && optab_for_tree_code (BIT_AND_EXPR, new_vectype, optab_default))
++    fallback_p = true;
++  else
+     return NULL;
+ 
+   /* The IR requires a valid vector type for the cast result, even though
+@@ -3662,9 +3664,7 @@ vect_recog_average_pattern (vec_info *vinfo,
+ 	 unmasked_carry = new_ops[0] and/or new_ops[1];
+ 	 carry = unmasked_carry & 1;
+ 	 new_var = sum_of_shifted + carry;
+-
+-	 For signed types, arithmetic shifts round down and the carry is one
+-	 when both operands are odd (or either operand for IFN_AVG_CEIL).  */
++      */
+ 
+       tree one_cst = build_one_cst (new_type);
+       gassign *g;
