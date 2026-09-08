@@ -1,0 +1,16 @@
+diff --git a/gcc/config/riscv/riscv-bclr-lowest-set-bit.cc b/gcc/config/riscv/riscv-bclr-lowest-set-bit.cc
+index ecfa511a882b..575030f08be3 100644
+--- a/gcc/config/riscv/riscv-bclr-lowest-set-bit.cc
++++ b/gcc/config/riscv/riscv-bclr-lowest-set-bit.cc
+@@ -193,11 +193,6 @@ pass_bclr_lowest_set_bit::execute (function *fn)
+ 	  rtx dec_src = SET_SRC (dec_set);
+ 	  rtx dec_dest = SET_DEST (dec_set);
+ 
+-	  /* For a 32 bit object on rv64, the decrement will
+-	     be wrapped by a SIGN_EXTEND.  Strip it.  */
+-	  if (GET_CODE (dec_src) == SIGN_EXTEND)
+-	    dec_src = XEXP (dec_src, 0);
+-
+ 	  /* Verify it's res = x - 1, if not proceed to the next insn.  */
+ 	  if (!dec_set
+ 	      || !REG_P (dec_dest)
