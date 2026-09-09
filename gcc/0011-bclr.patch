@@ -1,16 +1,125 @@
 diff --git a/gcc/config/riscv/riscv-bclr-lowest-set-bit.cc b/gcc/config/riscv/riscv-bclr-lowest-set-bit.cc
-index ecfa511a882b..575030f08be3 100644
+index ecfa511a882..1e1b58354f8 100644
 --- a/gcc/config/riscv/riscv-bclr-lowest-set-bit.cc
 +++ b/gcc/config/riscv/riscv-bclr-lowest-set-bit.cc
-@@ -193,11 +193,6 @@ pass_bclr_lowest_set_bit::execute (function *fn)
+@@ -193,10 +193,14 @@ pass_bclr_lowest_set_bit::execute (function *fn)
  	  rtx dec_src = SET_SRC (dec_set);
  	  rtx dec_dest = SET_DEST (dec_set);
  
 -	  /* For a 32 bit object on rv64, the decrement will
 -	     be wrapped by a SIGN_EXTEND.  Strip it.  */
--	  if (GET_CODE (dec_src) == SIGN_EXTEND)
++	  /* For a 32 bit object on rv64 the decrement is wrapped by a
++	     SIGN_EXTEND.  Strip it, remembering the mode to extend from.  */
++	  machine_mode subword_mode = VOIDmode;
+ 	  if (GET_CODE (dec_src) == SIGN_EXTEND)
 -	    dec_src = XEXP (dec_src, 0);
--
++	    {
++	      subword_mode = GET_MODE (XEXP (dec_src, 0));
++	      dec_src = XEXP (dec_src, 0);
++	    }
+ 
  	  /* Verify it's res = x - 1, if not proceed to the next insn.  */
  	  if (!dec_set
- 	      || !REG_P (dec_dest)
+@@ -229,6 +233,10 @@ pass_bclr_lowest_set_bit::execute (function *fn)
+ 	      || GET_CODE (and_src) != AND)
+ 	    continue;
+ 
++	  /* The extension lands in AND_DEST, and bclr is word_mode only.  */
++	  if (subword_mode != VOIDmode && GET_MODE (and_dest) != word_mode)
++	    continue;
++
+ 	  rtx and_op0 = XEXP (and_src, 0);
+ 	  rtx and_op1 = XEXP (and_src, 1);
+ 
+@@ -251,6 +259,17 @@ pass_bclr_lowest_set_bit::execute (function *fn)
+ 					gen_lowpart (QImode, prior_ctz_output));
+ 	      pat = gen_rtx_AND (GET_MODE (dec_dest), pat, dec_src);
+ 
++	      /* bclr does not keep a sub-word result sign extended:
++		 clearing bit 31 leaves the upper half set.  Redo it.  */
++	      if (subword_mode != VOIDmode)
++		{
++		  rtx tmp = gen_reg_rtx (word_mode);
++		  df_insn_rescan (emit_insn_before (gen_rtx_SET (tmp, pat),
++						    next));
++		  pat = gen_rtx_SIGN_EXTEND (word_mode,
++					     gen_lowpart (subword_mode, tmp));
++		}
++
+ 	      /* Slam that pattern in as the SET_SRC of the original AND.  */
+ 	      SET_SRC (and_set) = pat;
+ 	      INSN_CODE (next) = -1;
+@@ -288,8 +307,20 @@ pass_bclr_lowest_set_bit::execute (function *fn)
+ 				        GEN_INT (-2),
+ 					gen_lowpart (QImode, later_ctz_output));
+ 	      pat = gen_rtx_AND (GET_MODE (dec_dest), pat, dec_src);
++
++	      /* Sign extend as above.  */
++	      rtx_insn *after = NEXT_INSN (next);
++	      if (subword_mode != VOIDmode)
++		{
++		  rtx tmp = gen_reg_rtx (word_mode);
++		  after = emit_insn_after (gen_rtx_SET (tmp, pat), after);
++		  df_insn_rescan (after);
++		  pat = gen_rtx_SIGN_EXTEND (word_mode,
++					     gen_lowpart (subword_mode, tmp));
++		}
++
+ 	      pat = gen_rtx_SET (and_dest, pat);
+-	      df_insn_rescan (emit_insn_after (pat, NEXT_INSN (next)));
++	      df_insn_rescan (emit_insn_after (pat, after));
+ 	    }
+ 	}
+     }
+diff --git a/gcc/config/riscv/riscv-passes.def b/gcc/config/riscv/riscv-passes.def
+index bc6b3c8b98d..34c2db9ed92 100644
+--- a/gcc/config/riscv/riscv-passes.def
++++ b/gcc/config/riscv/riscv-passes.def
+@@ -17,7 +17,7 @@
+    along with GCC; see the file COPYING3.  If not see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-INSERT_PASS_AFTER (pass_combine, 1, pass_bclr_lowest_set_bit);
++INSERT_PASS_BEFORE (pass_combine, 1, pass_bclr_lowest_set_bit);
+ INSERT_PASS_AFTER (pass_rtl_store_motion, 1, pass_shorten_memrefs);
+ INSERT_PASS_AFTER (pass_split_all_insns, 1, pass_avlprop);
+ INSERT_PASS_BEFORE (pass_fast_rtl_dce, 1, pass_vsetvl);
+diff --git a/gcc/testsuite/gcc.target/riscv/bclr-lowest-set-bit-2.c b/gcc/testsuite/gcc.target/riscv/bclr-lowest-set-bit-2.c
+new file mode 100644
+index 00000000000..de772ab67ff
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/bclr-lowest-set-bit-2.c
+@@ -0,0 +1,33 @@
++/* { dg-do run { target { rv64 && riscv_b_ok } } } */
++/* { dg-options "-march=rv64gc_zbb_zbs -mabi=lp64d -O2 -save-temps" } */
++
++/* If bclr drops the sign extension, this loop never terminates.  */
++
++extern void abort (void);
++
++__attribute__((noipa)) unsigned
++bit_walk (unsigned x)
++{
++  unsigned r = 0;
++  unsigned guard = 0;
++
++  for (unsigned m = x; m; m &= m - 1)
++    {
++      if (++guard > 32)
++	abort ();
++      r += (unsigned) __builtin_ctz (m);
++    }
++  return r;
++}
++
++int
++main (void)
++{
++  if (bit_walk (0x80000001u) != 31)
++    abort ();
++  return 0;
++}
++
++/* And that bclr is still used.  */
++/* { dg-final { scan-assembler "\\sbclr\\s" } } */
++/* { dg-final { scan-assembler "\\ssext\\.w\\s" } } */
