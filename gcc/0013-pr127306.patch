@@ -1,0 +1,62 @@
+diff --git a/gcc/config/riscv/riscv-bclr-lowest-set-bit.cc b/gcc/config/riscv/riscv-bclr-lowest-set-bit.cc
+index ecfa511a882b..b81832ef6bc9 100644
+--- a/gcc/config/riscv/riscv-bclr-lowest-set-bit.cc
++++ b/gcc/config/riscv/riscv-bclr-lowest-set-bit.cc
+@@ -275,7 +275,7 @@ pass_bclr_lowest_set_bit::execute (function *fn)
+ 	  if (later_ctz)
+ 	    {
+ 	      /* Remove the CTZ from the stream and reemit it immediately
+-		 after NEXT.  XXX FIXME.  Need to prove this is safe.  */
++		 after NEXT.  */
+ 	      df_insn_delete (later_ctz);
+ 	      remove_insn (later_ctz);
+ 	      SET_PREV_INSN (later_ctz) = NULL;
+@@ -288,8 +288,11 @@ pass_bclr_lowest_set_bit::execute (function *fn)
+ 				        GEN_INT (-2),
+ 					gen_lowpart (QImode, later_ctz_output));
+ 	      pat = gen_rtx_AND (GET_MODE (dec_dest), pat, dec_src);
+-	      pat = gen_rtx_SET (and_dest, pat);
+-	      df_insn_rescan (emit_insn_after (pat, NEXT_INSN (next)));
++
++	      /* Slam that pattern in as the SET_SRC of the original AND.  */
++	      SET_SRC (and_set) = pat;
++	      INSN_CODE (next) = -1;
++	      df_insn_rescan (next);
+ 	    }
+ 	}
+     }
+diff --git a/gcc/testsuite/gcc.target/riscv/pr127306.c b/gcc/testsuite/gcc.target/riscv/pr127306.c
+new file mode 100644
+index 000000000000..b3a5f16cec31
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr127306.c
+@@ -0,0 +1,29 @@
++/* { dg-do run { target rv64 } } */
++/* { dg-additional-options "-march=rva32u64" } */ 
++
++typedef unsigned short uint16_t;
++
++__attribute__((noinline)) unsigned
++scan(uint16_t mask)
++{
++    unsigned result = 0, dword = mask, bit = 0;
++
++    while (dword) {
++        result |= 1u << bit;
++	dword &= dword - 1;
++	bit = __builtin_ffs(dword) - 1;
++    }
++
++    return result;
++}
++
++int
++main(void)
++{
++    const unsigned expected = 0xffff;
++    const unsigned actual = scan(expected);
++
++    if (actual != expected)
++      __builtin_abort ();
++    __builtin_exit (0);
++}
