@@ -1,0 +1,44 @@
+diff --git a/gcc/config/iq2000/iq2000.cc b/gcc/config/iq2000/iq2000.cc
+index 9945423affc..374f42ef45b 100644
+--- a/gcc/config/iq2000/iq2000.cc
++++ b/gcc/config/iq2000/iq2000.cc
+@@ -678,6 +678,8 @@ iq2000_move_1word (rtx operands[], rtx_insn *insn, int unsignedp)
+ 		ret = "ori\t%0,%%0,%x1\t\t\t# %1";
+ 	      else if (SMALL_INT (op1))
+ 		ret = "addiu\t%0,%%0,%1\t\t\t# %1";
++	      else if ((INTVAL (op1) & 0xffff) == 0)
++		ret = "lui\t%0,%X1\t\t\t# %1";
+ 	      else
+ 		ret = "lui\t%0,%X1\t\t\t# %1\n\tori\t%0,%0,%x1";
+ 	    }
+diff --git a/gcc/config/iq2000/iq2000.md b/gcc/config/iq2000/iq2000.md
+index ab9709a98df..1872553adc5 100644
+--- a/gcc/config/iq2000/iq2000.md
++++ b/gcc/config/iq2000/iq2000.md
+@@ -425,6 +425,14 @@
+   "nor\\t%0,%z1,%z2"
+   [(set_attr "type"	"arith")
+    (set_attr "mode"	"SI")])
++
++;; Expand any_or_plus (AOP) as iorsi3
++(define_expand "aopsi3"
++  [(set (match_operand:SI 0 "register_operand" "=d,d")
++	(ior:SI (match_operand:SI 1 "uns_arith_operand" "%d,d")
++		(match_operand:SI 2 "uns_arith_operand" "d,K")))]
++  ""
++  "")
+ 
+ ;;
+ ;;  ....................
+@@ -686,6 +694,11 @@
+ 					     & BITMASK_UPPER16,
+ 					     SImode));
+   operands[3] = GEN_INT (INTVAL (operands[1]) & BITMASK_LOWER16);
++  if (operands[3] == const0_rtx)
++    {
++      emit_insn (gen_rtx_SET (operands[0], operands[2]));
++      DONE;
++    }
+ }")
+ 
+ ;; Unlike most other insns, the move insns can't be split with
