@@ -27,14 +27,30 @@ index 1dc9ab5c8520..9d700e33b918 100644
  	  if (!dec_set
  	      || !REG_P (dec_dest)
  	      || GET_CODE (dec_src) != PLUS
+diff --git a/gcc/testsuite/gcc.target/riscv/bclr-lowest-set-bit-1.c b/gcc/testsuite/gcc.target/riscv/bclr-lowest-set-bit-1.c
+index fa201cec3590..211f3cb6a40f 100644
+--- a/gcc/testsuite/gcc.target/riscv/bclr-lowest-set-bit-1.c
++++ b/gcc/testsuite/gcc.target/riscv/bclr-lowest-set-bit-1.c
+@@ -123,6 +123,8 @@ void foo12(unsigned long x)
+   foo12_res2 = tz;
+ }
+ 
+-/* { dg-final { scan-assembler-not "\\sand\\s" } } */
+-/* { dg-final { scan-assembler-times "\\sbclr\\s" 12 } } */
++/* { dg-final { scan-assembler-not "\\sand\\s" { target rv32 } } } */
++/* { dg-final { scan-assembler-times "\\sbclr\\s" 12 { target rv32 } } } */
++/* { dg-final { scan-assembler-times "\\sand\\s" 6 { target rv64 } } } */
++/* { dg-final { scan-assembler-times "\\sbclr\\s" 6 { target rv64 } } } */
+ 
 diff --git a/gcc/testsuite/gcc.target/riscv/bclr-lowest-set-bit-2.c b/gcc/testsuite/gcc.target/riscv/bclr-lowest-set-bit-2.c
 new file mode 100644
-index 000000000000..de772ab67ff2
+index 000000000000..e40fd6c10f78
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/bclr-lowest-set-bit-2.c
-@@ -0,0 +1,33 @@
-+/* { dg-do run { target { rv64 && riscv_b_ok } } } */
-+/* { dg-options "-march=rv64gc_zbb_zbs -mabi=lp64d -O2 -save-temps" } */
+@@ -0,0 +1,30 @@
++/* { dg-do run } */
++/* { dg-additional options "-march=rv64gc_zbb_zbs -mabi=lp64d" { target rv64 } } */
++/* { dg-additional options "-march=rv32gc_zbb_zbs -mabi=ilp32" { target rv32 } } */
 +
 +/* If bclr drops the sign extension, this loop never terminates.  */
 +
@@ -62,7 +78,3 @@ index 000000000000..de772ab67ff2
 +    abort ();
 +  return 0;
 +}
-+
-+/* And that bclr is still used.  */
-+/* { dg-final { scan-assembler "\\sbclr\\s" } } */
-+/* { dg-final { scan-assembler "\\ssext\\.w\\s" } } */
