@@ -1,0 +1,326 @@
+
+
+reload_cse_regs_1 records an implicit set on the edges of a conditional
+branch that tests an equality, so cselib knows the compared register holds
+the compared value in the block the edge enters (PR107455).  It reads the
+condition out of the jump pattern, so it works only where the jump carries
+the comparison: riscv and mips branches, aarch64 cbz, Thumb-1 cbz
+(gcc.target/riscv/pr107455-1.c and -2.c).  Where the comparison is a
+separate insn the jump tests a MODE_CC register and no implicit set is made.
+
+Use get_condition, which finds the comparison through the cc register, and
+take the edge polarity from the returned code.  get_condition reverses the
+condition only for a LABEL_REF else arm, so a jump with a return in one arm
+(frv and ia64 *return_false) would give the other edge's condition; reject
+jumps whose target is not a label.
+
+Record the equivalence only where the block sets the register to that value,
+the redundancy the implicit set exists to remove.  That is a profitability
+choice, not a correctness condition: every equivalence is true, but
+unguarded it also reaches reload_cse_simplify_set, which at equal cost
+prefers a register to a constant (postreload.cc:452); with a register known
+to hold the constant that rewrites literal operands, and the lost fusions
+and cross-jumps cost more than the removed sets save: a bcmrpi_defconfig
+kernel at -O2 for arm1176 grows 3128 bytes of .text unguarded and shrinks
+224 guarded.  Of the 783 kernel objects the unguarded change alters, 42
+still change with the guard.  Teaching that tie-break to ignore a value
+known only through an implicit set would remove the guard, but it changes
+the rule for every target, so it belongs in a separate patch.
+
+On Arm the re-materialised value in a shared early-exit block goes away and
+the exit becomes a conditional return:
+
+	subs	r3, r0, #0		subs	r3, r0, #0
+	bne	.L14			bxeq	lr
+	mov	r0, #0
+	bx	lr
+
+The core_list_find loop of gcc.target/riscv/pr107455-2.c gets the same
+treatment on arm1176.
+
+Bootstrapped and regression tested on x86_64-pc-linux-gnu, where dg.exp and
+tree-ssa.exp are identical with and without the patch.  Cross tested
+like-for-like, the patched cc1 against one relinked from the unpatched
+source in the same tree: arm-none-eabi with arm.exp, simd.exp, mve.exp,
+advsimd-intrinsics.exp, acle.exp and cmse.exp on the default board and with
+-mthumb -mfloat-abi=hard -mtune=cortex-a9 -march=armv7-a
+-mfpu=neon-fp-armv8; aarch64-linux-gnu under qemu with aarch64.exp,
+vect.exp and tree-ssa.exp.  Only the new tests change.  gcc.c-torture/execute
+under qemu on arm1176 with and without the patch: 1564 tests, same results.
+
+Assisted-by: Claude Opus 5 (Anthropic)
+
+gcc/ChangeLog:
+
+	* postreload.cc (reload_cse_regs_1): Find the condition of the
+	predecessor's conditional branch with get_condition, so a comparison
+	held in the condition-code register is seen.  Reject a jump whose
+	target is not a label.  Record the implicit set only where the block
+	sets the register to that value.
+
+gcc/testsuite/ChangeLog:
+
+	* gcc.target/aarch64/postreload-implicit-set-1.c: New test.
+	* gcc.target/arm/postreload-implicit-set-1.c: New test.
+	* gcc.target/arm/postreload-implicit-set-2.c: New test.
+	* gcc.target/i386/postreload-implicit-set-1.c: New test.
+
+Signed-off-by: Dominic P <gcc@gcc.dp11.uk>
+---
+ gcc/postreload.cc                             | 44 ++++++++++----
+ .../aarch64/postreload-implicit-set-1.c       | 36 ++++++++++++
+ .../arm/postreload-implicit-set-1.c           | 57 +++++++++++++++++++
+ .../arm/postreload-implicit-set-2.c           | 34 +++++++++++
+ .../i386/postreload-implicit-set-1.c          | 27 +++++++++
+ 5 files changed, 188 insertions(+), 10 deletions(-)
+ create mode 100644 gcc/testsuite/gcc.target/aarch64/postreload-implicit-set-1.c
+ create mode 100644 gcc/testsuite/gcc.target/arm/postreload-implicit-set-1.c
+ create mode 100644 gcc/testsuite/gcc.target/arm/postreload-implicit-set-2.c
+ create mode 100644 gcc/testsuite/gcc.target/i386/postreload-implicit-set-1.c
+
+diff --git a/gcc/postreload.cc b/gcc/postreload.cc
+index 576456c79d5..475b5889629 100644
+--- a/gcc/postreload.cc
++++ b/gcc/postreload.cc
+@@ -249,18 +249,22 @@ reload_cse_regs_1 (void)
+ 	      if (!condjump || ! any_condjump_p (condjump))
+ 		break;
+ 
++	      /* get_condition reverses the condition only when the else arm
++		 is a LABEL_REF, so a jump that returns in one arm would give
++		 the condition of the other edge.  */
++	      if (!JUMP_LABEL (condjump) || !LABEL_P (JUMP_LABEL (condjump)))
++		break;
++
+ 	      /* This predecessor ends with a possible equivalence
+ 		 producing conditional branch.  Extract the condition
+ 		 and try to use it to create an equivalence.  */
+-	      rtx pat = pc_set (condjump);
+-	      rtx i_t_e = SET_SRC (pat);
+-	      gcc_assert (GET_CODE (i_t_e) == IF_THEN_ELSE);
+-	      rtx cond = XEXP (i_t_e, 0);
+-
+-	      if ((((e->flags & EDGE_FALLTHRU) != 0)
+-		   == (XEXP (i_t_e, 1) == pc_rtx))
+-		  ? GET_CODE (cond) == EQ
+-		  : GET_CODE (cond) == NE)
++	      rtx cond = get_condition (condjump, NULL, false, true);
++	      if (!cond)
++		break;
++
++	      if ((e->flags & EDGE_FALLTHRU) != 0
++		  ? GET_CODE (cond) == NE
++		  : GET_CODE (cond) == EQ)
+ 		{
+ 		  /* If this is the first time through record
+ 		     the source and destination.  */
+@@ -300,7 +304,27 @@ reload_cse_regs_1 (void)
+ 	     It will be entered into the cselib tables before
+ 	     we process the first real insn in this block.  */
+ 	  if (dest && ei_end_p (ei))
+-	    implicit_set = make_insn_raw (gen_rtx_SET (dest, src));
++	    {
++	      rtx_insn *i;
++	      bool useful = false;
++	      FOR_BB_INSNS (bb, i)
++		{
++		  if (!NONDEBUG_INSN_P (i))
++		    continue;
++		  rtx s = single_set (i);
++		  if (s
++		      && rtx_equal_p (SET_DEST (s), dest)
++		      && rtx_equal_p (SET_SRC (s), src))
++		    {
++		      useful = true;
++		      break;
++		    }
++		  if (reg_set_p (dest, i))
++		    break;
++		}
++	      if (useful)
++		implicit_set = make_insn_raw (gen_rtx_SET (dest, src));
++	    }
+ 	}
+ 
+       FOR_BB_INSNS (bb, insn)
+diff --git a/gcc/testsuite/gcc.target/aarch64/postreload-implicit-set-1.c b/gcc/testsuite/gcc.target/aarch64/postreload-implicit-set-1.c
+new file mode 100644
+index 00000000000..6faf6f7ba5e
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/postreload-implicit-set-1.c
+@@ -0,0 +1,36 @@
++/* As gcc.target/i386/postreload-implicit-set-1.c.  The zero case is already
++   handled without this, because cbz carries the comparison in the branch;
++   this covers the cmp form.  */
++/* { dg-do compile } */
++/* { dg-options "-O2" } */
++/* { dg-add-options check_function_bodies } */
++/* { dg-final { check-function-bodies "**" "" "" } } */
++
++int g (int);
++int h (int);
++
++/*
++** seven:
++**	cmp	w0, 7
++**	beq	\.L[0-9]+
++**	stp	x29, x30, \[sp, -16\]!
++**	mov	x29, sp
++**	bl	g
++**	cmp	w0, 7
++**	beq	\.L[0-9]+
++**	ldp	x29, x30, \[sp\], 16
++**	b	h
++**	ldp	x29, x30, \[sp\], 16
++**	ret
++**	ret
++*/
++int
++seven (int x)
++{
++  if (x == 7)
++    return 7;
++  x = g (x);
++  if (x == 7)
++    return 7;
++  return h (x);
++}
+diff --git a/gcc/testsuite/gcc.target/arm/postreload-implicit-set-1.c b/gcc/testsuite/gcc.target/arm/postreload-implicit-set-1.c
+new file mode 100644
+index 00000000000..d38d2dd7c7b
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/arm/postreload-implicit-set-1.c
+@@ -0,0 +1,57 @@
++/* The equality a conditional branch tests holds on one of its edges; reload
++   CSE must see it through the condition-code register, so that re-creating
++   the same value in the target block is dropped and the exit can become a
++   conditional return.  */
++/* { dg-do compile } */
++/* { dg-options "-O2 -marm" } */
++/* { dg-require-effective-target arm_arch_v6_arm_ok } */
++/* { dg-add-options arm_arch_v6 } */
++/* { dg-add-options check_function_bodies } */
++/* { dg-final { check-function-bodies "**" "" "" } } */
++
++int g (int);
++int h (int);
++
++/*
++** zero:
++**	subs	r3, r0, #0
++**	bxeq	lr
++**	push	{r4, lr}
++**	bl	g
++**	cmp	r0, #0
++**	popeq	{r4, pc}
++**	pop	{r4, lr}
++**	b	h
++*/
++int
++zero (int x)
++{
++  if (x == 0)
++    return 0;
++  x = g (x);
++  if (x == 0)
++    return 0;
++  return h (x);
++}
++
++/*
++** nonzero:
++**	cmp	r0, #7
++**	bxeq	lr
++**	push	{r4, lr}
++**	bl	g
++**	cmp	r0, #7
++**	popeq	{r4, pc}
++**	pop	{r4, lr}
++**	b	h
++*/
++int
++nonzero (int x)
++{
++  if (x == 7)
++    return 7;
++  x = g (x);
++  if (x == 7)
++    return 7;
++  return h (x);
++}
+diff --git a/gcc/testsuite/gcc.target/arm/postreload-implicit-set-2.c b/gcc/testsuite/gcc.target/arm/postreload-implicit-set-2.c
+new file mode 100644
+index 00000000000..75bbc6f1808
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/arm/postreload-implicit-set-2.c
+@@ -0,0 +1,34 @@
++/* As postreload-implicit-set-1.c, in Thumb-2 state.  */
++/* { dg-do compile } */
++/* { dg-options "-O2 -mthumb" } */
++/* { dg-require-effective-target arm_arch_v7a_ok } */
++/* { dg-add-options arm_arch_v7a } */
++/* { dg-add-options check_function_bodies } */
++/* { dg-final { check-function-bodies "**" "" "" } } */
++
++int g (int);
++int h (int);
++
++/*
++** nonzero:
++**	cmp	r0, #7
++**	beq	\.L[0-9]+
++**	push	{r3, lr}
++**	bl	g
++**	cmp	r0, #7
++**	beq	\.L[0-9]+
++**	pop	{r3, lr}
++**	b	h
++**	pop	{r3, pc}
++**	bx	lr
++*/
++int
++nonzero (int x)
++{
++  if (x == 7)
++    return 7;
++  x = g (x);
++  if (x == 7)
++    return 7;
++  return h (x);
++}
+diff --git a/gcc/testsuite/gcc.target/i386/postreload-implicit-set-1.c b/gcc/testsuite/gcc.target/i386/postreload-implicit-set-1.c
+new file mode 100644
+index 00000000000..f5714aedef0
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/i386/postreload-implicit-set-1.c
+@@ -0,0 +1,27 @@
++/* The equality a conditional branch tests holds on one of its edges; reload
++   CSE must see it through the flags register, so that re-creating the same
++   value in the target block goes away.  */
++/* { dg-do compile } */
++/* { dg-options "-O2" } */
++/* { dg-require-effective-target lp64 } */
++/* { dg-add-options check_function_bodies } */
++/* { dg-final { check-function-bodies "**" "" "" } } */
++
++void f1 (double);
++void f2 (int);
++
++/*
++** foo:
++**	testl	%edi, %edi
++**	je	\.L[0-9]+
++**	jmp	f1
++**	jmp	f2
++*/
++void
++foo (int type, double xx)
++{
++  if (type)
++    f1 (xx);
++  else
++    f2 (type);
++}
+-- 
+2.55.0
+
