@@ -54,6 +54,11 @@ if [ $TARGET == riscv64-linux-gnu ]; then
   ENABLE_MULTIARCH=--with-arch=rv64gcb_zicond
 fi
 
+if [ $TARGET == riscv64-unknown-linux-gnu ]; then
+  TARGET=riscv64-linux-gnu
+  ENABLE_MULTIARCH=--with-cpu=xt-c920
+fi
+
 if [ $TARGET == riscv64-k1-linux-gnu ]; then
   TARGET=riscv64-linux-gnu
   ENABLE_MULTIARCH=--with-cpu=spacemit-x60
