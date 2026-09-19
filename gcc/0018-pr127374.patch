@@ -1,0 +1,107 @@
+---
+ gcc/config/riscv/iterators.md               |  3 ++
+ gcc/config/riscv/zicond.md                  | 34 +++++++++++++++++++++
+ gcc/testsuite/gcc.target/riscv/czero-bext.c |  4 +--
+ gcc/testsuite/gcc.target/riscv/pr127374.c   | 20 ++++++++++++
+ 4 files changed, 59 insertions(+), 2 deletions(-)
+ create mode 100644 gcc/testsuite/gcc.target/riscv/pr127374.c
+
+diff --git a/gcc/config/riscv/iterators.md b/gcc/config/riscv/iterators.md
+index dc25dfd2e99..b2e27cf0e97 100644
+--- a/gcc/config/riscv/iterators.md
++++ b/gcc/config/riscv/iterators.md
+@@ -268,6 +268,9 @@
+ (define_code_iterator any_le [le leu])
+ (define_code_iterator any_eq [eq ne])
+ 
++;; Maps GT/GTU to LE/LE.
++(define_code_attr gt_to_le [(gt "le") (gtu "leu")])
++
+ ;; Iterators for conditions we can emit a sCC against 0 or a reg directly
+ (define_code_iterator scc_0  [any_eq any_gt any_lt])
+ 
+diff --git a/gcc/config/riscv/zicond.md b/gcc/config/riscv/zicond.md
+index b0152cb773f..a69f55e82d1 100644
+--- a/gcc/config/riscv/zicond.md
++++ b/gcc/config/riscv/zicond.md
+@@ -487,3 +487,37 @@
+   [(set (match_dup 4) (any_le:X (match_dup 1) (match_dup 2)))
+    (set (match_dup 0) (ashift:X (match_dup 4) (match_dup 5)))]
+   { operands[5] = GEN_INT (exact_log2 (INTVAL (operands[3]))); })
++
++(define_split
++  [(set (match_operand:GPR 0 "register_operand")
++	(if_then_else:GPR
++	  (any_le:X (match_operand:X 1 "register_operand")
++		    (match_operand:X 2 "sle<u>_operand"))
++	  (match_operand:GPR 3 "register_operand")
++	  (const_int 0)))]
++  "TARGET_ZICOND_LIKE && can_create_pseudo_p ()"
++  [(set (match_dup 4) (any_le:X (match_dup 1) (match_dup 2)))
++   (set (match_dup 0)
++	(if_then_else:GPR (ne:X (match_dup 4) (const_int 0))
++			  (match_dup 3)
++			  (const_int 0)))]
++{
++  operands[4] = gen_reg_rtx (<X:MODE>mode);
++})
++
++(define_split
++  [(set (match_operand:GPR 0 "register_operand")
++	(if_then_else:GPR
++	  (any_gt:X (match_operand:X 1 "register_operand")
++		    (match_operand:X 2 "sle<u>_operand"))
++	  (match_operand:GPR 3 "register_operand")
++	  (const_int 0)))]
++  "TARGET_ZICOND_LIKE && can_create_pseudo_p ()"
++  [(set (match_dup 4) (<gt_to_le>:X (match_dup 1) (match_dup 2)))
++   (set (match_dup 0)
++	(if_then_else:GPR (eq:X (match_dup 4) (const_int 0))
++			  (match_dup 3)
++			  (const_int 0)))]
++{
++  operands[4] = gen_reg_rtx (<X:MODE>mode);
++})
+diff --git a/gcc/testsuite/gcc.target/riscv/czero-bext.c b/gcc/testsuite/gcc.target/riscv/czero-bext.c
+index 54a6d6f175f..8ffeb426332 100644
+--- a/gcc/testsuite/gcc.target/riscv/czero-bext.c
++++ b/gcc/testsuite/gcc.target/riscv/czero-bext.c
+@@ -11,7 +11,7 @@ bool isValidAncestorType(int type) {
+ 
+ 
+ 
+-/* { dg-final { scan-assembler "czero.nez\t" } } */
+-/* { dg-final { scan-assembler "sgtu\t" } } */
++/* { dg-final { scan-assembler "czero.eqz\t" } } */
++/* { dg-final { scan-assembler "sltiu\t" } } */
+ /* { dg-final { scan-assembler-not "bgtu\t" } } */
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/pr127374.c b/gcc/testsuite/gcc.target/riscv/pr127374.c
+new file mode 100644
+index 00000000000..ccb93cdff12
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr127374.c
+@@ -0,0 +1,20 @@
++/* PR target/127374 */
++/* { dg-do compile } */
++/* { dg-options "-O2 -march=rv64gcb_zicond -mabi=lp64d" { target { rv64 } } } */
++/* { dg-options "-O2 -march=rv32gcb_zicond -mabi=ilp32d" { target { rv32 } } } */
++
++int sel_le_s (int x, int y) { return x <= 100 ? y : 0; }
++int sel_gt_s (int x, int y) { return x >  100 ? y : 0; }
++int sel_le_u (unsigned x, int y) { return x <= 100 ? y : 0; }
++int sel_gt_u (unsigned x, int y) { return x >  100 ? y : 0; }
++
++int clr_le_s (int x, int y) { return x <= 100 ? 0 : y; }
++int clr_gt_s (int x, int y) { return x >  100 ? 0 : y; }
++int clr_le_u (unsigned x, int y) { return x <= 100 ? 0 : y; }
++int clr_gt_u (unsigned x, int y) { return x >  100 ? 0 : y; }
++
++/* { dg-final { scan-assembler-times {\mslti\s+\w+,\w+,101\M} 4 } } */
++/* { dg-final { scan-assembler-times {\msltiu\s+\w+,\w+,101\M} 4 } } */
++/* { dg-final { scan-assembler-times {\mczero\.eqz\M} 4 } } */
++/* { dg-final { scan-assembler-times {\mczero\.nez\M} 4 } } */
++/* { dg-final { scan-assembler-not {\mli\M} } } */
+-- 
+2.34.1
+
