@@ -1,0 +1,469 @@
+
+
+Extend movement_possibility_1 to shift counts that are not known to be in
+range, following up on r17-3550: rather than proving the count in range,
+hoist the shift and reduce the count where it lands.
+gimple_needing_rewrite_undefined reports a shift or rotate whose count may
+be out of range, and rewrite_to_defined_unconditional masks it with
+precision - 1, or clamps it as unsigned where the precision is not a power
+of two.  Such a shift costs 1 rather than LIM_EXPENSIVE, so it moves only
+with an expensive statement that depends on it.
+
+v5 asked that of every caller of the predicate, which was wrong.
+if-conversion rewrites the statements it makes unconditional too, so the
+mask reached vectorised loops as a vector BIT_AND_EXPR: one instruction per
+iteration, and a pack and two unpacks at 64 bits.  Nine scans in
+gcc.target/i386/cond_op_shift_{q,ud,uq}-1.c fail on that, and the mask buys
+nothing, since the shift feeds a select on the original predicate.  The
+predicate now takes a SHIFT_COUNT parameter, false by default, that only
+the three loop-im callers pass.
+
+Bootstrapped and regression tested on x86_64-pc-linux-gnu.
+
+Assisted-by: Claude Opus 5 (Anthropic)
+
+gcc/ChangeLog:
+
+	* gimple-fold.h (gimple_needing_rewrite_undefined): Add a
+	SHIFT_COUNT parameter defaulting to false.
+	* gimple-fold.cc (gimple_needing_rewrite_undefined): Return true
+	for a shift or rotate whose count may be out of range, only when
+	SHIFT_COUNT.
+	(rewrite_to_defined_unconditional): Reduce such a count into range.
+	* tree-ssa-loop-im.cc (shift_needs_mask_p): New function.
+	(determine_max_movement): Cost a shift whose count would need
+	masking as cheap.
+	(movement_possibility_1): Require preserved execution for a
+	possibly out-of-range count only when the rewrite cannot reduce it
+	or the loop is optimized for size.
+
+gcc/testsuite/ChangeLog:
+
+	* gcc.dg/tree-ssa/loop-im-shift-2.c: Expect every chain but a lone
+	shift's to move; check the masks.
+	* gcc.dg/tree-ssa/loop-im-shift-3.c: New test.
+	* gcc.dg/tree-ssa/loop-im-shift-4.c: New test.
+	* gcc.dg/tree-ssa/loop-im-shift-5.c: New test.
+	* gcc.dg/tree-ssa/loop-im-shift-6.c: New test.
+
+Signed-off-by: Dominic P <gcc@gcc.dp11.uk>
+---
+ gcc/gimple-fold.cc                            | 54 +++++++++++++++--
+ gcc/gimple-fold.h                             |  2 +-
+ .../gcc.dg/tree-ssa/loop-im-shift-2.c         | 58 +++++++++++++++++++
+ .../gcc.dg/tree-ssa/loop-im-shift-3.c         | 44 ++++++++++++++
+ .../gcc.dg/tree-ssa/loop-im-shift-4.c         | 28 +++++++++
+ .../gcc.dg/tree-ssa/loop-im-shift-5.c         | 13 +++++
+ .../gcc.dg/tree-ssa/loop-im-shift-6.c         | 48 +++++++++++++++
+ gcc/tree-ssa-loop-im.cc                       | 38 ++++++++++--
+ 8 files changed, 273 insertions(+), 12 deletions(-)
+ create mode 100644 gcc/testsuite/gcc.dg/tree-ssa/loop-im-shift-2.c
+ create mode 100644 gcc/testsuite/gcc.dg/tree-ssa/loop-im-shift-3.c
+ create mode 100644 gcc/testsuite/gcc.dg/tree-ssa/loop-im-shift-4.c
+ create mode 100644 gcc/testsuite/gcc.dg/tree-ssa/loop-im-shift-5.c
+ create mode 100644 gcc/testsuite/gcc.dg/tree-ssa/loop-im-shift-6.c
+
+diff --git a/gcc/gimple-fold.cc b/gcc/gimple-fold.cc
+index e3df0d1163c..3f4c979793b 100644
+--- a/gcc/gimple-fold.cc
++++ b/gcc/gimple-fold.cc
+@@ -10960,10 +10960,12 @@ arith_code_with_undefined_signed_overflow (tree_code code)
+    integer types involves undefined behavior on overflow and the
+    operation can be expressed with unsigned arithmetic.
+    Also returns true if STMT is a VCE that needs to be rewritten
+-   if moved to be executed unconditionally.   */
++   if moved to be executed unconditionally.
++   SHIFT_COUNT additionally asks for a shift or rotate whose count may be
++   out of range; rewrite_to_defined_unconditional reduces such a count.  */
+ 
+ bool
+-gimple_needing_rewrite_undefined (gimple *stmt)
++gimple_needing_rewrite_undefined (gimple *stmt, bool shift_count)
+ {
+   if (!is_gimple_assign (stmt))
+     return false;
+@@ -10998,10 +11000,22 @@ gimple_needing_rewrite_undefined (gimple *stmt)
+       && TYPE_PRECISION (lhs_type)
+ 	  < TYPE_PRECISION (TREE_TYPE (TREE_OPERAND (rhs, 0))))
+     return true;
++  /* A shift or rotate by a count that may be out of range; the count can
++     be reduced into range.  */
++  enum tree_code code = gimple_assign_rhs_code (stmt);
++  if (shift_count
++      && (code == LSHIFT_EXPR
++	  || code == RSHIFT_EXPR
++	  || code == LROTATE_EXPR
++	  || code == RROTATE_EXPR)
++      && INTEGRAL_TYPE_P (lhs_type)
++      && (TREE_CODE (gimple_assign_rhs2 (stmt)) != INTEGER_CST
++	  || wi::geu_p (wi::to_wide (gimple_assign_rhs2 (stmt)),
++			TYPE_PRECISION (lhs_type))))
++    return true;
+   if (!TYPE_OVERFLOW_UNDEFINED (lhs_type))
+     return false;
+-  if (!arith_code_with_undefined_signed_overflow
+-	(gimple_assign_rhs_code (stmt)))
++  if (!arith_code_with_undefined_signed_overflow (code))
+     return false;
+   return true;
+ }
+@@ -11020,7 +11034,7 @@ static gimple_seq
+ rewrite_to_defined_unconditional (gimple_stmt_iterator *gsi, gimple *stmt,
+ 				  bool in_place)
+ {
+-  gcc_assert (gimple_needing_rewrite_undefined (stmt));
++  gcc_assert (gimple_needing_rewrite_undefined (stmt, true));
+   if (dump_file && (dump_flags & TDF_DETAILS))
+     {
+       fprintf (dump_file, "rewriting stmt for being unconditional defined");
+@@ -11099,6 +11113,36 @@ rewrite_to_defined_unconditional (gimple_stmt_iterator *gsi, gimple *stmt,
+ 	}
+       return stmts;
+     }
++  /* Reduce a shift or rotate count into range.  The mask keeps the count's
++     own type where that holds PREC - 1, so that a SHIFT_COUNT_TRUNCATED
++     target folds it away; MIN needs an unsigned count so a negative one
++     clamps.  */
++  enum tree_code code = gimple_assign_rhs_code (stmt);
++  if (code == LSHIFT_EXPR
++      || code == RSHIFT_EXPR
++      || code == LROTATE_EXPR
++      || code == RROTATE_EXPR)
++    {
++      unsigned prec = TYPE_PRECISION (TREE_TYPE (lhs));
++      bool pow2 = pow2p_hwi (prec);
++      tree count = gimple_assign_rhs2 (stmt);
++      tree type = TREE_TYPE (count);
++      if (!pow2 || wi::ltu_p (wi::max_value (type), prec - 1))
++	type = unsigned_type_node;
++      count = gimple_convert (&stmts, type, count);
++      count = gimple_build (&stmts, pow2 ? BIT_AND_EXPR : MIN_EXPR, type,
++			    count, build_int_cst (type, prec - 1));
++      gimple_assign_set_rhs2 (stmt, count);
++      gimple_set_modified (stmt, true);
++      if (in_place)
++	{
++	  gsi_insert_seq_before (gsi, stmts, GSI_SAME_STMT);
++	  update_stmt (stmt);
++	  return NULL;
++	}
++      gimple_seq_add_stmt (&stmts, stmt);
++      return stmts;
++    }
+   tree type = unsigned_type_for (TREE_TYPE (lhs));
+   if (gimple_assign_rhs_code (stmt) == ABS_EXPR)
+     gimple_assign_set_rhs_code (stmt, ABSU_EXPR);
+diff --git a/gcc/gimple-fold.h b/gcc/gimple-fold.h
+index f1853560779..febc15330c8 100644
+--- a/gcc/gimple-fold.h
++++ b/gcc/gimple-fold.h
+@@ -61,7 +61,7 @@ extern tree gimple_fold_indirect_ref (tree);
+ extern bool gimple_fold_builtin_sprintf (gimple_stmt_iterator *);
+ extern bool gimple_fold_builtin_snprintf (gimple_stmt_iterator *);
+ extern bool arith_code_with_undefined_signed_overflow (tree_code);
+-extern bool gimple_needing_rewrite_undefined (gimple *);
++extern bool gimple_needing_rewrite_undefined (gimple *, bool = false);
+ extern void rewrite_to_defined_unconditional (gimple_stmt_iterator *);
+ extern gimple_seq rewrite_to_defined_unconditional (gimple *);
+ extern void replace_call_with_value (gimple_stmt_iterator *, tree);
+diff --git a/gcc/testsuite/gcc.dg/tree-ssa/loop-im-shift-2.c b/gcc/testsuite/gcc.dg/tree-ssa/loop-im-shift-2.c
+new file mode 100644
+index 00000000000..15c3f7b5e0d
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/tree-ssa/loop-im-shift-2.c
+@@ -0,0 +1,58 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -fdump-tree-lim2-details -fdump-tree-optimized" } */
++
++/* The count is already in range: hoisted without a further mask.  */
++
++void f (int *p, int n, int a, unsigned int s, int c, int *q)
++{
++  s &= 7;
++  for (int i = 0; i < n; i++)
++    if (p[i] > c)
++      q[i] = ((a << s) * 5) / 7;
++}
++
++/* An unconstrained count is masked at the hoisted shift.  */
++
++void g (int *p, int n, int a, unsigned int s, int c, int *q)
++{
++  for (int i = 0; i < n; i++)
++    if (p[i] > c)
++      q[i] = ((a << s) * 5) / 7;
++}
++
++/* A mask that does not bound the count below the precision is refined.  */
++
++void h (int *p, int n, int a, unsigned int s, int c, int *q)
++{
++  s &= 63;
++  for (int i = 0; i < n; i++)
++    if (p[i] > c)
++      q[i] = ((a << s) * 5) / 7;
++}
++
++/* The guard's range is exported as global by VRP, so no mask survives.  */
++
++void k (int *p, int n, int a, unsigned int s, int c, int *q)
++{
++  for (int i = 0; i < n; i++)
++    if (p[i] > c)
++      {
++	if (s > 7) __builtin_unreachable ();
++	q[i] = ((a << s) * 5) / 7;
++      }
++}
++
++/* A lone shift that would need a mask is not worth moving by itself.  */
++
++void m (int *p, int n, int a, unsigned int s, int c, int *q)
++{
++  for (int i = 0; i < n; i++)
++    if (p[i] > c)
++      q[i] = a << s;
++}
++
++/* Every chain but m's moves: the shift, the multiply and the divide.  */
++/* { dg-final { scan-tree-dump-times "Moving statement" 12 "lim2" } } */
++/* { dg-final { scan-tree-dump-times "Moving statement \[^\\r\\n\]*<<" 4 "lim2" } } */
++/* f's count was masked by 7 already; g and h get a mask of 31.  */
++/* { dg-final { scan-tree-dump-times " & 31;" 2 "optimized" } } */
+diff --git a/gcc/testsuite/gcc.dg/tree-ssa/loop-im-shift-3.c b/gcc/testsuite/gcc.dg/tree-ssa/loop-im-shift-3.c
+new file mode 100644
+index 00000000000..03250059e58
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/tree-ssa/loop-im-shift-3.c
+@@ -0,0 +1,44 @@
++/* { dg-do run } */
++/* { dg-options "-O2" } */
++
++/* The shift is hoisted with its count masked; a count out of range on an
++   iteration that never reaches the shift must not affect the result.  */
++
++__attribute__ ((noipa)) void
++k (int *p, int n, int a, unsigned int s, int c, int *q)
++{
++  for (int i = 0; i < n; i++)
++    if (p[i] > c)
++      {
++	if (s > 7) __builtin_unreachable ();
++	q[i] = ((a << s) * 5) / 7;
++      }
++}
++
++__attribute__ ((noipa)) void
++g (int *p, int n, int a, unsigned int s, int c, int *q)
++{
++  for (int i = 0; i < n; i++)
++    if (p[i] > c)
++      q[i] = (a << s) * 5;
++}
++
++int
++main (void)
++{
++  int p[4] = { 1, 5, 2, 9 };
++  int q[4] = { -1, -1, -1, -1 };
++  k (p, 4, 3, 40u, 100, q);
++  g (p, 4, 3, 77u, 100, q);
++  for (int i = 0; i < 4; i++)
++    if (q[i] != -1)
++      __builtin_abort ();
++  k (p, 4, 3, 2u, 4, q);
++  if (q[0] != -1 || q[1] != (3 << 2) * 5 / 7 || q[2] != -1
++      || q[3] != (3 << 2) * 5 / 7)
++    __builtin_abort ();
++  g (p, 4, 3, 3u, 4, q);
++  if (q[1] != (3 << 3) * 5 || q[3] != (3 << 3) * 5)
++    __builtin_abort ();
++  return 0;
++}
+diff --git a/gcc/testsuite/gcc.dg/tree-ssa/loop-im-shift-4.c b/gcc/testsuite/gcc.dg/tree-ssa/loop-im-shift-4.c
+new file mode 100644
+index 00000000000..a580c5a53b6
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/tree-ssa/loop-im-shift-4.c
+@@ -0,0 +1,28 @@
++/* { dg-do run { target bitint } } */
++/* { dg-options "-O2 -std=c23 -fdump-tree-optimized" } */
++
++/* A non-power-of-two precision clamps the count to the precision - 1.  */
++
++__attribute__ ((noipa)) void
++f (int *p, int n, _BitInt(24) a, unsigned int s, int c, _BitInt(24) *q)
++{
++  for (int i = 0; i < n; i++)
++    if (p[i] > c)
++      q[i] = ((a << s) * 5) / 7;
++}
++
++int
++main (void)
++{
++  int p[2] = { 1, 9 };
++  _BitInt(24) q[2] = { 0, 0 };
++  f (p, 2, 1, 40u, 100, q);
++  if (q[0] != 0 || q[1] != 0)
++    __builtin_abort ();
++  f (p, 2, 1, 8u, 4, q);
++  if (q[0] != 0 || q[1] != ((_BitInt(24)) 1 << 8) * 5 / 7)
++    __builtin_abort ();
++  return 0;
++}
++
++/* { dg-final { scan-tree-dump "MIN_EXPR <\[^,\]*, 23>" "optimized" } } */
+diff --git a/gcc/testsuite/gcc.dg/tree-ssa/loop-im-shift-5.c b/gcc/testsuite/gcc.dg/tree-ssa/loop-im-shift-5.c
+new file mode 100644
+index 00000000000..859ff3d3625
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/tree-ssa/loop-im-shift-5.c
+@@ -0,0 +1,13 @@
++/* { dg-do compile } */
++/* { dg-options "-Os -fdump-tree-lim2-details" } */
++
++/* When optimizing for size a shift that would need a mask stays put.  */
++
++void g (int *p, int n, int a, unsigned int s, int c, int *q)
++{
++  for (int i = 0; i < n; i++)
++    if (p[i] > c)
++      q[i] = ((a << s) * 5) / 7;
++}
++
++/* { dg-final { scan-tree-dump-not "Moving statement" "lim2" } } */
+diff --git a/gcc/testsuite/gcc.dg/tree-ssa/loop-im-shift-6.c b/gcc/testsuite/gcc.dg/tree-ssa/loop-im-shift-6.c
+new file mode 100644
+index 00000000000..866c02625c5
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/tree-ssa/loop-im-shift-6.c
+@@ -0,0 +1,48 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -fgimple -fdump-tree-lim2-details" } */
++
++/* An out-of-range constant count is reduced into range where the shift
++   lands, as a non-constant one is.  */
++
++int __GIMPLE (ssa, startwith ("lim"))
++f (int x, int n)
++{
++  int i;
++  int r;
++  int _1;
++  int _2;
++
++  __BB(2):
++  goto __BB6;
++
++  __BB(3):
++  _1 = i_5 & 1;
++  if (_1 != 0)
++    goto __BB4;
++  else
++    goto __BB5;
++
++  __BB(4):
++  _2 = x_8(D) << 33;
++  r_9 = _2 / 5;
++  goto __BB5;
++
++  __BB(5):
++  r_3 = __PHI (__BB4: r_9, __BB3: r_4);
++  i_10 = i_5 + 1;
++  goto __BB6;
++
++  __BB(6,loop_header(1)):
++  r_4 = __PHI (__BB2: 1, __BB5: r_3);
++  i_5 = __PHI (__BB2: 0, __BB5: i_10);
++  if (i_5 < n_7(D))
++    goto __BB3;
++  else
++    goto __BB7;
++
++  __BB(7):
++  return r_4;
++}
++
++/* { dg-final { scan-tree-dump-times "Moving statement" 2 "lim2" } } */
++/* { dg-final { scan-tree-dump " << 1;" "lim2" } } */
+diff --git a/gcc/tree-ssa-loop-im.cc b/gcc/tree-ssa-loop-im.cc
+index f38a5831b58..162b30ad285 100644
+--- a/gcc/tree-ssa-loop-im.cc
++++ b/gcc/tree-ssa-loop-im.cc
+@@ -416,9 +416,9 @@ movement_possibility_1 (gimple *stmt)
+     {
+       auto code = gimple_assign_rhs_code (stmt);
+       tree type = TREE_TYPE (gimple_assign_rhs1 (stmt));
+-      /* For shifts and rotates and possibly out-of-bound shift operands
+-	 we currently cannot rewrite them into something unconditionally
+-	 well-defined.  */
++      /* A shift or rotate by a possibly out-of-bound count moves only where
++	 rewrite_to_defined_unconditional can reduce the count, and not at
++	 all when optimizing for size.  */
+       if ((code == LSHIFT_EXPR
+ 	   || code == RSHIFT_EXPR
+ 	   || code == LROTATE_EXPR
+@@ -426,7 +426,9 @@ movement_possibility_1 (gimple *stmt)
+ 	  && (TREE_CODE (gimple_assign_rhs2 (stmt)) != INTEGER_CST
+ 	      /* We cannot use ranges at 'stmt' here.  */
+ 	      || wi::geu_p (wi::to_wide (gimple_assign_rhs2 (stmt)),
+-			    element_precision (type))))
++			    element_precision (type)))
++	  && (!gimple_needing_rewrite_undefined (stmt, true)
++	      || optimize_loop_for_size_p (loop_containing_stmt (stmt))))
+ 	ret = MOVE_PRESERVE_EXECUTION;
+     }
+ 
+@@ -780,6 +782,26 @@ extract_true_false_args_from_phi (basic_block dom, gphi *phi,
+   return true;
+ }
+ 
++/* Return true if STMT is a shift or rotate whose count would have to be
++   masked when moved out of LOOP, because STMT is not always executed
++   when LOOP is entered.  An out-of-range constant count folds instead.  */
++
++static bool
++shift_needs_mask_p (gimple *stmt, class loop *loop)
++{
++  if (!gimple_needing_rewrite_undefined (stmt, true))
++    return false;
++  enum tree_code code = gimple_assign_rhs_code (stmt);
++  if ((code != LSHIFT_EXPR
++       && code != RSHIFT_EXPR
++       && code != LROTATE_EXPR
++       && code != RROTATE_EXPR)
++      || TREE_CODE (gimple_assign_rhs2 (stmt)) == INTEGER_CST)
++    return false;
++  class loop *always = get_lim_data (stmt)->always_executed_in;
++  return !always || !(always == loop || flow_loop_nested_p (always, loop));
++}
++
+ /* Determine the outermost loop to that it is possible to hoist a statement
+    STMT and store it to LIM_DATA (STMT)->max_loop.  To do this we determine
+    the outermost loop in that the value computed by STMT is invariant.
+@@ -929,7 +951,11 @@ determine_max_movement (gimple *stmt, bool must_preserve_exec)
+ 	return false;
+     }
+ 
+-  lim_data->cost += stmt_cost (stmt);
++  /* A shift that needs its count masked is not worth moving on its own.  */
++  unsigned cost = stmt_cost (stmt);
++  if (cost >= LIM_EXPENSIVE && shift_needs_mask_p (stmt, lim_data->max_loop))
++    cost = 1;
++  lim_data->cost += cost;
+ 
+   return true;
+ }
+@@ -1427,7 +1453,7 @@ move_computations_worker (basic_block bb)
+          when the target loop header is executed and the stmt may
+ 	 invoke undefined integer or pointer overflow rewrite it to
+ 	 unsigned arithmetic.  */
+-      if (gimple_needing_rewrite_undefined (stmt)
++      if (gimple_needing_rewrite_undefined (stmt, true)
+ 	  && (!ALWAYS_EXECUTED_IN (bb)
+ 	      || !(ALWAYS_EXECUTED_IN (bb) == level
+ 		   || flow_loop_nested_p (ALWAYS_EXECUTED_IN (bb), level))))
+-- 
+2.55.0
+
