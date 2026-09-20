@@ -1,0 +1,105 @@
+
+
+A DEBUG_INSN VAR_LOCATION can mention if_info->x without representing an
+ordinary use.  Exclude debug instructions from the overlap scan so that
+debug-only payloads do not suppress min/max if-conversion.
+
+Assisted-by: OpenAI Codex 5.6 Sol, co-reviewed by Claude and Yongqiang Tian.
+
+	PR rtl-optimization/127423
+
+gcc/ChangeLog:
+
+	* ifcvt.cc (noce_get_alt_condition): Ignore debug instructions when
+	checking whether if_info->x is mentioned in the interval.
+
+gcc/testsuite/ChangeLog:
+
+	* gcc.target/riscv/pr127423.c: New test.
+
+Signed-off-by: Yongqiang Tian <yqtian668@gmail.com>
+---
+Thanks for pointing this out.  I checked the RTL immediately after `ce2`,
+rather than relying only on what var-tracking eventually produces.
+
+For the reported case, the transformed sequence first binds `xghost` to the
+old value of `if_info->x`, then defines `if_info->x` with `smin`, and only then
+binds `result` to the new value.  The register is already defined at the first
+debug bind, and no ordinary instruction changes it before that program point.
+
+This ordering also follows from the interval involved here: the check scans
+`(cond_earliest, jump]`, while the merged definition is emitted at the former
+jump position.  Ignoring the debug instruction in this membership check does
+not move the bind across the new definition.
+
+As a secondary check, var-tracking represents `xghost` using the entry value
+when that value is recoverable.  In an additional variant where an opaque
+read-write asm operand prevents recovery of the old value, var-tracking makes
+`xghost` unavailable instead of associating it with the new minimum.  Based on
+these checks, I do not think an explicit reset is needed in
+`noce_get_alt_condition` for this transformation.
+
+I also strengthened the regression test.  `-fcompare-debug` alone can pass
+vacuously if `ce2` stops performing the conversion in both compilations.  The
+test now compiles explicitly with `-g`, retains `-fcompare-debug`, and checks
+that the resulting assembly contains exactly one `min`.  The strengthened
+test produces 14 expected passes with the patched compiler.  The pristine
+compiler reports seven `-fcompare-debug failure (length)` failures, and a
+separate control with `ce2` disabled fails the assembly check.
+
+Thank you very much for your help.  Any further suggestions would be greatly
+appreciated.
+
+Changes in v2:
+
+- Compile the regression test explicitly with `-g`.
+- Retain `-fcompare-debug` to check debug/no-debug convergence.
+- Require exactly one RISC-V `min` instruction so the test cannot pass without
+  exercising the intended if-conversion.
+
+ gcc/ifcvt.cc                              |  3 ++-
+ gcc/testsuite/gcc.target/riscv/pr127423.c | 18 ++++++++++++++++++
+ 2 files changed, 20 insertions(+), 1 deletion(-)
+ create mode 100644 gcc/testsuite/gcc.target/riscv/pr127423.c
+
+diff --git a/gcc/ifcvt.cc b/gcc/ifcvt.cc
+index 7d23ce115bd..618c2976c5d 100644
+--- a/gcc/ifcvt.cc
++++ b/gcc/ifcvt.cc
+@@ -3038,7 +3038,8 @@ noce_get_alt_condition (noce_if_info *if_info, rtx target,
+ 
+   /* X may not be mentioned in the range (cond_earliest, jump].  */
+   for (insn = if_info->jump; insn != *earliest; insn = PREV_INSN (insn))
+-    if (INSN_P (insn) && reg_overlap_mentioned_p (if_info->x, PATTERN (insn)))
++    if (NONDEBUG_INSN_P (insn)
++	&& reg_overlap_mentioned_p (if_info->x, PATTERN (insn)))
+       return NULL;
+ 
+   /* A and B may not be modified in the range [cond_earliest, jump).  */
+diff --git a/gcc/testsuite/gcc.target/riscv/pr127423.c b/gcc/testsuite/gcc.target/riscv/pr127423.c
+new file mode 100644
+index 00000000000..7c1e25bf640
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr127423.c
+@@ -0,0 +1,18 @@
++/* PR rtl-optimization/127423 */
++/* { dg-do compile } */
++/* { dg-options "-O2 -g -fno-tree-forwprop -fdisable-tree-phiopt1 -fdisable-tree-phiopt2 -fdisable-tree-phiopt3 -fdisable-tree-phiopt4 -march=rv64gc_zbb -mabi=lp64d -ffunction-sections -fcompare-debug" } */
++/* { dg-final { scan-assembler-times {\mmin\t} 1 } } */
++
++#define ATTR __attribute__ ((noinline, noclone))
++
++ATTR int
++debug_payload_min (int a, int b)
++{
++  _Bool pred = a < b;
++  asm volatile ("" : : "r" (pred));
++  int result = b;
++  int xghost = a;
++  if (pred)
++    result = a;
++  return result;
++}
+-- 
+2.34.1
+
