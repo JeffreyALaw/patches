@@ -50,9 +50,10 @@ if [ $TARGET == mipsel-linux-gnu ]; then
 fi
 
 # Abusing ENABLE_MULTIARCH...
-#if [ $TARGET == riscv64-linux-gnu ]; then
+if [ $TARGET == riscv64-linux-gnu ]; then
+  ENABLE_MULTIARCH=--with-arch=rv64gcb_zicond
 #  ENABLE_MULTIARCH=--with-cpu=spacemit-x100
-#fi
+fi
 
 #if [ $TARGET == riscv64-unknown-linux-gnu ]; then
 #  TARGET=riscv64-linux-gnu
