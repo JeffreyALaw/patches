@@ -99,6 +99,13 @@ esac
 #make -k -j $NPROC -l $NPROC check-gas check-ld check-binutils || true
 #popd
 
+# The aarch64 laptop doesn't handle power properly.  Sleep a long time to get the
+# battery charged back up.  It'd be best to monitor battery charge, but this
+# is likely good enough for now.
+if [ $TARGET == aarch64-linux-gnu ]; then
+  sleep 1200
+fi
+
 # As is the GCC testsuite on native targets
 echo Testing GCC
 date
