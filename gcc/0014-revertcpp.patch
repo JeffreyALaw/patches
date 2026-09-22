@@ -1,0 +1,26 @@
+commit 601b8b7948da50b0355fd1b359c156960c6bdb09
+Author: Jeff Law <jeffreyalaw@gmail.com>
+Date:   Tue Sep 22 06:56:24 2026 -0600
+
+    Revert "[PATCH][PR preprocessor/121508] fix(libcpp): Don't ICE parsing __has_include outside directive."
+    
+    This reverts commit 059231fb8a42eaeac8880c5d207249b46757767c.
+
+diff --git a/libcpp/macro.cc b/libcpp/macro.cc
+index 24493a45f86..736c360336d 100644
+--- a/libcpp/macro.cc
++++ b/libcpp/macro.cc
+@@ -392,11 +392,8 @@ builtin_has_include_1 (cpp_reader *pfile, const char *name, bool *paren,
+ 		       bool *bracket, location_t *loc)
+ {
+   if (!pfile->state.in_directive)
+-    {
+-      cpp_error (pfile, CPP_DL_ERROR,
+-		 "%qs used outside of preprocessing directive", name);
+-      return NULL;
+-    }
++    cpp_error (pfile, CPP_DL_ERROR,
++	       "%qs used outside of preprocessing directive", name);
+ 
+   pfile->state.angled_headers = true;
+   const auto sav_padding = pfile->state.directive_wants_padding;
