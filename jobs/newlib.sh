@@ -119,8 +119,9 @@ case "${TARGET}" in
 	;;
   iq2000*-*)
     RUNGCCTESTS=yes
-    SIMTARG=all-sim
-    SIMINSTALLTARG=install-sim
+    DUMMY_SIM=yes
+    SIMTARG=
+    SIMINSTALLTARG=
     TESTARGS="--target_board=iq2000-sim"
     ;;
   lm32*-*)
