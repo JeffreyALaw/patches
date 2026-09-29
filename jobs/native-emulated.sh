@@ -104,7 +104,7 @@ esac
 # battery charged back up.  It'd be best to monitor battery charge, but this
 # is likely good enough for now.
 if [ $TARGET == aarch64-linux-gnu ]; then
-  sleep 2400
+  sleep 3600
 fi
 
 # As is the GCC testsuite on native targets
