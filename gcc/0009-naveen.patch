@@ -1,0 +1,67 @@
+commit 1ba23d2cb7fb5c5d40edc5aa0e11114902fa075b
+Author: Jeff Law <jeffreyalaw@gmail.com>
+Date:   Tue Sep 29 16:34:59 2026 -0600
+
+    Revert "RISC-V: Add conditional negate expansion [PR126245]"
+    
+    This reverts commit ec09d7005033eb1f28304af80d888b81bb3063c7.
+
+diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
+index cfac4c960bf..0908078a6c4 100644
+--- a/gcc/config/riscv/riscv.md
++++ b/gcc/config/riscv/riscv.md
+@@ -3517,32 +3517,6 @@
+     FAIL;
+ })
+ 
+-(define_expand "neg<mode>cc"
+-  [(set (match_operand:GPR 0 "register_operand")
+-	(if_then_else:GPR (match_operand 1 "comparison_operator")
+-			  (neg:GPR (match_operand:GPR 2 "register_operand"))
+-			  (match_operand:GPR 3 "register_operand")))]
+-  ""
+-{
+-  rtx cmp = operands[1];
+-  rtx cmp0 = XEXP (cmp, 0);
+-  rtx cmp1 = XEXP (cmp, 1);
+-
+-  if (!INTEGRAL_MODE_P (GET_MODE (cmp0))
+-      || !rtx_equal_p (operands[2], operands[3]))
+-    FAIL;
+-
+-  rtx cmp_result = gen_reg_rtx (<MODE>mode);
+-  riscv_expand_int_scc (cmp_result, GET_CODE (cmp), cmp0, cmp1);
+-
+-  rtx mask = gen_reg_rtx (<MODE>mode);
+-  riscv_emit_unary (NEG, mask, cmp_result);
+-  rtx xor_result = gen_reg_rtx (<MODE>mode);
+-  riscv_emit_binary (XOR, xor_result, operands[2], mask);
+-  riscv_emit_binary (PLUS, operands[0], xor_result, cmp_result);
+-  DONE;
+-})
+-
+ (define_expand "add<mode>cc"
+   [(match_operand:GPR 0 "register_operand")
+    (match_operand     1 "comparison_operator")
+diff --git a/gcc/testsuite/gcc.target/riscv/pr126245-negcc.c b/gcc/testsuite/gcc.target/riscv/pr126245-negcc.c
+deleted file mode 100644
+index 5b791323ee2..00000000000
+--- a/gcc/testsuite/gcc.target/riscv/pr126245-negcc.c
++++ /dev/null
+@@ -1,16 +0,0 @@
+-/* PR target/126245.  Test the RISC-V negcc expander through if-conversion.  */
+-/* { dg-do compile { target { ! riscv_abi_e } } } */
+-/* { dg-options "-O2 -march=rv64g -mabi=lp64d -fdump-rtl-ce1" { target { rv64 } } } */
+-/* { dg-options "-O2 -march=rv32g -mabi=ilp32d -fdump-rtl-ce1" { target { rv32 } } } */
+-
+-long
+-f_negcc (long x, long y)
+-{
+-  return x < y ? 42 : -42;
+-}
+-
+-/* { dg-final { scan-assembler-times {\mslt\M} 1 } } */
+-/* { dg-final { scan-assembler-times {\m(?:xor|xori)\M} 1 } } */
+-/* { dg-final { scan-assembler-times {\madd\M} 1 } } */
+-/* { dg-final { scan-assembler-not {\m(?:beq|bne|blt|bge|ble|bgt)(?:u|z)?\M} } } */
+-/* { dg-final { scan-rtl-dump-times {if-conversion succeeded through noce_try_inverse_constants} 1 "ce1" } } */
