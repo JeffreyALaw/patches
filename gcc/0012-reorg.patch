@@ -1,75 +1,142 @@
 
 
-delete_prior_computation walks backward with prev_nonnote_insn while
-deleting a dead computation.  A DEBUG_INSN therefore terminates the scan
-and can make -g retain an instruction that is deleted with -g0.
+The delay-slot reorganization pass uses note-skipping neighboring-insn
+lookups in three places where a DEBUG_INSN is not an executable boundary.
+As a result, debug information can change skip optimization, label reuse,
+and register-copy recognition.
 
-Use prev_nonnote_nondebug_insn for both steps of the walk.  Add a SPARC
-regression test that checks both -fcompare-debug and the absence of the
-dead add.
+Use the nondebug lookup helpers and add focused SPARC -fcompare-debug
+tests for all three paths.
 
 Assisted-by: OpenAI Codex 5.6 Sol, co-reviewed by Claude and Yongqiang Tian.
 
-	PR rtl-optimization/127795
+	PR rtl-optimization/127725
 
 gcc/ChangeLog:
 
-	* reorg.cc (delete_prior_computation): Ignore debug insns in the
-	backward scan.
+	* reorg.cc (optimize_skip): Use next_nonnote_nondebug_insn.
+	(get_label_before): Use prev_nonnote_nondebug_insn.
+	(fill_slots_from_thread): Use next_nonnote_nondebug_insn.
 
 gcc/testsuite/ChangeLog:
 
-	* gcc.target/sparc/reorg-delete-prior-debug.c: New test.
+	* gcc.target/sparc/reorg-fill-slots-regcopy-debug.c: New test.
+	* gcc.target/sparc/reorg-get-label-before-debug.c: New test.
+	* gcc.target/sparc/reorg-optimize-skip-debug.c: New test.
 
 Signed-off-by: Yongqiang Tian <yqtian668@gmail.com>
 ---
- gcc/reorg.cc                                  |  4 ++--
- .../sparc/reorg-delete-prior-debug.c          | 19 +++++++++++++++++++
- 2 files changed, 21 insertions(+), 2 deletions(-)
- create mode 100644 gcc/testsuite/gcc.target/sparc/reorg-delete-prior-debug.c
+ gcc/reorg.cc                                  |  6 ++--
+ .../sparc/reorg-fill-slots-regcopy-debug.c    | 29 +++++++++++++++++++
+ .../sparc/reorg-get-label-before-debug.c      | 13 +++++++++
+ .../sparc/reorg-optimize-skip-debug.c         | 10 +++++++
+ 4 files changed, 55 insertions(+), 3 deletions(-)
+ create mode 100644 gcc/testsuite/gcc.target/sparc/reorg-fill-slots-regcopy-debug.c
+ create mode 100644 gcc/testsuite/gcc.target/sparc/reorg-get-label-before-debug.c
+ create mode 100644 gcc/testsuite/gcc.target/sparc/reorg-optimize-skip-debug.c
 
 diff --git a/gcc/reorg.cc b/gcc/reorg.cc
-index 76b3e1438..38aad68d7 100644
+index 76b3e1438..2f8cd7223 100644
 --- a/gcc/reorg.cc
 +++ b/gcc/reorg.cc
-@@ -2884,10 +2884,10 @@ delete_prior_computation (rtx note, rtx_insn *insn)
-   rtx_insn *our_prev;
-   rtx reg = XEXP (note, 0);
+@@ -670,7 +670,7 @@ note_delay_statistics (int slots_filled, int index)
+ static void
+ optimize_skip (rtx_jump_insn *insn, vec<rtx_insn *> *delay_list)
+ {
+-  rtx_insn *trial = next_nonnote_insn (insn);
++  rtx_insn *trial = next_nonnote_nondebug_insn (insn);
+   rtx_insn *next_trial = next_active_insn (trial);
+   int flags;
  
--  for (our_prev = prev_nonnote_insn (insn);
-+  for (our_prev = prev_nonnote_nondebug_insn (insn);
-        our_prev && (NONJUMP_INSN_P (our_prev)
- 		    || CALL_P (our_prev));
--       our_prev = prev_nonnote_insn (our_prev))
-+       our_prev = prev_nonnote_nondebug_insn (our_prev))
+@@ -1765,7 +1765,7 @@ get_label_before (rtx_insn *insn, rtx sibling)
+ 
+   /* Find an existing label at this point
+      or make a new one if there is none.  */
+-  label = prev_nonnote_insn (insn);
++  label = prev_nonnote_nondebug_insn (insn);
+ 
+   if (label == 0 || !LABEL_P (label))
      {
-       rtx pat = PATTERN (our_prev);
+@@ -2580,7 +2580,7 @@ fill_slots_from_thread (rtx_jump_insn *insn, rtx condition,
+ 	  && REG_P (SET_DEST (pat))
+ 	  && !reg_overlap_mentioned_p (SET_DEST (pat), SET_SRC (pat)))
+ 	{
+-	  rtx_insn *next = next_nonnote_insn (trial);
++	  rtx_insn *next = next_nonnote_nondebug_insn (trial);
  
-diff --git a/gcc/testsuite/gcc.target/sparc/reorg-delete-prior-debug.c b/gcc/testsuite/gcc.target/sparc/reorg-delete-prior-debug.c
+ 	  if (next && NONJUMP_INSN_P (next)
+ 	      && GET_CODE (PATTERN (next)) != USE
+diff --git a/gcc/testsuite/gcc.target/sparc/reorg-fill-slots-regcopy-debug.c b/gcc/testsuite/gcc.target/sparc/reorg-fill-slots-regcopy-debug.c
 new file mode 100644
-index 000000000..b1992bd96
+index 000000000..e23ae1ee1
 --- /dev/null
-+++ b/gcc/testsuite/gcc.target/sparc/reorg-delete-prior-debug.c
-@@ -0,0 +1,19 @@
-+/* PR rtl-optimization/127795 */
-+
-+/* Verify that delay-slot reorganization deletes the dead add with and
-+   without debug information.  -fno-tree-ter keeps the add separate, while
-+   -fno-var-tracking keeps the debug marker until the dbr pass.  Falling off
-+   the end of the function is required to expose the deletion path.  */
-+
++++ b/gcc/testsuite/gcc.target/sparc/reorg-fill-slots-regcopy-debug.c
+@@ -0,0 +1,29 @@
++/* PR rtl-optimization/127725 */
 +/* { dg-do compile } */
-+/* { dg-options "-O2 -fno-tree-ter -fno-var-tracking -fcompare-debug" } */
++/* { dg-options "-O2 -mcpu=v8 -fno-var-tracking -fcompare-debug --param=max-delay-slot-live-search=100000 --param=max-delay-slot-insn-search=100000" } */
++
++int h (int);
 +
 +int
-+foo (int a, int b)
++f (void)
 +{
-+  int e = a + b;
-+  if (e >= 97)
-+    return a;
-+}
++  unsigned int mid;
++  unsigned int lo = 0;
++  unsigned int hi = 3;
++  unsigned int last = -1;
 +
-+/* { dg-final { scan-assembler-not "add\t%" } } */
++  for (;;)
++    {
++      mid = (lo + hi) / 2;
++      if (last == mid)
++	return 0;
++      last = mid;
++      int r = h (mid);
++      if (r < 0)
++	hi = mid;
++      else if (r > 0)
++	lo = mid;
++      else
++	return 1;
++    }
++}
+diff --git a/gcc/testsuite/gcc.target/sparc/reorg-get-label-before-debug.c b/gcc/testsuite/gcc.target/sparc/reorg-get-label-before-debug.c
+new file mode 100644
+index 000000000..ce241f5dc
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/sparc/reorg-get-label-before-debug.c
+@@ -0,0 +1,13 @@
++/* PR rtl-optimization/127725 */
++/* { dg-do compile } */
++/* { dg-options "-O2 -mcpu=v8 -fno-var-tracking -fcompare-debug --param=max-delay-slot-live-search=100000 --param=max-delay-slot-insn-search=100000" } */
++
++int b;
++
++void
++foo (int n, char *c)
++{
++  for (;;)
++    for (int f = 0; f < n; f++)
++      b = c[f];
++}
+diff --git a/gcc/testsuite/gcc.target/sparc/reorg-optimize-skip-debug.c b/gcc/testsuite/gcc.target/sparc/reorg-optimize-skip-debug.c
+new file mode 100644
+index 000000000..ebd6a18fb
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/sparc/reorg-optimize-skip-debug.c
+@@ -0,0 +1,10 @@
++/* PR rtl-optimization/127725 */
++/* { dg-do compile } */
++/* { dg-options "-O2 -mcpu=v8 -fno-var-tracking -fcompare-debug --param=max-delay-slot-live-search=100000 --param=max-delay-slot-insn-search=100000" } */
++
++void
++f (int a, int b, int *p)
++{
++  if (a > b)
++    *p = b;
++}
 -- 
 2.34.1
+
 
