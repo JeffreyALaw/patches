@@ -116,7 +116,7 @@ index d8869810de76..c7fc97f6a0f1 100644
  ;; This code iterator allows unsigned and signed division to be generated
  ;; from the same template.
 diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
-index ae3fd8e3d72b..3d1b8e3b3b3d 100644
+index ae3fd8e3d72b..bf1290317f3b 100644
 --- a/gcc/config/riscv/riscv.cc
 +++ b/gcc/config/riscv/riscv.cc
 @@ -3705,7 +3705,7 @@ riscv_move_integer (rtx temp, rtx dest, HOST_WIDE_INT value)
@@ -128,3 +128,59 @@ index ae3fd8e3d72b..3d1b8e3b3b3d 100644
  		  x = t;
  		}
  	    }
+@@ -5057,6 +5057,28 @@ riscv_rtx_costs (rtx x, machine_mode mode, int outer_code, int opno ATTRIBUTE_UN
+ 	  return true;
+ 	}
+ 
++      /* packh for zbkb.  Alternate forms haven't shown up as a
++	 costing problem.  Obviously we can add the additional
++	 variants if needed. We tend to canonicalize to this form
++	 after the any-or-plus changes.  */
++      if (TARGET_ZBKB
++	  && GET_CODE (x) == PLUS
++	  && GET_CODE (XEXP (x, 0)) == AND
++	  && GET_CODE (XEXP (XEXP (x, 0), 0)) == ASHIFT
++	  && register_operand (XEXP (XEXP (XEXP (x, 0), 0), 0), word_mode)
++	  && CONST_INT_P (XEXP (XEXP (XEXP (x, 0), 0), 1))
++	  && INTVAL (XEXP (XEXP (XEXP (x, 0), 0), 1)) == 8
++	  && CONST_INT_P (XEXP (XEXP (x, 0), 1))
++	  && INTVAL (XEXP (XEXP (x, 0), 1)) == 0xff00
++	  && GET_CODE (XEXP (x, 1)) == ZERO_EXTEND
++	  && GET_MODE (XEXP (x, 1)) == word_mode
++	  && GET_MODE (XEXP (XEXP (x, 1), 0)) == QImode)
++	{
++	  *total = COSTS_N_INSNS (1);
++	  return true;
++	}
++
++
+       if (float_mode_p)
+ 	*total = tune_param->fp_add[mode == DFmode];
+       else
+diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
+index cfac4c960bf1..f017d783acad 100644
+--- a/gcc/config/riscv/riscv.md
++++ b/gcc/config/riscv/riscv.md
+@@ -5503,6 +5503,22 @@ (define_insn_and_split "*seq_sne_qi"
+   [(set_attr "type" "slt")
+    (set_attr "mode" "<X:MODE>")])
+ 
++;; If the input operands are registers then we want to steer towards
++;; ADD, otherwise steer towards IOR.
++(define_expand "aop<mode>3"
++  [(set (match_operand:X 0 "register_operand")
++        (ior:X (match_operand:X 1 "register_operand")
++               (match_operand:X 2 "arith_operand")))]
++  ""          
++  {
++    if (REG_P (operands[2]))
++      emit_insn (gen_add<mode>3 (operands[0], operands[1], operands[2]));
++    else
++      emit_insn (gen_ior<mode>3 (operands[0], operands[1], operands[2]));
++    DONE;
++  }
++) 
++
+ (include "bitmanip.md")
+ (include "crypto.md")
+ (include "sync.md")
