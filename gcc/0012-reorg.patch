@@ -1,0 +1,75 @@
+
+
+delete_prior_computation walks backward with prev_nonnote_insn while
+deleting a dead computation.  A DEBUG_INSN therefore terminates the scan
+and can make -g retain an instruction that is deleted with -g0.
+
+Use prev_nonnote_nondebug_insn for both steps of the walk.  Add a SPARC
+regression test that checks both -fcompare-debug and the absence of the
+dead add.
+
+Assisted-by: OpenAI Codex 5.6 Sol, co-reviewed by Claude and Yongqiang Tian.
+
+	PR rtl-optimization/127795
+
+gcc/ChangeLog:
+
+	* reorg.cc (delete_prior_computation): Ignore debug insns in the
+	backward scan.
+
+gcc/testsuite/ChangeLog:
+
+	* gcc.target/sparc/reorg-delete-prior-debug.c: New test.
+
+Signed-off-by: Yongqiang Tian <yqtian668@gmail.com>
+---
+ gcc/reorg.cc                                  |  4 ++--
+ .../sparc/reorg-delete-prior-debug.c          | 19 +++++++++++++++++++
+ 2 files changed, 21 insertions(+), 2 deletions(-)
+ create mode 100644 gcc/testsuite/gcc.target/sparc/reorg-delete-prior-debug.c
+
+diff --git a/gcc/reorg.cc b/gcc/reorg.cc
+index 76b3e1438..38aad68d7 100644
+--- a/gcc/reorg.cc
++++ b/gcc/reorg.cc
+@@ -2884,10 +2884,10 @@ delete_prior_computation (rtx note, rtx_insn *insn)
+   rtx_insn *our_prev;
+   rtx reg = XEXP (note, 0);
+ 
+-  for (our_prev = prev_nonnote_insn (insn);
++  for (our_prev = prev_nonnote_nondebug_insn (insn);
+        our_prev && (NONJUMP_INSN_P (our_prev)
+ 		    || CALL_P (our_prev));
+-       our_prev = prev_nonnote_insn (our_prev))
++       our_prev = prev_nonnote_nondebug_insn (our_prev))
+     {
+       rtx pat = PATTERN (our_prev);
+ 
+diff --git a/gcc/testsuite/gcc.target/sparc/reorg-delete-prior-debug.c b/gcc/testsuite/gcc.target/sparc/reorg-delete-prior-debug.c
+new file mode 100644
+index 000000000..b1992bd96
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/sparc/reorg-delete-prior-debug.c
+@@ -0,0 +1,19 @@
++/* PR rtl-optimization/127795 */
++
++/* Verify that delay-slot reorganization deletes the dead add with and
++   without debug information.  -fno-tree-ter keeps the add separate, while
++   -fno-var-tracking keeps the debug marker until the dbr pass.  Falling off
++   the end of the function is required to expose the deletion path.  */
++
++/* { dg-do compile } */
++/* { dg-options "-O2 -fno-tree-ter -fno-var-tracking -fcompare-debug" } */
++
++int
++foo (int a, int b)
++{
++  int e = a + b;
++  if (e >= 97)
++    return a;
++}
++
++/* { dg-final { scan-assembler-not "add\t%" } } */
+-- 
+2.34.1
+
