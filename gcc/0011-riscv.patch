@@ -1,5 +1,5 @@
 diff --git a/gcc/config/riscv/crypto.md b/gcc/config/riscv/crypto.md
-index 2f3cc7e43b04..80496b84dc49 100644
+index 2f3cc7e43b04..c3930ce4a2f5 100644
 --- a/gcc/config/riscv/crypto.md
 +++ b/gcc/config/riscv/crypto.md
 @@ -107,9 +107,9 @@ (define_insn "riscv_pack_<X:mode><HX:mode>"
@@ -7,10 +7,10 @@ index 2f3cc7e43b04..80496b84dc49 100644
  ;; that fully expose the RTL as it needs to self-adjust to
  ;; rv32 and rv64.  But it's not that hard.
 -(define_insn "riscv_xpack_<X:mode>_<HX:mode>_2"
-+(define_insn "*riscv_xpack_<X:mode>_<HX:mode>_2"
++(define_insn "riscv_xpack_<code>_<X:mode>_<HX:mode>_2"
    [(set (match_operand:X 0 "register_operand" "=r")
 -	(ior:X (ashift:X (match_operand:X 1 "register_operand" "r")
-+	(aop:X (ashift:X (match_operand:X 1 "register_operand" "r")
++	(oxp:X (ashift:X (match_operand:X 1 "register_operand" "r")
  			 (match_operand 2 "immediate_operand" "n"))
  	       (zero_extend:X
  		 (match_operand:HX 3 "register_operand" "r"))))]
@@ -19,7 +19,7 @@ index 2f3cc7e43b04..80496b84dc49 100644
  (define_insn "*riscv_packh_<mode>_3"
    [(set (match_operand:X 0 "register_operand" "=r")
 -	(ior:X (and:X (ashift:X (match_operand:X 1 "register_operand" "r")
-+	(aop:X (and:X (ashift:X (match_operand:X 1 "register_operand" "r")
++	(oxp:X (and:X (ashift:X (match_operand:X 1 "register_operand" "r")
  				(const_int 8))
  		      (const_int 65280))
  	       (zero_extend:X (match_operand:QI 2 "register_operand" "r"))))]
@@ -39,7 +39,7 @@ index 2f3cc7e43b04..80496b84dc49 100644
  (define_split
    [(set (match_operand:DI 0 "register_operand")
 -	(ior:DI (ashift:DI
-+	(aop:DI (ashift:DI
++	(oxp:DI (ashift:DI
  		  (sign_extend:DI (match_operand:HI 1 "register_operand"))
  		  (const_int 16))
  		(zero_extend:DI (match_operand:HI 2 "register_operand"))))]
@@ -54,7 +54,7 @@ index 2f3cc7e43b04..80496b84dc49 100644
  (define_split
    [(set (match_operand:DI 0 "register_operand")
 -	(ior:DI (zero_extend:DI (match_operand:HI 1 "register_operand"))
-+	(aop:DI (zero_extend:DI (match_operand:HI 1 "register_operand"))
++	(oxp:DI (zero_extend:DI (match_operand:HI 1 "register_operand"))
  		(ashift:DI
  		  (sign_extend:DI (match_operand:HI 2 "register_operand"))
  		  (const_int 16))))]
@@ -69,7 +69,7 @@ index 2f3cc7e43b04..80496b84dc49 100644
  (define_split
    [(set (match_operand:DI 0 "register_operand")
 -	(ior:DI (sign_extend:DI
-+	(aop:DI (sign_extend:DI
++	(oxp:DI (sign_extend:DI
  		  (ashift:SI (match_operand:SI 1 "register_operand")
  			     (const_int 16)))
  		(zero_extend:DI (match_operand:HI 2 "register_operand"))))]
@@ -83,7 +83,7 @@ index 2f3cc7e43b04..80496b84dc49 100644
  (define_split
    [(set (match_operand:DI 0 "register_operand")
 -	(ior:DI (zero_extend:DI (match_operand:HI 1 "register_operand"))
-+	(aop:DI (zero_extend:DI (match_operand:HI 1 "register_operand"))
++	(oxp:DI (zero_extend:DI (match_operand:HI 1 "register_operand"))
  		(sign_extend:DI
  		  (ashift:SI (match_operand:SI 2 "register_operand")
  			     (const_int 16)))))]
@@ -99,7 +99,7 @@ index 2f3cc7e43b04..80496b84dc49 100644
    [(set (match_operand:DI 0 "register_operand" "=r")
  	(sign_extend:DI
 -	  (ior:SI
-+	  (aop:SI
++	  (oxp:SI
  	    (ashift:SI (match_operand:SI 1 "register_operand" "r")
  		       (const_int 16))
  	    (zero_extend:SI (match_operand:HI 2 "register_operand" "r")))))]
@@ -115,3 +115,16 @@ index d8869810de76..c7fc97f6a0f1 100644
  
  ;; This code iterator allows unsigned and signed division to be generated
  ;; from the same template.
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index ae3fd8e3d72b..3d1b8e3b3b3d 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -3705,7 +3705,7 @@ riscv_move_integer (rtx temp, rtx dest, HOST_WIDE_INT value)
+ 		  rtx t2 = codes[i].code == VEC_MERGE ? old_value : x;
+ 		  gcc_assert (t2);
+ 		  t2 = gen_lowpart (SImode, t2);
+-		  emit_insn (gen_riscv_xpack_di_si_2 (t, x, GEN_INT (32), t2));
++		  emit_insn (gen_riscv_xpack_plus_di_si_2 (t, x, GEN_INT (32), t2));
+ 		  x = t;
+ 		}
+ 	    }
