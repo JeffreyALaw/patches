@@ -158,10 +158,21 @@ index ae3fd8e3d72b..bf1290317f3b 100644
  	*total = tune_param->fp_add[mode == DFmode];
        else
 diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
-index cfac4c960bf1..f017d783acad 100644
+index cfac4c960bf1..d3beba5f141c 100644
 --- a/gcc/config/riscv/riscv.md
 +++ b/gcc/config/riscv/riscv.md
-@@ -5503,6 +5503,22 @@ (define_insn_and_split "*seq_sne_qi"
+@@ -5136,6 +5136,10 @@ (define_insn_and_split ""
+ 		 (match_operand 3 "const_int_operand" "n")))
+    (clobber (match_scratch:DI 4 "=&r"))]
+   "(TARGET_64BIT
++    /* If this might reasonably be a pack, then reject.  */
++    && !(TARGET_ZBKB
++	 && INTVAL (operands[2]) == BITS_PER_WORD / 2
++	 && (INTVAL (operands[3]) & ~HOST_WIDE_INT_C (0xffffffff)) == 0)
+     && riscv_const_insns (operands[3], false) == 1
+     && riscv_const_insns (GEN_INT (INTVAL (operands[3])
+ 			  << INTVAL (operands[2])), false) != 1)"
+@@ -5503,6 +5507,22 @@ (define_insn_and_split "*seq_sne_qi"
    [(set_attr "type" "slt")
     (set_attr "mode" "<X:MODE>")])
  
