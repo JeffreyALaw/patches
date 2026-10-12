@@ -8,9 +8,9 @@ index e910245c2bc..ecc3996b4bb 100644
      {
 +      /* Re-use synthesize_add to try and emit efficient code here.  */
 +      if ((temp || can_create_pseudo_p ())
-+	  && temp != frame_pointer_rtx
-+	  && temp != hard_frame_pointer_rtx
-+	  && temp != virtual_stack_vars_rtx)
++	  && reg != frame_pointer_rtx
++	  && reg != hard_frame_pointer_rtx
++	  && reg != virtual_stack_vars_rtx)
 +	{
 +	  rtx operands[3];
 +	  operands[0] = temp ? temp : gen_reg_rtx (word_mode);
