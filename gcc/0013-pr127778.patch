@@ -1,0 +1,44 @@
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index e910245c2bc..51c910a8c09 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -3384,6 +3384,17 @@ riscv_add_offset (rtx temp, rtx reg, HOST_WIDE_INT offset)
+ {
+   if (!SMALL_OPERAND (offset))
+     {
++      /* Re-use synthesize_add to try and emit efficient code here.  */
++      if (temp || can_create_pseudo_p ())
++	{
++	  rtx operands[3];
++	  operands[0] = temp ? temp : gen_reg_rtx (word_mode);
++	  operands[1] = reg;
++	  operands[2] = GEN_INT (offset);
++	  if (synthesize_add (operands))
++	    return operands[0];
++	}
++
+       rtx high;
+ 
+       /* Leave OFFSET as a 16-bit offset and put the excess in HIGH.
+diff --git a/gcc/testsuite/gcc.target/riscv/pr127778.c b/gcc/testsuite/gcc.target/riscv/pr127778.c
+new file mode 100644
+index 00000000000..3a0d02da473
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr127778.c
+@@ -0,0 +1,16 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -march=rv64gcb_zicond -mabi=lp64d" { target { rv64 } } } */
++/* { dg-options "-O2 -march=rv32gcb_zicond -mabi=ilp32d" { target { rv32 } } } */
++
++  void
++  store_4000 (int *p, int v)
++  {
++    p[1000] = v;
++  }
++
++/* { dg-final { scan-assembler-not {\mli} } } */
++/* { dg-final { scan-assembler-times {\maddi\M} 1 } } */
++/* { dg-final { scan-assembler-times {\msw\M} 1 } } */
++
++
++
