@@ -27,3 +27,17 @@ index e70439f5a0d..ac8f047c31f 100644
      DONE;
    }
  ) 
+diff --git a/gcc/optabs.cc b/gcc/optabs.cc
+index 628500f8c879..2f7cbf478a39 100644
+--- a/gcc/optabs.cc
++++ b/gcc/optabs.cc
+@@ -79,6 +79,9 @@ add_equal_note (rtx_insn *insns, rtx target, enum rtx_code code, rtx op0,
+   rtx set;
+   rtx note;
+ 
++  if (code == AOP)
++    return true;
++
+   gcc_assert (insns && INSN_P (insns) && NEXT_INSN (insns));
+ 
+   if (GET_RTX_CLASS (code) != RTX_COMM_ARITH
