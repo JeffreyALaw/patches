@@ -1,0 +1,537 @@
+
+
+gcc/ChangeLog:
+
+        * config/rx/predicates.md (rx_pcrel_label_operand): New predicate.
+	(rx_plt_call_operand): New predicate.
+        * config/rx/rx.md (PIC_REG): New constant.
+        (UNSPEC_PIC): Likewise.
+        (UNSPEC_GOT): Likewise.
+        (UNSPEC_GOTOFF): Likewise.
+        (UNSPEC_PLT): Likewise.
+        (UNSPEC_GOTFUNCDESC): Likewise.
+        (UNSPEC_GOTOFFFUNCDESC): Likewise.
+        (UNSPEC_PCREL): Likewise.
+        (tablejump): Use relative in pic case.
+        (call): Add FDPIC call.
+        (call_value): Likewise.
+        (call_internal): Add use PICREG.
+        (call_value_internal): Likewise.
+        (mov<register_modes:mode>): Rename to rx_maybe_legitimize_pi_operand.
+	Add PC relative case.
+        (addsi3): Likewise.
+        (*mov<register_modes:mode>_internal): Added the condition that it is not UNSPEC.
+        (movsi_pcrel): New. load from PC relative address.
+	(movdi_internal): Add condition for non-pic.
+	(movdf_internal): Likewise.
+	(movdi_internal_pic): New. move DImode in pic.
+	(movdf_internal_pic): Likewise.
+
+        (addsi_unspec): Rename from addsi_pid. accept all unspec value.
+        (sym2GOT): New.
+        (sym2GOTreg): New.
+        (sym2GOTOFF): New.
+        (sym2GOTOFFreg): New.
+        (sym2GOTFUNCDESC): New.
+        (sym2GOTFUNCDESCreg): New.
+        (sym2GOTOFFFUNCDESC): New.
+        (sym2GOTOFFFUNCDESCreg): New.
+        (sym2PLT): New.
+        (sym2pcrel): New.
+        (call_fdpic): New.
+        (call_internal_fd): New.
+        (call_internal_plt): New.
+        (call_value_fdpic): New.
+        (call_value_internal_fd): New.
+        (call_value_internal_plt): New.
+
+Signed-off-by: Yoshinori Sato <yoshinori.sato@nifty.com>
+---
+ gcc/config/rx/predicates.md |  12 ++
+ gcc/config/rx/rx.md         | 339 +++++++++++++++++++++++++++++++++---
+ 2 files changed, 323 insertions(+), 28 deletions(-)
+
+diff --git a/gcc/config/rx/predicates.md b/gcc/config/rx/predicates.md
+index aa926be31ac..a02c0400f13 100644
+--- a/gcc/config/rx/predicates.md
++++ b/gcc/config/rx/predicates.md
+@@ -307,3 +307,15 @@
+ (define_predicate "rshift_operator"
+   (match_code "ashiftrt,lshiftrt")
+ )
++
++(define_predicate "rx_pcrel_label_operand"
++  (match_code "const")
++{
++  rtx unspec = XEXP (op, 0);
++
++  return (GET_CODE (unspec) == UNSPEC) && (XINT (unspec, 1) == UNSPEC_PCREL);
++})
++
++(define_predicate "rx_plt_call_operand"
++  (match_code "const")
++)
+diff --git a/gcc/config/rx/rx.md b/gcc/config/rx/rx.md
+index 1bd80fd3e2e..88476dd2902 100644
+--- a/gcc/config/rx/rx.md
++++ b/gcc/config/rx/rx.md
+@@ -35,6 +35,7 @@
+ (define_constants
+   [
+    (SP_REG 0)
++   (PIC_REG		   13)
+    (CC_REG 		   16)
+ 
+    (UNSPEC_LOW_REG         0)
+@@ -76,6 +77,14 @@
+ 
+    (UNSPEC_PID_ADDR	   52)
+ 
++   (UNSPEC_PIC		   60)
++   (UNSPEC_GOT		   61)
++   (UNSPEC_GOTOFF	   62)
++   (UNSPEC_PLT		   63)
++   (UNSPEC_GOTFUNCDESC     64)
++   (UNSPEC_GOTOFFFUNCDESC  65)
++   (UNSPEC_PCREL	   66)
++
+    (CTRLREG_PSW		    0)
+    (CTRLREG_PC		    1)
+    (CTRLREG_USP		    2)
+@@ -342,9 +351,9 @@
+ 	(match_operand:SI          0 "register_operand" "r"))
+    (use (label_ref (match_operand  1 "" "")))]
+   ""
+-  { return TARGET_PID ? (TARGET_AS100_SYNTAX ? "\n?:\tbra\t%0"
+-					     : "\n1:\tbra\t%0")
+-	                                     : "\n1:jmp\t%0";
++  { return TARGET_PID || flag_pic ? (TARGET_AS100_SYNTAX ? "\n?:\tbra\t%0"
++				 		         : "\n1:\tbra\t%0")
++							 : "\n1:jmp\t%0";
+   }
+   [(set_attr "timings" "33")
+    (set_attr "length" "2")]
+@@ -425,14 +434,24 @@
+ 
+ (define_expand "call"
+   [(call (match_operand:QI 0 "general_operand")
+-	 (match_operand:SI 1 "general_operand"))]
++	 (match_operand:SI 1 "general_operand"))
++	 (use (match_operand 2 "" ""))
++	 (use (reg:SI PIC_REG))]
+   ""
+   {
+     rtx dest = XEXP (operands[0], 0);
+ 
+-    if (! rx_call_operand (dest, Pmode))
+-      dest = force_reg (Pmode, dest);
+-    emit_call_insn (gen_call_internal (dest));
++    if (!TARGET_FDPIC)
++      {
++	if (! rx_call_operand (dest, Pmode))
++	  dest = force_reg (Pmode, dest);
++	emit_call_insn (gen_call_internal (dest));
++      }
++    else
++      {
++	emit_call_insn (gen_call_fdpic (operands[0],
++					operands[1], operands[2]));
++      }
+     DONE;
+   }
+ )
+@@ -440,7 +459,8 @@
+ (define_insn "call_internal"
+   [(call (mem:QI (match_operand:SI 0 "rx_call_operand" "r,CALL_OP_SYMBOL_REF"))
+ 	 (const_int 0))
+-   (clobber (reg:CC CC_REG))]
++   (clobber (reg:CC CC_REG))
++   (use (reg:SI PIC_REG))]
+   ""
+   "@
+   jsr\t%0
+@@ -450,16 +470,27 @@
+ )
+ 
+ (define_expand "call_value"
+-  [(set (match_operand          0 "register_operand")
++  [(set (match_operand		0 "register_operand")
+ 	(call (match_operand:QI 1 "general_operand")
+-	      (match_operand:SI 2 "general_operand")))]
++	      (match_operand:SI 2 "general_operand")))
++	 (use (match_operand 3 "" ""))
++	 (use (reg:SI PIC_REG))]
+   ""
+   {
+     rtx dest = XEXP (operands[1], 0);
+ 
+-    if (! rx_call_operand (dest, Pmode))
+-      dest = force_reg (Pmode, dest);
+-    emit_call_insn (gen_call_value_internal (operands[0], dest));
++    if (!TARGET_FDPIC
++	|| (SYMBOL_REF_P (dest) && SYMBOL_REF_LOCAL_P (dest)))
++      {
++	if (! rx_call_operand (dest, Pmode))
++	  dest = force_reg (Pmode, dest);
++	emit_call_insn (gen_call_value_internal (operands[0], dest));
++      }
++    else
++      {
++	emit_call_insn (gen_call_value_fdpic (operands[0],
++					      operands[1], operands[2]));
++      }
+     DONE;
+   }
+ )
+@@ -468,7 +499,8 @@
+   [(set (match_operand                  0 "register_operand" "=r,r")
+ 	(call (mem:QI (match_operand:SI 1 "rx_call_operand"   "r,CALL_OP_SYMBOL_REF"))
+ 	      (const_int 0)))
+-   (clobber (reg:CC CC_REG))]
++   (clobber (reg:CC CC_REG))
++   (use (reg:SI PIC_REG))]
+   ""
+   "@
+   jsr\t%1
+@@ -576,13 +608,18 @@
+   {
+     if (MEM_P (operands[0]) && MEM_P (operands[1]))
+       operands[1] = force_reg (<register_modes:MODE>mode, operands[1]);
+-    operands[0] = rx_maybe_pidify_operand (operands[0], 0);
+-    operands[1] = rx_maybe_pidify_operand (operands[1], 0);
++
++    operands[0] = rx_maybe_legitimize_pi_operand (operands[0], 0);
++    operands[1] = rx_maybe_legitimize_pi_operand (operands[1], 0);
++
+     if (MEM_P (operands[0]) && GET_CODE (operands[1]) == PLUS)
+       operands[1] = force_reg (<register_modes:MODE>mode, operands[1]);
+     if (CONST_INT_P (operand1)
+         && ! rx_is_legitimate_constant (<register_modes:MODE>mode, operand1))
+       FAIL;
++
++    if (rx_expand_pcrel (operands, 1))
++      DONE;
+   }
+ )
+ 
+@@ -591,12 +628,21 @@
+ 	 0 "nonimmediate_operand" "=r,r,r,r,r,r,m,Q,Q,Q,Q,r")
+ 	(match_operand:register_modes
+ 	 1 "general_operand" "Int08,Sint16,Sint24,i,r,m,r,Int08,Sint16,Sint24,i,RpdaRpid"))]
+-  ""
++  "!rx_is_unspec_offset (operands[1])"
+   { return rx_gen_move_template (operands, false); }
+   [(set_attr "length" "3,4,5,6,2,4,6,5,6,7,8,8")
+    (set_attr "timings" "11,11,11,11,11,12,11,11,11,11,11,11")]
+ )
+ 
++(define_insn "movsi_pcrel"
++  [(set (match_operand:SI 0 "register_operand" "=r")
++	(const:SI (unspec:SI [(match_operand:SI 1 "" "")] UNSPEC_PCREL)))
++   (clobber (reg:CC CC_REG))]
++  "flag_pic"
++  "mvfc\tpc, %0 ! add\t%1 - . + 3, %0"
++  [(set_attr "length" "6")]
++)
++
+ (define_expand "movdi"
+   [(set (match_operand:DI 0 "nonimmediate_operand" "")
+         (match_operand:DI 1 "general_operand" ""))]
+@@ -608,8 +654,23 @@
+ 
+ (define_insn_and_split "movdi_internal"
+   [(set (match_operand:DI 0 "nonimmediate_operand" "=r,r,m")
+-        (match_operand:DI 1 "general_operand"  "ri,m,r"))]
+-  ""
++		(match_operand:DI 1 "general_operand"  "ri,m,r"))]
++  "!flag_pic"
++  "#"
++  "reload_completed"
++  [(const_int 0)]
++  {
++    rx_split_double_move (operands, DImode);
++    DONE;
++  }
++  [(set_attr "length" "8")]
++)
++
++;; PIC case have strict address constraints.
++(define_insn_and_split "movdi_internal_pic"
++  [(set (match_operand:DI 0 "nonimmediate_operand" "=r,r,o")
++		(match_operand:DI 1 "general_operand"  "ri,o,r"))]
++  "flag_pic"
+   "#"
+   "reload_completed"
+   [(const_int 0)]
+@@ -631,8 +692,22 @@
+ 
+ (define_insn_and_split "movdf_internal"
+   [(set (match_operand:DF 0 "nonimmediate_operand" "=r,r,m")
+-        (match_operand:DF 1 "general_operand"  "rF,m,r"))]
+-  ""
++		(match_operand:DF 1 "general_operand"  "rF,m,r"))]
++  "!flag_pic"
++  "#"
++  "reload_completed"
++  [(const_int 0)]
++  {
++    rx_split_double_move (operands, DFmode);
++    DONE;
++  }
++  [(set_attr "length" "8")]
++)
++
++(define_insn_and_split "movdf_internal_pic"
++  [(set (match_operand:DF 0 "nonimmediate_operand" "=r,r,o")
++		(match_operand:DF 1 "general_operand"  "rF,o,r"))]
++  "flag_pic"
+   "#"
+   "reload_completed"
+   [(const_int 0)]
+@@ -909,11 +984,13 @@
+ 		 (match_operand:SI 2 "rx_source_operand" "")))
+     (clobber (reg:CC CC_REG))])]
+   ""
+-  "
+-      operands[0] = rx_maybe_pidify_operand (operands[0], 1);
+-      operands[1] = rx_maybe_pidify_operand (operands[1], 1);
+-      operands[2] = rx_maybe_pidify_operand (operands[2], 1);
+-  "
++  {
++    operands[0] = rx_maybe_legitimize_pi_operand (operands[0], 1);
++    operands[1] = rx_maybe_legitimize_pi_operand (operands[1], 1);
++    operands[2] = rx_maybe_legitimize_pi_operand (operands[2], 1);
++    if (rx_expand_pcrel (operands, 2))
++      DONE;
++  }
+ )
+ 
+ (define_insn "addsi3_internal"
+@@ -1015,12 +1092,11 @@
+    (set_attr "length"   "3,4,5,6,7,6")]
+ )
+ 
+-(define_insn "addsi3_pid"
++(define_insn "addsi3_unspec"
+   [(set (match_operand:SI 0 "register_operand" "=r")
+         (plus:SI (match_operand:SI 1 "register_operand" "%0")
+                  (const:SI (unspec:SI [(match_operand:SI 2 "immediate_operand" "i")] UNSPEC_PID_ADDR))))
+     (clobber (reg:CC CC_REG))]
+-
+   ""
+   "add\t%2, %0"
+   [(set_attr "length" "6")
+@@ -2952,3 +3028,210 @@
+      (clobber (reg:CC CC_REG))
+    ])]
+ )
++
++;;-------------- PIC staff -----------------------------
++(define_expand "sym2GOT"
++ [(const:SI (unspec:SI [(match_operand 0 "" "")] UNSPEC_GOT))]
++  ""
++  "")
++
++(define_expand "symGOT2reg"
++  [(match_operand 0 "" "") (match_operand 1 "" "")]
++  ""
++  {
++    rtx mem = !can_create_pseudo_p ()
++      ? operands[0] : gen_reg_rtx (GET_MODE (operands[0]));
++    rtx gotsym = gen_sym2GOT (operands[1]);
++    rtx picreg = gen_rtx_REG (Pmode, PIC_REG);
++
++    emit_move_insn (operands[0],
++		    gen_rtx_MEM (Pmode, gen_rtx_PLUS (Pmode, picreg, gotsym)));
++    DONE;
++  }
++)
++
++(define_expand "sym2GOTOFF"
++ [(const:SI (unspec:SI [(match_operand 0 "" "")] UNSPEC_GOTOFF))]
++  ""
++  "")
++
++(define_expand "symGOTOFF2reg"
++  [(match_operand 0 "" "") (match_operand 1 "" "")]
++  ""
++  {
++    rtx picreg = gen_rtx_REG (Pmode, PIC_REG);
++
++    rtx gotoffsym = gen_sym2GOTOFF (operands[1]);
++    emit_insn (gen_addsi3 (operands[0],  picreg, gotoffsym));
++    DONE;
++  }
++)
++
++(define_expand "sym2GOTFUNCDESC"
++ [(const:SI (unspec:SI [(match_operand 0)] UNSPEC_GOTFUNCDESC))]
++  "TARGET_FDPIC")
++
++(define_expand "sym2GOTOFFFUNCDESC"
++ [(const:SI (unspec:SI [(match_operand 0)] UNSPEC_GOTOFFFUNCDESC))]
++  "TARGET_FDPIC")
++
++(define_expand "symGOTFUNCDESC2reg"
++  [(match_operand 0) (match_operand 1)]
++  "TARGET_FDPIC"
++  {
++    rtx picreg = rx_get_fdpic_reg_initial_val ();
++    rtx gotsym = gen_sym2GOTFUNCDESC (operands[1]);
++    emit_move_insn (operands[0], gen_rtx_PLUS (Pmode, picreg, gotsym));
++    DONE;
++  }
++)
++
++(define_expand "symGOTOFFFUNCDESC2reg"
++  [(match_operand 0) (match_operand 1)]
++  "TARGET_FDPIC"
++  {
++    rtx picreg = rx_get_fdpic_reg_initial_val ();
++    rtx gotsym = gen_sym2GOTOFFFUNCDESC (operands[1]);
++    emit_move_insn (operands[0], gen_rtx_PLUS (Pmode, picreg, gotsym));
++    DONE;
++  }
++)
++
++(define_expand "sym2PLT"
++  [(const (unspec [(match_operand 0 "" "")] UNSPEC_PLT))]
++  ""
++  "")
++
++(define_expand "sym2pcrel"
++  [(const (unspec [(match_operand 0 "" "")] UNSPEC_PCREL))]
++  ""
++  "")
++
++(define_expand "call_fdpic"
++  [(call (match_operand:QI 0 "general_operand")
++	 (match_operand:SI 1 "general_operand"))
++	 (use (match_operand 2 "" ""))
++	 (use (reg:SI PIC_REG))]
++  ""
++  {
++    rtx picreg = force_reg (Pmode, gen_rtx_REG (Pmode, PIC_REG));
++    rtx dest = XEXP (operands[0], 0);
++
++    if (SYMBOL_REF_P (dest) && SYMBOL_REF_LOCAL_P (dest))
++      {
++	if (! rx_call_operand (dest, Pmode))
++	  dest = force_reg (Pmode, dest);
++	emit_call_insn (gen_call_internal (dest));
++      }
++    else
++      {
++	rtx savereg = gen_reg_rtx (Pmode);
++
++	emit_move_insn (savereg, picreg);
++	if (MEM_P (operands[0]) && SYMBOL_REF_P (dest))
++	  {
++	    dest = gen_sym2PLT (dest);
++	    emit_call_insn (gen_call_internal_plt (dest));
++	  }
++	else
++	  {
++	    rtx func = gen_reg_rtx (Pmode);
++	    rtx gotaddr = plus_constant (Pmode, dest, 4);
++	    emit_move_insn (picreg, gen_rtx_MEM (Pmode, gotaddr));
++	    emit_move_insn (func, gen_rtx_MEM (Pmode, dest));
++	    emit_call_insn (gen_call_internal_fd (func));
++	  }
++	emit_move_insn (picreg, savereg);
++      }
++    DONE;
++  }
++)
++
++(define_insn "call_internal_fd"
++  [(call (mem:QI (match_operand:SI 0 "register_operand" "r"))
++	 (const_int 0))
++   (clobber (reg:CC CC_REG))
++   (clobber (reg:SI PIC_REG))
++   (use (reg:SI PIC_REG))]
++  "TARGET_FDPIC"
++  "jsr\t%A0"
++  [(set_attr "length" "2")
++   (set_attr "timings" "33")]
++)
++
++(define_insn "call_internal_plt"
++  [(call (mem:QI (match_operand 0 "rx_plt_call_operand" ""))
++	 (const_int 0))
++   (clobber (reg:CC CC_REG))
++   (clobber (reg:SI PIC_REG))
++   (use (reg:SI PIC_REG))]
++  "TARGET_FDPIC"
++  "bsr\t%A0"
++  [(set_attr "length" "4")
++   (set_attr "timings" "33")]
++)
++
++(define_expand "call_value_fdpic"
++  [(call (match_operand:QI 0 "general_operand")
++	 (match_operand:SI 1 "general_operand"))
++	 (use (match_operand 2 "" ""))
++	 (use (reg:SI PIC_REG))]
++  ""
++  {
++    rtx picreg = force_reg (Pmode, gen_rtx_REG (Pmode, PIC_REG));
++    rtx dest = XEXP (operands[1], 0);
++
++    if (SYMBOL_REF_P (dest) && SYMBOL_REF_LOCAL_P (dest))
++      {
++	if (! rx_call_operand (dest, Pmode))
++	  dest = force_reg (Pmode, dest);
++	emit_call_insn (gen_call_internal (dest));
++      }
++    else
++      {
++	rtx savereg = gen_reg_rtx (Pmode);
++	emit_move_insn (savereg, picreg);
++	if (MEM_P (operands[1]) && SYMBOL_REF_P (dest))
++	  {
++	    dest = gen_sym2PLT (dest);
++	    emit_call_insn (gen_call_value_internal_plt (operands[0], dest));
++	  }
++	else
++	  {
++	    rtx func = gen_reg_rtx (Pmode);
++	    rtx gotaddr = plus_constant (Pmode, dest, 4);
++	    emit_move_insn (picreg, gen_rtx_MEM (Pmode, gotaddr));
++	    emit_move_insn (func, gen_rtx_MEM (Pmode, dest));
++	    emit_call_insn (gen_call_value_internal_fd (operands[0], func));
++	  }
++	emit_move_insn (picreg, savereg);
++      }
++    DONE;
++  }
++)
++
++(define_insn "call_value_internal_plt"
++  [(set (match_operand		     0 "register_operand" "=r")
++	(call (mem:QI (match_operand 1 "rx_plt_call_operand" ""))
++	      (const_int 0)))
++   (clobber (reg:CC CC_REG))
++   (clobber (reg:SI PIC_REG))
++   (use (reg:SI PIC_REG))]
++  "TARGET_FDPIC"
++  "bsr\t%A1"
++  [(set_attr "length" "4")
++   (set_attr "timings" "33")]
++)
++
++(define_insn "call_value_internal_fd"
++  [(set (match_operand			0 "register_operand" "=r")
++	(call (mem:QI (match_operand:SI 1 "register_operand"   "r"))
++	      (const_int 0)))
++   (clobber (reg:CC CC_REG))
++   (clobber (reg:SI PIC_REG))
++   (use (reg:SI PIC_REG))]
++  "TARGET_FDPIC"
++  "jsr\t%1"
++  [(set_attr "length" "2")
++   (set_attr "timings" "33")]
++)
+-- 
+2.47.3
+
