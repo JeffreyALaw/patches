@@ -1,0 +1,57 @@
+diff --git a/gcc/match.pd b/gcc/match.pd
+index 00988241348a..08813ae36886 100644
+--- a/gcc/match.pd
++++ b/gcc/match.pd
+@@ -3288,7 +3288,7 @@ DEFINE_INT_AND_FLOAT_ROUND_FN (RINT)
+ 		       (bit_xor:c @0 INTEGER_CST@3)) integer_zerop)
+        (bit_xor:c (negate (convert (lt @0 integer_zerop))) max_value) @2)
+ (if (INTEGRAL_TYPE_P (type) && !TYPE_UNSIGNED (type)
+-     && wi::bit_and (wi::to_wide (@1), wi::to_wide (@3)) == 0)))
++     && wi::neg_p (wi::to_wide (@1)) != wi::neg_p (wi::to_wide (@3)))))
+ 
+ /* Unsigned saturation sub, case 1 (branch with gt):
+    SAT_U_SUB = X > Y ? X - Y : 0  */
+diff --git a/gcc/testsuite/gcc.dg/pr127916.c b/gcc/testsuite/gcc.dg/pr127916.c
+new file mode 100644
+index 000000000000..e4229946408e
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/pr127916.c
+@@ -0,0 +1,38 @@
++/* { dg-do run } */
++
++#include <limits.h>
++
++__attribute__((noipa)) int
++s_sat (int x)
++{
++  int sum = (int) ((unsigned) x + 1u);
++  if (((x ^ sum) & (x ^ 2)) < 0)
++    return -(int) (x < 0) ^ INT_MAX;
++  return sum;
++}
++
++__attribute__((noipa)) signed char
++another_sat (int a, int b)
++{
++  signed char r;
++  if (__builtin_add_overflow (a, b, &r))
++    return a < 0 ? SCHAR_MIN : SCHAR_MAX;
++  return r;
++}
++
++int main (void)
++{
++  if (s_sat (INT_MAX) != INT_MIN)
++    __builtin_abort ();
++
++  if (s_sat (-1) != INT_MIN)
++    __builtin_abort ();
++
++  if (another_sat (-1, 200) != -128)
++    __builtin_abort ();
++
++  if (another_sat (100, 100) != 127)
++    __builtin_abort ();
++
++  __builtin_exit (0);
++}
