@@ -1,16 +1,16 @@
-diff --git a/gcc/match.pd b/gcc/match.pd
-index 00988241348a..08813ae36886 100644
---- a/gcc/match.pd
-+++ b/gcc/match.pd
-@@ -3288,7 +3288,7 @@ DEFINE_INT_AND_FLOAT_ROUND_FN (RINT)
- 		       (bit_xor:c @0 INTEGER_CST@3)) integer_zerop)
-        (bit_xor:c (negate (convert (lt @0 integer_zerop))) max_value) @2)
- (if (INTEGRAL_TYPE_P (type) && !TYPE_UNSIGNED (type)
--     && wi::bit_and (wi::to_wide (@1), wi::to_wide (@3)) == 0)))
-+     && wi::neg_p (wi::to_wide (@1)) != wi::neg_p (wi::to_wide (@3)))))
+diff --git a/gcc/match-sat-alu.pd b/gcc/match-sat-alu.pd
+index c79f8986ff50..6048d9bf97de 100644
+--- a/gcc/match-sat-alu.pd
++++ b/gcc/match-sat-alu.pd
+@@ -499,7 +499,7 @@ along with GCC; see the file COPYING3.  If not see
+                    integer_zerop)
+            (signed_integer_sat_val @0)
+            @2)
+-   (if (wi::eq_p (wi::to_wide (@1), wi::to_wide (@3)))))
++   (if (wi::neg (wi::wide (@1)) != wi::neg (wi::wide (@3)))))
  
- /* Unsigned saturation sub, case 1 (branch with gt):
-    SAT_U_SUB = X > Y ? X - Y : 0  */
+  /* A signed saturating add written as a two sided clamp on a wider
+     intermediate, which is a common source form and what the integer
 diff --git a/gcc/testsuite/gcc.dg/pr127916.c b/gcc/testsuite/gcc.dg/pr127916.c
 new file mode 100644
 index 000000000000..e4229946408e
