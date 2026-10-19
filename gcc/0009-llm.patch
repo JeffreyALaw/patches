@@ -17,3 +17,15 @@ index ab0bfb27c3c..3586cbaba63 100644
    [(set (match_dup 0) (and:DI (match_dup 1) (match_dup 2)))
     (set (match_dup 0) (ior:DI (match_dup 0) (match_dup 3)))]
    { operands[2] = GEN_INT (UINTVAL (operands[2]) | UINTVAL (operands[3])); })
+diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
+index af4718332446..0ebd006e5585 100644
+--- a/gcc/config/riscv/bitmanip.md
++++ b/gcc/config/riscv/bitmanip.md
+@@ -192,6 +192,7 @@ (define_insn_and_split "*shift_then_shNadd.uw"
+ 		 (match_operand:DI 4 "register_operand" "r")))
+    (clobber (match_scratch:DI 5 "=&r"))]
+   "TARGET_64BIT && TARGET_ZBA
++   && popcount_hwi (INTVAL (operands[3])) < 32
+    && riscv_shamt_matches_mask_p (UINTVAL (operands[2]), UINTVAL (operands[3]))
+    && IN_RANGE (clz_hwi (UINTVAL (operands[3])), 29, 31)"
+   "#"
