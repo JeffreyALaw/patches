@@ -40,3 +40,15 @@ index 23dc47eaaefc..92024f735501 100644
    "TARGET_ZBS && UINTVAL (operands[2]) < GET_MODE_BITSIZE (<MODE>mode)"
    "bexti\t%0,%1,%2"
    [(set_attr "type" "bitmanip")])
+diff --git a/gcc/config/riscv/predicates.md b/gcc/config/riscv/predicates.md
+index 17ca8ef093a6..f019426007cb 100644
+--- a/gcc/config/riscv/predicates.md
++++ b/gcc/config/riscv/predicates.md
+@@ -742,6 +742,7 @@ (define_predicate "pcrel_symbol_operand"
+ ;; Shadow stack operands only allow x1, x5 registers
+ (define_predicate "x1x5_operand"
+   (and (match_operand 0 "register_operand")
++       (match_test "GET_CODE (op) == REG")
+        (match_test "REGNO (op) == RETURN_ADDR_REGNUM
+ 		    || REGNO (op) == T0_REGNUM")))
+ 
