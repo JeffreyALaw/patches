@@ -50,3 +50,69 @@ index 1027aa2dc066..a458e3e9d876 100644
 +    operands[2] = GEN_INT (new_mask);
 +  })
    
+diff --git a/gcc/simplify-rtx.cc b/gcc/simplify-rtx.cc
+index 6b19008c0d32..227e69447fbb 100644
+--- a/gcc/simplify-rtx.cc
++++ b/gcc/simplify-rtx.cc
+@@ -3409,6 +3409,47 @@ simplify_context::simplify_binary_operation_1 (rtx_code code,
+ 				    simplify_gen_binary (XOR, mode, op1,
+ 							 XEXP (op0, 1)));
+ 
++      /* (x & C1) + ((x ^ y) & C2) is x ^ (y & C2) when ~C1 == C2.
++	 Note that what we see in practice is op0 and op1 being lowpart
++	 subregs.  */
++      if (GET_CODE (op0) == SUBREG
++	  && GET_CODE (op1) == SUBREG
++	  && subreg_lowpart_p (op0)
++	  && subreg_lowpart_p (op1)
++	  && GET_CODE (SUBREG_REG (op0)) == AND
++	  && GET_CODE (SUBREG_REG (op1)) == AND
++	  && CONST_INT_P (XEXP (SUBREG_REG (op0), 1))
++	  && CONST_INT_P (XEXP (SUBREG_REG (op1), 1))
++	  && (~UINTVAL (XEXP (SUBREG_REG (op0), 1))
++	      == UINTVAL (XEXP (SUBREG_REG (op1), 1))))
++	{
++	  rtx temp_op0 = XEXP (SUBREG_REG (op0), 0);
++	  rtx temp_op1 = XEXP (SUBREG_REG (op1), 0);
++	  if (GET_CODE (temp_op0) == XOR)
++	    std::swap (temp_op0, temp_op1);
++
++	  /* While TOP0 could be anything without side effects,
++	     it seems safer to restrict to REGs.  */
++	  if (REG_P (temp_op0) && GET_CODE (temp_op1) == XOR)
++	    {
++	      rtx new_op0 = NULL_RTX;
++	      rtx new_op1 = NULL_RTX;
++	      if (temp_op0 == XEXP (temp_op1, 0))
++		new_op0 = temp_op0, new_op1 = XEXP (temp_op1, 1);
++	      else if (temp_op0 == XEXP (temp_op1, 1))
++		new_op0 = temp_op0, new_op1 = XEXP (temp_op1, 0);
++
++	      if (new_op0 && new_op1)
++		{
++		  machine_mode op_mode = GET_MODE (new_op1);
++		  rtx x = gen_rtx_AND (op_mode, new_op1, XEXP (SUBREG_REG (op1), 1));
++		  x = gen_rtx_XOR (op_mode, new_op0, x);
++		  poly_int64 offset = subreg_lowpart_offset (mode, op_mode);
++		  return simplify_gen_subreg (mode, x, op_mode, offset);
++		}
++	    }
++	}
++
+       /* Canonicalize (plus (mult (neg B) C) A) to (minus A (mult B C)).  */
+       if (!HONOR_SIGN_DEPENDENT_ROUNDING (mode)
+ 	  && GET_CODE (op0) == MULT
+diff --git a/gcc/testsuite/gcc.target/riscv/pr80770-2.c b/gcc/testsuite/gcc.target/riscv/pr80770-2.c
+index 1514a49c5605..4e9097c38856 100644
+--- a/gcc/testsuite/gcc.target/riscv/pr80770-2.c
++++ b/gcc/testsuite/gcc.target/riscv/pr80770-2.c
+@@ -5,7 +5,7 @@
+ int foop(int x) { x &= 0xf; x |= (x + 0x80); return x; }
+ int foox(int x) { x &= 0xf; x |= (x ^ 0x80); return x; }
+ 
+-/* { dg-final { scan-assembler-not "add" } } */
+ /* { dg-final { scan-assembler-not "xor" } } */
+ /* { dg-final { scan-assembler-times "andi\t" 2 } } */
+-/* { dg-final { scan-assembler-times "ori\t" 2 } } */
++/* { dg-final { scan-assembler-times "ori\t" 1 } } */
++/* { dg-final { scan-assembler-times "addi\t" 1 } } */
