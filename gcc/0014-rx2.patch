@@ -1,0 +1,124 @@
+
+
+config/ChangeLog:
+
+	* picflag.m4: Add rx fdpic option.
+	* rx/t-linux: Add fdpic multilib.
+
+libgcc/ChangeLog:
+	* config.host (rx-*-linux*): Fix overwrite in tmake_file.
+	(rx-*-linux*): Add unwind_header.
+	* config/rx/rx-abi,h: Remove prefix '_' in standard ELF ABI.
+	* config/rx/r-rx: Add fdpic flags.
+	* config/rx/unwind-linux.h: New.
+	* configure: Regenerate.
+
+Signed-off-by: Yoshinori Sato <yoshinori.sato@nifty.com>
+---
+ gcc/config/rx/t-linux           |  4 ++--
+ libgcc/config.host              |  5 ++++-
+ libgcc/config/rx/rx-abi.h       |  7 ++++++-
+ libgcc/config/rx/t-rx           |  4 ++++
+ libgcc/config/rx/unwind-linux.h | 24 ++++++++++++++++++++++++
+ 5 files changed, 40 insertions(+), 4 deletions(-)
+ create mode 100644 libgcc/config/rx/unwind-linux.h
+
+diff --git a/gcc/config/rx/t-linux b/gcc/config/rx/t-linux
+index 0975b2690dc..6cfc5889e62 100644
+--- a/gcc/config/rx/t-linux
++++ b/gcc/config/rx/t-linux
+@@ -20,8 +20,8 @@
+ 
+ # Enable multilibs:
+ 
+-MULTILIB_OPTIONS    =
+-MULTILIB_DIRNAMES   =
++MULTILIB_OPTIONS    = mfdpic
++MULTILIB_DIRNAMES   = fdpic
+ 
+ MULTILIB_MATCHES    = nofpu=mnofpu  nofpu=mcpu?rx200  nofpu=mcpu?RX200
+ 
+diff --git a/libgcc/config.host b/libgcc/config.host
+index 319d6cfe0ef..87ed6c84de8 100644
+--- a/libgcc/config.host
++++ b/libgcc/config.host
+@@ -1382,8 +1382,11 @@ rx-*-elf)
+ 	tm_file="$tm_file rx/rx-abi.h rx/rx-lib.h"
+ 	;;
+ rx-*-linux*)
+-	tmake_file="rx/t-rx t-fdpbit"
++	tmake_file="${tmake_file} rx/t-rx t-fdpbit t-slibgcc t-eh-dw2-dip"
++	tmake_file=`echo ${tmake_file} | sed -e 's/t-libgcc-pic//g'`
+ 	tm_file="$tm_file rx/rx-lib.h"
++	unwind_header=config/rx/unwind-linux.h
++	extra_parts="$extra_parts crtbegin.o crtend.o crtbeginS.o crtendS.o crtbeginT.o"
+ 	;;
+ s390x-*-linux*)
+ 	tmake_file="${tmake_file} s390/t-crtstuff s390/t-linux t-stack s390/t-stack-s390"
+diff --git a/libgcc/config/rx/rx-abi.h b/libgcc/config/rx/rx-abi.h
+index 507c4ed454b..48a090ab7fe 100644
+--- a/libgcc/config/rx/rx-abi.h
++++ b/libgcc/config/rx/rx-abi.h
+@@ -22,11 +22,16 @@
+    along with GCC; see the file COPYING3.  If not see
+    <http://www.gnu.org/licenses/>.  */
+ 
++#if defined (__RX_GCC_ABI__) || defined (__RX_ABI__)
+ /* Make __COM_<RX_NAME> an alias for __<GCC_NAME>.  */
+ #define RENAME_LIBRARY(GCC_NAME, RX_NAME)		\
+   __asm__ (".globl\t__COM_" #RX_NAME "\n"		\
+ 	   ".set\t__COM_" #RX_NAME ", ___" #GCC_NAME "\n");
+-
++#else
++#define RENAME_LIBRARY(GCC_NAME, RX_NAME)		\
++  __asm__ (".globl\t__COM_" #RX_NAME "\n"		\
++	   ".set\t__COM_" #RX_NAME ", __" #GCC_NAME "\n");
++#endif
+ 
+ /* The long-long aliases...  */
+ 
+diff --git a/libgcc/config/rx/t-rx b/libgcc/config/rx/t-rx
+index 5772fa93b22..2eaf33b4f2b 100644
+--- a/libgcc/config/rx/t-rx
++++ b/libgcc/config/rx/t-rx
+@@ -32,3 +32,7 @@ FPBIT = true
+ ifeq ($(double_type_size),64)
+ DPBIT = true
+ endif
++
++PICFLAG = -mfdpic
++SHLIB_LDFLAGS += -mfdpic
++%_s.o: CFLAGS += -mfdpic
+diff --git a/libgcc/config/rx/unwind-linux.h b/libgcc/config/rx/unwind-linux.h
+new file mode 100644
+index 00000000000..66a68ebd949
+--- /dev/null
++++ b/libgcc/config/rx/unwind-linux.h
+@@ -0,0 +1,24 @@
++/* Header file for the Renesas RX unwinder.  */
++
++#ifndef UNWIND_RX_H
++#define UNWIND_RX_H
++
++#include "unwind-generic.h"
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++  static inline _Unwind_Ptr _Unwind_gnu_Find_got (_Unwind_Ptr ptr)
++{
++    _Unwind_Ptr res;
++
++    __asm volatile ("mov r13, %0":"=r" (res));
++    return res;
++}
++
++#ifdef __cplusplus
++}   /* extern "C" */
++#endif
++
++#endif
+-- 
+2.47.3
+
