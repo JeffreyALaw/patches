@@ -1,0 +1,56 @@
+
+
+This change detects smax(a, -a) and
+smax(-a, a) at the RTL level for integer
+operands and optimizes that to abs(a).
+
+	PR rtl-optimization/126726
+
+gcc/ChangeLog:
+
+	* simplify-rtx.cc (simplify_context::simplify_binary_operation_1):
+        Detect smax(a, -a) for integers and optimize it to abs(a).
+
+Signed-off-by: Kevin Stefanov <kevinstefanov15@gmail.com>
+---
+Hi all,
+
+This is my patch for Easy Issue of Week 52
+to detect smax(a, -a) at the RTL level for
+integers and optimize it to abs(a).
+
+Bugzilla link:
+https://gcc.gnu.org/bugzilla/show_bug.cgi?id=126726
+
+I bootstrapped and regression tested with
+enable-languages=c,c++,fortran and using
+"make check-gcc" instead of "make -k check"
+because the latter was ending with an error
+even on pristine sources, both on x86_64 and
+on aarch64, and I was advised the former should
+suffice for a patch like this.
+
+ gcc/simplify-rtx.cc | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/gcc/simplify-rtx.cc b/gcc/simplify-rtx.cc
+index 285826a3fed..5616a6b889f 100644
+--- a/gcc/simplify-rtx.cc
++++ b/gcc/simplify-rtx.cc
+@@ -5035,6 +5035,13 @@ simplify_ashift:
+ 	return op1;
+       if (rtx_equal_p (trueop0, trueop1) && ! side_effects_p (op0))
+ 	return op0;
++      if (INTEGRAL_MODE_P (mode))
++	{
++	  if (GET_CODE (op0) == NEG && rtx_equal_p (XEXP (op0, 0), op1))
++	    return simplify_gen_unary (ABS, mode, op1, mode);
++	  else if (GET_CODE (op1) == NEG && rtx_equal_p (XEXP (op1, 0), op0))
++	    return simplify_gen_unary (ABS, mode, op0, mode);
++	}
+       tem = simplify_associative_operation (code, mode, op0, op1);
+       if (tem)
+ 	return tem;
+-- 
+2.55.0
+
