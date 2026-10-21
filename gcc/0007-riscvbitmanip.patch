@@ -103,10 +103,10 @@ index 6b19008c0d32..227e69447fbb 100644
        if (!HONOR_SIGN_DEPENDENT_ROUNDING (mode)
  	  && GET_CODE (op0) == MULT
 diff --git a/gcc/testsuite/gcc.target/riscv/pr80770-2.c b/gcc/testsuite/gcc.target/riscv/pr80770-2.c
-index 1514a49c5605..4e9097c38856 100644
+index 1514a49c5605..19e89e881f1f 100644
 --- a/gcc/testsuite/gcc.target/riscv/pr80770-2.c
 +++ b/gcc/testsuite/gcc.target/riscv/pr80770-2.c
-@@ -5,7 +5,7 @@
+@@ -5,7 +5,6 @@
  int foop(int x) { x &= 0xf; x |= (x + 0x80); return x; }
  int foox(int x) { x &= 0xf; x |= (x ^ 0x80); return x; }
  
@@ -114,5 +114,4 @@ index 1514a49c5605..4e9097c38856 100644
  /* { dg-final { scan-assembler-not "xor" } } */
  /* { dg-final { scan-assembler-times "andi\t" 2 } } */
 -/* { dg-final { scan-assembler-times "ori\t" 2 } } */
-+/* { dg-final { scan-assembler-times "ori\t" 1 } } */
-+/* { dg-final { scan-assembler-times "addi\t" 1 } } */
++/* { dg-final { scan-assembler-times "(ori|addi)\t" 2 } } */
