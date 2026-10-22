@@ -1,0 +1,52 @@
+diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
+index b35743d7f361..52cf0fccd8a1 100644
+--- a/gcc/config/riscv/bitmanip.md
++++ b/gcc/config/riscv/bitmanip.md
+@@ -1527,6 +1527,8 @@ (define_split
+    (clobber (match_operand:DI 3 "register_operand"))]
+   "(TARGET_64BIT
+     && TARGET_ZBB
++    && (nonzero_bits (operands[2], DImode)
++	& HOST_WIDE_INT_UC (0xffffffff00000000)) == 0
+     && (REG_P (operands[2]) && SUBREG_P (operands[1])
+ 	 ? REGNO (operands[2]) == REGNO (SUBREG_REG (operands[1]))
+ 	 : REG_P (operands[1]) && SUBREG_P (operands[2])
+diff --git a/gcc/testsuite/gcc.target/riscv/pr121268-2.c b/gcc/testsuite/gcc.target/riscv/pr121268-2.c
+new file mode 100644
+index 000000000000..66ba94925b37
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr121268-2.c
+@@ -0,0 +1,17 @@
++/* { dg-do run { target rv64 } } */
++/* { dg-options "-O2 -march=rv64gc_zbb -mabi=lp64d" } */
++
++__attribute__ ((noipa)) long
++f (unsigned long y)
++{
++  unsigned int x = (unsigned int) y;
++  return (long) (int) ((x & -x) - 1u);
++}
++
++int
++main (void)
++{
++  if (f(0x100000000) != -1)
++    __builtin_abort ();
++  __builtin_exit (0);
++}
+diff --git a/gcc/testsuite/gcc.target/riscv/pr121268.c b/gcc/testsuite/gcc.target/riscv/pr121268.c
+index d79f444d2f87..65f7f13ffdcf 100644
+--- a/gcc/testsuite/gcc.target/riscv/pr121268.c
++++ b/gcc/testsuite/gcc.target/riscv/pr121268.c
+@@ -36,4 +36,10 @@ F3 (signed long, sl)
+ 
+ /* We match addi and addiw here on purpose.  */
+ /* { dg-final { scan-assembler-times "addi" 24 } } */
+-/* { dg-final { scan-assembler-times "andn\t" 24 } } */
++
++/* The transformation we want to apply for one class of test requires
++   nonzero bits information to be safe on rv64.  That information is
++   not available for the long of that test. Hence the difference
++   in andn instrutions seen across rv32 and rv64.  */
++/* { dg-final { scan-assembler-times "andn\t" 24 { target rv32 } } } */
++/* { dg-final { scan-assembler-times "andn\t" 22 { target rv64 } } } */
