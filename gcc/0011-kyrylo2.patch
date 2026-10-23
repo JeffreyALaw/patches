@@ -1,143 +1,3 @@
-
-
-From: Kyrylo Tkachov <ktkachov@nvidia.com>
-
-An RTL basic block that ends in a tablejump cannot normally be duplicated.
-The instructions that compute the table address can be outside the block, so
-copying and retargeting the table is not reliable.
-
-Let an opted-in pass keep one table instead.  Before duplication, one jump
-owns the adjacent table:
-
-  jump A -> label T -> addr_diff_vec
-
-After duplication, both jumps name the same label and table:
-
-  jump A --\
-             label T -> addr_diff_vec
-  jump B --/
-
-Mark the table with the sticky JUMP_TABLE_SHARED_P flag.  A shared table is
-immutable because each entry describes a successor of every dispatch that
-uses it.  Block deletion can remove one dispatch but must retain the table for
-the others.
-
-The table still follows one of the jumps through it.  When the block that
-the table follows is deleted, move the table after another jump through it:
-
-  jump A; label T; addr_diff_vec        (A deleted)
-  ...                             ->    ...
-  jump B                                jump B; label T; addr_diff_vec
-
-So the insn before a table in use is still a jump through it, which is what
-code that looks back from a table, or for the last insn of a function,
-expects.  get_last_bb_insn includes a shared table only when the table
-follows the block.  If no other jump uses the table, leave it to
-delete_dead_jumptables.
-
-Add PROP_rtl_allow_tablejump_duplication as a function property.  The RTL hook
-uses it to permit the copy, retain JUMP_LABEL, and mark the table.  A pass can
-set the property while it is prepared for the table to become immutable.
-
-Guard the RTL redirection, deletion, fall-through, merge, and cross-jump paths
-that assume one owner or physical adjacency.  Add checking assertions for
-bulk deletion and verify every shared dispatch against the table successors.
-
-Treat shared tablejumps as nonregular for interblock scheduling.  This prevents
-selective scheduling from splitting shared-table edges to create loop
-preheaders or bookkeeping blocks.  Likewise, do not let hw-doloop redirect
-the entry edges of a hardware loop when one of them comes from a shared
-tablejump.  Add shared_tablejump_p for these checks.
-
-No pass opts in in this patch, so it does not change generated code by
-itself.
-
-gcc/ChangeLog:
-
-	PR middle-end/126236
-	* tree-pass.h (PROP_rtl_allow_tablejump_duplication): New property.
-	* cfgcleanup.cc (outgoing_edges_match): Reject matches involving a
-	shared jump table.
-	* cfgrtl.cc (shared_jump_table_component_p): New function.
-	(shared_jump_table_between_p): Likewise.
-	(hosted_shared_table): Likewise.
-	(other_table_user): Likewise.
-	(move_table_after): Likewise.
-	(delete_insn_chain): Assert that the range does not contain a shared
-	jump table.
-	(rtl_delete_block): Move a shared table that follows the block after
-	another jump through it.
-	(can_fallthru, rtl_can_merge_blocks, rtl_tidy_fallthru_edge): Do not
-	remove or cross a shared jump table between basic blocks.
-	(cfg_layout_can_duplicate_bb_p): Allow a tablejump when the new
-	property is set.
-	(duplicate_insn_chain): Retain a copied tablejump's table and mark it
-	shared.
-	(patch_jump_insn): Refuse to redirect through a shared table before
-	creating a label for the new destination.
-	(try_redirect_by_replacing_jump): Do not delete a shared table.
-	(get_last_bb_insn): Include a shared table only if it follows the
-	block.
-	(force_nonfallthru_and_redirect): Likewise.
-	(rtl_verify_edges): Check each shared table against the successors of
-	each dispatch that uses it.
-	* hw-doloop.cc (discover_loop): Reject a loop that is entered from a
-	shared tablejump.
-	* jump.cc (delete_related_insns): Do not delete a shared table.
-	* rtl.h (JUMP_TABLE_SHARED_P): New macro.
-	(rtx_def): Document the shared-table use of the unchanging flag.
-	(shared_tablejump_p): Declare.
-	* rtlanal.cc (shared_tablejump_p): New function.
-	* sched-rgn.cc (is_cfg_nonregular): Reject shared tablejumps.
-	* doc/cfg.texi: Document shared jump tables.
-	* doc/md.texi: Likewise.
-	* doc/rtl.texi (Flags): Document JUMP_TABLE_SHARED_P.
-	(Insns): Document shared jump tables.
-
-Signed-off-by: Kyrylo Tkachov <ktkachov@nvidia.com>
----
-Changes since v3:
-- While the CFG exists, a shared table that is in use now follows one
-  of the jumps through it.  When rtl_delete_block deletes the block
-  that the table follows, it moves the table and its label after
-  another jump through it.
-- Without the move, ia64 can lose the break.f and alpha can lose the nop
-  after a noreturn call at the end of a function.  Both ports share
-  tables in v4.
-- get_last_bb_insn and force_nonfallthru_and_redirect now include a
-  shared table that follows the block (v3 excluded all shared tables).
-  So a new block does not go between the jump and its table.
-- discover_loop (hw-doloop.cc) now rejects a hardware loop that a shared
-  tablejump enters.  The ports cannot redirect such an edge.  Without
-  the check, bfin and xtensa can ICE in force_nonfallthru_and_redirect.
-- patch_jump_insn now refuses a shared table before it creates a label
-  for the new destination, so a refused redirect adds no label.
-- New functions: shared_tablejump_p (rtlanal.cc) and, in cfgrtl.cc, the
-  static hosted_shared_table, other_table_user and move_table_after.
-- is_cfg_nonregular and rtl_verify_edges now use shared_tablejump_p in
-  place of the v3 open-coded test.  Their behavior does not change.
-- Docs: cfg.texi, md.texi and rtl.texi (Insns) now state the placement
-  rule.  rtl.texi (Flags) now documents JUMP_TABLE_SHARED_P and its use
-  of the unchanging flag in addr_vec and addr_diff_vec.
-- The subject now has [PR middle-end/126236].  The message and the
-  ChangeLog describe the new code.
-- No pass shares a table before patch 5.  Patch 5 tests the table move
-  and the hw-doloop check: switch-dispatch-placement.c,
-  switch-dispatch-hwloop.c and the bfin and xtensa switch-dispatch-1.c.
-
- gcc/cfgcleanup.cc |   6 ++
- gcc/cfgrtl.cc     | 209 ++++++++++++++++++++++++++++++++++++++++++----
- gcc/doc/cfg.texi  |   7 +-
- gcc/doc/md.texi   |  11 ++-
- gcc/doc/rtl.texi  |  27 ++++--
- gcc/hw-doloop.cc  |  20 +++++
- gcc/jump.cc       |   6 +-
- gcc/rtl.h         |  11 +++
- gcc/rtlanal.cc    |  18 ++++
- gcc/sched-rgn.cc  |   5 ++
- gcc/tree-pass.h   |   2 +
- 11 files changed, 289 insertions(+), 33 deletions(-)
-
 diff --git a/gcc/cfgcleanup.cc b/gcc/cfgcleanup.cc
 index f9178a92c39..bc802c3237f 100644
 --- a/gcc/cfgcleanup.cc
@@ -156,7 +16,7 @@ index f9178a92c39..bc802c3237f 100644
  	     the jump tables are same too. So disable crossjumping of blocks BB1
  	     and BB2 because when deleting the common insns in the end of BB1
 diff --git a/gcc/cfgrtl.cc b/gcc/cfgrtl.cc
-index 474b84a0893..9fdb6f5ec90 100644
+index c89f28a51c2..737ae795823 100644
 --- a/gcc/cfgrtl.cc
 +++ b/gcc/cfgrtl.cc
 @@ -254,6 +254,86 @@ delete_insn_and_edges (rtx_insn *insn)
@@ -246,7 +106,7 @@ index 474b84a0893..9fdb6f5ec90 100644
  /* Unlink a chain of insns between START and FINISH, leaving notes
     that must be paired.  If CLEAR_BB is true, we set bb field for
     insns that cannot be removed to NULL.  */
-@@ -268,6 +348,7 @@ delete_insn_chain (rtx start, rtx_insn *finish, bool clear_bb)
+@@ -268,6 +348,7 @@ delete_insn_chain (rtx_insn *start, rtx_insn *finish, bool clear_bb)
    while (1)
      {
        rtx_insn *prev = PREV_INSN (current);
@@ -349,7 +209,7 @@ index 474b84a0893..9fdb6f5ec90 100644
  	new_head = table;
        else
  	new_head = BB_END (e->src);
-@@ -1788,7 +1910,7 @@ rtl_tidy_fallthru_edge (edge e)
+@@ -1789,7 +1911,7 @@ rtl_tidy_fallthru_edge (edge e)
       the head of block C and assert that we really do fall through.  */
  
    for (q = NEXT_INSN (BB_END (b)); q != BB_HEAD (c); q = NEXT_INSN (q))
@@ -358,7 +218,7 @@ index 474b84a0893..9fdb6f5ec90 100644
        return;
  
    /* Remove what will soon cease being the jump insn from the source block.
-@@ -1803,7 +1925,10 @@ rtl_tidy_fallthru_edge (edge e)
+@@ -1804,7 +1926,10 @@ rtl_tidy_fallthru_edge (edge e)
        rtx_insn *label;
        rtx_jump_table_data *table;
  
@@ -370,7 +230,7 @@ index 474b84a0893..9fdb6f5ec90 100644
  	{
  	  /* The label is likely mentioned in some instruction before
  	     the tablejump and might not be DCEd, so turn it into
-@@ -2381,8 +2506,11 @@ get_last_bb_insn (basic_block bb)
+@@ -2382,8 +2507,11 @@ get_last_bb_insn (basic_block bb)
    rtx_insn *tmp;
    rtx_insn *end = BB_END (bb);
  
@@ -384,7 +244,7 @@ index 474b84a0893..9fdb6f5ec90 100644
      end = table;
  
    /* Include any barriers that may follow the basic block.  */
-@@ -2591,6 +2719,7 @@ rtl_verify_edges (void)
+@@ -2592,6 +2720,7 @@ rtl_verify_edges (void)
  {
    bool err = false;
    basic_block bb;
@@ -392,7 +252,7 @@ index 474b84a0893..9fdb6f5ec90 100644
  
    FOR_EACH_BB_REVERSE_FN (bb, cfun)
      {
-@@ -2723,6 +2852,32 @@ rtl_verify_edges (void)
+@@ -2724,6 +2853,32 @@ rtl_verify_edges (void)
  	  error ("fallthru edge after unconditional jump in bb %i", bb->index);
  	  err = true;
  	}
@@ -425,15 +285,7 @@ index 474b84a0893..9fdb6f5ec90 100644
        if (n_branch != 1 && any_uncondjump_p (BB_END (bb)))
  	{
  	  error ("wrong number of branch edges after unconditional jump"
-@@ -4352,15 +4507,19 @@ force_one_exit_fallthru (void)
-     }
- }
- 
--/* Return true in case it is possible to duplicate the basic block BB.  */
-+/* Return true if BB can be duplicated.  A tablejump can be duplicated only
-+   when PROP_rtl_allow_tablejump_duplication is set.  Its copy then shares the
-+   table with BB, see duplicate_insn_chain.  */
- 
+@@ -4358,10 +4513,12 @@ force_one_exit_fallthru (void)
  static bool
  cfg_layout_can_duplicate_bb_p (const_basic_block bb)
  {
@@ -450,7 +302,7 @@ index 474b84a0893..9fdb6f5ec90 100644
      return false;
  
    /* Do not duplicate blocks containing insns that can't be copied.  */
-@@ -4410,6 +4569,22 @@ duplicate_insn_chain (rtx_insn *from, rtx_insn *to,
+@@ -4411,6 +4568,22 @@ duplicate_insn_chain (rtx_insn *from, rtx_insn *to,
  	  if (JUMP_P (insn) && JUMP_LABEL (insn) != NULL_RTX
  	      && ANY_RETURN_P (JUMP_LABEL (insn)))
  	    JUMP_LABEL (copy) = JUMP_LABEL (insn);
@@ -473,7 +325,7 @@ index 474b84a0893..9fdb6f5ec90 100644
            maybe_copy_prologue_epilogue_insn (insn, copy);
  	  /* If requested remap dependence info of cliques brought in
  	     via inlining.  */
-@@ -4460,11 +4635,9 @@ duplicate_insn_chain (rtx_insn *from, rtx_insn *to,
+@@ -4461,11 +4634,9 @@ duplicate_insn_chain (rtx_insn *from, rtx_insn *to,
  	  break;
  
  	case JUMP_TABLE_DATA:
@@ -612,7 +464,7 @@ index 02c2200f728..9bbc8abe667 100644
  
  /* Analyze the structure of the loops in the current function.  Use
 diff --git a/gcc/jump.cc b/gcc/jump.cc
-index 973c776fe60..5a5e6265e62 100644
+index 100a0b13611..f41d18675a2 100644
 --- a/gcc/jump.cc
 +++ b/gcc/jump.cc
 @@ -1244,12 +1244,14 @@ delete_related_insns (rtx uncast_insn)
@@ -633,7 +485,7 @@ index 973c776fe60..5a5e6265e62 100644
  	}
      }
 diff --git a/gcc/rtl.h b/gcc/rtl.h
-index 90e7630108d..b400961c46c 100644
+index 6bc14f65747..ed251695e5d 100644
 --- a/gcc/rtl.h
 +++ b/gcc/rtl.h
 @@ -347,6 +347,7 @@ struct GTY((desc("0"), tag("0"),
@@ -659,7 +511,7 @@ index 90e7630108d..b400961c46c 100644
  /* During sched, 1 if RTX is an insn that must be scheduled together
     with the preceding insn.  */
  #define SCHED_GROUP_P(RTX)						\
-@@ -3785,6 +3794,8 @@ extern void replace_label (rtx *, rtx, rtx, bool);
+@@ -3786,6 +3795,8 @@ extern void replace_label (rtx *, rtx_insn *, rtx_insn *, bool);
  extern void replace_label_in_insn (rtx_insn *, rtx_insn *, rtx_insn *, bool);
  extern bool rtx_referenced_p (const_rtx, const_rtx);
  extern bool tablejump_p (const rtx_insn *, rtx_insn **, rtx_jump_table_data **);
@@ -669,10 +521,10 @@ index 90e7630108d..b400961c46c 100644
  extern bool computed_jump_p (const rtx_insn *);
  extern bool tls_referenced_p (const_rtx);
 diff --git a/gcc/rtlanal.cc b/gcc/rtlanal.cc
-index 7f170cb7dfc..7208c43be4f 100644
+index 98e0481cf79..bae772d7f8d 100644
 --- a/gcc/rtlanal.cc
 +++ b/gcc/rtlanal.cc
-@@ -3547,6 +3547,24 @@ tablejump_p (const rtx_insn *insn, rtx_insn **labelp,
+@@ -3549,6 +3549,24 @@ tablejump_p (const rtx_insn *insn, rtx_insn **labelp,
    return true;
  }
  
@@ -698,7 +550,7 @@ index 7f170cb7dfc..7208c43be4f 100644
     CASESI.  Return the insn pattern if so, NULL_RTX otherwise.  */
  
 diff --git a/gcc/sched-rgn.cc b/gcc/sched-rgn.cc
-index a3df373a64f..3bb76267f7b 100644
+index 8334e90b302..08af28bcd74 100644
 --- a/gcc/sched-rgn.cc
 +++ b/gcc/sched-rgn.cc
 @@ -293,6 +293,11 @@ is_cfg_nonregular (void)
@@ -726,6 +578,3 @@ index a3b35e009e0..48aebe41764 100644
  
  #define PROP_gimple \
    (PROP_gimple_any | PROP_gimple_lcf | PROP_gimple_leh | PROP_gimple_lomp)
--- 
-2.54.0 (Apple Git-157)
-
