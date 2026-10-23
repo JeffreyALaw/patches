@@ -1,0 +1,398 @@
+
+
+From: Kyrylo Tkachov <ktkachov@nvidia.com>
+
+Several ports dispatch through a table that has to follow the jump, or
+compute the table entries from the address of the jump.  A copy of such a
+dispatch elsewhere in the function would branch to the wrong place, fail
+to assemble or break a machine reorg pass.  These ports refuse to share
+jump tables:
+
+- arm: Thumb-2 tbb and tbh read the table at the PC, the Thumb-1 casesi
+  helpers find it from LR, and the Arm casesi sequence defines a base label
+  after each dispatch.  arm_reorg also expects every table to follow its
+  jump.
+- cris: casesi reads the table at its own PC, and cris_asm_output_case_end
+  expects the jump right before the table label.
+- m68k: the relative dispatch forms read the table at a fixed offset from
+  the PC.
+- sh: fixup_addr_diff_vecs makes the entries relative to the braf of one
+  dispatch, and sh_reorg pairs every table with one mova.
+- xstormy16: the dispatch branches into a table of jmpf insns that follows
+  it.
+- vax: the casel table is part of the instruction.
+
+These ports refuse only some forms:
+
+- pa: with PIC, which includes all 64-bit code, casesi32p and casesi64p
+  reach the table with one ldo from their own address.  Its displacement
+  only reaches a table close to the jump.  casesi32 loads the address of
+  the table and can share it.
+- c6x: with PIC, casesi_internal reaches the table with addkpc, which only
+  covers about 256 bytes.
+- mips: with MIPS16 short jump tables, the length of the casesi dispatch
+  assumes the short ADDIUPC form of the la of the table, which only a
+  nearby table guarantees.
+- csky: with -mconstpool, which CK801 and CK802 require, the constant pool
+  scan steps from every tablejump to the table that follows it.
+- arc: the bi and bih dispatches of -mbranch-index branch into a table of
+  branches that follows them.
+- rx: with -mpid or -fpic, the table entries are relative to a local label
+  that the dispatch defines.
+
+The port maintainers can refine these predicates later.
+Cc'ing the various port maintainers in case they spot something wrong.
+
+Ok for trunk?
+Thanks,
+Kyrill
+
+Cc: Jeff Law <jeffrey.law@oss.qualcomm.com>,
+    Robin Dapp <rdapp.gcc@gmail.com>,
+    Nick Clifton <nickc@redhat.com>,
+    Richard Earnshaw <richard.earnshaw@arm.com>,
+    Ramana Radhakrishnan <ramanara@nvidia.com>,
+    Hans-Peter Nilsson <hp@axis.com>,
+    Andreas Schwab <schwab@linux-m68k.org>,
+    Jeff Law <jeffreyalaw@gmail.com>,
+    Oleg Endo <olegendo@gcc.gnu.org>,
+    Alexandre Oliva <aoliva@gcc.gnu.org>,
+    "Maciej W. Rozycki" <macro@orcam.me.uk>,
+    Matt Thomas <matt@3am-software.com>,
+    John David Anglin <dave.anglin@bell.net>,
+    Bernd Schmidt <bernds_cb1@t-online.de>,
+    YunQiang Su <syq@gcc.gnu.org>,
+    Xianmiao Qu <cooper.qu@linux.alibaba.com>,
+    Yunhai Shang <yunhai@linux.alibaba.com>,
+    Claudiu Zissulescu <claziss@gmail.com>,
+    Jie Zhang <jzhang918@gmail.com>,
+    Sterling Augustine <augustine.sterling@gmail.com>,
+    Max Filippov <jcmvbkbc@gmail.com>
+
+gcc/ChangeLog:
+
+	PR middle-end/126236
+	* config/arc/arc.cc (arc_can_share_jump_table_p): New function.
+	(TARGET_CAN_SHARE_JUMP_TABLE_P): Define.
+	* config/arm/arm.cc (TARGET_CAN_SHARE_JUMP_TABLE_P): Define.
+	* config/c6x/c6x.cc (c6x_can_share_jump_table_p): New function.
+	(TARGET_CAN_SHARE_JUMP_TABLE_P): Define.
+	* config/cris/cris.cc (TARGET_CAN_SHARE_JUMP_TABLE_P): Define.
+	* config/csky/csky.cc (csky_can_share_jump_table_p): New function.
+	(TARGET_CAN_SHARE_JUMP_TABLE_P): Define.
+	* config/m68k/m68k.cc (TARGET_CAN_SHARE_JUMP_TABLE_P): Define.
+	* config/mips/mips.cc (mips_can_share_jump_table_p): New function.
+	(TARGET_CAN_SHARE_JUMP_TABLE_P): Define.
+	* config/pa/pa.cc (pa_can_share_jump_table_p): New function.
+	(TARGET_CAN_SHARE_JUMP_TABLE_P): Define.
+	* config/rx/rx.cc (rx_can_share_jump_table_p): New function.
+	(TARGET_CAN_SHARE_JUMP_TABLE_P): Define.
+	* config/sh/sh.cc (TARGET_CAN_SHARE_JUMP_TABLE_P): Define.
+	* config/stormy16/stormy16.cc (TARGET_CAN_SHARE_JUMP_TABLE_P): Define.
+	* config/vax/vax.cc (TARGET_CAN_SHARE_JUMP_TABLE_P): Define.
+
+Signed-off-by: Kyrylo Tkachov <ktkachov@nvidia.com>
+---
+New in v4.
+
+ gcc/config/arc/arc.cc           | 12 ++++++++++++
+ gcc/config/arm/arm.cc           |  6 ++++++
+ gcc/config/c6x/c6x.cc           | 12 ++++++++++++
+ gcc/config/cris/cris.cc         |  4 ++++
+ gcc/config/csky/csky.cc         | 12 ++++++++++++
+ gcc/config/m68k/m68k.cc         |  5 +++++
+ gcc/config/mips/mips.cc         | 13 +++++++++++++
+ gcc/config/pa/pa.cc             | 15 +++++++++++++++
+ gcc/config/rx/rx.cc             | 12 ++++++++++++
+ gcc/config/sh/sh.cc             |  4 ++++
+ gcc/config/stormy16/stormy16.cc |  4 ++++
+ gcc/config/vax/vax.cc           |  4 ++++
+ 12 files changed, 103 insertions(+)
+
+diff --git a/gcc/config/arc/arc.cc b/gcc/config/arc/arc.cc
+index e1a4aa6cfc2..3a24f903092 100644
+--- a/gcc/config/arc/arc.cc
++++ b/gcc/config/arc/arc.cc
+@@ -691,6 +691,9 @@ static rtx arc_legitimize_address_0 (rtx, rtx, machine_mode mode);
+ #undef TARGET_CAN_FOLLOW_JUMP
+ #define TARGET_CAN_FOLLOW_JUMP arc_can_follow_jump
+ 
++#undef TARGET_CAN_SHARE_JUMP_TABLE_P
++#define TARGET_CAN_SHARE_JUMP_TABLE_P arc_can_share_jump_table_p
++
+ #undef TARGET_DELEGITIMIZE_ADDRESS
+ #define TARGET_DELEGITIMIZE_ADDRESS arc_delegitimize_address
+ 
+@@ -10150,6 +10153,15 @@ arc_can_follow_jump (const rtx_insn *follower, const rtx_insn *followee)
+   return true;
+ }
+ 
++/* Implement TARGET_CAN_SHARE_JUMP_TABLE_P.  The bi and bih dispatches branch
++   into a table of branches that has to follow them.  */
++
++static bool
++arc_can_share_jump_table_p (rtx_insn *)
++{
++  return !TARGET_BI_BIH;
++}
++
+ 
+ /* Implement EPILOGUE_USES.
+    Return true if REGNO should be added to the deemed uses of the epilogue.
+diff --git a/gcc/config/arm/arm.cc b/gcc/config/arm/arm.cc
+index 940c689b21e..454ba690cff 100644
+--- a/gcc/config/arm/arm.cc
++++ b/gcc/config/arm/arm.cc
+@@ -627,6 +627,12 @@ static const scoped_attribute_specs *const arm_attribute_table[] =
+ #undef  TARGET_CANNOT_COPY_INSN_P
+ #define TARGET_CANNOT_COPY_INSN_P arm_cannot_copy_insn_p
+ 
++/* The dispatch sequences find the table through the PC or LR, or define a
++   base label of their own, and arm_reorg expects every table to follow its
++   jump.  */
++#undef TARGET_CAN_SHARE_JUMP_TABLE_P
++#define TARGET_CAN_SHARE_JUMP_TABLE_P hook_bool_rtx_insn_false
++
+ #ifdef HAVE_AS_TLS
+ #undef TARGET_HAVE_TLS
+ #define TARGET_HAVE_TLS true
+diff --git a/gcc/config/c6x/c6x.cc b/gcc/config/c6x/c6x.cc
+index c96a405ba7d..87279475e91 100644
+--- a/gcc/config/c6x/c6x.cc
++++ b/gcc/config/c6x/c6x.cc
+@@ -6670,6 +6670,15 @@ c6x_modes_tieable_p (machine_mode mode1, machine_mode mode2)
+ 	      && GET_MODE_SIZE (mode2) <= UNITS_PER_WORD));
+ }
+ 
++/* Implement TARGET_CAN_SHARE_JUMP_TABLE_P.  With PIC, the dispatch finds the
++   table with addkpc, which only reaches a table close to the jump.  */
++
++static bool
++c6x_can_share_jump_table_p (rtx_insn *)
++{
++  return !flag_pic;
++}
++
+ /* Implement REGNO_REG_CLASS.  */
+ 
+ enum reg_class
+@@ -6821,6 +6830,9 @@ c6x_regno_reg_class (int reg)
+ #undef TARGET_MACHINE_DEPENDENT_REORG
+ #define TARGET_MACHINE_DEPENDENT_REORG c6x_reorg
+ 
++#undef TARGET_CAN_SHARE_JUMP_TABLE_P
++#define TARGET_CAN_SHARE_JUMP_TABLE_P c6x_can_share_jump_table_p
++
+ #undef TARGET_ASM_FILE_START
+ #define TARGET_ASM_FILE_START c6x_file_start
+ 
+diff --git a/gcc/config/cris/cris.cc b/gcc/config/cris/cris.cc
+index 2112ceb0e66..41ebd9ecd80 100644
+--- a/gcc/config/cris/cris.cc
++++ b/gcc/config/cris/cris.cc
+@@ -215,6 +215,10 @@ int cris_cpu_version = CRIS_DEFAULT_CPU_VERSION;
+ #undef TARGET_ASM_CAN_OUTPUT_MI_THUNK
+ #define TARGET_ASM_CAN_OUTPUT_MI_THUNK default_can_output_mi_thunk_no_vcall
+ 
++/* The casesi dispatch reads the table at its own PC.  */
++#undef TARGET_CAN_SHARE_JUMP_TABLE_P
++#define TARGET_CAN_SHARE_JUMP_TABLE_P hook_bool_rtx_insn_false
++
+ #undef TARGET_ASM_FILE_START
+ #define TARGET_ASM_FILE_START cris_file_start
+ 
+diff --git a/gcc/config/csky/csky.cc b/gcc/config/csky/csky.cc
+index be33a50b806..807f7a23cad 100644
+--- a/gcc/config/csky/csky.cc
++++ b/gcc/config/csky/csky.cc
+@@ -658,6 +658,9 @@ csky_default_logical_op_non_short_circuit (void)
+ #undef	TARGET_CANNOT_COPY_INSN_P
+ #define TARGET_CANNOT_COPY_INSN_P csky_cannot_copy_insn_p
+ 
++#undef	TARGET_CAN_SHARE_JUMP_TABLE_P
++#define TARGET_CAN_SHARE_JUMP_TABLE_P csky_can_share_jump_table_p
++
+ 
+ /******************************************************************
+  *			Assembler Format			  *
+@@ -1697,6 +1700,15 @@ csky_reorg (void)
+     csky_emit_constant_pools ();
+ }
+ 
++/* Implement TARGET_CAN_SHARE_JUMP_TABLE_P.  The -mconstpool scan in
++   csky_emit_constant_pools expects every table to follow its jump.  */
++
++static bool
++csky_can_share_jump_table_p (rtx_insn *)
++{
++  return !TARGET_CONSTANT_POOL;
++}
++
+ 
+ /* Check to see if the current function contains a branch insn with the
+    far jump attribute set.  Such a function uses the LR register.  */
+diff --git a/gcc/config/m68k/m68k.cc b/gcc/config/m68k/m68k.cc
+index 074d82efb25..8291a58073f 100644
+--- a/gcc/config/m68k/m68k.cc
++++ b/gcc/config/m68k/m68k.cc
+@@ -236,6 +236,11 @@ static bool m68k_use_lra_p (void);
+ #undef TARGET_ASM_CAN_OUTPUT_MI_THUNK
+ #define TARGET_ASM_CAN_OUTPUT_MI_THUNK hook_bool_const_tree_hwi_hwi_const_tree_true
+ 
++/* The relative dispatch forms find the table at a fixed offset from the PC
++   of the jump.  */
++#undef TARGET_CAN_SHARE_JUMP_TABLE_P
++#define TARGET_CAN_SHARE_JUMP_TABLE_P hook_bool_rtx_insn_false
++
+ #undef TARGET_ASM_FILE_START_APP_OFF
+ #define TARGET_ASM_FILE_START_APP_OFF true
+ 
+diff --git a/gcc/config/mips/mips.cc b/gcc/config/mips/mips.cc
+index e54a310b2b4..6e75f69add1 100644
+--- a/gcc/config/mips/mips.cc
++++ b/gcc/config/mips/mips.cc
+@@ -23133,6 +23133,16 @@ mips_case_values_threshold (void)
+     return default_case_values_threshold ();
+ }
+ 
++/* Implement TARGET_CAN_SHARE_JUMP_TABLE_P.  The MIPS16 casesi dispatch
++   loads the address of a table in the text section with a PC-relative
++   la, whose length assumes that the table follows the jump.  */
++
++static bool
++mips_can_share_jump_table_p (rtx_insn *)
++{
++  return !TARGET_MIPS16_SHORT_JUMP_TABLES;
++}
++
+ /* Implement TARGET_ATOMIC_ASSIGN_EXPAND_FENV.  */
+ 
+ static void
+@@ -23630,6 +23640,9 @@ mips_print_patchable_function_entry (FILE *file ATTRIBUTE_UNUSED,
+ #undef TARGET_CASE_VALUES_THRESHOLD
+ #define TARGET_CASE_VALUES_THRESHOLD mips_case_values_threshold
+ 
++#undef TARGET_CAN_SHARE_JUMP_TABLE_P
++#define TARGET_CAN_SHARE_JUMP_TABLE_P mips_can_share_jump_table_p
++
+ #undef TARGET_ATOMIC_ASSIGN_EXPAND_FENV
+ #define TARGET_ATOMIC_ASSIGN_EXPAND_FENV mips_atomic_assign_expand_fenv
+ 
+diff --git a/gcc/config/pa/pa.cc b/gcc/config/pa/pa.cc
+index 5e577af67c7..585fbb376de 100644
+--- a/gcc/config/pa/pa.cc
++++ b/gcc/config/pa/pa.cc
+@@ -213,6 +213,7 @@ static section* pa_elf_select_rtx_section(machine_mode, rtx, unsigned HOST_WIDE_
+ static void pa_atomic_assign_expand_fenv (tree *, tree *, tree *);
+ static bool pa_use_lra_p (void);
+ static bool pa_frame_pointer_required (void);
++static bool pa_can_share_jump_table_p (rtx_insn *);
+ 
+ /* The following extra sections are only used for SOM.  */
+ static GTY(()) section *som_readonly_data_section;
+@@ -337,6 +338,9 @@ static size_t n_deferred_plabels = 0;
+ #undef TARGET_MACHINE_DEPENDENT_REORG
+ #define TARGET_MACHINE_DEPENDENT_REORG pa_reorg
+ 
++#undef TARGET_CAN_SHARE_JUMP_TABLE_P
++#define TARGET_CAN_SHARE_JUMP_TABLE_P pa_can_share_jump_table_p
++
+ #undef TARGET_INIT_LIBFUNCS
+ #define TARGET_INIT_LIBFUNCS pa_init_libfuncs
+ 
+@@ -11382,6 +11386,17 @@ pa_legitimize_reload_address (rtx ad, machine_mode mode,
+   return NULL_RTX;
+ }
+ 
++/* Implement TARGET_CAN_SHARE_JUMP_TABLE_P.  casesi32 loads the address of
++   the table.  The PIC dispatches add the distance to the table to their
++   own address with one ldo, which only reaches a table close to the
++   jump.  */
++
++static bool
++pa_can_share_jump_table_p (rtx_insn *insn)
++{
++  return recog_memoized (insn) == CODE_FOR_casesi32;
++}
++
+ /* Output address vector.  */
+ 
+ void
+diff --git a/gcc/config/rx/rx.cc b/gcc/config/rx/rx.cc
+index a7ddfead32c..082611d70c4 100644
+--- a/gcc/config/rx/rx.cc
++++ b/gcc/config/rx/rx.cc
+@@ -2368,6 +2368,15 @@ rx_select_section (tree decl,
+ 
+   return default_elf_select_section (decl, reloc, align);
+ }
++
++/* Implement TARGET_CAN_SHARE_JUMP_TABLE_P.  The entries of a PID or PIC
++   table are relative to a local label that the dispatch defines.  */
++
++static bool
++rx_can_share_jump_table_p (rtx_insn *)
++{
++  return !TARGET_PID && !flag_pic;
++}
+ 
+ enum rx_builtin
+ {
+@@ -3759,6 +3768,9 @@ rx_relax_double_operands(rtx * operands, machine_mode mode)
+ #undef	TARGET_ASM_SELECT_SECTION
+ #define	TARGET_ASM_SELECT_SECTION	rx_select_section
+ 
++#undef	TARGET_CAN_SHARE_JUMP_TABLE_P
++#define	TARGET_CAN_SHARE_JUMP_TABLE_P	rx_can_share_jump_table_p
++
+ #undef  TARGET_INIT_BUILTINS
+ #define TARGET_INIT_BUILTINS		rx_init_builtins
+ 
+diff --git a/gcc/config/sh/sh.cc b/gcc/config/sh/sh.cc
+index 71342153874..410f1f37ee2 100644
+--- a/gcc/config/sh/sh.cc
++++ b/gcc/config/sh/sh.cc
+@@ -489,6 +489,10 @@ TARGET_GNU_ATTRIBUTES (sh_attribute_table,
+ 
+ #undef TARGET_CANNOT_COPY_INSN_P
+ #define TARGET_CANNOT_COPY_INSN_P sh_cannot_copy_insn_p
++/* The table entries are relative to the braf of one dispatch, and sh_reorg
++   pairs every table with one mova.  */
++#undef TARGET_CAN_SHARE_JUMP_TABLE_P
++#define TARGET_CAN_SHARE_JUMP_TABLE_P hook_bool_rtx_insn_false
+ #undef TARGET_RTX_COSTS
+ #define TARGET_RTX_COSTS sh_rtx_costs
+ #undef TARGET_ADDRESS_COST
+diff --git a/gcc/config/stormy16/stormy16.cc b/gcc/config/stormy16/stormy16.cc
+index 7ea8327aa41..f64ac17aac8 100644
+--- a/gcc/config/stormy16/stormy16.cc
++++ b/gcc/config/stormy16/stormy16.cc
+@@ -2847,6 +2847,10 @@ xstormy16_push_rounding (poly_int64 bytes)
+ #undef  TARGET_ASM_CAN_OUTPUT_MI_THUNK
+ #define TARGET_ASM_CAN_OUTPUT_MI_THUNK default_can_output_mi_thunk_no_vcall
+ 
++/* The table is a run of jmpf insns that the dispatch branches into.  */
++#undef  TARGET_CAN_SHARE_JUMP_TABLE_P
++#define TARGET_CAN_SHARE_JUMP_TABLE_P hook_bool_rtx_insn_false
++
+ #undef  TARGET_PRINT_OPERAND
+ #define TARGET_PRINT_OPERAND xstormy16_print_operand
+ #undef  TARGET_PRINT_OPERAND_ADDRESS
+diff --git a/gcc/config/vax/vax.cc b/gcc/config/vax/vax.cc
+index 47bdfadfde1..1d301a90dbb 100644
+--- a/gcc/config/vax/vax.cc
++++ b/gcc/config/vax/vax.cc
+@@ -88,6 +88,10 @@ static HOST_WIDE_INT vax_starting_frame_offset (void);
+ #undef TARGET_ASM_CAN_OUTPUT_MI_THUNK
+ #define TARGET_ASM_CAN_OUTPUT_MI_THUNK default_can_output_mi_thunk_no_vcall
+ 
++/* The casel table is part of the instruction.  */
++#undef TARGET_CAN_SHARE_JUMP_TABLE_P
++#define TARGET_CAN_SHARE_JUMP_TABLE_P hook_bool_rtx_insn_false
++
+ /* Enable compare elimination pass.  */
+ #undef TARGET_FLAGS_REGNUM
+ #define TARGET_FLAGS_REGNUM VAX_PSL_REGNUM
+-- 
+2.54.0 (Apple Git-157)
+

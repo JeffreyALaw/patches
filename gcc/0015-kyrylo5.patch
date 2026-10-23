@@ -1,0 +1,1952 @@
+
+
+From: Kyrylo Tkachov <ktkachov@nvidia.com>
+
+A bytecode interpreter written with a switch at its loop head normally has one
+jump-table dispatch.  Every opcode transition returns to the same indirect
+branch instruction.  This can make indirect target prediction less effective.
+The existing compgotos pass already gives each eligible predecessor its own
+computed goto.  Apply the same transformation to the jump-table form.
+
+The guarded tablejump is a short chain rather than one block:
+
+  handler -> fetch and range check -> tablejump
+
+Collect the single-predecessor fall-through chain and copy it into eligible
+predecessors.  Take a block into the chain only through a plain fall-through
+edge: a jump at its end that also targets the next block would still name
+the original block after the edge moves to the copy.  The copies share the
+table through the representation added by the cfgrtl patch.  Require a
+direct DFS back edge into the collected chain head before the first
+tablejump duplication.  This limits the new transformation to a loop head.
+Recursive copies do not repeat the test.  Computed gotos keep their existing
+behavior.
+
+Use the existing max-goto-duplication-insns budget.  Charge the tablejump as
+one budget unit and every other instruction at its size, as for computed
+gotos.  A zero budget rejects the transformation.  Require the target's
+can_share_jump_table_p hook to permit sharing and reject partitioned
+functions.
+
+Reject functions that use stack registers.  Stack-register conversion can
+split outgoing edges to reconcile different stack layouts, but a shared-table
+edge cannot be changed for only one dispatch.
+
+Set PROP_rtl_allow_tablejump_duplication only while the pass scans and copies
+dispatches.  Clear it before CFG cleanup and before any later pass runs.
+
+switch-dispatch-run-5.c sends every dispatch copy to every case and to
+out-of-range values, and checks the exact path with a trace.  run-6.c and
+run-7.c give handlers enough code that some copies are far from the table,
+with and without PIC.  run-8.c has an asm goto that targets its own
+fall-through block above the switch.  switch-dispatch-hwloop.c and the bfin
+and xtensa tests reach a hardware loop through a shared table.  In
+switch-dispatch-placement.c the original dispatch is deleted after a noreturn
+call or a return, so its table has to move.  switch-dispatch-4.c checks that
+both tables of the trace test are shared on the targets that the new
+shared_jump_tables effective target lists.  Plugin tests check per-function
+target options, the default hook result, existing instruction-copy vetoes,
+and output after eligibility becomes false.
+
+On an AArch64 Vera system, explicit enablement improves 714.cpython_r by
+10.3%, mawk by 6.9%, and QuickJS-ng by 24.9%.
+
+Jeff approved v3 of this patch (3/7), provided that the patches it
+depends on are approved:
+https://inbox.sourceware.org/gcc-patches/d1506ad7-1796-4ae9-8c83-69e9b23ee8a0@oss.qualcomm.com/
+
+gcc/ChangeLog:
+
+	PR middle-end/126236
+	* common.opt (fduplicate-switch-dispatch): New option.
+	* doc/invoke.texi: Document it.
+	* doc/params.texi (max-goto-duplication-insns): Mention switch
+	dispatches.
+	* doc/sourcebuild.texi (shared_jump_tables): Document.
+	* params.opt (max-goto-duplication-insns): Mention switch dispatches.
+	* common.opt.urls: Regenerate.
+	* bb-reorder.cc (dispatch_jump_p): New function.
+	(can_attach_dispatch_copy_p): New function.
+	(fallthru_unified_with_branch_p): New function.
+	(find_dispatch_chain): New function.
+	(maybe_duplicate_computed_goto): Rename to...
+	(maybe_duplicate_dispatch): ...this.  Copy a dispatch chain and
+	optionally require a DFS back edge into its head.
+	(duplicate_computed_gotos): Mark DFS back edges, select eligible
+	tablejumps, and scope PROP_rtl_allow_tablejump_duplication.
+
+gcc/testsuite/ChangeLog:
+
+	PR middle-end/126236
+	* lib/target-supports.exp
+	(check_effective_target_shared_jump_tables): New.
+	* gcc.dg/plugin/plugin.exp: Register the capability test.
+	* gcc.dg/plugin/tablejump_capability_plugin.cc: New plugin.
+	* gcc.dg/plugin/tablejump-capability.c: New test.
+	* gcc.dg/plugin/tablejump-test.h: New test header.
+	* gcc.dg/switch-dispatch-2.c: New test.
+	* gcc.dg/switch-dispatch-3.c: New test.
+	* gcc.dg/switch-dispatch-4.c: New test.
+	* gcc.dg/torture/switch-dispatch-run-1.c: New test.
+	* gcc.dg/torture/switch-dispatch-run-2.c: New test.
+	* gcc.dg/torture/switch-dispatch-run-3.c: New test.
+	* gcc.dg/torture/switch-dispatch-run-4.c: New test.
+	* gcc.dg/torture/switch-dispatch-run-5.c: New test.
+	* gcc.dg/torture/switch-dispatch-run-6.c: New test.
+	* gcc.dg/torture/switch-dispatch-run-7.c: New test.
+	* gcc.dg/torture/switch-dispatch-run-8.c: New test.
+	* gcc.dg/torture/switch-dispatch-hwloop.c: New test.
+	* gcc.dg/torture/switch-dispatch-placement.c: New test.
+	* gcc.target/bfin/switch-dispatch-1.c: New test.
+	* gcc.target/xtensa/switch-dispatch-1.c: New test.
+	* gcc.target/aarch64/switch-dispatch-1.c: New test.
+	* gcc.target/aarch64/switch-dispatch-2.c: New test.
+	* gcc.target/aarch64/switch-dispatch-3.c: New test.
+	* gcc.target/aarch64/switch-dispatch-4.c: New test.
+	* gcc.target/aarch64/switch-dispatch-5.c: New test.
+	* gcc.target/aarch64/switch-dispatch-6.c: New test.
+	* gcc.target/aarch64/switch-dispatch-7.c: New test.
+
+Signed-off-by: Kyrylo Tkachov <ktkachov@nvidia.com>
+---
+Changes since v3:
+- For the opt-out model, dispatch_jump_p no longer asserts that
+  TARGET_ASM_JUMP_TABLE_BASE is set.  With patch 3, the transformation
+  runs on every port that does not opt out in patch 4, not only AArch64.
+- find_dispatch_chain: stop at a fall-through edge when the jump at the
+  end of its source, such as an asm goto, also targets the destination.
+  In v3 the copy of that jump still named the original block, which can
+  cause an ICE.
+- New function fallthru_unified_with_branch_p does this check.  A new
+  gcc_checking_assert in maybe_duplicate_dispatch applies it to each
+  chain edge that moves to a copy.  New test switch-dispatch-run-8.c.
+- find_dispatch_chain: count with duplication_unit and duplication_size
+  of patch 1.  This changes only ports without a length attribute, where
+  the v3 budget set no limit.  Some of them, such as ia64, now share
+  tables (patch 3), so the limit now has an effect.
+- New torture test switch-dispatch-run-5.c, to find ports that must opt
+  out.  It sends each copy of its two switch dispatches to every case,
+  hole, range end and type limit.  A trace checks the exact path.
+- New torture tests switch-dispatch-run-6.c (-fpic) and
+  switch-dispatch-run-7.c (-fno-pic) run switch-dispatch-run-5.c with
+  large handlers, so that some copies are far from their table.
+- New test gcc.dg/switch-dispatch-4.c: at -O2, switch-dispatch-run-5.c
+  must have exactly two shared tables where the new effective target
+  shared_jump_tables is true.  A port that does not share then FAILs.
+- New effective target shared_jump_tables (lib/target-supports.exp,
+  doc/sourcebuild.texi) lists where sharing is expected.  It is false
+  for the opt-outs of patch 4 and where no jump table is emitted.
+- New compile tests for the guards of patch 2: switch-dispatch-hwloop.c,
+  switch-dispatch-placement.c, and bfin and xtensa switch-dispatch-1.c.
+  The bfin and xtensa tests check that hw-doloop rejects the loop.
+- tablejump_capability_plugin.cc: with TARGET_ASM_JUMP_TABLE_BASE unset,
+  expect TARGET_CAN_SHARE_JUMP_TABLE_P to return true (patch 3 default).
+  v3 expected false.  Call the saved base hook only if it is set.
+- switch-dispatch-2.c and switch-dispatch-3.c require indirect_jumps.
+  In v3 they were UNRESOLVED on nvptx.  switch-dispatch-2.c also sets
+  max-goto-duplication-insns to 128 to test only the back-edge rule.
+- switch-dispatch-run-1.c to switch-dispatch-run-4.c now use noipa.
+- Documentation: doc/invoke.texi says that the transformation runs only
+  with -fexpensive-optimizations and in functions optimized for speed.
+  doc/params.texi says that max-goto-duplication-insns also limits it.
+- common.opt.urls: add the entry for -fduplicate-switch-dispatch, which
+  v3 did not have.
+- The comments of find_dispatch_chain and maybe_duplicate_dispatch now
+  say that MAX_SIZE limits the whole chain, not only BB.  Remove an
+  empty-chain check in find_dispatch_chain that is never true.
+- Commit message: describe the plain fall-through rule, the budget units
+  and the new tests.  Say "the cfgrtl patch" in place of "the first
+  patch", because patch 1 is now a different patch.
+
+ gcc/bb-reorder.cc                             | 259 +++++++++++++++---
+ gcc/common.opt                                |   4 +
+ gcc/common.opt.urls                           |   3 +
+ gcc/doc/invoke.texi                           |  17 ++
+ gcc/doc/params.texi                           |   3 +-
+ gcc/doc/sourcebuild.texi                      |   5 +
+ gcc/params.opt                                |   2 +-
+ gcc/testsuite/gcc.dg/plugin/plugin.exp        |   1 +
+ .../gcc.dg/plugin/tablejump-capability.c      |  25 ++
+ gcc/testsuite/gcc.dg/plugin/tablejump-test.h  |  24 ++
+ .../plugin/tablejump_capability_plugin.cc     | 182 ++++++++++++
+ gcc/testsuite/gcc.dg/switch-dispatch-2.c      |  34 +++
+ gcc/testsuite/gcc.dg/switch-dispatch-3.c      |   8 +
+ gcc/testsuite/gcc.dg/switch-dispatch-4.c      |  11 +
+ .../gcc.dg/torture/switch-dispatch-hwloop.c   |  26 ++
+ .../torture/switch-dispatch-placement.c       |  81 ++++++
+ .../gcc.dg/torture/switch-dispatch-run-1.c    |  63 +++++
+ .../gcc.dg/torture/switch-dispatch-run-2.c    |  67 +++++
+ .../gcc.dg/torture/switch-dispatch-run-3.c    |  33 +++
+ .../gcc.dg/torture/switch-dispatch-run-4.c    |  62 +++++
+ .../gcc.dg/torture/switch-dispatch-run-5.c    | 193 +++++++++++++
+ .../gcc.dg/torture/switch-dispatch-run-6.c    |   9 +
+ .../gcc.dg/torture/switch-dispatch-run-7.c    |  11 +
+ .../gcc.dg/torture/switch-dispatch-run-8.c    |  47 ++++
+ .../gcc.target/aarch64/switch-dispatch-1.c    |  39 +++
+ .../gcc.target/aarch64/switch-dispatch-2.c    |  32 +++
+ .../gcc.target/aarch64/switch-dispatch-3.c    |  30 ++
+ .../gcc.target/aarch64/switch-dispatch-4.c    |  10 +
+ .../gcc.target/aarch64/switch-dispatch-5.c    |  10 +
+ .../gcc.target/aarch64/switch-dispatch-6.c    |  10 +
+ .../gcc.target/aarch64/switch-dispatch-7.c    |  11 +
+ .../gcc.target/bfin/switch-dispatch-1.c       |  22 ++
+ .../gcc.target/xtensa/switch-dispatch-1.c     |  26 ++
+ gcc/testsuite/lib/target-supports.exp         |  72 +++++
+ 34 files changed, 1395 insertions(+), 37 deletions(-)
+ create mode 100644 gcc/testsuite/gcc.dg/plugin/tablejump-capability.c
+ create mode 100644 gcc/testsuite/gcc.dg/plugin/tablejump-test.h
+ create mode 100644 gcc/testsuite/gcc.dg/plugin/tablejump_capability_plugin.cc
+ create mode 100644 gcc/testsuite/gcc.dg/switch-dispatch-2.c
+ create mode 100644 gcc/testsuite/gcc.dg/switch-dispatch-3.c
+ create mode 100644 gcc/testsuite/gcc.dg/switch-dispatch-4.c
+ create mode 100644 gcc/testsuite/gcc.dg/torture/switch-dispatch-hwloop.c
+ create mode 100644 gcc/testsuite/gcc.dg/torture/switch-dispatch-placement.c
+ create mode 100644 gcc/testsuite/gcc.dg/torture/switch-dispatch-run-1.c
+ create mode 100644 gcc/testsuite/gcc.dg/torture/switch-dispatch-run-2.c
+ create mode 100644 gcc/testsuite/gcc.dg/torture/switch-dispatch-run-3.c
+ create mode 100644 gcc/testsuite/gcc.dg/torture/switch-dispatch-run-4.c
+ create mode 100644 gcc/testsuite/gcc.dg/torture/switch-dispatch-run-5.c
+ create mode 100644 gcc/testsuite/gcc.dg/torture/switch-dispatch-run-6.c
+ create mode 100644 gcc/testsuite/gcc.dg/torture/switch-dispatch-run-7.c
+ create mode 100644 gcc/testsuite/gcc.dg/torture/switch-dispatch-run-8.c
+ create mode 100644 gcc/testsuite/gcc.target/aarch64/switch-dispatch-1.c
+ create mode 100644 gcc/testsuite/gcc.target/aarch64/switch-dispatch-2.c
+ create mode 100644 gcc/testsuite/gcc.target/aarch64/switch-dispatch-3.c
+ create mode 100644 gcc/testsuite/gcc.target/aarch64/switch-dispatch-4.c
+ create mode 100644 gcc/testsuite/gcc.target/aarch64/switch-dispatch-5.c
+ create mode 100644 gcc/testsuite/gcc.target/aarch64/switch-dispatch-6.c
+ create mode 100644 gcc/testsuite/gcc.target/aarch64/switch-dispatch-7.c
+ create mode 100644 gcc/testsuite/gcc.target/bfin/switch-dispatch-1.c
+ create mode 100644 gcc/testsuite/gcc.target/xtensa/switch-dispatch-1.c
+
+diff --git a/gcc/bb-reorder.cc b/gcc/bb-reorder.cc
+index 3fbf6fd9fe9..81a1e0f9ddd 100644
+--- a/gcc/bb-reorder.cc
++++ b/gcc/bb-reorder.cc
+@@ -2740,59 +2740,225 @@ duplication_size (rtx_insn *insn)
+   return active_insn_p (insn);
+ }
+ 
+-/* Duplicate a block (that we already know ends in a computed jump) into its
+-   predecessors, where possible.  Return whether anything is changed.  */
++/* Return true if INSN is a jump whose predecessors are worth giving a copy
++   of their own.  Every transition through such a jump uses the same indirect
++   branch instruction, which can make indirect target prediction less
++   effective.  */
++
+ static bool
+-maybe_duplicate_computed_goto (basic_block bb, int max_size)
++dispatch_jump_p (rtx_insn *insn)
+ {
+-  /* Make sure that the block is small enough.  */
+-  rtx_insn *insn;
+-  FOR_BB_INSNS (bb, insn)
+-    if (INSN_P (insn))
+-      {
+-	max_size -= duplication_size (insn);
+-	if (max_size < 0)
+-	   return false;
+-      }
++  if (computed_jump_p (insn))
++    return true;
++
++  /* A switch lowered to a jump table dispatches exactly like a factored
++     computed goto.  Copying such a block makes the copies share the one
++     table, so only the branch is replicated, not the table.  The target
++     decides whether the dispatch can share its table.  Sharing a table in a
++     partitioned function would require explicit ownership of the section of
++     the base of the table entries.  */
++  if (!(flag_duplicate_switch_dispatch
++	&& !crtl->has_bb_partition
++	&& tablejump_p (insn, NULL, NULL)
++	&& targetm.can_share_jump_table_p (insn)))
++    return false;
++
++#ifdef STACK_REGS
++  /* Stack-register conversion can split outgoing edges to reconcile stack
++     layouts.  Such edges cannot be redirected for one shared-table user.  */
++  for (int regno = FIRST_STACK_REG; regno <= LAST_STACK_REG; ++regno)
++    if (df_regs_ever_live_p (regno))
++      return false;
++#endif
++
++  return true;
++}
++
++/* Return true if a copy of the dispatch can be attached to the source of E,
++   taking over that edge.  */
++
++static bool
++can_attach_dispatch_copy_p (edge e)
++{
++  basic_block pred = e->src;
++
++  return (single_succ_p (pred)
++	  && !(e->flags & EDGE_COMPLEX)
++	  && pred->index >= NUM_FIXED_BLOCKS
++	  && (!JUMP_P (BB_END (pred))
++	      || (simplejump_p (BB_END (pred))
++		  && !CROSSING_JUMP_P (BB_END (pred)))));
++}
++
++/* Return true if the fall-through edge E also stands for a branch, that is
++   if the jump at the end of its source names its destination as well.
++   Such an edge cannot move to a copy of its destination without changing
++   the jump.  */
++
++static bool
++fallthru_unified_with_branch_p (edge e)
++{
++  rtx_insn *end = BB_END (e->src);
++  return JUMP_P (end) && label_is_jump_target_p (BB_HEAD (e->dest), end);
++}
++
++/* Collect into CHAIN the blocks that have to be copied together with the
++   dispatch block BB, innermost first, and return the head of the chain: the
++   block whose predecessors the copies are attached to.  Anything above the
++   dispatch is reached only through the chain, so copying the lot into a
++   predecessor of the head is sound.  The chain is what makes a jump table
++   dispatch reachable at all, since the range check that guards it sits in a
++   block of its own.  Return NULL if the chain is larger than MAX_SIZE, which
++   is in units of duplication_unit.  */
++
++static basic_block
++find_dispatch_chain (basic_block bb, int max_size,
++		     vec<basic_block> *chain)
++{
++  int size = 0;
++
++  /* Count a tablejump as one instruction.  Its target sequence is an
++     indivisible part of every copy, while the budget still bounds the work
++     copied with it.  */
++  rtx_insn *dispatch = NULL;
++  if (tablejump_p (BB_END (bb), NULL, NULL))
++    dispatch = BB_END (bb);
++
++  for (basic_block b = bb; ; b = single_pred (b))
++    {
++      rtx_insn *insn;
++      FOR_BB_INSNS (b, insn)
++	if (INSN_P (insn))
++	  {
++	    size += (insn == dispatch
++		     ? duplication_unit () : duplication_size (insn));
++	    if (size > max_size)
++	      return NULL;
++	  }
++
++      chain->safe_push (b);
++
++      /* Stop at the block the copies attach to, and at anything we may not
++	 copy.  Only a jump table dispatch needs more than its own block, and
++	 only a plain fall-through predecessor can be taken along: the copies
++	 are laid out one after the other, so any other edge into the chain
++	 would need a jump of its own, and a jump that also targets the next
++	 block would still name the original block.  */
++      if (!dispatch || !single_pred_p (b))
++	break;
++      edge in = single_pred_edge (b);
++      if (can_attach_dispatch_copy_p (in)
++	  || !(in->flags & EDGE_FALLTHRU)
++	  || in->src == ENTRY_BLOCK_PTR_FOR_FN (cfun)
++	  || !can_duplicate_block_p (in->src)
++	  || fallthru_unified_with_branch_p (in))
++	break;
++    }
++
++  return chain->last ();
++}
++
++/* Duplicate the dispatch block BB, along with the blocks it can only be
++   reached through, into the predecessors of that chain, where possible.
++   MAX_SIZE limits the size of the chain, in units of duplication_unit.
++   If REQUIRE_BACK_EDGE is true, first require a DFS back edge into the head
++   of the chain.  Return whether anything is changed.  */
++static bool
++maybe_duplicate_dispatch (basic_block bb, int max_size,
++			  bool require_back_edge)
++{
++  auto_vec<basic_block, 4> chain;
++  basic_block head = find_dispatch_chain (bb, max_size, &chain);
++  if (!head)
++    return false;
++
++  if (require_back_edge)
++    {
++      bool found = false;
++      edge e;
++      edge_iterator ei;
++      FOR_EACH_EDGE (e, ei, head->preds)
++	if (e->flags & EDGE_DFS_BACK)
++	  {
++	    found = true;
++	    break;
++	  }
++      if (!found)
++	return false;
++    }
+ 
+   bool changed = false;
+   edge e;
+   edge_iterator ei;
+-  for (ei = ei_start (bb->preds); (e = ei_safe_edge (ei)); )
++  for (ei = ei_start (head->preds); (e = ei_safe_edge (ei)); )
+     {
+       basic_block pred = e->src;
+ 
+-      /* Do not duplicate BB into PRED if we cannot merge a copy of BB
+-	 with PRED.  */
+-      if (!single_succ_p (pred)
+-	  || e->flags & EDGE_COMPLEX
+-	  || pred->index < NUM_FIXED_BLOCKS
+-	  || (JUMP_P (BB_END (pred)) && !simplejump_p (BB_END (pred)))
+-	  || (JUMP_P (BB_END (pred)) && CROSSING_JUMP_P (BB_END (pred))))
++      /* Do not duplicate the chain into PRED if we cannot merge a copy of
++	 its head with PRED.  */
++      if (!can_attach_dispatch_copy_p (e))
+ 	{
+ 	  ei_next (&ei);
+ 	  continue;
+ 	}
+ 
+       if (dump_file)
+-	fprintf (dump_file, "Duplicating computed goto bb %d into bb %d\n",
+-		 bb->index, e->src->index);
++	fprintf (dump_file, "Duplicating dispatch bb %d into bb %d\n",
++		 bb->index, pred->index);
+ 
+-      /* Remember if PRED can be duplicated; if so, the copy of BB merged
+-	 with PRED can be duplicated as well.  */
++      /* Remember if PRED can be duplicated; if so, the copy of the chain
++	 merged with PRED can be duplicated as well.  */
+       bool can_dup_more = can_duplicate_block_p (pred);
+ 
+-      /* Make a copy of BB, merge it into PRED.  */
+-      basic_block copy = duplicate_block (bb, e, NULL);
+-      emit_barrier_after_bb (copy);
+-      reorder_insns_nobb (BB_HEAD (copy), BB_END (copy), BB_END (pred));
+-      merge_blocks (pred, copy);
++      /* Copy the chain head first, so that the copies end up in the
++	 instruction stream in the order they are executed in.  Only the head
++	 takes over the edge from PRED; the edges inside the chain are
++	 fall-through and so are moved onto the copies directly.  */
++      auto_vec<basic_block, 4> copies;
++      for (unsigned i = chain.length (); i-- > 0; )
++	{
++	  basic_block copy;
++	  if (copies.is_empty ())
++	    copy = duplicate_block (chain[i], e, NULL);
++	  else
++	    {
++	      edge in = find_edge (copies.last (), chain[i]);
++	      gcc_checking_assert (!fallthru_unified_with_branch_p (in));
++	      profile_count count = in->count ();
++	      if (chain[i]->count < count)
++		count = chain[i]->count;
++	      copy = duplicate_block (chain[i], NULL, NULL);
++	      copy->count = count;
++	      chain[i]->count -= count;
++	      redirect_edge_succ (in, copy);
++	    }
++	  copies.safe_push (copy);
++	}
++
++      basic_block first = copies[0];
++      basic_block last = copies.last ();
++
++      /* Move the copies after PRED and fold the head into it.  */
++      emit_barrier_after_bb (last);
++      reorder_insns_nobb (BB_HEAD (first), BB_END (last), BB_END (pred));
++      merge_blocks (pred, first);
++
++      /* The rest of the chain stays as separate blocks that PRED falls
++	 through to, so put them in the block order to match.  */
++      basic_block after = pred;
++      for (unsigned i = 1; i < copies.length (); i++)
++	{
++	  unlink_block (copies[i]);
++	  link_block (copies[i], after);
++	  after = copies[i];
++	}
+ 
+       changed = true;
+ 
+-      /* Try to merge the resulting merged PRED into further predecessors.  */
++      /* Try to merge the resulting dispatch block into further
++	 predecessors.  */
+       if (can_dup_more)
+-	maybe_duplicate_computed_goto (pred, max_size);
++	maybe_duplicate_dispatch (first == last ? pred : last, max_size, false);
+     }
+ 
+   return changed;
+@@ -2802,7 +2968,11 @@ maybe_duplicate_computed_goto (basic_block bb, int max_size)
+    computed gotos that were factored early on in the compilation process to
+    speed up edge based data flow.  We used to not unfactor them again, which
+    can seriously pessimize code with many computed jumps in the source code,
+-   such as interpreters.  See e.g. PR15242.  */
++   such as interpreters.  See e.g. PR15242.
++
++   With -fduplicate-switch-dispatch the same is done for a switch lowered to
++   a jump table, which an interpreter written without the labels-as-values
++   extension ends up with.  See PR126236.  */
+ static void
+ duplicate_computed_gotos (function *fun)
+ {
+@@ -2810,13 +2980,32 @@ duplicate_computed_gotos (function *fun)
+   int max_size = duplication_unit () * param_max_goto_duplication_insns;
+ 
+   bool changed = false;
++  bool back_edges_marked = false;
++
++  gcc_checking_assert (!(fun->curr_properties
++			 & PROP_rtl_allow_tablejump_duplication));
++  fun->curr_properties |= PROP_rtl_allow_tablejump_duplication;
+ 
+-  /* Try to duplicate all blocks that end in a computed jump and that
++  /* Try to duplicate all blocks that end in a dispatching jump and that
+      can be duplicated at all.  */
+   basic_block bb;
+   FOR_EACH_BB_FN (bb, fun)
+-    if (computed_jump_p (BB_END (bb)) && can_duplicate_block_p (bb))
+-      changed |= maybe_duplicate_computed_goto (bb, max_size);
++    {
++      if (!dispatch_jump_p (BB_END (bb))
++	  || !can_duplicate_block_p (bb))
++	continue;
++
++      bool tablejump = tablejump_p (BB_END (bb), NULL, NULL);
++      if (tablejump && !back_edges_marked)
++	{
++	  mark_dfs_back_edges ();
++	  back_edges_marked = true;
++	}
++
++      changed |= maybe_duplicate_dispatch (bb, max_size, tablejump);
++    }
++
++  fun->curr_properties &= ~PROP_rtl_allow_tablejump_duplication;
+ 
+   /* Some blocks may have become unreachable.  */
+   if (changed)
+diff --git a/gcc/common.opt b/gcc/common.opt
+index 69a55b8d40d..92c166500d2 100644
+--- a/gcc/common.opt
++++ b/gcc/common.opt
+@@ -1706,6 +1706,10 @@ fdump-unnumbered-links
+ Common Var(flag_dump_unnumbered_links)
+ Suppress output of previous and next insn numbers in debugging dumps.
+ 
++fduplicate-switch-dispatch
++Common Var(flag_duplicate_switch_dispatch) Optimization
++Give eligible predecessors of a loop switch their own copy of the table branch.
++
+ fdwarf2-cfi-asm
+ Common Var(flag_dwarf2_cfi_asm) Init(HAVE_GAS_CFI_DIRECTIVE)
+ Enable CFI tables via GAS assembler directives.
+diff --git a/gcc/common.opt.urls b/gcc/common.opt.urls
+index b61a786383b..d2baa15db8f 100644
+--- a/gcc/common.opt.urls
++++ b/gcc/common.opt.urls
+@@ -935,6 +935,9 @@ UrlSuffix(gcc/Developer-Options.html#index-fdump-unnumbered)
+ fdump-unnumbered-links
+ UrlSuffix(gcc/Developer-Options.html#index-fdump-unnumbered-links)
+ 
++fduplicate-switch-dispatch
++UrlSuffix(gcc/Optimize-Options.html#index-fduplicate-switch-dispatch)
++
+ fdwarf2-cfi-asm
+ UrlSuffix(gcc/Debugging-Options.html#index-fdwarf2-cfi-asm)
+ 
+diff --git a/gcc/doc/invoke.texi b/gcc/doc/invoke.texi
+index 66d80f17e74..d1af39b105f 100644
+--- a/gcc/doc/invoke.texi
++++ b/gcc/doc/invoke.texi
+@@ -616,6 +616,7 @@ Objective-C and Objective-C++ Dialects}.
+ -fdata-sections  -fdce  -fdelayed-branch
+ -fdelete-null-pointer-checks  -fdep-fusion  -fdevirtualize
+ -fdevirtualize-speculatively  -fdevirtualize-at-ltrans  -fdse
++-fduplicate-switch-dispatch
+ -fearly-inlining  -fexcess-precision=@var{style}
+ -fexpensive-optimizations  -fext-dce
+ -ffast-math  -ffat-lto-objects  -ffinite-loops
+@@ -14299,6 +14300,22 @@ Enabled by default at @option{-O1} and higher.
+ Perform dead store elimination (DSE) on RTL@.
+ Enabled by default at @option{-O1} and higher.
+ 
++@opindex fduplicate-switch-dispatch
++@opindex fno-duplicate-switch-dispatch
++@item -fduplicate-switch-dispatch
++If supported by the target machine, give eligible predecessors of a switch at
++a loop head their own copy of the jump-table branch.  A bytecode interpreter
++written with such a @code{switch} otherwise sends every opcode transition
++through one indirect branch instruction.  This can make indirect target
++prediction less effective.  GCC already performs the same transformation for
++the computed gotos of an interpreter written with the labels-as-values
++extension.
++
++It trades size for speed, so the amount copied is bounded by
++@option{--param=max-goto-duplication-insns}.  The transformation runs only
++with @option{-fexpensive-optimizations} and only in functions that are
++optimized for speed.
++
+ @opindex fif-conversion
+ @opindex fno-if-conversion
+ @item -fif-conversion
+diff --git a/gcc/doc/params.texi b/gcc/doc/params.texi
+index 090af64a7e7..43a1397971d 100644
+--- a/gcc/doc/params.texi
++++ b/gcc/doc/params.texi
+@@ -122,7 +122,8 @@ to a computed goto.  To avoid @math{O(N^2)} behavior in a number of
+ passes, GCC factors computed gotos early in the compilation process,
+ and unfactors them as late as possible.  Only computed jumps at the
+ end of a basic blocks with no more than @code{max-goto-duplication-insns} are
+-unfactored.
++unfactored.  With @option{-fduplicate-switch-dispatch}, the same limit applies
++to switch dispatches.
+ 
+ @paindex max-delay-slot-insn-search
+ @item max-delay-slot-insn-search
+diff --git a/gcc/doc/sourcebuild.texi b/gcc/doc/sourcebuild.texi
+index 3aa9fcbb577..622397e6a2b 100644
+--- a/gcc/doc/sourcebuild.texi
++++ b/gcc/doc/sourcebuild.texi
+@@ -3220,6 +3220,11 @@ and @code{double}.  These optabs are: @code{fma_optab}, @code{fms_optab},
+ @item section_anchors
+ Target supports section anchors.
+ 
++@item shared_jump_tables
++Target makes the copies of a loop switch dispatch that
++@option{-fduplicate-switch-dispatch} creates share one jump table, with the
++current multilib and test options.  Use it only in test directives.
++
+ @item shf_gnu_retain
+ Target supports @code{SHF_GNU_RETAIN}.
+ 
+diff --git a/gcc/params.opt b/gcc/params.opt
+index 29a5c7018a8..b1be4339bb6 100644
+--- a/gcc/params.opt
++++ b/gcc/params.opt
+@@ -620,7 +620,7 @@ The maximum amount of memory to be allocated by GCSE, in kilobytes.
+ 
+ -param=max-goto-duplication-insns=
+ Common Joined UInteger Var(param_max_goto_duplication_insns) Init(8) Param Optimization
+-The maximum number of insns to duplicate when unfactoring computed gotos.
++The maximum number of insns to duplicate when unfactoring computed gotos or switch dispatches.
+ 
+ -param=max-grow-copy-bb-insns=
+ Common Joined UInteger Var(param_max_grow_copy_bb_insns) Init(8) Param Optimization
+diff --git a/gcc/testsuite/gcc.dg/plugin/plugin.exp b/gcc/testsuite/gcc.dg/plugin/plugin.exp
+index deef8e8570c..0062ac14051 100644
+--- a/gcc/testsuite/gcc.dg/plugin/plugin.exp
++++ b/gcc/testsuite/gcc.dg/plugin/plugin.exp
+@@ -54,6 +54,7 @@ gcc_parallel_test_enable 0
+ # Specify the plugin source file and the associated test files in a list.
+ # plugin_test_list={ {plugin1 test1 test2 ...} {plugin2 test1 ...} ... }
+ set plugin_test_list [list \
++    { tablejump_capability_plugin.cc tablejump-capability.c } \
+     { selfassign.cc self-assign-test-1.c self-assign-test-2.c } \
+     { ggcplug.cc ggcplug-test-1.c } \
+     { one_time_plugin.cc one_time-test-1.c } \
+diff --git a/gcc/testsuite/gcc.dg/plugin/tablejump-capability.c b/gcc/testsuite/gcc.dg/plugin/tablejump-capability.c
+new file mode 100644
+index 00000000000..93d50fcfa09
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/plugin/tablejump-capability.c
+@@ -0,0 +1,25 @@
++/* PR middle-end/126236 */
++/* { dg-do assemble { target aarch64*-*-* } } */
++/* { dg-options "-O2 -fchecking -fduplicate-switch-dispatch" } */
++
++void allowed (const unsigned char *, volatile unsigned *)
++  __attribute__ ((noipa, target ("arch=armv8-a+crc")));
++void rejected (const unsigned char *, volatile unsigned *)
++  __attribute__ ((noipa, target ("arch=armv8-a+nocrc")));
++void vetoed (const unsigned char *, volatile unsigned *)
++  __attribute__ ((noipa, target ("arch=armv8-a+crc")));
++
++#define TEST_NAME allowed
++#include "tablejump-test.h"
++#undef TEST_NAME
++#define TEST_NAME rejected
++#include "tablejump-test.h"
++#undef TEST_NAME
++#define TEST_NAME vetoed
++#include "tablejump-test.h"
++
++int
++ordinary (int x)
++{
++  return x + 1;
++}
+diff --git a/gcc/testsuite/gcc.dg/plugin/tablejump-test.h b/gcc/testsuite/gcc.dg/plugin/tablejump-test.h
+new file mode 100644
+index 00000000000..3e90c1efd63
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/plugin/tablejump-test.h
+@@ -0,0 +1,24 @@
++/* PR middle-end/126236 */
++/* A loop with shared dispatches and repeated table entries.  */
++
++void
++TEST_NAME (const unsigned char *pc, volatile unsigned *state)
++{
++  for (;;)
++    switch (*pc++)
++      {
++      case 0: return;
++      case 1: case 12: state[0] += 1; break;
++      case 2: state[1] ^= 2; break;
++      case 3: state[2] -= 3; break;
++      case 4: state[3] |= 4; break;
++      case 5: state[4] &= 5; break;
++      case 6: state[5] += 6; break;
++      case 7: state[6] ^= 7; break;
++      case 8: state[7] -= 8; break;
++      case 9: state[8] |= 9; break;
++      case 10: state[9] &= 10; break;
++      case 11: state[10] += 11; break;
++      default: state[11] ^= 12; break;
++      }
++}
+diff --git a/gcc/testsuite/gcc.dg/plugin/tablejump_capability_plugin.cc b/gcc/testsuite/gcc.dg/plugin/tablejump_capability_plugin.cc
+new file mode 100644
+index 00000000000..c6c16e5d448
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/plugin/tablejump_capability_plugin.cc
+@@ -0,0 +1,182 @@
++/* PR middle-end/126236 */
++/* { dg-options "-O0" } */
++
++#include "gcc-plugin.h"
++#include "config.h"
++#include "system.h"
++#include "coretypes.h"
++#include "tm.h"
++#include "rtl.h"
++#include "tree.h"
++#include "function.h"
++#include "memmodel.h"
++#include "emit-rtl.h"
++#include "tree-pass.h"
++#include "target.h"
++#include "context.h"
++#include "plugin-version.h"
++
++int plugin_is_GPL_compatible;
++
++static bool (*saved_can_share) (rtx_insn *);
++static bool (*saved_cannot_copy) (rtx_insn *);
++static void (*saved_base) (FILE *, rtx_jump_table_data *, unsigned long);
++static unsigned queries, late_queries, veto_queries;
++static unsigned functions, expected_bases, emitted_bases;
++static bool veto;
++
++/* Return whether the current function enables CRC instructions.  */
++
++static bool
++crc_enabled_p ()
++{
++#ifdef AARCH64_HAVE_ISA
++  return TARGET_CRC32;
++#else
++  gcc_unreachable ();
++#endif
++}
++
++/* Check the real tablejump INSN and allow sharing according to the current
++   function's target options.  The target's own answer does not depend on
++   whether it emits a table base.  */
++
++static bool
++can_share (rtx_insn *insn)
++{
++  gcc_assert (tablejump_p (insn, NULL, NULL));
++  auto base = targetm.asm_out.jump_table_base;
++  targetm.asm_out.jump_table_base = NULL;
++  gcc_assert (saved_can_share (insn));
++  targetm.asm_out.jump_table_base = base;
++  gcc_assert (saved_can_share (insn));
++  ++queries;
++  return crc_enabled_p ();
++}
++
++/* Reject sharing and record any query outside the duplication pass.  */
++
++static bool
++reject_late (rtx_insn *)
++{
++  ++late_queries;
++  return false;
++}
++
++/* Reject copying a tablejump INSN in the selected function.  */
++
++static bool
++cannot_copy (rtx_insn *insn)
++{
++  if (veto && tablejump_p (insn, NULL, NULL))
++    {
++      ++veto_queries;
++      return true;
++    }
++  return saved_cannot_copy && saved_cannot_copy (insn);
++}
++
++/* Emit TABLE's base with LABELNO to STREAM while eligibility is false.  */
++
++static void
++emit_base (FILE *stream, rtx_jump_table_data *table, unsigned long labelno)
++{
++  gcc_assert (targetm.can_share_jump_table_p == reject_late);
++  gcc_assert (JUMP_TABLE_SHARED_P (PATTERN (table)));
++  ++emitted_bases;
++  if (saved_base)
++    saved_base (stream, table, labelno);
++}
++
++const pass_data capability_pass_data =
++{
++  RTL_PASS, "tablejump_capability", OPTGROUP_NONE, TV_NONE,
++  PROP_rtl, 0, 0, 0, 0
++};
++
++class capability_pass : public rtl_opt_pass
++{
++public:
++  capability_pass (gcc::context *ctxt, bool before)
++    : rtl_opt_pass (capability_pass_data, ctxt), m_before (before)
++  {}
++
++  unsigned int execute (function *fun) final override
++  {
++    const char *name = IDENTIFIER_POINTER (DECL_NAME (fun->decl));
++    bool ordinary = !strcmp (name, "ordinary");
++    bool allowed = !strcmp (name, "allowed");
++    unsigned tables = 0, shared = 0, jumps = 0;
++    for (rtx_insn *insn = get_insns (); insn; insn = NEXT_INSN (insn))
++      {
++	if (JUMP_TABLE_DATA_P (insn))
++	  {
++	    ++tables;
++	    shared += JUMP_TABLE_SHARED_P (PATTERN (insn));
++	  }
++	jumps += tablejump_p (insn, NULL, NULL);
++      }
++    gcc_assert (tables == (ordinary ? 0 : 1));
++    gcc_assert (!late_queries);
++    if (!ordinary)
++      gcc_assert (crc_enabled_p () == !!strcmp (name, "rejected"));
++
++    if (m_before)
++      {
++	gcc_assert (!shared && jumps == tables);
++	queries = veto_queries = 0;
++	veto = !strcmp (name, "vetoed");
++	targetm.can_share_jump_table_p = can_share;
++	targetm.cannot_copy_insn_p = cannot_copy;
++      }
++    else
++      {
++	gcc_assert ((queries != 0) == !ordinary);
++	gcc_assert (shared == (allowed ? 1 : 0));
++	gcc_assert (allowed ? jumps > tables : jumps == tables);
++	gcc_assert ((veto_queries != 0) == veto);
++	expected_bases += shared;
++	++functions;
++	targetm.can_share_jump_table_p = reject_late;
++	targetm.cannot_copy_insn_p = saved_cannot_copy;
++      }
++    return 0;
++  }
++
++private:
++  bool m_before;
++};
++
++/* Check that all driver functions were tested and all shared bases emitted.  */
++
++static void
++finish_unit (void *, void *)
++{
++  gcc_assert (functions == 4);
++  gcc_assert (expected_bases == 1 && emitted_bases == expected_bases);
++  gcc_assert (!late_queries);
++}
++
++int
++plugin_init (struct plugin_name_args *info, struct plugin_gcc_version *version)
++{
++  if (!plugin_default_version_check (version, &gcc_version))
++    return 1;
++  saved_can_share = targetm.can_share_jump_table_p;
++  saved_cannot_copy = targetm.cannot_copy_insn_p;
++  saved_base = targetm.asm_out.jump_table_base;
++  targetm.can_share_jump_table_p = reject_late;
++  targetm.asm_out.jump_table_base = emit_base;
++  for (unsigned i = 0; i != 2; ++i)
++    {
++      struct register_pass_info pass;
++      pass.pass = new capability_pass (g, i == 0);
++      pass.reference_pass_name = "compgotos";
++      pass.ref_pass_instance_number = 1;
++      pass.pos_op = i == 0 ? PASS_POS_INSERT_BEFORE : PASS_POS_INSERT_AFTER;
++      register_callback (info->base_name, PLUGIN_PASS_MANAGER_SETUP, NULL,
++			 &pass);
++    }
++  register_callback (info->base_name, PLUGIN_FINISH_UNIT, finish_unit, NULL);
++  return 0;
++}
+diff --git a/gcc/testsuite/gcc.dg/switch-dispatch-2.c b/gcc/testsuite/gcc.dg/switch-dispatch-2.c
+new file mode 100644
+index 00000000000..ffd619defbe
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/switch-dispatch-2.c
+@@ -0,0 +1,34 @@
++/* PR middle-end/126236 */
++/* { dg-do compile } */
++/* { dg-require-effective-target indirect_jumps } */
++/* { dg-options "-O2 -fduplicate-switch-dispatch --param=case-values-threshold=1 --param=max-goto-duplication-insns=128 -fdump-rtl-compgotos-details" } */
++
++/* The two paths converge on an attachable switch dispatch, but there is no
++   back edge into it.  */
++
++int
++plain (int x, int path, volatile int *state)
++{
++  if (path)
++    state[12] += path;
++  else
++    state[13] ^= x;
++
++  switch (x)
++    {
++    case 0: state[0] += 1; break;
++    case 1: state[1] ^= 2; break;
++    case 2: state[2] -= 3; break;
++    case 3: state[3] |= 4; break;
++    case 4: state[4] &= 5; break;
++    case 5: state[5] += 6; break;
++    case 6: state[6] ^= 7; break;
++    case 7: state[7] -= 8; break;
++    case 8: state[8] |= 9; break;
++    case 9: state[9] &= 10; break;
++    default: state[10] ^= 11; break;
++    }
++  return state[11];
++}
++
++/* { dg-final { scan-rtl-dump-not "Duplicating dispatch" "compgotos" } } */
+diff --git a/gcc/testsuite/gcc.dg/switch-dispatch-3.c b/gcc/testsuite/gcc.dg/switch-dispatch-3.c
+new file mode 100644
+index 00000000000..ab4035e9472
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/switch-dispatch-3.c
+@@ -0,0 +1,8 @@
++/* PR middle-end/126236 */
++/* { dg-do compile } */
++/* { dg-require-effective-target indirect_jumps } */
++/* { dg-options "-O2 -fduplicate-switch-dispatch --param=max-goto-duplication-insns=0 -fdump-rtl-compgotos-details" } */
++
++#include "torture/switch-dispatch-run-1.c"
++
++/* { dg-final { scan-rtl-dump-not "Duplicating dispatch" "compgotos" } } */
+diff --git a/gcc/testsuite/gcc.dg/switch-dispatch-4.c b/gcc/testsuite/gcc.dg/switch-dispatch-4.c
+new file mode 100644
+index 00000000000..1993d039f36
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/switch-dispatch-4.c
+@@ -0,0 +1,11 @@
++/* PR middle-end/126236 */
++/* { dg-do run } */
++/* { dg-options "-O2 -fduplicate-switch-dispatch --param=max-goto-duplication-insns=128 --param=case-values-threshold=1 -fdump-rtl-compgotos-details" } */
++
++/* Both loop switches of switch-dispatch-run-5.c are duplicated, and both
++   tables are shared.  */
++
++#include "torture/switch-dispatch-run-5.c"
++
++/* { dg-final { scan-rtl-dump "Duplicating dispatch" "compgotos" { target shared_jump_tables } } } */
++/* { dg-final { scan-rtl-dump-times {addr_(?:diff_)?vec/u} 2 "compgotos" { target shared_jump_tables } } } */
+diff --git a/gcc/testsuite/gcc.dg/torture/switch-dispatch-hwloop.c b/gcc/testsuite/gcc.dg/torture/switch-dispatch-hwloop.c
+new file mode 100644
+index 00000000000..b769b54f376
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/torture/switch-dispatch-hwloop.c
+@@ -0,0 +1,26 @@
++/* PR middle-end/126236 */
++/* { dg-do compile } */
++/* { dg-additional-options "-fduplicate-switch-dispatch --param=max-goto-duplication-insns=128 --param=case-values-threshold=1" } */
++
++/* The counted loop of case 3 starts right at its case label, and its count
++   is live into the dispatch, so each copy of the dispatch jumps straight
++   into the loop.  Case 4 also enters the loop by falling through.  Targets
++   with hardware loops must not redirect the shared-table edges to a new
++   loop entry block.  */
++
++void
++f (volatile int *vp, const unsigned char *pc, const int *ip)
++{
++  int n = *ip++;
++  for (;;)
++    switch (*pc++)
++      {
++      case 0: return;
++      case 1: *vp = 1; break;
++      case 2: n = *ip++; break;
++      case 4: *vp = 4;
++	/* Fall through.  */
++      case 3: do *vp = 0; while (--n); n = *ip++; break;
++      default: __builtin_unreachable ();
++      }
++}
+diff --git a/gcc/testsuite/gcc.dg/torture/switch-dispatch-placement.c b/gcc/testsuite/gcc.dg/torture/switch-dispatch-placement.c
+new file mode 100644
+index 00000000000..c71f0cd7a42
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/torture/switch-dispatch-placement.c
+@@ -0,0 +1,81 @@
++/* PR middle-end/126236 */
++/* { dg-do compile } */
++/* { dg-additional-options "-fduplicate-switch-dispatch --param=max-goto-duplication-insns=128 --param=case-values-threshold=1" } */
++
++/* The block before each original dispatch leaves the function, through a
++   noreturn call in f1 and through a call and a return in f2.  Every
++   predecessor of a dispatch takes a copy, so the original is deleted and its
++   shared table has to move after one of the copies.  */
++
++extern void fail (int) __attribute__ ((noreturn));
++extern void note (int);
++
++int
++f1 (const unsigned char *pc, const unsigned char *pc2, int acc)
++{
++  if (!pc)
++    fail (acc);
++  for (;;)
++    switch (*pc++)
++      {
++      case 0: goto second;
++      case 1: acc += 3; break;
++      case 2: acc *= 5; break;
++      case 3: acc ^= 7; break;
++      case 4: acc -= *pc++; break;
++      case 5: acc += 11; break;
++      default: __builtin_unreachable ();
++      }
++ second:
++  if (!pc2)
++    fail (acc + 1);
++  for (;;)
++    switch (*pc2++)
++      {
++      case 0: return acc;
++      case 1: acc -= 3; break;
++      case 2: acc *= 7; break;
++      case 3: acc ^= 9; break;
++      case 4: acc += *pc2++; break;
++      case 5: acc -= 13; break;
++      default: __builtin_unreachable ();
++      }
++}
++
++int
++f2 (const unsigned char *pc, const unsigned char *pc2, int acc)
++{
++  if (!pc)
++    {
++      note (acc);
++      return -1;
++    }
++  for (;;)
++    switch (*pc++)
++      {
++      case 0: goto second;
++      case 1: acc += 3; break;
++      case 2: acc *= 5; break;
++      case 3: acc ^= 7; break;
++      case 4: acc -= *pc++; break;
++      case 5: acc += 11; break;
++      default: __builtin_unreachable ();
++      }
++ second:
++  if (!pc2)
++    {
++      note (acc + 1);
++      return -2;
++    }
++  for (;;)
++    switch (*pc2++)
++      {
++      case 0: return acc;
++      case 1: acc -= 3; break;
++      case 2: acc *= 7; break;
++      case 3: acc ^= 9; break;
++      case 4: acc += *pc2++; break;
++      case 5: acc -= 13; break;
++      default: __builtin_unreachable ();
++      }
++}
+diff --git a/gcc/testsuite/gcc.dg/torture/switch-dispatch-run-1.c b/gcc/testsuite/gcc.dg/torture/switch-dispatch-run-1.c
+new file mode 100644
+index 00000000000..2f9bd815b3d
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/torture/switch-dispatch-run-1.c
+@@ -0,0 +1,63 @@
++/* PR middle-end/126236 */
++/* { dg-do run } */
++/* { dg-additional-options "-fduplicate-switch-dispatch" } */
++
++/* A bytecode interpreter whose switch sits at the head of the execution
++   loop.  Every opcode, the default and an out of range index are executed,
++   so the range check has to survive being copied into each handler.  */
++
++unsigned int state[16];
++
++__attribute__((noipa)) void
++interp (const unsigned char *pc)
++{
++  for (;;)
++    switch (*pc++)
++      {
++      case 0: return;
++      case 1: state[0] += 1; break;
++      case 2: state[1] ^= 2; break;
++      case 3: state[2] -= 3; break;
++      case 4: state[3] |= 4; break;
++      case 5: state[4] &= 5; break;
++      case 6: state[5] += 6; break;
++      case 7: state[6] ^= 7; break;
++      case 8: state[7] -= 8; break;
++      case 9: state[8] |= 9; break;
++      case 10: state[9] &= 10; break;
++      case 11: state[10] += 11; break;
++      default: state[11] ^= 12; break;
++      }
++}
++
++static const unsigned char prog[] = {
++  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,	/* every explicit case */
++  12, 200, 255,				/* the default, in and out of range */
++  1, 1, 1, 11, 11,			/* repeats */
++  0
++};
++
++int
++main (void)
++{
++  unsigned int expect[16] = { 0 };
++
++  for (unsigned i = 0; i < 16; i++)
++    state[i] = i + 1;
++  for (unsigned i = 0; i < 16; i++)
++    expect[i] = i + 1;
++
++  expect[0] += 1; expect[1] ^= 2; expect[2] -= 3; expect[3] |= 4;
++  expect[4] &= 5; expect[5] += 6; expect[6] ^= 7; expect[7] -= 8;
++  expect[8] |= 9; expect[9] &= 10; expect[10] += 11;
++  expect[11] ^= 12; expect[11] ^= 12; expect[11] ^= 12;
++  expect[0] += 1; expect[0] += 1; expect[0] += 1;
++  expect[10] += 11; expect[10] += 11;
++
++  interp (prog);
++
++  for (unsigned i = 0; i < 16; i++)
++    if (state[i] != expect[i])
++      __builtin_abort ();
++  return 0;
++}
+diff --git a/gcc/testsuite/gcc.dg/torture/switch-dispatch-run-2.c b/gcc/testsuite/gcc.dg/torture/switch-dispatch-run-2.c
+new file mode 100644
+index 00000000000..441a063c346
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/torture/switch-dispatch-run-2.c
+@@ -0,0 +1,67 @@
++/* PR middle-end/126236 */
++/* { dg-do run } */
++/* { dg-additional-options "-fduplicate-switch-dispatch" } */
++
++/* Gaps and shared case labels make table entries repeat, so the successors
++   of a copy are a multiset.  A case target that is a plain forwarder makes
++   cfg cleanup want to redirect an edge of the shared table.  */
++
++int sink;
++
++__attribute__((noipa)) int
++run (const signed char *pc, int n)
++{
++  int acc = 0;
++
++  for (;;)
++    switch (*pc++)
++      {
++      case 3:
++      case 5:
++      case 7:
++	acc += 2;
++	break;
++      case 4:
++	goto fwd;
++      case 6:
++	acc *= 3;
++	break;
++      case 9:
++	acc -= 1;
++	break;
++      case 12:
++	acc ^= 0x55;
++	break;
++      case 17:
++	return acc + n;
++      default:
++	acc += 1000;
++	break;
++      fwd:
++	acc += 7;
++	break;
++      }
++}
++
++static const signed char prog[] = {
++  3, 5, 7, 4, 6, 9, 12, 1, -8, 100, 4, 4, 6, 17
++};
++
++int
++main (void)
++{
++  int acc = 0;
++
++  acc += 2; acc += 2; acc += 2;		/* 3 5 7 */
++  acc += 7;				/* 4 */
++  acc *= 3;				/* 6 */
++  acc -= 1;				/* 9 */
++  acc ^= 0x55;				/* 12 */
++  acc += 1000; acc += 1000; acc += 1000;	/* 1 -8 100 */
++  acc += 7; acc += 7;			/* 4 4 */
++  acc *= 3;				/* 6 */
++
++  if (run (prog, 11) != acc + 11)
++    __builtin_abort ();
++  return 0;
++}
+diff --git a/gcc/testsuite/gcc.dg/torture/switch-dispatch-run-3.c b/gcc/testsuite/gcc.dg/torture/switch-dispatch-run-3.c
+new file mode 100644
+index 00000000000..8fd2b3ae669
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/torture/switch-dispatch-run-3.c
+@@ -0,0 +1,33 @@
++/* PR middle-end/126236 */
++/* { dg-do run } */
++/* { dg-additional-options "-fduplicate-switch-dispatch --param=case-values-threshold=1" } */
++
++/* Every predecessor of the dispatch chain can take a copy, so the original
++   dispatch block and its shared table's former owner become unreachable.  */
++
++volatile unsigned int state[3];
++
++__attribute__((noipa)) void
++interp (const unsigned char *pc)
++{
++  goto first;
++  for (;;)
++    switch (*pc++)
++      {
++      case 0: return;
++      case 1: first: state[0] += 1; break;
++      case 2: state[1] += 2; break;
++      default: state[2] ^= 3; break;
++      }
++}
++
++int
++main (void)
++{
++  static const unsigned char prog[] = { 2, 3, 1, 0 };
++
++  interp (prog);
++  if (state[0] != 2 || state[1] != 2 || state[2] != 3)
++    __builtin_abort ();
++  return 0;
++}
+diff --git a/gcc/testsuite/gcc.dg/torture/switch-dispatch-run-4.c b/gcc/testsuite/gcc.dg/torture/switch-dispatch-run-4.c
+new file mode 100644
+index 00000000000..1991dc8b21b
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/torture/switch-dispatch-run-4.c
+@@ -0,0 +1,62 @@
++/* PR middle-end/126236 */
++/* { dg-do run } */
++/* { dg-additional-options "-fduplicate-switch-dispatch" } */
++
++/* Keep floating values live across the dispatches.  Targets with stack
++   registers must retain a single table owner for stack conversion.  */
++
++__attribute__((noipa)) long double
++dispatch (const unsigned char *pc, long double seed, volatile unsigned *out)
++{
++  long double a = seed + 1, b = seed + 2, c = seed + 3, d = seed + 4;
++
++  for (;;)
++    switch (*pc++)
++      {
++      case 0: return a + 3 * b + 5 * c + 7 * d;
++      case 1: a += b; out[0] += 1; break;
++      case 2: b += c; out[1] += 2; break;
++      case 3: c += d; out[2] += 3; break;
++      case 4: d += a; out[3] += 4; break;
++      case 5: a -= c; out[0] += 5; break;
++      case 6: b -= d; out[1] += 6; break;
++      case 7: c -= a; out[2] += 7; break;
++      case 8: d -= b; out[3] += 8; break;
++      case 9: a *= 2; out[0] += 9; break;
++      case 10: b *= 2; out[1] += 10; break;
++      case 11: c *= 2; out[2] += 11; break;
++      default: d *= 2; out[3] += 12; break;
++      }
++}
++
++int
++main (void)
++{
++  static const unsigned char code[] = {
++    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 255, 1, 2, 3, 0
++  };
++  for (unsigned seed = 0; seed != 16; ++seed)
++    {
++      volatile unsigned out[4] = { 0 };
++      long double a = seed + 1, b = seed + 2, c = seed + 3, d = seed + 4;
++      a += b;
++      b += c;
++      c += d;
++      d += a;
++      a -= c;
++      b -= d;
++      c -= a;
++      d -= b;
++      a *= 2;
++      b *= 2;
++      c *= 2;
++      d *= 2;
++      a += b;
++      b += c;
++      c += d;
++      if (dispatch (code, seed, out) != a + 3 * b + 5 * c + 7 * d
++          || out[0] != 16 || out[1] != 20 || out[2] != 24 || out[3] != 24)
++        __builtin_abort ();
++    }
++  return 0;
++}
+diff --git a/gcc/testsuite/gcc.dg/torture/switch-dispatch-run-5.c b/gcc/testsuite/gcc.dg/torture/switch-dispatch-run-5.c
+new file mode 100644
+index 00000000000..01cdbf98f30
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/torture/switch-dispatch-run-5.c
+@@ -0,0 +1,193 @@
++/* PR middle-end/126236 */
++/* { dg-do run } */
++/* { dg-additional-options "-fduplicate-switch-dispatch --param=max-goto-duplication-insns=128 --param=case-values-threshold=1" } */
++
++/* Two loop switches in one function.  Each continuing handler takes a copy
++   of the dispatch of its loop, so all the copies of a loop share its table.
++   Every run executes two instructions and a halt.  So the copy at the loop
++   entry dispatches every value, and the copy in each handler dispatches
++   every case, the hole, both ends of the range and both limits of the index
++   type.  A trace and an accumulator that depends on the order check the
++   exact path.  With LARGE, two handlers get about 2048 stores each, so some
++   copies are far from the table.  */
++
++#ifdef LARGE
++#define S1(k) sd_sink[(k) & 7] = (unsigned int) ((k) * 0x9e3779b1u);
++#define S4(k) S1 (k) S1 ((k) + 1) S1 ((k) + 2) S1 ((k) + 3)
++#define S16(k) S4 (k) S4 ((k) + 4) S4 ((k) + 8) S4 ((k) + 12)
++#define S64(k) S16 (k) S16 ((k) + 16) S16 ((k) + 32) S16 ((k) + 48)
++#define S512(k) S64 (k) S64 ((k) + 64) S64 ((k) + 128) S64 ((k) + 192) \
++		S64 ((k) + 256) S64 ((k) + 320) S64 ((k) + 384) S64 ((k) + 448)
++#define BIG(k) S512 (k) S512 ((k) + 512) S512 ((k) + 1024) S512 ((k) + 1536)
++#else
++#define BIG(k)
++#endif
++
++#define SEED 0x2a5u
++
++volatile unsigned int sd_sink[8];
++volatile unsigned char sd_trace[8];
++
++__attribute__ ((noipa)) unsigned int
++sd_bump (unsigned int x)
++{
++  return x * 9 + 4;
++}
++
++static inline unsigned int
++sd_spin (unsigned int x)
++{
++  unsigned int n = (x & 3) + 1;
++  do
++    x = x * 5 + n;
++  while (--n);
++  return x;
++}
++
++/* Case value, trace number, new accumulator and extra handler code.  */
++#define A_CASES(C, C2)					\
++  C (-4, 1, acc * 3 + 1, BIG (0))			\
++  C (-3, 2, acc ^ 0x5a5, )				\
++  C (-2, 3, acc - 77, )					\
++  C (-1, 4, (acc << 3) | (acc >> 11), )			\
++  C (1, 5, acc + 1001, )				\
++  C (2, 6, acc * 7, )					\
++  C (3, 7, ~acc, )					\
++  C (4, 8, sd_bump (acc), )				\
++  C (6, 9, acc ^ (acc >> 2), )				\
++  C (7, 10, sd_spin (acc), )				\
++  C2 (8, 9, 11, acc * 11 + 5, BIG (2048))
++#define A_HALT 0
++#define A_DEF_ID 12
++#define A_DEF(acc) ((acc) * 13 + 12)
++
++#define B_CASES(C, C2)					\
++  C (1000, 13, acc + 3, )				\
++  C (1001, 14, acc * 5 + 2, )				\
++  C (1002, 15, acc ^ 0x3c3, )				\
++  C (1003, 16, sd_spin (acc), )				\
++  C (1004, 17, acc - (acc >> 3), )			\
++  C (1005, 18, sd_bump (acc) + 1, )			\
++  C (1006, 19, (acc >> 5) | (acc << 7), )		\
++  C (1008, 20, acc * 17, )				\
++  C (1009, 21, acc + 0x777, )				\
++  C (1010, 22, ~acc + 3, )				\
++  C (1011, 23, acc ^ (acc << 1), )			\
++  C2 (1012, 1013, 24, acc * 19 + 7, )			\
++  C (1014, 25, acc - 1015, )
++#define B_HALT 1015
++#define B_DEF_ID 26
++#define B_DEF(acc) ((acc) * 29 + 26)
++
++#define CASE(V, ID, E, X) \
++  case V: X sd_trace[n++ & 7] = ID; acc = E; break;
++#define CASE2(V1, V2, ID, E, X) \
++  case V1: case V2: X sd_trace[n++ & 7] = ID; acc = E; break;
++
++__attribute__ ((noipa)) unsigned int
++interp (const signed char *pa, const int *pb, unsigned int *len)
++{
++  unsigned int acc = SEED, n = 0;
++
++  for (;;)
++    switch (*pa++)
++      {
++      A_CASES (CASE, CASE2)
++      case A_HALT:
++	goto second;
++      default:
++	sd_trace[n++ & 7] = A_DEF_ID;
++	acc = A_DEF (acc);
++	break;
++      }
++
++ second:
++  for (;;)
++    switch (*pb++)
++      {
++      B_CASES (CASE, CASE2)
++      case B_HALT:
++	*len = n;
++	return acc;
++      default:
++	sd_trace[n++ & 7] = B_DEF_ID;
++	acc = B_DEF (acc);
++	break;
++      }
++}
++
++#define REF(V, ID, E, X) if (v == (V)) { *id = ID; return E; }
++#define REF2(V1, V2, ID, E, X) \
++  if (v == (V1) || v == (V2)) { *id = ID; return E; }
++
++__attribute__ ((noipa)) static unsigned int
++ref_a (int v, unsigned int acc, unsigned char *id)
++{
++  A_CASES (REF, REF2)
++  *id = A_DEF_ID;
++  return A_DEF (acc);
++}
++
++__attribute__ ((noipa)) static unsigned int
++ref_b (int v, unsigned int acc, unsigned char *id)
++{
++  B_CASES (REF, REF2)
++  *id = B_DEF_ID;
++  return B_DEF (acc);
++}
++
++static const signed char a_values[] = {
++  -__SCHAR_MAX__ - 1, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
++  __SCHAR_MAX__
++};
++
++static const int b_values[] = {
++  -__INT_MAX__ - 1, -1, 0, 999, 1000, 1001, 1002, 1003, 1004, 1005, 1006,
++  1007, 1008, 1009, 1010, 1011, 1012, 1013, 1014, 1015, 1016, __INT_MAX__
++};
++
++static void
++check_a (signed char i, signed char j)
++{
++  const signed char pa[3] = { i, j, A_HALT };
++  static const int pb[1] = { B_HALT };
++  unsigned char want[2];
++  unsigned int acc = SEED, n = 0, len;
++
++  for (unsigned int k = 0; k < 2 && pa[k] != A_HALT; k++, n++)
++    acc = ref_a (pa[k], acc, &want[n]);
++  if (interp (pa, pb, &len) != acc || len != n)
++    __builtin_abort ();
++  for (unsigned int k = 0; k < n; k++)
++    if (sd_trace[k] != want[k])
++      __builtin_abort ();
++}
++
++static void
++check_b (int i, int j)
++{
++  static const signed char pa[1] = { A_HALT };
++  const int pb[3] = { i, j, B_HALT };
++  unsigned char want[2];
++  unsigned int acc = SEED, n = 0, len;
++
++  for (unsigned int k = 0; k < 2 && pb[k] != B_HALT; k++, n++)
++    acc = ref_b (pb[k], acc, &want[n]);
++  if (interp (pa, pb, &len) != acc || len != n)
++    __builtin_abort ();
++  for (unsigned int k = 0; k < n; k++)
++    if (sd_trace[k] != want[k])
++      __builtin_abort ();
++}
++
++int
++main (void)
++{
++  for (unsigned int i = 0; i < sizeof a_values; i++)
++    for (unsigned int j = 0; j < sizeof a_values; j++)
++      check_a (a_values[i], a_values[j]);
++  for (unsigned int i = 0; i < sizeof b_values / sizeof b_values[0]; i++)
++    for (unsigned int j = 0; j < sizeof b_values / sizeof b_values[0]; j++)
++      check_b (b_values[i], b_values[j]);
++  return 0;
++}
+diff --git a/gcc/testsuite/gcc.dg/torture/switch-dispatch-run-6.c b/gcc/testsuite/gcc.dg/torture/switch-dispatch-run-6.c
+new file mode 100644
+index 00000000000..65b57ad3303
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/torture/switch-dispatch-run-6.c
+@@ -0,0 +1,9 @@
++/* PR middle-end/126236 */
++/* { dg-do run { target fpic } } */
++/* { dg-require-effective-target size20plus } */
++/* { dg-additional-options "-fpic -fduplicate-switch-dispatch --param=max-goto-duplication-insns=128 --param=case-values-threshold=1" } */
++
++/* PIC dispatches, with copies far from their tables.  */
++
++#define LARGE
++#include "switch-dispatch-run-5.c"
+diff --git a/gcc/testsuite/gcc.dg/torture/switch-dispatch-run-7.c b/gcc/testsuite/gcc.dg/torture/switch-dispatch-run-7.c
+new file mode 100644
+index 00000000000..cbf9e1ee7ea
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/torture/switch-dispatch-run-7.c
+@@ -0,0 +1,11 @@
++/* PR middle-end/126236 */
++/* { dg-do run } */
++/* { dg-require-effective-target size20plus } */
++/* { dg-additional-options "-fno-pic -fduplicate-switch-dispatch --param=max-goto-duplication-insns=128 --param=case-values-threshold=1" } */
++/* { dg-additional-options "-no-pie" { target pie_enabled } } */
++/* { dg-skip-if "" { arm*-*-uclinuxfdpiceabi } "*" "" } */
++
++/* Non-PIC dispatches, with copies far from their tables.  */
++
++#define LARGE
++#include "switch-dispatch-run-5.c"
+diff --git a/gcc/testsuite/gcc.dg/torture/switch-dispatch-run-8.c b/gcc/testsuite/gcc.dg/torture/switch-dispatch-run-8.c
+new file mode 100644
+index 00000000000..d3391e53587
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/torture/switch-dispatch-run-8.c
+@@ -0,0 +1,47 @@
++/* PR middle-end/126236 */
++/* { dg-do run } */
++/* { dg-additional-options "-fduplicate-switch-dispatch --param=max-goto-duplication-insns=128 --param=case-values-threshold=1" } */
++
++/* The block with the asm goto falls through to the range check of the
++   switch, and the asm goto names that block as well.  Such a block must
++   not become part of a copy of the dispatch.  */
++
++volatile unsigned int sd_count[12];
++
++__attribute__ ((noipa)) void
++sd_interp (const unsigned char *pc)
++{
++  sd_count[0] = 0;
++  for (;;)
++    {
++      unsigned int op = *pc++;
++      asm goto ("" :::: next);
++    next:
++      switch (op)
++	{
++	case 0: return;
++	case 1: sd_count[1] += 1; break;
++	case 2: sd_count[2] += 2; break;
++	case 3: sd_count[3] += 3; break;
++	case 4: sd_count[4] += 4; break;
++	case 5: sd_count[5] += 5; break;
++	case 6: sd_count[6] += 6; break;
++	case 7: sd_count[7] += 7; break;
++	case 8: sd_count[8] += 8; break;
++	case 9: sd_count[9] += 9; break;
++	case 10: sd_count[10] += 10; break;
++	default: sd_count[11] += 11; break;
++	}
++    }
++}
++
++int
++main (void)
++{
++  static const unsigned char prog[] = { 1, 2, 3, 200, 10, 0 };
++  sd_interp (prog);
++  if (sd_count[1] != 1 || sd_count[2] != 2 || sd_count[3] != 3
++      || sd_count[10] != 10 || sd_count[11] != 11)
++    __builtin_abort ();
++  return 0;
++}
+diff --git a/gcc/testsuite/gcc.target/aarch64/switch-dispatch-1.c b/gcc/testsuite/gcc.target/aarch64/switch-dispatch-1.c
+new file mode 100644
+index 00000000000..5d60bed79d9
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/switch-dispatch-1.c
+@@ -0,0 +1,39 @@
++/* PR middle-end/126236 */
++/* { dg-do assemble } */
++/* { dg-options "-O2 -fduplicate-switch-dispatch -save-temps" } */
++
++/* Each of the 11 continuing handlers, the default handler and the loop entry
++   get a dispatch of their own, so 13 register indirect branches.  All of them
++   share the one table, whose entries are relative to a single base label,
++   which must be defined exactly once.  */
++
++void
++interp (const unsigned char *pc, volatile unsigned *state)
++{
++  for (;;)
++    switch (*pc++)
++      {
++      case 0: return;
++      case 1: state[0] += 1; break;
++      case 2: state[1] ^= 2; break;
++      case 3: state[2] -= 3; break;
++      case 4: state[3] |= 4; break;
++      case 5: state[4] &= 5; break;
++      case 6: state[5] += 6; break;
++      case 7: state[6] ^= 7; break;
++      case 8: state[7] -= 8; break;
++      case 9: state[8] |= 9; break;
++      case 10: state[9] &= 10; break;
++      case 11: state[10] += 11; break;
++      default: state[11] ^= 12; break;
++      }
++}
++
++/* { dg-final { scan-assembler-times "\\tbr\\tx" 13 } } */
++/* { dg-final { scan-assembler-times "\\.Lrtx\[0-9\]+:" 1 } } */
++
++/* A copy can sit far from that one base label, further than ADR reaches, so the
++   copies materialise it with ADRP and ADD.  */
++/* { dg-final { scan-assembler-times "adrp\\tx\[0-9\]+, \\.Lrtx" 13 } } */
++/* { dg-final { scan-assembler-times "add\\tx\[0-9\]+, x\[0-9\]+, :lo12:\\.Lrtx" 13 } } */
++/* { dg-final { scan-assembler-not "\\tadr\\tx\[0-9\]+, \\.Lrtx" } } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/switch-dispatch-2.c b/gcc/testsuite/gcc.target/aarch64/switch-dispatch-2.c
+new file mode 100644
+index 00000000000..9824a805683
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/switch-dispatch-2.c
+@@ -0,0 +1,32 @@
++/* PR middle-end/126236 */
++/* { dg-do compile } */
++/* { dg-options "-O2 -fduplicate-switch-dispatch -mbranch-protection=bti" } */
++
++/* Duplicating the dispatch must not duplicate the landing pads: one BTI J per
++   case handler, not one per handler per dispatch copy.  */
++
++void
++interp (const unsigned char *pc, volatile unsigned *state)
++{
++  for (;;)
++    switch (*pc++)
++      {
++      case 0: return;
++      case 1: state[0] += 1; break;
++      case 2: state[1] ^= 2; break;
++      case 3: state[2] -= 3; break;
++      case 4: state[3] |= 4; break;
++      case 5: state[4] &= 5; break;
++      case 6: state[5] += 6; break;
++      case 7: state[6] ^= 7; break;
++      case 8: state[7] -= 8; break;
++      case 9: state[8] |= 9; break;
++      case 10: state[9] &= 10; break;
++      case 11: state[10] += 11; break;
++      default: state[11] ^= 12; break;
++      }
++}
++
++/* 12 table targets plus the function entry.  */
++/* { dg-final { scan-assembler-times "bti\\tj|hint\\t36" 12 } } */
++/* { dg-final { scan-assembler-times "bti\\tc|hint\\t34" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/switch-dispatch-3.c b/gcc/testsuite/gcc.target/aarch64/switch-dispatch-3.c
+new file mode 100644
+index 00000000000..46455328128
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/switch-dispatch-3.c
+@@ -0,0 +1,30 @@
++/* PR middle-end/126236 */
++/* { dg-do compile } */
++/* { dg-options "-O2 -fduplicate-switch-dispatch -fdump-rtl-compgotos-details" } */
++
++/* The dispatch of an interpreter loop is duplicated into the handlers that
++   branch back to it.  There are 11 such handlers plus the default one.  */
++
++void
++interp (const unsigned char *pc, volatile unsigned *state)
++{
++  for (;;)
++    switch (*pc++)
++      {
++      case 0: return;
++      case 1: state[0] += 1; break;
++      case 2: state[1] ^= 2; break;
++      case 3: state[2] -= 3; break;
++      case 4: state[3] |= 4; break;
++      case 5: state[4] &= 5; break;
++      case 6: state[5] += 6; break;
++      case 7: state[6] ^= 7; break;
++      case 8: state[7] -= 8; break;
++      case 9: state[8] |= 9; break;
++      case 10: state[9] &= 10; break;
++      case 11: state[10] += 11; break;
++      default: state[11] ^= 12; break;
++      }
++}
++
++/* { dg-final { scan-rtl-dump "Duplicating dispatch" "compgotos" } } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/switch-dispatch-4.c b/gcc/testsuite/gcc.target/aarch64/switch-dispatch-4.c
+new file mode 100644
+index 00000000000..e7d1b387261
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/switch-dispatch-4.c
+@@ -0,0 +1,10 @@
++/* PR middle-end/126236 */
++/* { dg-do assemble } */
++/* { dg-options "-O2 -fduplicate-switch-dispatch -mcmodel=tiny -save-temps" } */
++
++#include "switch-dispatch-1.c"
++
++/* { dg-final { scan-assembler-times "\\tbr\\tx" 13 } } */
++/* { dg-final { scan-assembler-times "\\.Lrtx\[0-9\]+:" 1 } } */
++/* { dg-final { scan-assembler-times "\\tadr\\tx\[0-9\]+, \\.Lrtx" 13 } } */
++/* { dg-final { scan-assembler-not "adrp\\tx\[0-9\]+, \\.Lrtx" } } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/switch-dispatch-5.c b/gcc/testsuite/gcc.target/aarch64/switch-dispatch-5.c
+new file mode 100644
+index 00000000000..b35663b6e9b
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/switch-dispatch-5.c
+@@ -0,0 +1,10 @@
++/* PR middle-end/126236 */
++/* { dg-do assemble } */
++/* { dg-options "-O2 -fduplicate-switch-dispatch -mcmodel=large -fno-pie -save-temps" } */
++
++#include "switch-dispatch-1.c"
++
++/* { dg-final { scan-assembler-times "\\tbr\\tx" 13 } } */
++/* { dg-final { scan-assembler-times "\\.Lrtx\[0-9\]+:" 1 } } */
++/* { dg-final { scan-assembler-times "adrp\\tx\[0-9\]+, \\.Lrtx" 13 } } */
++/* { dg-final { scan-assembler-times "add\\tx\[0-9\]+, x\[0-9\]+, :lo12:\\.Lrtx" 13 } } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/switch-dispatch-6.c b/gcc/testsuite/gcc.target/aarch64/switch-dispatch-6.c
+new file mode 100644
+index 00000000000..be26e047dcf
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/switch-dispatch-6.c
+@@ -0,0 +1,10 @@
++/* PR middle-end/126236 */
++/* { dg-do assemble } */
++/* { dg-options "-O2 -fno-duplicate-switch-dispatch -fno-pie -save-temps" } */
++
++#include "switch-dispatch-1.c"
++
++/* { dg-final { scan-assembler-times "\\tbr\\tx" 1 } } */
++/* { dg-final { scan-assembler-times "\\.Lrtx\[0-9\]+:" 1 } } */
++/* { dg-final { scan-assembler-times "\\tadr\\tx\[0-9\]+, \\.Lrtx" 1 } } */
++/* { dg-final { scan-assembler-not "adrp\\tx\[0-9\]+, \\.Lrtx" } } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/switch-dispatch-7.c b/gcc/testsuite/gcc.target/aarch64/switch-dispatch-7.c
+new file mode 100644
+index 00000000000..7645827f662
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/aarch64/switch-dispatch-7.c
+@@ -0,0 +1,11 @@
++/* PR middle-end/126236 */
++/* { dg-do compile } */
++/* { dg-options "-O2 -fduplicate-switch-dispatch -mcmodel=tiny -fno-pie -fselective-scheduling2 -fsel-sched-pipelining -fno-gcse -fno-move-loop-invariants -fdump-rtl-compgotos-details" } */
++
++/* Keep the table address in the dispatch blocks.  Selective scheduling must
++   not redirect shared-table edges to create loop preheaders.  */
++
++#include "switch-dispatch-1.c"
++
++/* { dg-final { scan-rtl-dump "Duplicating dispatch" "compgotos" } } */
++/* { dg-final { scan-assembler-times "\\.Lrtx\[0-9\]+:" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/bfin/switch-dispatch-1.c b/gcc/testsuite/gcc.target/bfin/switch-dispatch-1.c
+new file mode 100644
+index 00000000000..5ad5dea72b3
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/bfin/switch-dispatch-1.c
+@@ -0,0 +1,22 @@
++/* PR middle-end/126236 */
++/* { dg-do compile } */
++/* { dg-options "-O2 -fduplicate-switch-dispatch --param=max-goto-duplication-insns=128 --param=case-values-threshold=1 -fdump-rtl-mach" } */
++
++/* Each copy of the dispatch jumps straight into the counted loop of case 2.
++   The hardware loop pass must not redirect those shared-table edges to a
++   new loop entry block.  */
++
++void
++f (volatile int *vp, const unsigned char *pc, int n)
++{
++  for (;;)
++    switch (*pc++)
++      {
++      case 0: return;
++      case 1: *vp = 1; break;
++      case 2: do *vp = 0; while (--n); n = *pc++; break;
++      default: __builtin_unreachable ();
++      }
++}
++
++/* { dg-final { scan-rtl-dump "entered through a shared jump table" "mach" } } */
+diff --git a/gcc/testsuite/gcc.target/xtensa/switch-dispatch-1.c b/gcc/testsuite/gcc.target/xtensa/switch-dispatch-1.c
+new file mode 100644
+index 00000000000..a6cc3b2b834
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/xtensa/switch-dispatch-1.c
+@@ -0,0 +1,26 @@
++/* PR middle-end/126236 */
++/* { dg-do compile } */
++/* { dg-options "-O2 -fduplicate-switch-dispatch --param=max-goto-duplication-insns=128 --param=case-values-threshold=1 -fdump-rtl-mach" } */
++
++/* Each copy of the dispatch jumps straight into the counted loop of case 3,
++   which case 4 also enters by falling through.  The hardware loop pass must
++   not redirect the shared-table edges to a new loop entry block.  */
++
++void
++f (volatile int *vp, const unsigned char *pc, const int *ip)
++{
++  int n = *ip++;
++  for (;;)
++    switch (*pc++)
++      {
++      case 0: return;
++      case 1: *vp = 1; break;
++      case 2: n = *ip++; break;
++      case 4: *vp = 4;
++	/* Fall through.  */
++      case 3: do *vp = 0; while (--n); n = *ip++; break;
++      default: __builtin_unreachable ();
++      }
++}
++
++/* { dg-final { scan-rtl-dump "entered through a shared jump table" "mach" } } */
+diff --git a/gcc/testsuite/lib/target-supports.exp b/gcc/testsuite/lib/target-supports.exp
+index ae04b6a8daa..80ef2af2723 100644
+--- a/gcc/testsuite/lib/target-supports.exp
++++ b/gcc/testsuite/lib/target-supports.exp
+@@ -1043,6 +1043,78 @@ proc check_effective_target_nonlocal_goto {} {
+     return 1
+ }
+ 
++# Return 1 if the copies of a loop switch dispatch that
++# -fduplicate-switch-dispatch creates share one jump table, with the
++# current multilib and test options.  This lists the expected result
++# rather than probing for it, so that a target that is expected to share
++# tables and does not makes the test fail.  Use it only in test directives,
++# as it reads the options of the current test.
++
++proc check_effective_target_shared_jump_tables { } {
++    # Targets without jump tables.
++    if { ![check_effective_target_indirect_jumps]
++	 || [istarget amdgcn-*-*] || [istarget moxie-*-*]
++	 || [istarget msp430-*-*] || [istarget or1k*-*-*]
++	 || [istarget pru-*-*] || [istarget rl78-*-*] } {
++	return 0
++    }
++
++    # Targets whose dispatch needs the table to follow it.
++    if { [istarget arm*-*-*] || [istarget cris-*-*]
++	 || [istarget fido-*-*] || [istarget m68k-*-*]
++	 || [istarget sh*-*-*] || [istarget vax-*-*]
++	 || [istarget xstormy16-*-*] } {
++	return 0
++    }
++
++    # Targets without ASM_OUTPUT_ADDR_DIFF_ELT emit no jump tables for PIC.
++    # hppa, tic6x and rx refuse to share PIC or 64-bit dispatches.
++    if { ([istarget avr-*-*] || [istarget ft32-*-*]
++	  || [istarget hppa*-*-*] || [istarget mcore-*-*]
++	  || [istarget pdp11-*-*] || [istarget rx-*-*]
++	  || [istarget tic6x-*-*])
++	 && ![check_no_compiler_messages_nocache shared_jump_tables_nopic \
++		  assembly {
++		      #if defined __PIC__ || defined __LP64__
++		      #error PIC or 64-bit dispatch
++		      #endif
++		      int i;
++		  } [current_compiler_flags]] } {
++	return 0
++    }
++
++    # Targets that refuse to share other forms.
++    if { [istarget mips*-*-*]
++	 && ([check-flags [list "" { *-*-* } { "-mflip-mips16" } { "" }]]
++	     || ![check_no_compiler_messages_nocache shared_jump_tables_nomips16 \
++		      assembly {
++			  #ifdef __mips16
++			  #error MIPS16 dispatch
++			  #endif
++			  int i;
++		      } [current_compiler_flags]]) } {
++	return 0
++    }
++    if { [istarget csky*-*-*]
++	 && ([check-flags [list "" { *-*-* } { "-mconstpool" } { "" }]]
++	     || ![check_no_compiler_messages_nocache shared_jump_tables_nopool \
++		      assembly {
++			  #if defined __CK801__ || defined __CK802__
++			  #error mandatory constant pools
++			  #endif
++			  int i;
++		      } [current_compiler_flags]]) } {
++	return 0
++    }
++    if { ([istarget rx-*-*]
++	  && [check-flags [list "" { *-*-* } { "-mpid" } { "" }]])
++	 || ([istarget arc*-*-*]
++	     && [check-flags [list "" { *-*-* } { "-mbranch-index" } { "" }]]) } {
++	return 0
++    }
++    return 1
++}
++
+ # Return 1 if global constructors are supported, 0 otherwise.
+ 
+ proc check_effective_target_global_constructor {} {
+-- 
+2.54.0 (Apple Git-157)
+

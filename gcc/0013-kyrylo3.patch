@@ -1,0 +1,434 @@
+
+
+From: Kyrylo Tkachov <ktkachov@nvidia.com>
+
+The copies of a tablejump can share one jump table only if every copy
+reaches the table and computes the same destinations from it.  Most ports
+address the table through its label, with absolute entries or entries
+relative to that label, and need nothing more.  Some dispatch sequences
+depend on the table following the jump instead.
+
+Add TARGET_CAN_SHARE_JUMP_TABLE_P so that a port can refuse sharing for a
+particular dispatch under the current function's target options.  It is
+queried before duplication only.  It defaults to true.  A port that cannot
+share tables at all defines it as the new hook_bool_rtx_insn_false.  Output
+and late verification do not query it.
+
+AArch64 addr_diff_vec entries are relative to a synthetic text label.  The
+casesi output sequence currently defines that label at each dispatch.  If
+several dispatches share one table, they define the same assembler symbol more
+than once.
+
+The base label belongs to the table:
+
+  dispatch A --\
+  dispatch B ----> .LrtxN: -> table N
+  dispatch C --/
+
+Add TARGET_ASM_JUMP_TABLE_BASE and call it once per shared table while final
+still has the function section selected.  Only a port whose dispatch output
+would otherwise define the base of the entries needs it.
+
+Preserve the existing AArch64 path for an unshared table.  Its casesi output
+still defines the base label and uses ADR.  Once a table is shared, the hook
+emits the base label and each dispatch refers to it.  Shared copies can be more
+than ADR's range from the base label, so use ADRP and ADD outside the tiny code
+model and account for the extra instruction in the length attribute.
+
+No pass creates shared tables in this patch.
+Ok for trunk?
+Thanks,
+Kyrill
+
+gcc/ChangeLog:
+
+	PR middle-end/126236
+	* target.def (asm_out.jump_table_base): New hook.
+	(can_share_jump_table_p): Likewise.
+	* hooks.cc (hook_bool_rtx_insn_false): New function.
+	* hooks.h (hook_bool_rtx_insn_false): Declare.
+	* doc/tm.texi.in (Dispatch Tables): Document the hooks.
+	* doc/tm.texi: Regenerate.
+	* doc/md.texi (Standard Names): Refer to
+	TARGET_CAN_SHARE_JUMP_TABLE_P.
+	* final.cc (final_scan_insn_1): Call the jump-table base hook before
+	switching away from the function section or invoking target table
+	output.
+	* config/aarch64/aarch64.cc (aarch64_far_jump_table_base_p): New
+	function.
+	(aarch64_output_casesi): Emit the base label here for an unshared
+	table.  Use ADRP and ADD for a shared table outside the tiny code
+	model.
+	(aarch64_casesi_far_base_p): New function.
+	(aarch64_asm_jump_table_base): New function.
+	(TARGET_ASM_JUMP_TABLE_BASE): Define.
+	* config/aarch64/aarch64-protos.h (aarch64_casesi_far_base_p):
+	Declare.
+	* config/aarch64/aarch64.md (length): Account for the longer base
+	sequence.
+
+Signed-off-by: Kyrylo Tkachov <ktkachov@nvidia.com>
+---
+Changes since v3:
+- This patch was v3 2/7, "target, aarch64: Emit a jump table base once
+  per table".  The new subject refers to both hooks and adds the PR.
+- TARGET_CAN_SHARE_JUMP_TABLE_P now defaults to hook_bool_rtx_insn_true,
+  for the opt-out model that Jeff suggested on v3 3/7.  The v3 default
+  needed TARGET_ASM_JUMP_TABLE_BASE, so only AArch64 could share.
+- The patch adds hook_bool_rtx_insn_false to hooks.cc and hooks.h, for
+  ports that cannot share any table (six in patch 4/8).  It no longer
+  adds default_can_share_jump_table_p to targhooks.cc and targhooks.h.
+- TARGET_ASM_JUMP_TABLE_BASE is optional and no longer enables sharing.
+  A port whose dispatch output defines the entry base must define it or
+  refuse sharing.  The AArch64 and final.cc code is the same as in v3.
+- The TARGET_CAN_SHARE_JUMP_TABLE_P text now gives the cases that must
+  return false.  New cases are a dispatch that finds its table from its
+  own address, and a target pass that expects the table after each jump.
+- The text no longer requires that the insn record its table label in
+  RTL and be repeatable, or that final output support the shared table.
+  doc/md.texi, TARGET_CANNOT_COPY_INSN_P and the cases above cover them.
+- doc/md.texi now tells a port whose dispatch needs the table right
+  after the jump to refuse sharing.  The hooks move to the Dispatch
+  Tables node of doc/tm.texi.in.
+- Commit message: a new first paragraph says when copies can share a
+  table and that most ports need no change.  The hook paragraphs now
+  describe the opt-out model.  The last paragraph now says that no pass
+  shares tables yet, not that other targets stay disabled.
+
+ gcc/config/aarch64/aarch64-protos.h |  1 +
+ gcc/config/aarch64/aarch64.cc       | 68 +++++++++++++++++++++++++++--
+ gcc/config/aarch64/aarch64.md       |  8 ++++
+ gcc/doc/md.texi                     | 10 +++--
+ gcc/doc/tm.texi                     | 35 +++++++++++++++
+ gcc/doc/tm.texi.in                  |  4 ++
+ gcc/final.cc                        |  9 ++++
+ gcc/hooks.cc                        |  6 +++
+ gcc/hooks.h                         |  1 +
+ gcc/target.def                      | 42 ++++++++++++++++++
+ 10 files changed, 176 insertions(+), 8 deletions(-)
+
+diff --git a/gcc/config/aarch64/aarch64-protos.h b/gcc/config/aarch64/aarch64-protos.h
+index 262b3c44105..422f518580c 100644
+--- a/gcc/config/aarch64/aarch64-protos.h
++++ b/gcc/config/aarch64/aarch64-protos.h
+@@ -995,6 +995,7 @@ bool aarch64_is_mov_xn_imm (unsigned HOST_WIDE_INT);
+ bool aarch64_use_return_insn_p (void);
+ bool aarch64_use_simple_return_insn_p (void);
+ const char *aarch64_output_casesi (rtx *);
++bool aarch64_casesi_far_base_p (rtx_insn *);
+ const char *aarch64_output_load_tp (rtx);
+ const char *aarch64_output_sme_zero_za (rtx);
+ const char *aarch64_output_move_imm (rtx);
+diff --git a/gcc/config/aarch64/aarch64.cc b/gcc/config/aarch64/aarch64.cc
+index 5f0556fd516..3a1f2a2ce37 100644
+--- a/gcc/config/aarch64/aarch64.cc
++++ b/gcc/config/aarch64/aarch64.cc
+@@ -14419,6 +14419,21 @@ aarch64_elf_asm_destructor (rtx symbol, int priority)
+     }
+ }
+ 
++/* True if the base of a jump table whose body is DIFF_VEC has to be
++   materialised with ADRP and ADD rather than ADR.  Once other jumps dispatch
++   through the same table the base is defined once and the copies are spread
++   over the whole function, which ADR does not cover.  The tiny code model
++   bounds the whole program by 1MB, so ADR always reaches there.  Under the
++   other models the base is still a label in this function, whose text is
++   limited to 4GB, so the page-relative form is enough.  */
++
++static bool
++aarch64_far_jump_table_base_p (rtx diff_vec)
++{
++  return (JUMP_TABLE_SHARED_P (diff_vec)
++	  && aarch64_cmodel != AARCH64_CMODEL_TINY);
++}
++
+ const char*
+ aarch64_output_casesi (rtx *operands)
+ {
+@@ -14459,17 +14474,59 @@ aarch64_output_casesi (rtx *operands)
+   /* Need to implement table size reduction, by changing the code below.  */
+   output_asm_insn (patterns[index][0], operands);
+   ASM_GENERATE_INTERNAL_LABEL (label, "Lrtx", CODE_LABEL_NUMBER (operands[2]));
+-  snprintf (buf, sizeof (buf),
+-	    "adr\t%%4, %s", targetm.strip_name_encoding (label));
+-  output_asm_insn (buf, operands);
++  const char *name = targetm.strip_name_encoding (label);
++  if (aarch64_far_jump_table_base_p (diff_vec))
++    {
++      /* Several jumps dispatch through this table and there is one base,
++	 so the distance to it is bounded only by the size of the function.
++	 ADR only reaches 1MB.  */
++      snprintf (buf, sizeof (buf), "adrp\t%%4, %s", name);
++      output_asm_insn (buf, operands);
++      snprintf (buf, sizeof (buf), "add\t%%4, %%4, :lo12:%s", name);
++      output_asm_insn (buf, operands);
++    }
++  else
++    {
++      snprintf (buf, sizeof (buf), "adr\t%%4, %s", name);
++      output_asm_insn (buf, operands);
++    }
+   output_asm_insn (patterns[index][1], operands);
+   output_asm_insn ("br\t%3", operands);
+   output_asm_insn (aarch64_sls_barrier (aarch64_harden_sls_retbr_p ()),
+ 		   operands);
+-  assemble_label (asm_out_file, label);
++  if (!JUMP_TABLE_SHARED_P (diff_vec))
++    assemble_label (asm_out_file, label);
+   return "";
+ }
+ 
++/* Return true if the dispatch INSN needs the longer base sequence.  Used by
++   the length attribute of the dispatch pattern.  */
++
++bool
++aarch64_casesi_far_base_p (rtx_insn *insn)
++{
++  rtx_jump_table_data *table;
++
++  return (tablejump_p (insn, NULL, &table)
++	  && aarch64_far_jump_table_base_p (PATTERN (table)));
++}
++
++/* Implement TARGET_ASM_JUMP_TABLE_BASE.  The entries of a table are the
++   distance from the base to the case handler, so the base has to be a
++   text label.  Emit it here, just before the table's own label, rather than
++   from the output template of the dispatching jump: several jumps may
++   dispatch through the one table, and the base has to be defined once.  */
++
++static void
++aarch64_asm_jump_table_base (FILE *stream, rtx_jump_table_data *,
++			     unsigned long labelno)
++{
++  char label[100];
++
++  ASM_GENERATE_INTERNAL_LABEL (label, "Lrtx", labelno);
++  assemble_label (stream, label);
++}
++
+ /* Return the asm string for an SME ZERO instruction whose 8-bit mask
+    operand is MASK.  */
+ const char *
+@@ -34281,6 +34338,9 @@ aarch64_run_selftests (void)
+ #undef TARGET_ASM_ALIGNED_HI_OP
+ #define TARGET_ASM_ALIGNED_HI_OP "\t.hword\t"
+ 
++#undef TARGET_ASM_JUMP_TABLE_BASE
++#define TARGET_ASM_JUMP_TABLE_BASE aarch64_asm_jump_table_base
++
+ #undef TARGET_ASM_ALIGNED_SI_OP
+ #define TARGET_ASM_ALIGNED_SI_OP "\t.word\t"
+ 
+diff --git a/gcc/config/aarch64/aarch64.md b/gcc/config/aarch64/aarch64.md
+index 4abf2b7baae..bce442bb16d 100644
+--- a/gcc/config/aarch64/aarch64.md
++++ b/gcc/config/aarch64/aarch64.md
+@@ -646,6 +646,14 @@
+ 		  (match_test "TARGET_SB") (const_int 8)]
+ 		 (const_int 12))
+ 
++	 ;; A shared jump table may have to reach its base with ADRP and
++	 ;; ADD rather than ADR, which is one instruction more.
++	 (and (eq_attr "sls_length" "casesi")
++	      (match_test "aarch64_casesi_far_base_p (insn)"))
++	   (cond [(match_test "!aarch64_harden_sls_retbr_p ()") (const_int 20)
++		  (match_test "TARGET_SB") (const_int 24)]
++		 (const_int 28))
++
+ 	 (eq_attr "sls_length" "casesi")
+ 	   (cond [(match_test "!aarch64_harden_sls_retbr_p ()") (const_int 16)
+ 		  (match_test "TARGET_SB") (const_int 20)]
+diff --git a/gcc/doc/md.texi b/gcc/doc/md.texi
+index 23d9313ac74..1f03238733d 100644
+--- a/gcc/doc/md.texi
++++ b/gcc/doc/md.texi
+@@ -6440,10 +6440,12 @@ mode @code{Pmode}.
+ The @samp{tablejump} insn is normally the last insn before the jump
+ table it uses.  A late RTL pass can make several such insns share one table,
+ which is then marked with @code{JUMP_TABLE_SHARED_P} and follows only one of
+-them.  The assembler code normally has no need to use the second operand,
+-but the RTL pattern must incorporate it.  Copies rely on
+-@code{mark_jump_label} finding this operand, and it also prevents the jump
+-optimizer from deleting the table as unreachable code.
++them.  A port whose dispatch needs the table right after the jump must refuse
++to share it through @code{TARGET_CAN_SHARE_JUMP_TABLE_P}.  The assembler code
++normally has no need to use the second operand, but the RTL pattern must
++incorporate it.  Copies rely on @code{mark_jump_label} finding this operand,
++and it also prevents the jump optimizer from deleting the table as
++unreachable code.
+ 
+ 
+ @mdindex doloop_end
+diff --git a/gcc/doc/tm.texi b/gcc/doc/tm.texi
+index 17fae2e3a0e..21405578f81 100644
+--- a/gcc/doc/tm.texi
++++ b/gcc/doc/tm.texi
+@@ -10058,6 +10058,41 @@ If this macro is not defined, nothing special is output at the end of
+ the jump-table.
+ @end defmac
+ 
++@deftypefn {Target Hook} void TARGET_ASM_JUMP_TABLE_BASE (FILE *@var{stream}, rtx_jump_table_data *@var{table}, unsigned long @var{labelno})
++Define this hook if the output of a dispatching jump defines the base that
++the entries of its jump table are relative to.  Several jumps can share one
++table, and the base then has to be defined once.  The hook is called once
++for a shared table, with the function's own section still selected,
++immediately before the label of the jump table @var{table}, whose label
++number is @var{labelno}.  It should write that base to the stdio stream
++@var{stream}, typically as a text label for a PC-relative table.
++
++A target whose table entries are absolute or relative to the label of the
++table has nothing to emit and does not need this hook.
++@end deftypefn
++
++@deftypefn {Target Hook} bool TARGET_CAN_SHARE_JUMP_TABLE_P (rtx_insn *@var{insn})
++Return true if the tablejump instruction @var{insn} can share its jump
++table with copies of itself.  The hook is called before duplication, with
++the current function's target options active.  It can inspect the instruction
++form and these options, but must not modify RTL or emit assembly.
++
++A shared table follows only one of the jumps through it.  Return false if
++@var{insn} finds its table, or the base of the table entries, from its own
++address or from a label that its output defines, unless
++@code{TARGET_ASM_JUMP_TABLE_BASE} emits that base once per table.  Also
++return false if a copy elsewhere in the function might not reach the table
++under the current target configuration, including the code model and
++section layout, or if a target pass expects a table to follow every jump
++through it.  This hook only permits creating shared tables.  It is not
++called to control their later output or verification.
++
++The default implementation returns true.  Define the hook as
++@code{hook_bool_rtx_insn_false} to disable shared jump tables.  Other
++duplication restrictions, including @code{TARGET_CANNOT_COPY_INSN_P}, still
++apply.
++@end deftypefn
++
+ @deftypefn {Target Hook} void TARGET_ASM_POST_CFI_STARTPROC (FILE *@var{}, @var{tree})
+ This target hook is used to emit assembly strings required by the target
+ after the .cfi_startproc directive.  The first argument is the file stream to
+diff --git a/gcc/doc/tm.texi.in b/gcc/doc/tm.texi.in
+index 2113b9c679a..059563bb0e2 100644
+--- a/gcc/doc/tm.texi.in
++++ b/gcc/doc/tm.texi.in
+@@ -6553,6 +6553,10 @@ If this macro is not defined, nothing special is output at the end of
+ the jump-table.
+ @end defmac
+ 
++@hook TARGET_ASM_JUMP_TABLE_BASE
++
++@hook TARGET_CAN_SHARE_JUMP_TABLE_P
++
+ @hook TARGET_ASM_POST_CFI_STARTPROC
+ 
+ @hook TARGET_ASM_EMIT_UNWIND_LABEL
+diff --git a/gcc/final.cc b/gcc/final.cc
+index b6be9be99b7..4b51d59f01c 100644
+--- a/gcc/final.cc
++++ b/gcc/final.cc
+@@ -2427,6 +2427,15 @@ final_scan_insn_1 (rtx_insn *insn, FILE *file, int optimize_p ATTRIBUTE_UNUSED,
+ 	 the label in the read-only section.  Also possibly write the
+ 	 label and jump table together.  */
+       table = jump_table_for_label (as_a <rtx_code_label *> (insn));
++
++      /* Still in the function's own section here, which is where the base
++	 label of a PC-relative table has to go.  */
++      if (table
++	  && JUMP_TABLE_SHARED_P (PATTERN (table))
++	  && targetm.asm_out.jump_table_base)
++	targetm.asm_out.jump_table_base (file, table,
++					     CODE_LABEL_NUMBER (insn));
++
+       if (table)
+ 	{
+ #if defined(ASM_OUTPUT_ADDR_VEC) || defined(ASM_OUTPUT_ADDR_DIFF_VEC)
+diff --git a/gcc/hooks.cc b/gcc/hooks.cc
+index 2b47fd3e50f..57569a7da24 100644
+--- a/gcc/hooks.cc
++++ b/gcc/hooks.cc
+@@ -370,6 +370,12 @@ hook_bool_rtx_insn_true (rtx_insn *)
+   return true;
+ }
+ 
++bool
++hook_bool_rtx_insn_false (rtx_insn *)
++{
++  return false;
++}
++
+ bool
+ hook_bool_rtx_false (rtx)
+ {
+diff --git a/gcc/hooks.h b/gcc/hooks.h
+index 1ad4abb5500..635510c4a5b 100644
+--- a/gcc/hooks.h
++++ b/gcc/hooks.h
+@@ -62,6 +62,7 @@ extern bool hook_bool_const_tree_hwi_hwi_const_tree_true (const_tree,
+ 							  HOST_WIDE_INT,
+ 							  const_tree);
+ extern bool hook_bool_rtx_insn_true (rtx_insn *);
++extern bool hook_bool_rtx_insn_false (rtx_insn *);
+ extern bool hook_bool_rtx_false (rtx);
+ extern bool hook_bool_rtx_insn_int_false (rtx_insn *, int);
+ extern bool hook_bool_uintp_uintp_false (unsigned int *, unsigned int *);
+diff --git a/gcc/target.def b/gcc/target.def
+index 4c4f91827b2..3fc9951234e 100644
+--- a/gcc/target.def
++++ b/gcc/target.def
+@@ -233,6 +233,23 @@ DEFHOOK_UNDOC
+  void, (char *buf, const char *prefix, unsigned long labelno),
+  default_generate_internal_label)
+ 
++/* Emit whatever a shared jump table's entries are relative to, once per
++   table, in the function's own section.  */
++DEFHOOK
++(jump_table_base,
++ "Define this hook if the output of a dispatching jump defines the base that\n\
++the entries of its jump table are relative to.  Several jumps can share one\n\
++table, and the base then has to be defined once.  The hook is called once\n\
++for a shared table, with the function's own section still selected,\n\
++immediately before the label of the jump table @var{table}, whose label\n\
++number is @var{labelno}.  It should write that base to the stdio stream\n\
++@var{stream}, typically as a text label for a PC-relative table.\n\
++\n\
++A target whose table entries are absolute or relative to the label of the\n\
++table has nothing to emit and does not need this hook.",
++ void, (FILE *stream, rtx_jump_table_data *table, unsigned long labelno),
++ NULL)
++
+ /* Output an internal label.  */
+ DEFHOOK
+ (internal_label,
+@@ -2810,6 +2827,31 @@ follow through a hot/cold partitioning.",
+  bool, (const rtx_insn *follower, const rtx_insn *followee),
+  hook_bool_const_rtx_insn_const_rtx_insn_true)
+ 
++/* Return true if INSN can share its jump table with copies of itself.  */
++DEFHOOK
++(can_share_jump_table_p,
++ "Return true if the tablejump instruction @var{insn} can share its jump\n\
++table with copies of itself.  The hook is called before duplication, with\n\
++the current function's target options active.  It can inspect the instruction\n\
++form and these options, but must not modify RTL or emit assembly.\n\
++\n\
++A shared table follows only one of the jumps through it.  Return false if\n\
++@var{insn} finds its table, or the base of the table entries, from its own\n\
++address or from a label that its output defines, unless\n\
++@code{TARGET_ASM_JUMP_TABLE_BASE} emits that base once per table.  Also\n\
++return false if a copy elsewhere in the function might not reach the table\n\
++under the current target configuration, including the code model and\n\
++section layout, or if a target pass expects a table to follow every jump\n\
++through it.  This hook only permits creating shared tables.  It is not\n\
++called to control their later output or verification.\n\
++\n\
++The default implementation returns true.  Define the hook as\n\
++@code{hook_bool_rtx_insn_false} to disable shared jump tables.  Other\n\
++duplication restrictions, including @code{TARGET_CANNOT_COPY_INSN_P}, still\n\
++apply.",
++ bool, (rtx_insn *insn),
++ hook_bool_rtx_insn_true)
++
+ /* Return true if the target supports conditional execution.  */
+ DEFHOOK
+ (have_conditional_execution,
+-- 
+2.54.0 (Apple Git-157)
+
