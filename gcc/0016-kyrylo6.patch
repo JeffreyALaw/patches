@@ -1,0 +1,862 @@
+
+
+From: Kyrylo Tkachov <ktkachov@nvidia.com>
+
+A broken table reference can make tablejump_p stop recognizing a dispatch,
+which bypasses its CFG checks.  Those checks also stop when free_cfg removes
+the CFG before machine reorganization and branch shortening.
+
+Check table references from both instruction patterns and JUMP_LABEL in the
+existing post-pass RTL verifier.  Require live table, base and case labels,
+label-to-table adjacency, and a shared flag for tables with several repeatable
+users.  Honor the existing target copy restriction when counting users.
+An uncopyable dispatch can also have an out-of-line execution template.
+Handle jumps in delay-slot sequences.  Allow a shared table to lose users
+and to change entry width.  While the CFG exists, also require a shared
+table in use to follow one of the jumps through it.
+
+Run the structural check on all targets in linear RTL, including after
+free_cfg.  Strengthen the CFG check to compare complete destination sets,
+including casesi default and exceptional edges.
+
+Plugin tests damage individual invariants and check the diagnostics at pass
+boundaries.  Positive tests cover repeated entries, zero or one remaining
+user, target copy restrictions, shortened tables, delay-slot sequences and
+casesi default edges.
+
+Jeff approved v3 of this patch (5/7), provided that the patches it
+depends on are approved:
+https://inbox.sourceware.org/gcc-patches/cbfebd13-2464-486e-a684-f8a187179a07@oss.qualcomm.com/
+
+gcc/ChangeLog:
+
+	PR middle-end/126236
+	* cfgrtl.cc (rtl_verify_edges): Compare all shared-table destinations
+	with the dispatch's successors.
+	* passes.cc (execute_function_todo): Verify tablejump links before
+	CFG verification and after CFG teardown.
+	* rtl.h (verify_jump_tables): Declare.
+	* rtlanal.cc: Include hash-map.h and tree-pass.h.
+	(verify_jump_tables): New function.
+
+gcc/testsuite/ChangeLog:
+
+	PR middle-end/126236
+	* gcc.dg/plugin/plugin.exp: Register the tablejump tests.
+	* gcc.dg/plugin/tablejump_plugin.cc: New plugin.
+	* gcc.dg/plugin/tablejump-valid.c: New test.
+	* gcc.dg/plugin/tablejump-missing-edge.c: Likewise.
+	* gcc.dg/plugin/tablejump-extra-edge.c: Likewise.
+	* gcc.dg/plugin/tablejump-null-label.c: Likewise.
+	* gcc.dg/plugin/tablejump-stale-label.c: Likewise.
+	* gcc.dg/plugin/tablejump-missing-ref.c: Likewise.
+	* gcc.dg/plugin/tablejump-detached-label.c: Likewise.
+	* gcc.dg/plugin/tablejump-detached-table.c: Likewise.
+	* gcc.dg/plugin/tablejump-detached-pair.c: Likewise.
+	* gcc.dg/plugin/tablejump-deleted-table.c: Likewise.
+	* gcc.dg/plugin/tablejump-unmarked.c: Likewise.
+	* gcc.dg/plugin/tablejump-case-label.c: Likewise.
+	* gcc.dg/plugin/tablejump-base-label.c: Likewise.
+	* gcc.dg/plugin/tablejump-misplaced-table.c: Likewise.
+
+Signed-off-by: Kyrylo Tkachov <ktkachov@nvidia.com>
+---
+Changes since v3:
+- execute_function_todo no longer tests targetm.asm_out.jump_table_base,
+  which only AArch64 defines.  For the opt-out model, verify_jump_tables
+  now checks all jump tables on all targets, also on ports that opt out.
+- While the CFG exists, verify_jump_tables now checks the new rule of
+  patch 2/8: a shared table in use follows a jump through it.  After
+  free_cfg, machine reorganization can put insns between them.
+- gcc.dg/plugin/tablejump-misplaced-table.c is a new negative test.  Its
+  plugin case misplaced_table moves the table and label after a block
+  that does not jump through the table (new helper non_user_block).
+- Commit message: it says "all targets" and describes the new check.  It
+  drops the bootstrap line, because the cover letter gives the
+  validation.
+- rtlanal.cc now includes tree-pass.h for PROP_cfg.  The ChangeLog names
+  this include and hash-map.h, which v3 included but did not name.
+
+ gcc/cfgrtl.cc                                 |  39 ++-
+ gcc/passes.cc                                 |   5 +
+ gcc/rtl.h                                     |   1 +
+ gcc/rtlanal.cc                                | 128 +++++++++
+ gcc/testsuite/gcc.dg/plugin/plugin.exp        |  15 ++
+ .../gcc.dg/plugin/tablejump-base-label.c      |  10 +
+ .../gcc.dg/plugin/tablejump-case-label.c      |  10 +
+ .../gcc.dg/plugin/tablejump-deleted-table.c   |  10 +
+ .../gcc.dg/plugin/tablejump-detached-label.c  |  10 +
+ .../gcc.dg/plugin/tablejump-detached-pair.c   |  10 +
+ .../gcc.dg/plugin/tablejump-detached-table.c  |  10 +
+ .../gcc.dg/plugin/tablejump-extra-edge.c      |  10 +
+ .../gcc.dg/plugin/tablejump-misplaced-table.c |  10 +
+ .../gcc.dg/plugin/tablejump-missing-edge.c    |  10 +
+ .../gcc.dg/plugin/tablejump-missing-ref.c     |  10 +
+ .../gcc.dg/plugin/tablejump-null-label.c      |  10 +
+ .../gcc.dg/plugin/tablejump-stale-label.c     |  10 +
+ .../gcc.dg/plugin/tablejump-unmarked.c        |  10 +
+ gcc/testsuite/gcc.dg/plugin/tablejump-valid.c |   6 +
+ .../gcc.dg/plugin/tablejump_plugin.cc         | 247 ++++++++++++++++++
+ 20 files changed, 561 insertions(+), 10 deletions(-)
+ create mode 100644 gcc/testsuite/gcc.dg/plugin/tablejump-base-label.c
+ create mode 100644 gcc/testsuite/gcc.dg/plugin/tablejump-case-label.c
+ create mode 100644 gcc/testsuite/gcc.dg/plugin/tablejump-deleted-table.c
+ create mode 100644 gcc/testsuite/gcc.dg/plugin/tablejump-detached-label.c
+ create mode 100644 gcc/testsuite/gcc.dg/plugin/tablejump-detached-pair.c
+ create mode 100644 gcc/testsuite/gcc.dg/plugin/tablejump-detached-table.c
+ create mode 100644 gcc/testsuite/gcc.dg/plugin/tablejump-extra-edge.c
+ create mode 100644 gcc/testsuite/gcc.dg/plugin/tablejump-misplaced-table.c
+ create mode 100644 gcc/testsuite/gcc.dg/plugin/tablejump-missing-edge.c
+ create mode 100644 gcc/testsuite/gcc.dg/plugin/tablejump-missing-ref.c
+ create mode 100644 gcc/testsuite/gcc.dg/plugin/tablejump-null-label.c
+ create mode 100644 gcc/testsuite/gcc.dg/plugin/tablejump-stale-label.c
+ create mode 100644 gcc/testsuite/gcc.dg/plugin/tablejump-unmarked.c
+ create mode 100644 gcc/testsuite/gcc.dg/plugin/tablejump-valid.c
+ create mode 100644 gcc/testsuite/gcc.dg/plugin/tablejump_plugin.cc
+
+diff --git a/gcc/cfgrtl.cc b/gcc/cfgrtl.cc
+index 9fdb6f5ec90..1b6bbdf2b46 100644
+--- a/gcc/cfgrtl.cc
++++ b/gcc/cfgrtl.cc
+@@ -2720,6 +2720,7 @@ rtl_verify_edges (void)
+   bool err = false;
+   basic_block bb;
+   auto_bitmap succ_dests;
++  auto_bitmap table_dests;
+ 
+   FOR_EACH_BB_REVERSE_FN (bb, cfun)
+     {
+@@ -2853,29 +2854,47 @@ rtl_verify_edges (void)
+ 	  err = true;
+ 	}
+ 
+-      /* A shared jump table lists the successors of every jump that
+-	 dispatches through it, so nothing may have redirected one of them
+-	 behind the others' back.  */
++      /* Compare each shared dispatch's normal successors with its table
++	 entries and optional out-of-range destination.  */
+       rtx_jump_table_data *table;
+       if (shared_tablejump_p (BB_END (bb), NULL, &table))
+ 	{
+ 	  bitmap_clear (succ_dests);
++	  bitmap_clear (table_dests);
+ 	  FOR_EACH_EDGE (e, ei, bb->succs)
+-	    bitmap_set_bit (succ_dests, e->dest->index);
++	    {
++	      bitmap_set_bit (succ_dests, e->dest->index);
++	      if (e->flags & (EDGE_ABNORMAL | EDGE_EH))
++		bitmap_set_bit (table_dests, e->dest->index);
++	    }
+ 
+-	  rtvec vec = table->get_labels ();
+-	  for (int j = GET_NUM_ELEM (vec) - 1; j >= 0; --j)
++	  auto add_destination = [&] (rtx lab)
+ 	    {
+-	      rtx lab = XEXP (RTVEC_ELT (vec, j), 0);
+ 	      basic_block dest = (LABEL_P (lab)
+ 				  ? BLOCK_FOR_INSN (as_a <rtx_insn *> (lab))
+ 				  : NULL);
+-	      if (!dest || !bitmap_bit_p (succ_dests, dest->index))
++	      if (dest)
++		bitmap_set_bit (table_dests, dest->index);
++	      else
+ 		{
+-		  error ("entry %i of the jump table of bb %i has no edge",
+-			 j, bb->index);
++		  error ("jump table of bb %i has an invalid destination",
++			 bb->index);
+ 		  err = true;
+ 		}
++	    };
++	  rtvec vec = table->get_labels ();
++	  for (int j = GET_NUM_ELEM (vec) - 1; j >= 0; --j)
++	    add_destination (XEXP (RTVEC_ELT (vec, j), 0));
++
++	  rtx casesi = tablejump_casesi_pattern (BB_END (bb));
++	  if (casesi)
++	    add_destination (label_ref_label (XEXP (SET_SRC (casesi), 2)));
++
++	  if (!bitmap_equal_p (succ_dests, table_dests))
++	    {
++	      error ("jump table of bb %i does not match its successors",
++		     bb->index);
++	      err = true;
+ 	    }
+ 	}
+       if (n_branch != 1 && any_uncondjump_p (BB_END (bb)))
+diff --git a/gcc/passes.cc b/gcc/passes.cc
+index 96c2456fe32..8b64f2ded34 100644
+--- a/gcc/passes.cc
++++ b/gcc/passes.cc
+@@ -2092,6 +2092,11 @@ execute_function_todo (function *fn, void *data)
+ 
+       if (flags & TODO_verify_il)
+ 	{
++	  /* Shared tables are introduced after leaving CFG layout mode.
++	     Check their RTL links even after the CFG has been released.  */
++	  if ((cfun->curr_properties & PROP_rtl)
++	      && !(cfun->curr_properties & PROP_cfglayout))
++	    verify_jump_tables ();
+ 	  if (cfun->curr_properties & PROP_gimple)
+ 	    {
+ 	      if (cfun->curr_properties & PROP_cfg)
+diff --git a/gcc/rtl.h b/gcc/rtl.h
+index b400961c46c..f4a360d18e4 100644
+--- a/gcc/rtl.h
++++ b/gcc/rtl.h
+@@ -3796,6 +3796,7 @@ extern bool rtx_referenced_p (const_rtx, const_rtx);
+ extern bool tablejump_p (const rtx_insn *, rtx_insn **, rtx_jump_table_data **);
+ extern bool shared_tablejump_p (const rtx_insn *, rtx_insn **,
+ 				rtx_jump_table_data **);
++extern void verify_jump_tables (void);
+ extern rtx tablejump_casesi_pattern (const rtx_insn *insn);
+ extern bool computed_jump_p (const rtx_insn *);
+ extern bool tls_referenced_p (const_rtx);
+diff --git a/gcc/rtlanal.cc b/gcc/rtlanal.cc
+index 7208c43be4f..9cda7143e84 100644
+--- a/gcc/rtlanal.cc
++++ b/gcc/rtlanal.cc
+@@ -38,6 +38,8 @@ along with GCC; see the file COPYING3.  If not see
+ #include "rtl-iter.h"
+ #include "hard-reg-set.h"
+ #include "function-abi.h"
++#include "hash-map.h"
++#include "tree-pass.h"
+ 
+ /* Forward declarations */
+ static void set_of_1 (rtx, const_rtx, void *);
+@@ -3565,6 +3567,132 @@ shared_tablejump_p (const rtx_insn *insn, rtx_insn **labelp,
+   return true;
+ }
+ 
++/* Check the tablejump links in the current function's linear RTL chain.
++   This also works after the CFG has been released.  */
++
++void
++verify_jump_tables (void)
++{
++  struct table_users
++  {
++    unsigned int total;
++    unsigned int repeatable;
++  };
++  hash_set<rtx_insn *> live;
++  hash_map<rtx_insn *, table_users> users;
++  auto_vec<rtx_jump_table_data *> tables;
++  auto_vec<rtx_insn *> jumps;
++
++  for (rtx_insn *insn = get_insns (); insn; insn = NEXT_INSN (insn))
++    {
++      if (LABEL_P (insn) || JUMP_TABLE_DATA_P (insn))
++	live.add (insn);
++      if (JUMP_TABLE_DATA_P (insn))
++	{
++	  tables.safe_push (as_a<rtx_jump_table_data *> (insn));
++	  users.put (insn, { 0, 0 });
++	}
++      else if (JUMP_P (insn))
++	jumps.safe_push (insn);
++      else if (NONDEBUG_INSN_P (insn) && GET_CODE (PATTERN (insn)) == SEQUENCE)
++	for (int i = 0; i < XVECLEN (PATTERN (insn), 0); ++i)
++	  {
++	    rtx_insn *part = as_a<rtx_insn *> (XVECEXP (PATTERN (insn), 0, i));
++	    if (JUMP_P (part))
++	      jumps.safe_push (part);
++	  }
++    }
++
++  for (rtx_jump_table_data *table : tables)
++    {
++      rtx_insn *label = PREV_INSN (table);
++      if (!label || !LABEL_P (label) || !live.contains (label)
++	  || NEXT_INSN (label) != table)
++	fatal_insn ("jump table has no adjacent live label", table);
++    }
++
++  for (rtx_insn *jump : jumps)
++    {
++      rtx_insn *label = NULL;
++      if (tablejump_p (jump, &label, NULL)
++	  && !reg_mentioned_p (label, PATTERN (jump)))
++	fatal_insn ("tablejump pattern does not reference its label", jump);
++
++      /* A USE of a label identifies a tablejump even if its JUMP_LABEL
++	 or table was lost.  Also find table references in casesi patterns.  */
++      bool indirect = (!any_uncondjump_p (jump) && !any_condjump_p (jump)
++		       && !returnjump_p (jump));
++      subrtx_iterator::array_type array;
++      FOR_EACH_SUBRTX (iter, array, PATTERN (jump), ALL)
++	{
++	  const_rtx x = *iter;
++	  bool table_use = (indirect && GET_CODE (x) == USE
++			    && GET_CODE (XEXP (x, 0)) == LABEL_REF);
++	  if (table_use)
++	    x = XEXP (x, 0);
++	  else if (GET_CODE (x) != LABEL_REF)
++	    continue;
++	  rtx_insn *ref = label_ref_label (x);
++	  if (!table_use
++	      && (!LABEL_P (ref) || !NEXT_INSN (ref)
++		  || !JUMP_TABLE_DATA_P (NEXT_INSN (ref))))
++	    continue;
++	  if (!LABEL_P (ref) || !live.contains (ref))
++	    fatal_insn ("tablejump references a label outside the RTL chain",
++			jump);
++	  if (JUMP_LABEL (jump) != ref)
++	    fatal_insn ("tablejump pattern and JUMP_LABEL disagree", jump);
++	  if (!NEXT_INSN (ref) || !JUMP_TABLE_DATA_P (NEXT_INSN (ref))
++	      || !live.contains (NEXT_INSN (ref)))
++	    fatal_insn ("tablejump references a missing jump table", jump);
++	  label = ref;
++	}
++      if (label)
++	{
++	  table_users &count = *users.get (NEXT_INSN (label));
++	  ++count.total;
++	  if (!targetm.cannot_copy_insn_p || !targetm.cannot_copy_insn_p (jump))
++	    ++count.repeatable;
++	}
++    }
++
++  for (rtx_jump_table_data *table : tables)
++    {
++      /* A dispatch with private labels can also have an out-of-line
++	 execution template that references the same table.  */
++      const table_users &count = *users.get (table);
++      if (count.repeatable > 1 && !JUMP_TABLE_SHARED_P (PATTERN (table)))
++	fatal_insn ("jump table with multiple users is not marked shared",
++		    table);
++      if (!count.total)
++	continue;
++
++      /* While the CFG exists, a shared table follows one of the jumps
++	 through it.  Machine reorganization can place other insns between
++	 them later.  */
++      if ((cfun->curr_properties & PROP_cfg)
++	  && JUMP_TABLE_SHARED_P (PATTERN (table)))
++	{
++	  rtx_insn *label = PREV_INSN (table);
++	  rtx_insn *prev = prev_nonnote_nondebug_insn (label);
++	  while (prev && BARRIER_P (prev))
++	    prev = prev_nonnote_nondebug_insn (prev);
++	  if (!prev || !JUMP_P (prev) || JUMP_LABEL (prev) != label)
++	    fatal_insn ("shared jump table does not follow a jump through it",
++			table);
++	}
++      subrtx_iterator::array_type array;
++      FOR_EACH_SUBRTX (iter, array, PATTERN (table), ALL)
++	if (GET_CODE (*iter) == LABEL_REF)
++	  {
++	    rtx_insn *label = label_ref_label (*iter);
++	    if (!LABEL_P (label) || !live.contains (label))
++	      fatal_insn ("jump table references a label outside the RTL chain",
++			  table);
++	  }
++    }
++}
++
+ /* For INSN known to satisfy tablejump_p, determine if it actually is a
+    CASESI.  Return the insn pattern if so, NULL_RTX otherwise.  */
+ 
+diff --git a/gcc/testsuite/gcc.dg/plugin/plugin.exp b/gcc/testsuite/gcc.dg/plugin/plugin.exp
+index 0062ac14051..56132379868 100644
+--- a/gcc/testsuite/gcc.dg/plugin/plugin.exp
++++ b/gcc/testsuite/gcc.dg/plugin/plugin.exp
+@@ -55,6 +55,21 @@ gcc_parallel_test_enable 0
+ # plugin_test_list={ {plugin1 test1 test2 ...} {plugin2 test1 ...} ... }
+ set plugin_test_list [list \
+     { tablejump_capability_plugin.cc tablejump-capability.c } \
++    { tablejump_plugin.cc \
++	  tablejump-valid.c \
++	  tablejump-missing-edge.c \
++	  tablejump-extra-edge.c \
++	  tablejump-null-label.c \
++	  tablejump-stale-label.c \
++	  tablejump-missing-ref.c \
++	  tablejump-detached-label.c \
++	  tablejump-detached-table.c \
++	  tablejump-detached-pair.c \
++	  tablejump-deleted-table.c \
++	  tablejump-unmarked.c \
++	  tablejump-case-label.c \
++	  tablejump-base-label.c \
++	  tablejump-misplaced-table.c } \
+     { selfassign.cc self-assign-test-1.c self-assign-test-2.c } \
+     { ggcplug.cc ggcplug-test-1.c } \
+     { one_time_plugin.cc one_time-test-1.c } \
+diff --git a/gcc/testsuite/gcc.dg/plugin/tablejump-base-label.c b/gcc/testsuite/gcc.dg/plugin/tablejump-base-label.c
+new file mode 100644
+index 00000000000..ca9078bd412
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/plugin/tablejump-base-label.c
+@@ -0,0 +1,10 @@
++/* PR middle-end/126236 */
++/* { dg-do compile { target aarch64*-*-* } } */
++/* { dg-options "-O2 -fchecking -fduplicate-switch-dispatch -fno-report-bug" } */
++/* { dg-prune-output {\(jump_(insn|table_data)[: ][^\n]*(\n[ \t][^\n]*)*} } */
++/* { dg-prune-output "during RTL pass: tablejump_test" } */
++/* { dg-ice "jump table references a label outside the RTL chain" } */
++/* { dg-error "jump table references a label outside the RTL chain" "" { target *-*-* } 0 } */
++
++#define TEST_NAME missing_base_label
++#include "tablejump-test.h"
+diff --git a/gcc/testsuite/gcc.dg/plugin/tablejump-case-label.c b/gcc/testsuite/gcc.dg/plugin/tablejump-case-label.c
+new file mode 100644
+index 00000000000..7a1ac6ab677
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/plugin/tablejump-case-label.c
+@@ -0,0 +1,10 @@
++/* PR middle-end/126236 */
++/* { dg-do compile { target aarch64*-*-* } } */
++/* { dg-options "-O2 -fchecking -fduplicate-switch-dispatch -fno-report-bug" } */
++/* { dg-prune-output {\(jump_(insn|table_data)[: ][^\n]*(\n[ \t][^\n]*)*} } */
++/* { dg-prune-output "during RTL pass: tablejump_test" } */
++/* { dg-ice "jump table references a label outside the RTL chain" } */
++/* { dg-error "jump table references a label outside the RTL chain" "" { target *-*-* } 0 } */
++
++#define TEST_NAME missing_case_label
++#include "tablejump-test.h"
+diff --git a/gcc/testsuite/gcc.dg/plugin/tablejump-deleted-table.c b/gcc/testsuite/gcc.dg/plugin/tablejump-deleted-table.c
+new file mode 100644
+index 00000000000..9b6de2d9eef
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/plugin/tablejump-deleted-table.c
+@@ -0,0 +1,10 @@
++/* PR middle-end/126236 */
++/* { dg-do compile { target aarch64*-*-* } } */
++/* { dg-options "-O2 -fchecking -fduplicate-switch-dispatch -fno-report-bug" } */
++/* { dg-prune-output {\(jump_(insn|table_data)[: ][^\n]*(\n[ \t][^\n]*)*} } */
++/* { dg-prune-output "during RTL pass: tablejump_test" } */
++/* { dg-ice "tablejump references a missing jump table" } */
++/* { dg-error "tablejump references a missing jump table" "" { target *-*-* } 0 } */
++
++#define TEST_NAME deleted_table
++#include "tablejump-test.h"
+diff --git a/gcc/testsuite/gcc.dg/plugin/tablejump-detached-label.c b/gcc/testsuite/gcc.dg/plugin/tablejump-detached-label.c
+new file mode 100644
+index 00000000000..040efdd5914
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/plugin/tablejump-detached-label.c
+@@ -0,0 +1,10 @@
++/* PR middle-end/126236 */
++/* { dg-do compile { target aarch64*-*-* } } */
++/* { dg-options "-O2 -fchecking -fduplicate-switch-dispatch -fno-report-bug" } */
++/* { dg-prune-output {\(jump_(insn|table_data)[: ][^\n]*(\n[ \t][^\n]*)*} } */
++/* { dg-prune-output "during RTL pass: tablejump_test" } */
++/* { dg-ice "jump table has no adjacent live label" } */
++/* { dg-error "jump table has no adjacent live label" "" { target *-*-* } 0 } */
++
++#define TEST_NAME detached_label
++#include "tablejump-test.h"
+diff --git a/gcc/testsuite/gcc.dg/plugin/tablejump-detached-pair.c b/gcc/testsuite/gcc.dg/plugin/tablejump-detached-pair.c
+new file mode 100644
+index 00000000000..6038197f72f
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/plugin/tablejump-detached-pair.c
+@@ -0,0 +1,10 @@
++/* PR middle-end/126236 */
++/* { dg-do compile { target aarch64*-*-* } } */
++/* { dg-options "-O2 -fchecking -fduplicate-switch-dispatch -fno-report-bug" } */
++/* { dg-prune-output {\(jump_(insn|table_data)[: ][^\n]*(\n[ \t][^\n]*)*} } */
++/* { dg-prune-output "during RTL pass: tablejump_test" } */
++/* { dg-ice "tablejump references a label outside the RTL chain" } */
++/* { dg-error "tablejump references a label outside the RTL chain" "" { target *-*-* } 0 } */
++
++#define TEST_NAME detached_pair
++#include "tablejump-test.h"
+diff --git a/gcc/testsuite/gcc.dg/plugin/tablejump-detached-table.c b/gcc/testsuite/gcc.dg/plugin/tablejump-detached-table.c
+new file mode 100644
+index 00000000000..ece18436e59
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/plugin/tablejump-detached-table.c
+@@ -0,0 +1,10 @@
++/* PR middle-end/126236 */
++/* { dg-do compile { target aarch64*-*-* } } */
++/* { dg-options "-O2 -fchecking -fduplicate-switch-dispatch -fno-report-bug" } */
++/* { dg-prune-output {\(jump_(insn|table_data)[: ][^\n]*(\n[ \t][^\n]*)*} } */
++/* { dg-prune-output "during RTL pass: tablejump_test" } */
++/* { dg-ice "tablejump references a missing jump table" } */
++/* { dg-error "tablejump references a missing jump table" "" { target *-*-* } 0 } */
++
++#define TEST_NAME detached_table
++#include "tablejump-test.h"
+diff --git a/gcc/testsuite/gcc.dg/plugin/tablejump-extra-edge.c b/gcc/testsuite/gcc.dg/plugin/tablejump-extra-edge.c
+new file mode 100644
+index 00000000000..e8bd8185084
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/plugin/tablejump-extra-edge.c
+@@ -0,0 +1,10 @@
++/* PR middle-end/126236 */
++/* { dg-do compile { target aarch64*-*-* } } */
++/* { dg-options "-O2 -fchecking -fduplicate-switch-dispatch -fno-report-bug" } */
++/* { dg-prune-output {\(jump_(insn|table_data)[: ][^\n]*(\n[ \t][^\n]*)*} } */
++/* { dg-prune-output "during RTL pass: tablejump_test" } */
++/* { dg-ice "verify_flow_info failed" } */
++/* { dg-error "jump table of bb .* does not match its successors" "" { target *-*-* } 0 } */
++
++#define TEST_NAME extra_edge
++#include "tablejump-test.h"
+diff --git a/gcc/testsuite/gcc.dg/plugin/tablejump-misplaced-table.c b/gcc/testsuite/gcc.dg/plugin/tablejump-misplaced-table.c
+new file mode 100644
+index 00000000000..2c575fc3232
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/plugin/tablejump-misplaced-table.c
+@@ -0,0 +1,10 @@
++/* PR middle-end/126236 */
++/* { dg-do compile { target aarch64*-*-* } } */
++/* { dg-options "-O2 -fchecking -fduplicate-switch-dispatch -fno-report-bug" } */
++/* { dg-prune-output {\(jump_(insn|table_data)[: ][^\n]*(\n[ \t][^\n]*)*} } */
++/* { dg-prune-output "during RTL pass: tablejump_test" } */
++/* { dg-ice "shared jump table does not follow a jump through it" } */
++/* { dg-error "shared jump table does not follow a jump through it" "" { target *-*-* } 0 } */
++
++#define TEST_NAME misplaced_table
++#include "tablejump-test.h"
+diff --git a/gcc/testsuite/gcc.dg/plugin/tablejump-missing-edge.c b/gcc/testsuite/gcc.dg/plugin/tablejump-missing-edge.c
+new file mode 100644
+index 00000000000..322e93dbc49
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/plugin/tablejump-missing-edge.c
+@@ -0,0 +1,10 @@
++/* PR middle-end/126236 */
++/* { dg-do compile { target aarch64*-*-* } } */
++/* { dg-options "-O2 -fchecking -fduplicate-switch-dispatch -fno-report-bug" } */
++/* { dg-prune-output {\(jump_(insn|table_data)[: ][^\n]*(\n[ \t][^\n]*)*} } */
++/* { dg-prune-output "during RTL pass: tablejump_test" } */
++/* { dg-ice "verify_flow_info failed" } */
++/* { dg-error "jump table of bb .* does not match its successors" "" { target *-*-* } 0 } */
++
++#define TEST_NAME missing_edge
++#include "tablejump-test.h"
+diff --git a/gcc/testsuite/gcc.dg/plugin/tablejump-missing-ref.c b/gcc/testsuite/gcc.dg/plugin/tablejump-missing-ref.c
+new file mode 100644
+index 00000000000..59bca121247
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/plugin/tablejump-missing-ref.c
+@@ -0,0 +1,10 @@
++/* PR middle-end/126236 */
++/* { dg-do compile { target aarch64*-*-* } } */
++/* { dg-options "-O2 -fchecking -fduplicate-switch-dispatch -fno-report-bug" } */
++/* { dg-prune-output {\(jump_(insn|table_data)[: ][^\n]*(\n[ \t][^\n]*)*} } */
++/* { dg-prune-output "during RTL pass: tablejump_test" } */
++/* { dg-ice "tablejump pattern does not reference its label" } */
++/* { dg-error "tablejump pattern does not reference its label" "" { target *-*-* } 0 } */
++
++#define TEST_NAME missing_pattern_ref
++#include "tablejump-test.h"
+diff --git a/gcc/testsuite/gcc.dg/plugin/tablejump-null-label.c b/gcc/testsuite/gcc.dg/plugin/tablejump-null-label.c
+new file mode 100644
+index 00000000000..637bd98b223
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/plugin/tablejump-null-label.c
+@@ -0,0 +1,10 @@
++/* PR middle-end/126236 */
++/* { dg-do compile { target aarch64*-*-* } } */
++/* { dg-options "-O2 -fchecking -fduplicate-switch-dispatch -fno-report-bug" } */
++/* { dg-prune-output {\(jump_(insn|table_data)[: ][^\n]*(\n[ \t][^\n]*)*} } */
++/* { dg-prune-output "during RTL pass: tablejump_test" } */
++/* { dg-ice "tablejump pattern and JUMP_LABEL disagree" } */
++/* { dg-error "tablejump pattern and JUMP_LABEL disagree" "" { target *-*-* } 0 } */
++
++#define TEST_NAME null_jump_label
++#include "tablejump-test.h"
+diff --git a/gcc/testsuite/gcc.dg/plugin/tablejump-stale-label.c b/gcc/testsuite/gcc.dg/plugin/tablejump-stale-label.c
+new file mode 100644
+index 00000000000..e5170c835c0
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/plugin/tablejump-stale-label.c
+@@ -0,0 +1,10 @@
++/* PR middle-end/126236 */
++/* { dg-do compile { target aarch64*-*-* } } */
++/* { dg-options "-O2 -fchecking -fduplicate-switch-dispatch -fno-report-bug" } */
++/* { dg-prune-output {\(jump_(insn|table_data)[: ][^\n]*(\n[ \t][^\n]*)*} } */
++/* { dg-prune-output "during RTL pass: tablejump_test" } */
++/* { dg-ice "tablejump pattern and JUMP_LABEL disagree" } */
++/* { dg-error "tablejump pattern and JUMP_LABEL disagree" "" { target *-*-* } 0 } */
++
++#define TEST_NAME stale_jump_label
++#include "tablejump-test.h"
+diff --git a/gcc/testsuite/gcc.dg/plugin/tablejump-unmarked.c b/gcc/testsuite/gcc.dg/plugin/tablejump-unmarked.c
+new file mode 100644
+index 00000000000..29faf1e0a30
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/plugin/tablejump-unmarked.c
+@@ -0,0 +1,10 @@
++/* PR middle-end/126236 */
++/* { dg-do compile { target aarch64*-*-* } } */
++/* { dg-options "-O2 -fchecking -fduplicate-switch-dispatch -fno-report-bug" } */
++/* { dg-prune-output {\(jump_(insn|table_data)[: ][^\n]*(\n[ \t][^\n]*)*} } */
++/* { dg-prune-output "during RTL pass: tablejump_test" } */
++/* { dg-ice "jump table with multiple users is not marked shared" } */
++/* { dg-error "jump table with multiple users is not marked shared" "" { target *-*-* } 0 } */
++
++#define TEST_NAME unmarked_table
++#include "tablejump-test.h"
+diff --git a/gcc/testsuite/gcc.dg/plugin/tablejump-valid.c b/gcc/testsuite/gcc.dg/plugin/tablejump-valid.c
+new file mode 100644
+index 00000000000..d3b771ea23c
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/plugin/tablejump-valid.c
+@@ -0,0 +1,6 @@
++/* PR middle-end/126236 */
++/* { dg-do assemble { target aarch64*-*-* } } */
++/* { dg-options "-O2 -fchecking -fduplicate-switch-dispatch" } */
++
++#define TEST_NAME valid
++#include "tablejump-test.h"
+diff --git a/gcc/testsuite/gcc.dg/plugin/tablejump_plugin.cc b/gcc/testsuite/gcc.dg/plugin/tablejump_plugin.cc
+new file mode 100644
+index 00000000000..3f3162def56
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/plugin/tablejump_plugin.cc
+@@ -0,0 +1,247 @@
++/* PR middle-end/126236 */
++/* { dg-options "-O0" } */
++
++#include "gcc-plugin.h"
++#include "config.h"
++#include "system.h"
++#include "coretypes.h"
++#include "tm.h"
++#include "rtl.h"
++#include "tree.h"
++#include "function.h"
++#include "memmodel.h"
++#include "emit-rtl.h"
++#include "basic-block.h"
++#include "cfg.h"
++#include "cfghooks.h"
++#include "cfgrtl.h"
++#include "tree-pass.h"
++#include "target.h"
++#include "context.h"
++#include "plugin-version.h"
++
++int plugin_is_GPL_compatible;
++
++static rtx_insn *uncopyable_jump;
++
++/* Return true if INSN is the selected target-specific table user.  */
++
++static bool
++cannot_copy_jump (rtx_insn *insn)
++{
++  return insn == uncopyable_jump;
++}
++
++/* Check sticky shared flags with zero, one and two users, including repeated
++   table entries.  Keep this synthetic RTL out of the output pipeline.  */
++
++static void
++check_user_counts ()
++{
++  start_sequence ();
++  rtx_code_label *dest = gen_label_rtx ();
++  emit_label (dest);
++  rtx_code_label *label = gen_label_rtx ();
++  emit_label (label);
++  rtvec entries = gen_rtvec (2, gen_rtx_LABEL_REF (Pmode, dest),
++			   gen_rtx_LABEL_REF (Pmode, dest));
++  rtx_jump_table_data *table
++    = emit_jump_table_data (gen_rtx_ADDR_DIFF_VEC
++			   (SImode, gen_rtx_LABEL_REF (Pmode, label),
++			    entries, const0_rtx, const0_rtx));
++  JUMP_TABLE_SHARED_P (PATTERN (table)) = 1;
++  verify_jump_tables ();
++  for (int i = 0; i != 2; ++i)
++    {
++      rtx pattern = gen_rtx_PARALLEL
++	(VOIDmode, gen_rtvec
++	 (2, gen_rtx_SET (pc_rtx, gen_rtx_REG (Pmode, 0)),
++	  gen_rtx_USE (VOIDmode, gen_rtx_LABEL_REF (Pmode, label))));
++      rtx_insn *jump = emit_jump_insn (pattern);
++      JUMP_LABEL (jump) = label;
++      verify_jump_tables ();
++    }
++  auto saved_cannot_copy = targetm.cannot_copy_insn_p;
++  uncopyable_jump = get_last_insn ();
++  targetm.cannot_copy_insn_p = cannot_copy_jump;
++  JUMP_TABLE_SHARED_P (PATTERN (table)) = 0;
++  verify_jump_tables ();
++  JUMP_TABLE_SHARED_P (PATTERN (table)) = 1;
++  targetm.cannot_copy_insn_p = saved_cannot_copy;
++  uncopyable_jump = NULL;
++  PUT_MODE (PATTERN (table), QImode);
++  verify_jump_tables ();
++  rtx_insn *jump = get_last_insn ();
++  remove_insn (jump);
++  SET_PREV_INSN (jump) = SET_NEXT_INSN (jump) = NULL;
++  add_insn (make_insn_raw (gen_rtx_SEQUENCE
++			 (VOIDmode, gen_rtvec (1, jump))));
++  verify_jump_tables ();
++  end_sequence ();
++}
++
++/* Return a block that is not a successor of BB.  */
++
++static basic_block
++other_block (basic_block bb)
++{
++  basic_block dest;
++  FOR_EACH_BB_FN (dest, cfun)
++    if (dest != bb && !find_edge (bb, dest))
++      return dest;
++  gcc_unreachable ();
++}
++
++/* Return a block that does not end in a jump through the table whose label
++   is LABEL.  */
++
++static basic_block
++non_user_block (rtx_insn *label)
++{
++  basic_block bb;
++  FOR_EACH_BB_FN (bb, cfun)
++    if (!JUMP_P (BB_END (bb)) || JUMP_LABEL (BB_END (bb)) != label)
++      return bb;
++  gcc_unreachable ();
++}
++
++/* Check a CASESI default edge and abnormal edges for JUMP.  Restore its
++   pattern and edges before target-specific processing resumes.  */
++
++static void
++check_successors (rtx_insn *jump)
++{
++  basic_block bb = BLOCK_FOR_INSN (jump);
++  rtx_code_label *dest = block_label (other_block (bb));
++  edge extra = make_edge (bb, BLOCK_FOR_INSN (dest), 0);
++  extra->probability = profile_probability::never ();
++  rtx saved_pattern = PATTERN (jump);
++  int saved_code = INSN_CODE (jump);
++  PATTERN (jump) = gen_rtx_PARALLEL
++    (VOIDmode, gen_rtvec
++     (2, gen_rtx_SET
++      (pc_rtx, gen_rtx_IF_THEN_ELSE
++       (Pmode, gen_rtx_EQ (VOIDmode, gen_rtx_REG (Pmode, 0), const0_rtx),
++	gen_rtx_REG (Pmode, 0), gen_rtx_LABEL_REF (Pmode, dest))),
++      gen_rtx_USE (VOIDmode, gen_rtx_LABEL_REF (Pmode, JUMP_LABEL (jump)))));
++  INSN_CODE (jump) = -1;
++  verify_flow_info ();
++  PATTERN (jump) = saved_pattern;
++  INSN_CODE (jump) = saved_code;
++  extra->flags = EDGE_ABNORMAL;
++  verify_flow_info ();
++  remove_edge (extra);
++
++  edge existing = EDGE_SUCC (bb, 0);
++  int saved_flags = existing->flags;
++  existing->flags |= EDGE_ABNORMAL;
++  verify_flow_info ();
++  existing->flags = saved_flags;
++}
++
++const pass_data tablejump_pass_data =
++{
++  RTL_PASS, "tablejump_test", OPTGROUP_NONE, TV_NONE,
++  PROP_rtl, 0, 0, 0, 0
++};
++
++class tablejump_pass : public rtl_opt_pass
++{
++public:
++  tablejump_pass (gcc::context *ctxt, bool cfg)
++    : rtl_opt_pass (tablejump_pass_data, ctxt), m_cfg (cfg)
++  {}
++
++  unsigned int execute (function *fun) final override
++  {
++    const char *name = IDENTIFIER_POINTER (DECL_NAME (fun->decl));
++    bool cfg_test = (!strcmp (name, "missing_edge")
++		     || !strcmp (name, "extra_edge")
++		     || !strcmp (name, "misplaced_table"));
++    bool valid = !strcmp (name, "valid");
++    if (!valid && m_cfg != cfg_test)
++      return 0;
++
++    rtx_insn *jump = NULL;
++    rtx_insn *label = NULL;
++    rtx_jump_table_data *table = NULL;
++    for (rtx_insn *insn = get_insns (); insn; insn = NEXT_INSN (insn))
++      if (tablejump_p (insn, &label, &table))
++	{
++	  jump = insn;
++	  break;
++	}
++    gcc_assert (jump && JUMP_TABLE_SHARED_P (PATTERN (table)));
++
++    if (valid)
++      {
++	if (m_cfg)
++	  check_successors (jump);
++	else
++	  check_user_counts ();
++	return 0;
++      }
++
++    if (!strcmp (name, "missing_edge"))
++      remove_edge (EDGE_SUCC (BLOCK_FOR_INSN (jump), 0));
++    else if (!strcmp (name, "extra_edge"))
++      {
++	basic_block bb = BLOCK_FOR_INSN (jump);
++	edge extra = make_edge (bb, other_block (bb), 0);
++	extra->probability = profile_probability::never ();
++      }
++    else if (!strcmp (name, "null_jump_label"))
++      JUMP_LABEL (jump) = NULL_RTX;
++    else if (!strcmp (name, "stale_jump_label"))
++      JUMP_LABEL (jump) = gen_label_rtx ();
++    else if (!strcmp (name, "missing_pattern_ref"))
++      PATTERN (jump) = gen_rtx_SET (pc_rtx, gen_rtx_REG (Pmode, 0));
++    else if (!strcmp (name, "misplaced_table"))
++      reorder_insns_nobb (label, table, BB_END (non_user_block (label)));
++    else if (!strcmp (name, "detached_label"))
++      remove_insn (label);
++    else if (!strcmp (name, "detached_table"))
++      remove_insn (table);
++    else if (!strcmp (name, "detached_pair"))
++      {
++	remove_insn (table);
++	remove_insn (label);
++      }
++    else if (!strcmp (name, "deleted_table"))
++      delete_insn (table);
++    else if (!strcmp (name, "unmarked_table"))
++      JUMP_TABLE_SHARED_P (PATTERN (table)) = 0;
++    else if (!strcmp (name, "missing_case_label"))
++      XEXP (RTVEC_ELT (table->get_labels (), 0), 0) = gen_label_rtx ();
++    else if (!strcmp (name, "missing_base_label"))
++      {
++	gcc_assert (GET_CODE (PATTERN (table)) == ADDR_DIFF_VEC);
++	XEXP (XEXP (PATTERN (table), 0), 0) = gen_label_rtx ();
++      }
++    else
++      gcc_unreachable ();
++    return 0;
++  }
++
++private:
++  bool m_cfg;
++};
++
++int
++plugin_init (struct plugin_name_args *info, struct plugin_gcc_version *version)
++{
++  if (!plugin_default_version_check (version, &gcc_version))
++    return 1;
++  const char *points[] = { "compgotos", "*free_cfg" };
++  for (unsigned i = 0; i != ARRAY_SIZE (points); ++i)
++    {
++      struct register_pass_info pass;
++      pass.pass = new tablejump_pass (g, i == 0);
++      pass.reference_pass_name = points[i];
++      pass.ref_pass_instance_number = 1;
++      pass.pos_op = PASS_POS_INSERT_AFTER;
++      register_callback (info->base_name, PLUGIN_PASS_MANAGER_SETUP, NULL,
++			 &pass);
++    }
++  return 0;
++}
+-- 
+2.54.0 (Apple Git-157)
+
