@@ -58,3 +58,31 @@ index 00000000000..c21c9797a2c
 +    __builtin_abort ();
 +  __builtin_exit (0);
 +}
+diff --git a/gcc/config/v850/v850.md b/gcc/config/v850/v850.md
+index 304477629db0..684e5e428730 100644
+--- a/gcc/config/v850/v850.md
++++ b/gcc/config/v850/v850.md
+@@ -1533,8 +1533,9 @@ (define_insn "*branch_normal"
+     (if_then_else (lt (abs (minus (match_dup 0) (pc)))
+ 		      (const_int 256))
+ 		  (const_int 2)
+-		  (if_then_else (lt (abs (minus (match_dup 0) (pc)))
+-		      (const_int 65536))
++		  (if_then_else (and (match_test "TARGET_V850E3V5_UP")
++				     (lt (abs (minus (match_dup 0) (pc)))
++					 (const_int 65536)))
+ 		      (const_int 4)
+ 		      (const_int 6))))])
+ 
+@@ -1573,8 +1574,9 @@ (define_insn "*branch_invert"
+     (if_then_else (lt (abs (minus (match_dup 0) (pc)))
+ 		      (const_int 256))
+ 		  (const_int 2)
+-		  (if_then_else (lt (abs (minus (match_dup 0) (pc)))
+-		      (const_int 65536))
++		  (if_then_else (and (match_test "TARGET_V850E3V5_UP")
++				     (lt (abs (minus (match_dup 0) (pc)))
++					 (const_int 65536)))
+ 		      (const_int 4)
+ 		      (const_int 6))))])
+ 
