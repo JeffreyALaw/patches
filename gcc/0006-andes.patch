@@ -39,7 +39,7 @@ index c7fc97f6a0f..6f043947d3a 100644
  			 (fix "fix_trunc")
  			 (unsigned_fix "fixuns_trunc")])
  
-+(define_code_attr any_eq_inv [(eq "ne") (ne "eq")]
++(define_code_attr any_eq_inv [(eq "ne") (ne "eq")])
 +
  (define_code_attr bit_optab [(ior "bset")
  			     (xor "binv")])
