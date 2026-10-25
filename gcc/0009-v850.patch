@@ -1,0 +1,60 @@
+diff --git a/gcc/config/v850/v850.md b/gcc/config/v850/v850.md
+index 304477629db..5c5c61208a5 100644
+--- a/gcc/config/v850/v850.md
++++ b/gcc/config/v850/v850.md
+@@ -831,7 +831,8 @@ (define_insn "*v850_set1_1"
+ (define_insn "*v850_set1_2"
+   [(set (match_operand:HI 0 "indirect_operand" "=m")
+ 	(subreg:HI (ior:SI (subreg:SI (match_dup 0) 0)
+-			   (match_operand 1 "power_of_two_operand" "")) 0))]
++			   (match_operand 1 "power_of_two_operand" "")) 0))
++   (clobber (reg:CC CC_REGNUM))]
+   ""
+ {
+   int log2 = exact_log2 (INTVAL (operands[1]));
+@@ -930,7 +931,8 @@ (define_insn "*v850_not1_1"
+ (define_insn "*v850_not1_2"
+   [(set (match_operand:HI 0 "indirect_operand" "=m")
+ 	(subreg:HI (xor:SI (subreg:SI (match_dup 0) 0)
+-			   (match_operand 1 "power_of_two_operand" "")) 0))]
++			   (match_operand 1 "power_of_two_operand" "")) 0))
++   (clobber (reg:CC CC_REGNUM))]
+   ""
+ {
+   int log2 = exact_log2 (INTVAL (operands[1]));
+diff --git a/gcc/testsuite/gcc.target/v850/min_bit.c b/gcc/testsuite/gcc.target/v850/min_bit.c
+new file mode 100644
+index 00000000000..c21c9797a2c
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/v850/min_bit.c
+@@ -0,0 +1,30 @@
++/* { dg-do run } */
++/* { dg-options "-O2" } */
++
++int g1 = 1, g2 = 2;
++
++#define TEST(NAME, OP)					\
++  __attribute__ ((noinline, noclone)) int		\
++  NAME (short *p, int a, int b)				\
++  {							\
++    *p OP 0x10;						\
++    if (a == b)						\
++      return g1;					\
++    return g2;						\
++  }
++
++TEST (f_set1, |=)
++TEST (f_not1, ^=)
++
++int
++main (void)
++{
++  short x = 0;
++
++  if (f_set1 (&x, 1, 2) != 2)
++    __builtin_abort ();
++  x = 0;
++  if (f_not1 (&x, 1, 2) != 2)
++    __builtin_abort ();
++  __builtin_exit (0);
++}
