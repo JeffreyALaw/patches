@@ -12,3 +12,24 @@ index 898fa85ea62..298f6c39b37 100644
      {
        emit_insn (gen_mov<GPR:mode> (operands[0], SUBREG_REG (operands[1])));
        DONE;
+diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
+index 0284512d72c2..08b65ecb16e0 100644
+--- a/gcc/config/riscv/riscv.md
++++ b/gcc/config/riscv/riscv.md
+@@ -1450,10 +1450,12 @@ (define_expand "<u>divmod<mode>4"
+            (<paired_mod>:GPR (match_dup 1) (match_dup 2)))])]
+   "TARGET_DIV && riscv_use_divmod_expander ()"
+   {
+-      rtx tmp = gen_reg_rtx (<MODE>mode);
+-      emit_insn (gen_<u>div<GPR:mode>3 (operands[0], operands[1], operands[2]));
+-      emit_insn (gen_mul<GPR:mode>3 (tmp, operands[0], operands[2]));
+-      emit_insn (gen_sub<GPR:mode>3 (operands[3], operands[1], tmp));
++      rtx tmp1 = gen_reg_rtx (<MODE>mode);
++      rtx tmp2 = gen_reg_rtx (<MODE>mode);
++      emit_insn (gen_<u>div<GPR:mode>3 (tmp2, operands[1], operands[2]));
++      emit_insn (gen_mul<GPR:mode>3 (tmp1, tmp2, operands[2]));
++      emit_insn (gen_sub<GPR:mode>3 (operands[3], operands[1], tmp1));
++      emit_move_insn (operands[0], tmp2);
+       DONE;
+   })
+ 
