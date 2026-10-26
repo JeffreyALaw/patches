@@ -33,3 +33,46 @@ index 0284512d72c2..08b65ecb16e0 100644
        DONE;
    })
  
+diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
+index b18d4c8e5c6..df359ebdfdd 100644
+--- a/gcc/config/riscv/bitmanip.md
++++ b/gcc/config/riscv/bitmanip.md
+@@ -309,14 +309,15 @@ (define_peephole2
+ ;; bit of extra help for combine (i.e., the below split), we end up emitting
+ ;; not/srai/and instead of combining the not into an andn.
+ (define_split
+-  [(set (match_operand:DI 0 "register_operand")
+-	(and:DI (neg:DI (ge:DI (match_operand:DI 1 "register_operand")
+-			       (const_int 0)))
+-		(match_operand:DI 2 "register_operand")))
+-   (clobber (match_operand:DI 3 "register_operand"))]
++  [(set (match_operand:X 0 "register_operand")
++	(and:X (neg:X (ge:X (match_operand:DI 1 "register_operand")
++			    (const_int 0)))
++	       (match_operand:X 2 "register_operand")))
++   (clobber (match_operand:X 3 "register_operand"))]
+   "TARGET_ZBB || TARGET_ZBKB"
+-  [(set (match_dup 3) (ashiftrt:DI (match_dup 1) (const_int 63)))
+-   (set (match_dup 0) (and:DI (not:DI (match_dup 3)) (match_dup 2)))])
++  [(set (match_dup 3) (ashiftrt:X (match_dup 1) (match_dup 4)))
++   (set (match_dup 0) (and:X (not:X (match_dup 3)) (match_dup 2)))]
++  { operands[4] = GEN_INT (BITS_PER_WORD - 1); })
+ 
+ (define_insn "*xor_not<mode>"
+   [(set (match_operand:X 0 "register_operand" "=r")
+diff --git a/gcc/config/riscv/zicond.md b/gcc/config/riscv/zicond.md
+index a6275f6637f..b07aec8feb2 100644
+--- a/gcc/config/riscv/zicond.md
++++ b/gcc/config/riscv/zicond.md
+@@ -335,8 +335,9 @@ (define_split
+   [(set (match_dup 4) (if_then_else:X (ne:X (match_dup 1) (const_int 0))
+ 				      (match_dup 3)
+ 				      (const_int 0)))
+-   (set (match_dup 0) (any_shift_rotate:X (match_dup 2) (subreg:QI (match_dup 4) 0)))]
+-  "operands[3] = gen_lowpart (word_mode, operands[3]);")
++   (set (match_dup 0) (any_shift_rotate:X (match_dup 2) (match_dup 5)))]
++  "operands[3] = gen_lowpart (word_mode, operands[3]);
++   operands[5] = gen_lowpart (QImode, operands[4]);")
+ 
+ ;; AND is special as the czero doesn't produce the neutral operand.  It
+ ;; would be a natural 4->3 split, but combine doesn't support that, so
