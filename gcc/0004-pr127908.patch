@@ -1,0 +1,84 @@
+diff --git a/gcc/config/riscv/riscv.cc b/gcc/config/riscv/riscv.cc
+index bed695ccae4b..beb041745c46 100644
+--- a/gcc/config/riscv/riscv.cc
++++ b/gcc/config/riscv/riscv.cc
+@@ -16984,6 +16984,35 @@ riscv_can_tag_addresses ()
+   return TARGET_64BIT && target_has_pointer_masking_p;
+ }
+ 
++/* Implement TARGET_UNSPEC_MAY_TRAP_P.  */
++
++static int
++riscv_unspec_may_trap_p (const_rtx x, unsigned flags)
++{
++  /* The default impementation catches things with an FP mode on the UNSPEC.
++     Thus we don't need to list all those.  We can focus on cases where the
++     UNSPEC has no mode or an integer/vector mode.  */
++  switch (XINT (x, 1))
++    {
++    case UNSPEC_LRINT:
++    case UNSPEC_ROUND:
++    case UNSPEC_FLOOR:
++    case UNSPEC_CEIL:
++    case UNSPEC_BTRUNC:
++    case UNSPEC_ROUNDEVEN:
++    case UNSPEC_NEARBYINT:
++    case UNSPEC_FLT_QUIET:
++    case UNSPEC_FLE_QUIET:
++    case UNSPEC_VFCVT:
++    case UNSPEC_UNSIGNED_VFCVT:
++      return 1;
++    default:
++      break;
++    }
++
++  return default_unspec_may_trap_p (x, flags);
++}
++
+ 
+ /* libsanitizer expects 8 tag bits.  */
+ 
+@@ -17437,6 +17466,9 @@ riscv_memtag_tag_bitsize ()
+ #undef TARGET_MEMTAG_TAG_BITSIZE
+ #define TARGET_MEMTAG_TAG_BITSIZE riscv_memtag_tag_bitsize
+ 
++#undef TARGET_UNSPEC_MAY_TRAP_P
++#define TARGET_UNSPEC_MAY_TRAP_P riscv_unspec_may_trap_p
++
+ #undef TARGET_DOCUMENTATION_NAME
+ #define TARGET_DOCUMENTATION_NAME "RISC-V"
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/pr127908.c b/gcc/testsuite/gcc.target/riscv/pr127908.c
+new file mode 100644
+index 000000000000..a30dbe8ed649
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/pr127908.c
+@@ -0,0 +1,28 @@
++/* { dg-do run } */
++/* { dg-additional-options "-std=c11" } */
++
++#include <fenv.h>
++#include <math.h>
++#include <stdio.h>
++
++__attribute__((noinline)) void loop(const double *s, double *d, long n)
++{
++    for (; n > 0; --n, ++s, ++d)
++        *d = ceil(*s);
++}
++
++int main(void)
++{
++    const double in[] = { INFINITY, -INFINITY, 1e300, 2.5 };
++    double out[4];
++    int bad = 0;
++    for (int i = 0; i < 4; i++) {
++        feclearexcept(FE_ALL_EXCEPT);
++        loop(&in[i], &out[i], 1);
++        int inv = fetestexcept(FE_INVALID) != 0;
++        bad |= inv;
++    }
++   if (bad)
++      __builtin_abort ();
++   __builtin_exit (0);
++}
