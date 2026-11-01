@@ -1,0 +1,116 @@
+
+
+From: panciyan <panciyan@eswincomputing.com>
+
+When a constant-size block copy has a size that is an exact multiple
+of the word size and a copied word is immediately overwritten by a
+later store, the pre-patch expansion defers the trailing whole word
+to move_by_pieces, emitting its accesses after the group's stores.
+RTL DSE then cannot prove that the trailing load does not read the
+overwritten word, so it retains the dead copy pair, costing one dead
+load and one dead store per overwritten word.
+
+Keeping the trailing whole word in the group keeps all loads ahead of
+all stores, which lets DSE remove the dead pair.  The new
+cpymem-dse-1.c test (a copy whose Int_Comp word is immediately
+overwritten; 48 bytes on rv32, 64 on rv64) flips from FAIL to PASS.
+
+Signed-off-by: Ciyan Pan <panciyan@eswincomputing.com>
+gcc/ChangeLog:
+
+        * config/riscv/riscv-string.cc (riscv_block_move_straight):
+
+gcc/testsuite/ChangeLog:
+
+        * gcc.target/riscv/cpymem-dse-1.c: New test.
+
+---
+ gcc/config/riscv/riscv-string.cc              | 17 ++++++---
+ gcc/testsuite/gcc.target/riscv/cpymem-dse-1.c | 36 +++++++++++++++++++
+ 2 files changed, 48 insertions(+), 5 deletions(-)
+ create mode 100644 gcc/testsuite/gcc.target/riscv/cpymem-dse-1.c
+
+diff --git a/gcc/config/riscv/riscv-string.cc b/gcc/config/riscv/riscv-string.cc
+index 5ca9f4e1f82..1ce89892954 100644
+--- a/gcc/config/riscv/riscv-string.cc
++++ b/gcc/config/riscv/riscv-string.cc
+@@ -853,22 +853,29 @@ riscv_block_move_straight (rtx dest, rtx src, unsigned HOST_WIDE_INT length,
+       if (step <= length)
+ 	{
+ 	  int i;
++	  /* Keep the trailing chunk in the group when it is a whole word:
++	     unlike a ragged tail, move_by_pieces cannot handle it any
++	     better (no overlapping access is possible for an aligned
++	     word), and keeping all loads ahead of all stores lets RTL DSE
++	     eliminate copies of words that later stores overwrite.  */
++	  bool group_last = bits == BITS_PER_WORD && length % delta == 0;
++	  unsigned HOST_WIDE_INT limit
++	    = group_last ? length - delta : length - 2 * delta;
++
+ 	  /* Allocate a buffer for the temporary registers.  */
+-	  regs = XALLOCAVEC (rtx, length / delta - 1);
++	  regs = XALLOCAVEC (rtx, limit / delta + 1);
+ 
+ 	  /* Load as many BITS-sized chunks as possible.  Use a normal load
+ 	     if the source has enough alignment, otherwise use left/right
+ 	     pairs.  */
+-	  for (offset = 0, i = 0; offset + step <= length;
+-	       offset += delta, i++)
++	  for (offset = 0, i = 0; offset <= limit; offset += delta, i++)
+ 	    {
+ 	      regs[i] = gen_reg_rtx (mode);
+ 	      riscv_emit_move (regs[i], adjust_address (src, mode, offset));
+ 	    }
+ 
+ 	  /* Copy the chunks to the destination.  */
+-	  for (offset = 0, i = 0; offset + step <= length;
+-	       offset += delta, i++)
++	  for (offset = 0, i = 0; offset <= limit; offset += delta, i++)
+ 	    riscv_emit_move (adjust_address (dest, mode, offset), regs[i]);
+ 	}
+ 
+diff --git a/gcc/testsuite/gcc.target/riscv/cpymem-dse-1.c b/gcc/testsuite/gcc.target/riscv/cpymem-dse-1.c
+new file mode 100644
+index 00000000000..b7fc42aecd1
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/cpymem-dse-1.c
+@@ -0,0 +1,36 @@
++/* RTL DSE can only eliminate the copy of a word that a later store
++   overwrites if the copy's loads are not interleaved with its stores.
++   riscv_block_move_straight must therefore keep the trailing whole-word
++   chunk in the group instead of deferring it to move_by_pieces, which
++   emits its accesses after the group's stores.  */
++
++/* { dg-do compile } */
++/* { dg-options "-march=rv32gc -mabi=ilp32d" { target { rv32 } } } */
++/* { dg-options "-march=rv64gc -mabi=lp64d" { target { rv64 } } } */
++/* { dg-skip-if "" { *-*-* } {"-O0" "-Os" "-Og" "-Oz" "-flto" } } */
++
++struct Record
++{
++  struct Record *Ptr_Comp;
++  long Discr;
++  long Enum_Comp;
++  long Int_Comp;
++  char Str_Comp[32];
++};
++
++extern struct Record Glob;
++
++void
++Proc (struct Record *p)
++{
++  struct Record *n = p->Ptr_Comp;
++  *n = Glob;
++  n->Int_Comp = 5;
++}
++
++/* The word holding Int_Comp (offset 12 on rv32, 24 on rv64) is
++   immediately overwritten, so the copy of that word (a load from that
++   offset in Glob feeding a store to the same offset in *n) must have
++   been removed.  The store of the constant 5 remains.  */
++/* { dg-final { scan-assembler-not "lw\t\[at\]\[0-9\]+,12\\(" { target rv32 } } } */
++/* { dg-final { scan-assembler-not "ld\t\[at\]\[0-9\]+,24\\(" { target rv64 } } } */
+-- 
+2.43.0
+
