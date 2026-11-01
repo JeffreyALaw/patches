@@ -65,6 +65,11 @@ if [ $TARGET == riscv64-k1-linux-gnu ]; then
   ENABLE_MULTIARCH=--with-cpu=spacemit-x60
 fi
 
+if [ $TARGET == riscv64-k3-linux-gnu ]; then
+  TARGET=riscv64-linux-gnu
+  ENABLE_MULTIARCH=--with-cpu=spacemit-x100
+fi
+
 echo Building GCC
 date
 pushd obj/gcc
