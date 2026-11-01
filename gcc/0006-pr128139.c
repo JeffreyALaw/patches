@@ -27,7 +27,7 @@ index 000000000000..b18fb539bad4
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/pr128139.c
 @@ -0,0 +1,12 @@
-+/* { dg-do compile */
++/* { dg-do compile } */
 +
 +void b(char *);
 +
