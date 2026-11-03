@@ -1,0 +1,345 @@
+diff --git a/gcc/match.pd b/gcc/match.pd
+index d1eeb283bcb..eadd6751612 100644
+--- a/gcc/match.pd
++++ b/gcc/match.pd
+@@ -10722,14 +10722,16 @@ DEFINE_INT_AND_FLOAT_ROUND_FN (RINT)
+ 	       (convert:utype @4))))))))
+ 
+ /* Transform (@0 < @1 and @0 < @2) to use min,
+-   (@0 > @1 and @0 > @2) to use max */
++   (@0 > @1 and @0 > @2) to use max.  MIN (a, b) is one of a or b and is
++   <= both, so this holds for any @0, including a constant, which is the
++   shape of the vectorizer's runtime alias check:
++     (a > 4) & (b > 4)  ->  MIN (a, b) > 4  */
+ (for logic (bit_and bit_and bit_and bit_and bit_ior bit_ior bit_ior bit_ior)
+      op    (lt      le      gt      ge      lt      le      gt      ge     )
+      ext   (min     min     max     max     max     max     min     min    )
+  (simplify
+   (logic (op:cs @0 @1) (op:cs @0 @2))
+-  (if (INTEGRAL_TYPE_P (TREE_TYPE (@0))
+-       && TREE_CODE (@0) != INTEGER_CST)
++  (if (INTEGRAL_TYPE_P (TREE_TYPE (@0)))
+    (op @0 (ext @1 @2)))))
+ 
+ /* Max<bool0, bool1> -> bool0 | bool1
+diff --git a/gcc/testsuite/gcc.dg/tree-ssa/minmax-cmp-1.c b/gcc/testsuite/gcc.dg/tree-ssa/minmax-cmp-1.c
+new file mode 100644
+index 00000000000..f5be4965c02
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/tree-ssa/minmax-cmp-1.c
+@@ -0,0 +1,27 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -fdump-tree-optimized" } */
++
++/* Two comparisons against the same value, combined with & or |, become one
++   comparison of a MIN/MAX, including when the common operand is a constant
++   (as in the vectorizer's runtime alias check).  */
++
++#define FORMS(T, N) \
++  int and_gt_##N (T a, T b) { return (a >  4) & (b >  4); } \
++  int and_ge_##N (T a, T b) { return (a >= 4) & (b >= 4); } \
++  int and_lt_##N (T a, T b) { return (a <  4) & (b <  4); } \
++  int and_le_##N (T a, T b) { return (a <= 4) & (b <= 4); } \
++  int ior_gt_##N (T a, T b) { return (a >  4) | (b >  4); } \
++  int ior_ge_##N (T a, T b) { return (a >= 4) | (b >= 4); } \
++  int ior_lt_##N (T a, T b) { return (a <  4) | (b <  4); } \
++  int ior_le_##N (T a, T b) { return (a <= 4) | (b <= 4); }
++
++FORMS (int, i)
++FORMS (unsigned int, u)
++FORMS (long, l)
++FORMS (unsigned long, ul)
++
++/* Per type: and_gt, and_ge, ior_lt, ior_le use MIN; the other four MAX.  */
++/* { dg-final { scan-tree-dump-times " = MIN_EXPR <" 16 "optimized" } } */
++/* { dg-final { scan-tree-dump-times " = MAX_EXPR <" 16 "optimized" } } */
++/* { dg-final { scan-tree-dump-not " & " "optimized" } } */
++/* { dg-final { scan-tree-dump-not " \\| " "optimized" } } */
+diff --git a/gcc/testsuite/gcc.dg/tree-ssa/minmax-cmp-2.c b/gcc/testsuite/gcc.dg/tree-ssa/minmax-cmp-2.c
+new file mode 100644
+index 00000000000..278f32d4e5b
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/tree-ssa/minmax-cmp-2.c
+@@ -0,0 +1,14 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -fdump-tree-optimized" } */
++
++/* Operands of different types or signedness must not be combined.  */
++
++int f1 (long l, int i) { return (l > 4) & (i > 4); }
++int f2 (unsigned u, int i) { return (u > 4) & (i > 4); }
++int f3 (signed char c, unsigned short s) { return (c > 4) & (s > 4); }
++int f4 (int a, unsigned b) { return (a > 4) & (b > 4u); }
++int f5 (int a, int b, int c) { return (a > 4) & (b > c); }
++int f6 (int a, int b) { return (a > 4) & (b < 4); }
++
++/* { dg-final { scan-tree-dump-not "MIN_EXPR" "optimized" } } */
++/* { dg-final { scan-tree-dump-not "MAX_EXPR" "optimized" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/zbb-min-max-cmp-1.c b/gcc/testsuite/gcc.target/riscv/zbb-min-max-cmp-1.c
+new file mode 100644
+index 00000000000..e5ca0948e6c
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/zbb-min-max-cmp-1.c
+@@ -0,0 +1,30 @@
++/* { dg-do compile { target { rv32 || rv64 } } } */
++/* { dg-options "-march=rv64gc_zbb -mabi=lp64d -O2 -fdump-tree-optimized" { target { rv64 } } } */
++/* { dg-options "-march=rv32gc_zbb -mabi=ilp32d -O2 -fdump-tree-optimized" { target { rv32 } } } */
++
++/* (a OP c) & (b OP c) and (a OP c) | (b OP c) with a single MIN/MAX.  */
++
++#define MINMAX_CMP_TYPES(X) \
++  X (int, i) X (unsigned int, u) X (long, l) X (unsigned long, ul)
++
++#define DEF_FORMS(T, N) \
++  __attribute__ ((noipa)) int and_gt_##N (T a, T b, T c) { return (a >  c) & (b >  c); } \
++  __attribute__ ((noipa)) int and_ge_##N (T a, T b, T c) { return (a >= c) & (b >= c); } \
++  __attribute__ ((noipa)) int and_lt_##N (T a, T b, T c) { return (a <  c) & (b <  c); } \
++  __attribute__ ((noipa)) int and_le_##N (T a, T b, T c) { return (a <= c) & (b <= c); } \
++  __attribute__ ((noipa)) int ior_gt_##N (T a, T b, T c) { return (a >  c) | (b >  c); } \
++  __attribute__ ((noipa)) int ior_ge_##N (T a, T b, T c) { return (a >= c) | (b >= c); } \
++  __attribute__ ((noipa)) int ior_lt_##N (T a, T b, T c) { return (a <  c) | (b <  c); } \
++  __attribute__ ((noipa)) int ior_le_##N (T a, T b, T c) { return (a <= c) | (b <= c); }
++
++MINMAX_CMP_TYPES (DEF_FORMS)
++
++/* 4 types x 8 forms = 32 functions: and_gt/and_ge/ior_lt/ior_le use MIN
++   (16), and_lt/and_le/ior_gt/ior_ge use MAX (16).  */
++/* { dg-final { scan-tree-dump-times " = MIN_EXPR <" 16 "optimized" } } */
++/* { dg-final { scan-tree-dump-times " = MAX_EXPR <" 16 "optimized" } } */
++/* { dg-final { scan-tree-dump-not " & " "optimized" } } */
++/* { dg-final { scan-tree-dump-not " \\| " "optimized" } } */
++/* One min/max per function and no second compare.  */
++/* { dg-final { scan-assembler-times "\\m(min|minu|max|maxu)\\M" 32 } } */
++/* { dg-final { scan-assembler-not "\\mand\\M|\\mor\\M" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/zbb-min-max-cmp-2.c b/gcc/testsuite/gcc.target/riscv/zbb-min-max-cmp-2.c
+new file mode 100644
+index 00000000000..1d9bfcba170
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/zbb-min-max-cmp-2.c
+@@ -0,0 +1,26 @@
++/* { dg-do compile { target { rv32 || rv64 } } } */
++/* { dg-options "-march=rv64gc_zbb -mabi=lp64d -O2 -fdump-tree-optimized" { target { rv64 } } } */
++/* { dg-options "-march=rv32gc_zbb -mabi=ilp32d -O2 -fdump-tree-optimized" { target { rv32 } } } */
++
++/* Same as zbb-min-max-cmp-1.c, with a constant as the common operand, as in
++   the vectorizer's runtime alias check.  */
++
++#define MINMAX_CMP_TYPES(X) \
++  X (int, i) X (unsigned int, u) X (long, l) X (unsigned long, ul)
++
++#define DEF_FORMS_C(T, N) \
++  __attribute__ ((noipa)) int c_and_gt_##N (T a, T b) { return (a >  4) & (b >  4); } \
++  __attribute__ ((noipa)) int c_and_ge_##N (T a, T b) { return (a >= 4) & (b >= 4); } \
++  __attribute__ ((noipa)) int c_and_lt_##N (T a, T b) { return (a <  4) & (b <  4); } \
++  __attribute__ ((noipa)) int c_and_le_##N (T a, T b) { return (a <= 4) & (b <= 4); } \
++  __attribute__ ((noipa)) int c_ior_gt_##N (T a, T b) { return (a >  4) | (b >  4); } \
++  __attribute__ ((noipa)) int c_ior_ge_##N (T a, T b) { return (a >= 4) | (b >= 4); } \
++  __attribute__ ((noipa)) int c_ior_lt_##N (T a, T b) { return (a <  4) | (b <  4); } \
++  __attribute__ ((noipa)) int c_ior_le_##N (T a, T b) { return (a <= 4) | (b <= 4); }
++
++MINMAX_CMP_TYPES (DEF_FORMS_C)
++
++/* { dg-final { scan-tree-dump-times " = MIN_EXPR <" 16 "optimized" } } */
++/* { dg-final { scan-tree-dump-times " = MAX_EXPR <" 16 "optimized" } } */
++/* { dg-final { scan-tree-dump-not " & " "optimized" } } */
++/* { dg-final { scan-tree-dump-not " \\| " "optimized" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/zbb-min-max-cmp-3.c b/gcc/testsuite/gcc.target/riscv/zbb-min-max-cmp-3.c
+new file mode 100644
+index 00000000000..07d2178e86a
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/zbb-min-max-cmp-3.c
+@@ -0,0 +1,26 @@
++/* { dg-do compile { target { rv32 || rv64 } } } */
++/* { dg-options "-march=rv64gc_zbb -mabi=lp64d -O2 -fdump-tree-optimized" { target { rv64 } } } */
++/* { dg-options "-march=rv32gc_zbb -mabi=ilp32d -O2 -fdump-tree-optimized" { target { rv32 } } } */
++
++/* Runtime alias check shape from the vectorizer.  */
++typedef __UINTPTR_TYPE__ uintptr_t;
++
++int
++f (char *d, char *m, char *b)
++{
++  return ((uintptr_t) d - (uintptr_t) b - 2 > 4)
++	 & ((uintptr_t) d - (uintptr_t) m - 2 > 4);
++}
++
++int
++g (char *d, char *m, char *b, int *x)
++{
++  if (((uintptr_t) d - (uintptr_t) b - 2 > 4)
++      & ((uintptr_t) d - (uintptr_t) m - 2 > 4))
++    return x[0];
++  return x[1];
++}
++
++/* { dg-final { scan-tree-dump-times " = MIN_EXPR <" 2 "optimized" } } */
++/* { dg-final { scan-tree-dump-not " & " "optimized" } } */
++/* { dg-final { scan-assembler-times "\\mminu\\M" 2 } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/zbb-min-max-cmp-4.c b/gcc/testsuite/gcc.target/riscv/zbb-min-max-cmp-4.c
+new file mode 100644
+index 00000000000..b15df2a8d50
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/zbb-min-max-cmp-4.c
+@@ -0,0 +1,25 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gcv_zbb -mabi=lp64d -O3 -fdump-tree-optimized" { target { rv64 } } } */
++/* { dg-options "-march=rv32gcv_zbb -mabi=ilp32d -O3 -fdump-tree-optimized" { target { rv32 } } } */
++
++/* No restrict: the vectorizer versions the loop on a runtime alias check
++   that compares two pointer differences against a constant.  */
++typedef short int16_t;
++typedef unsigned short uint16_t;
++typedef unsigned uint32_t;
++
++void
++quant (int16_t *dct, uint16_t *mf, uint16_t *bias)
++{
++  for (int i = 0; i < 16; i++)
++    {
++      int a = dct[i];
++      if (a > 0)
++	dct[i] = ((uint32_t) (bias[i] + a) * mf[i]) >> 16;
++      else
++	dct[i] = -(int) (((uint32_t) (bias[i] - a) * mf[i]) >> 16);
++    }
++}
++
++/* { dg-final { scan-tree-dump " = MIN_EXPR <" "optimized" } } */
++/* { dg-final { scan-assembler "\\mminu?\\M" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/zbb-min-max-cmp-run-1.c b/gcc/testsuite/gcc.target/riscv/zbb-min-max-cmp-run-1.c
+new file mode 100644
+index 00000000000..7f869b09071
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/zbb-min-max-cmp-run-1.c
+@@ -0,0 +1,63 @@
++/* { dg-do run { target { rv64 && riscv_zbb } } } */
++/* { dg-options "-O2" } */
++
++#define MINMAX_CMP_TYPES(X) \
++  X (int, i) X (unsigned int, u) X (long, l) X (unsigned long, ul)
++
++#define DEF_FORMS(T, N) \
++  __attribute__ ((noipa)) int and_gt_##N (T a, T b, T c) { return (a >  c) & (b >  c); } \
++  __attribute__ ((noipa)) int and_ge_##N (T a, T b, T c) { return (a >= c) & (b >= c); } \
++  __attribute__ ((noipa)) int and_lt_##N (T a, T b, T c) { return (a <  c) & (b <  c); } \
++  __attribute__ ((noipa)) int and_le_##N (T a, T b, T c) { return (a <= c) & (b <= c); } \
++  __attribute__ ((noipa)) int ior_gt_##N (T a, T b, T c) { return (a >  c) | (b >  c); } \
++  __attribute__ ((noipa)) int ior_ge_##N (T a, T b, T c) { return (a >= c) | (b >= c); } \
++  __attribute__ ((noipa)) int ior_lt_##N (T a, T b, T c) { return (a <  c) | (b <  c); } \
++  __attribute__ ((noipa)) int ior_le_##N (T a, T b, T c) { return (a <= c) | (b <= c); }
++
++extern void abort (void);
++
++MINMAX_CMP_TYPES (DEF_FORMS)
++
++/* Reference: compare through volatiles so the compiler cannot combine them.  */
++#define REF_CMP(NAME, OP) \
++  static int NAME (long long x, long long y) { return x OP y; }
++
++#define VALS \
++  0LL, 1LL, 2LL, 3LL, 4LL, 5LL, 6LL, 127LL, 128LL, 255LL, 256LL, 32767LL, \
++  32768LL, 65535LL, 0x7fffffffLL, 0x80000000LL, 0xffffffffLL, -1LL, -2LL, \
++  -3LL, -5LL, -128LL, -32768LL, -0x80000000LL, 0x7fffffffffffffffLL, \
++  -0x7fffffffffffffffLL - 1, 0x100000000LL, 0x100000001LL
++
++static const long long vals[] = { VALS };
++#define NV (sizeof vals / sizeof vals[0])
++
++#define CHECK_ONE(T, N, FORM, A, B, C, EXPECT) \
++  do { if (FORM##_##N (A, B, C) != (EXPECT)) abort (); } while (0)
++
++#define CHECK_TYPE(T, N) \
++  for (unsigned i = 0; i < NV; i++) \
++    for (unsigned j = 0; j < NV; j++) \
++      for (unsigned k = 0; k < NV; k++) \
++	{ \
++	  volatile T va = (T) vals[i], vb = (T) vals[j], vc = (T) vals[k]; \
++	  T a = va, b = vb, c = vc; \
++	  int ag = a > c, ae = a >= c, al = a < c, ale = a <= c; \
++	  int bg = b > c, be = b >= c, bl = b < c, ble = b <= c; \
++	  __asm__ volatile ("" : "+r" (ag), "+r" (ae), "+r" (al), "+r" (ale), \
++			    "+r" (bg), "+r" (be), "+r" (bl), "+r" (ble)); \
++	  CHECK_ONE (T, N, and_gt, a, b, c, ag & bg); \
++	  CHECK_ONE (T, N, and_ge, a, b, c, ae & be); \
++	  CHECK_ONE (T, N, and_lt, a, b, c, al & bl); \
++	  CHECK_ONE (T, N, and_le, a, b, c, ale & ble); \
++	  CHECK_ONE (T, N, ior_gt, a, b, c, ag | bg); \
++	  CHECK_ONE (T, N, ior_ge, a, b, c, ae | be); \
++	  CHECK_ONE (T, N, ior_lt, a, b, c, al | bl); \
++	  CHECK_ONE (T, N, ior_le, a, b, c, ale | ble); \
++	}
++
++int
++main (void)
++{
++  MINMAX_CMP_TYPES (CHECK_TYPE)
++  return 0;
++}
+diff --git a/gcc/testsuite/gcc.target/riscv/zbb-min-max-cmp-run-2.c b/gcc/testsuite/gcc.target/riscv/zbb-min-max-cmp-run-2.c
+new file mode 100644
+index 00000000000..27f525d2fc4
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/zbb-min-max-cmp-run-2.c
+@@ -0,0 +1,62 @@
++/* { dg-do run { target { rv64 && riscv_zbb } } } */
++/* { dg-options "-O2" } */
++
++#define MINMAX_CMP_TYPES(X) \
++  X (int, i) X (unsigned int, u) X (long, l) X (unsigned long, ul)
++
++#define DEF_FORMS_C(T, N) \
++  __attribute__ ((noipa)) int c_and_gt_##N (T a, T b) { return (a >  4) & (b >  4); } \
++  __attribute__ ((noipa)) int c_and_ge_##N (T a, T b) { return (a >= 4) & (b >= 4); } \
++  __attribute__ ((noipa)) int c_and_lt_##N (T a, T b) { return (a <  4) & (b <  4); } \
++  __attribute__ ((noipa)) int c_and_le_##N (T a, T b) { return (a <= 4) & (b <= 4); } \
++  __attribute__ ((noipa)) int c_ior_gt_##N (T a, T b) { return (a >  4) | (b >  4); } \
++  __attribute__ ((noipa)) int c_ior_ge_##N (T a, T b) { return (a >= 4) | (b >= 4); } \
++  __attribute__ ((noipa)) int c_ior_lt_##N (T a, T b) { return (a <  4) | (b <  4); } \
++  __attribute__ ((noipa)) int c_ior_le_##N (T a, T b) { return (a <= 4) | (b <= 4); }
++
++extern void abort (void);
++
++MINMAX_CMP_TYPES (DEF_FORMS_C)
++
++/* Reference: compare through volatiles so the compiler cannot combine them.  */
++#define REF_CMP(NAME, OP) \
++  static int NAME (long long x, long long y) { return x OP y; }
++
++#define VALS \
++  0LL, 1LL, 2LL, 3LL, 4LL, 5LL, 6LL, 127LL, 128LL, 255LL, 256LL, 32767LL, \
++  32768LL, 65535LL, 0x7fffffffLL, 0x80000000LL, 0xffffffffLL, -1LL, -2LL, \
++  -3LL, -5LL, -128LL, -32768LL, -0x80000000LL, 0x7fffffffffffffffLL, \
++  -0x7fffffffffffffffLL - 1, 0x100000000LL, 0x100000001LL
++
++static const long long vals[] = { VALS };
++#define NV (sizeof vals / sizeof vals[0])
++
++#define CHECK_ONE(T, N, FORM, A, B, EXPECT) \
++  do { if (FORM##_##N (A, B) != (EXPECT)) abort (); } while (0)
++
++#define CHECK_TYPE(T, N) \
++  for (unsigned i = 0; i < NV; i++) \
++    for (unsigned j = 0; j < NV; j++) \
++      { \
++	volatile T va = (T) vals[i], vb = (T) vals[j], vc = 4; \
++	T a = va, b = vb, c = vc; \
++	int ag = a > c, ae = a >= c, al = a < c, ale = a <= c; \
++	int bg = b > c, be = b >= c, bl = b < c, ble = b <= c; \
++	__asm__ volatile ("" : "+r" (ag), "+r" (ae), "+r" (al), "+r" (ale), \
++			  "+r" (bg), "+r" (be), "+r" (bl), "+r" (ble)); \
++	CHECK_ONE (T, N, c_and_gt, a, b, ag & bg); \
++	CHECK_ONE (T, N, c_and_ge, a, b, ae & be); \
++	CHECK_ONE (T, N, c_and_lt, a, b, al & bl); \
++	CHECK_ONE (T, N, c_and_le, a, b, ale & ble); \
++	CHECK_ONE (T, N, c_ior_gt, a, b, ag | bg); \
++	CHECK_ONE (T, N, c_ior_ge, a, b, ae | be); \
++	CHECK_ONE (T, N, c_ior_lt, a, b, al | bl); \
++	CHECK_ONE (T, N, c_ior_le, a, b, ale | ble); \
++      }
++
++int
++main (void)
++{
++  MINMAX_CMP_TYPES (CHECK_TYPE)
++  return 0;
++}
