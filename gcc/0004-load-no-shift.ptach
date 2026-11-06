@@ -1,0 +1,87 @@
+diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
+index bc8e7106e52f..a986be789fcf 100644
+--- a/gcc/config/riscv/riscv.md
++++ b/gcc/config/riscv/riscv.md
+@@ -5515,6 +5515,29 @@ (define_expand "aop<mode>3"
+   }
+ ) 
+ 
++;; We want to capture things like loading a 32 bit object, right shifting
++;; it by 8 bits and storing it as a 16 bit object.  Naively that would
++;; generate the 32-bit load, right shift and 16-bit store.  But if we can
++;; handle unaligned accesses, then we can adjust the address of the load
++;; and narrow it to 16 bits.
++;;
++;; Combine has actually done all the hard work to adjust the source and
++;; and destination operands.  So we just need to load from memory into
++;; the appropriately sized temporary and store from that temporary into
++;; memory.
++(define_split
++  [(set (match_operand:SUBX 0 "memory_operand")
++       (match_operand:SUBX 1 "memory_operand"))]
++  "!MEM_VOLATILE_P (operands[0])
++    && !MEM_VOLATILE_P (operands[1])
++    && (<MODE>mode == QImode || !riscv_slow_unaligned_access_p))"
++  [(set (match_dup 2) (match_dup 1))
++   (set (match_dup 0) (match_dup 2))]
++{
++  operands[2] = gen_reg_rtx (<MODE>mode);
++})
++
++
+ (include "bitmanip.md")
+ (include "crypto.md")
+ (include "sync.md")
+diff --git a/gcc/testsuite/gcc.target/riscv/load-no-shift.c b/gcc/testsuite/gcc.target/riscv/load-no-shift.c
+new file mode 100644
+index 000000000000..5ee077146eb0
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/load-no-shift.c
+@@ -0,0 +1,47 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -mtune=generic-ooo" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" } } */
++
++/* Only a narrow field of the loaded word is stored, so a load of the store's
++   width at the adjusted offset is enough.  */
++
++void
++f_qi (unsigned char *d, const unsigned int *s)
++{
++  *d = *s >> 8;
++}
++
++void
++f_hi_8 (unsigned short *d, const unsigned int *s)
++{
++  *d = *s >> 8;
++}
++
++void
++f_hi_16 (unsigned short *d, const unsigned int *s)
++{
++  *d = *s >> 16;
++}
++
++#if __riscv_xlen == 64
++void
++f_si_8 (unsigned int *d, const unsigned long *s)
++{
++  *d = *s >> 8;
++}
++
++void
++f_si_16 (unsigned int *d, const unsigned long *s)
++{
++  *d = *s >> 16;
++}
++#endif
++
++/* Each function must be a single load, a single store and a return.  */
++/* { dg-final { scan-assembler-times "\tl\[bhw\]u?\t" 3 { target { rv32 } } } } */
++/* { dg-final { scan-assembler-times "\ts\[bhw\]\t" 3 { target { rv32 } } } } */
++/* { dg-final { scan-assembler-times "\tret\n" 3 { target { rv32 } } } } */
++/* { dg-final { scan-assembler-times "\tl\[bhw\]u?\t" 5 { target { rv64 } } } } */
++/* { dg-final { scan-assembler-times "\ts\[bhw\]\t" 5 { target { rv64 } } } } */
++/* { dg-final { scan-assembler-times "\tret\n" 5 { target { rv64 } } } } */
++/* { dg-final { scan-assembler-not "\n\t(?!l\[bhw\]u?\t|s\[bhw\]\t|ret\n)\[a-z\]" } } */
