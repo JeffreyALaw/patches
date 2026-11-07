@@ -19,7 +19,7 @@ index bc8e7106e52f..a986be789fcf 100644
 +(define_split
 +  [(set (match_operand:SUBX 0 "memory_operand")
 +       (match_operand:SUBX 1 "memory_operand"))]
-+  "!MEM_VOLATILE_P (operands[0])
++  "(!MEM_VOLATILE_P (operands[0])
 +    && !MEM_VOLATILE_P (operands[1])
 +    && (<MODE>mode == QImode || !riscv_slow_unaligned_access_p))"
 +  [(set (match_dup 2) (match_dup 1))
