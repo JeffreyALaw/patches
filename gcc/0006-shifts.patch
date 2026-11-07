@@ -1,0 +1,81 @@
+diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
+index e6572f629ab..fe5ea9c5233 100644
+--- a/gcc/config/riscv/riscv.md
++++ b/gcc/config/riscv/riscv.md
+@@ -3336,6 +3336,25 @@
+   operands[6] = GEN_INT (leading);
+ })
+ 
++;; The low 32 bits of a zero_extract of at least 32 bits are the low 32 bits
++;; of a right shift, which addiw consumes directly.  This arises when a shift
++;; left followed by a logical shift right feeds a 32-bit add.  Narrower fields
++;; do not qualify as the bits above the field must read as zero.
++(define_split
++  [(set (match_operand:DI 0 "register_operand")
++	(sign_extend:DI
++	  (plus:SI
++	    (subreg:SI
++	      (zero_extract:DI (match_operand:DI 1 "register_operand")
++			       (match_operand 2 "const_int_operand")
++			       (match_operand 3 "const_int_operand")) 0)
++	    (match_operand:SI 4 "arith_operand"))))
++   (clobber (match_operand:DI 5 "register_operand"))]
++  "TARGET_64BIT && INTVAL (operands[2]) >= 32 && INTVAL (operands[3]) >= 1"
++  [(set (match_dup 5) (lshiftrt:DI (match_dup 1) (match_dup 3)))
++   (set (match_dup 0)
++	(sign_extend:DI (plus:SI (subreg:SI (match_dup 5) 0) (match_dup 4))))])
++
+ ;; Handle logical AND feeding an equality test against zero where an operand
+ ;; to the AND is a constant requiring synthesis.  Because we only care about
+ ;; zero/nonzero state after the AND, we may be able to shift both operands
+diff --git a/gcc/testsuite/gcc.target/riscv/shift-shift-8.c b/gcc/testsuite/gcc.target/riscv/shift-shift-8.c
+new file mode 100644
+index 00000000000..66ba7d91f42
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/shift-shift-8.c
+@@ -0,0 +1,45 @@
++/* { dg-do compile { target rv64 } } */
++/* { dg-options "-O2 -march=rv64gc -mabi=lp64d" } */
++
++/* These all have field extractions where the field is 32 or more bits, but
++   any bits beyond the SI sign bit are never used.  Knowing those upper bits
++   are never used, we can simplify the shift sequences a bit.  */
++
++int
++f32 (unsigned long s)
++{
++  return (int) ((s << 24) >> 32) + 47;
++}
++
++int
++f33 (unsigned long s)
++{
++  return (int) ((s << 24) >> 31) + 47;
++}
++
++int
++f40 (unsigned long s)
++{
++  return (int) ((s << 16) >> 24) + 47;
++}
++
++int
++f48 (unsigned long s)
++{
++  return (int) ((s << 8) >> 16) + 47;
++}
++
++int
++f62 (unsigned long s)
++{
++  return (int) ((s << 1) >> 2) + 47;
++}
++
++int
++freg (unsigned long s, int y)
++{
++  return (int) ((s << 24) >> 32) + y;
++}
++
++/* { dg-final { scan-assembler-times "\tsrli\t" 6 } } */
++/* { dg-final { scan-assembler-not "\tslli\t" } } */
