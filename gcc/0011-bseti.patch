@@ -1,0 +1,217 @@
+diff --git a/gcc/config/riscv/bitmanip.md b/gcc/config/riscv/bitmanip.md
+index 1482cee29a0..c2f7d869a6d 100644
+--- a/gcc/config/riscv/bitmanip.md
++++ b/gcc/config/riscv/bitmanip.md
+@@ -1651,3 +1651,53 @@
+    (set (match_dup 0) (ior:DI (match_dup 0) (match_dup 3)))]
+   { operands[2] = GEN_INT (UINTVAL (operands[2]) | UINTVAL (operands[3])); })
+   
++;; Combine splits this at the inner operation.  But RISC-V would prefer the
++;; split happen at the SIGN_EXTEND since it has instrutions for those forms.
++;;
++;; I suspect there are AND forms we should be supporting here.
++(define_split
++  [(set (match_operand:DI 0 "register_operand")
++	(any_or:DI (sign_extend:DI
++		    (sext_w_binop:SI (match_operand:SI 1 "register_operand")
++				     (match_operand:SI 2 "arith_operand")))
++		   (match_operand:DI 3 "single_bit_mask_operand")))]
++  "TARGET_64BIT && TARGET_ZBS && (UINTVAL (operands[3]) >> 31) == 0"
++  [(set (match_dup 0)
++	(sign_extend:DI (sext_w_binop:SI (match_dup 1) (match_dup 2))))
++   (set (match_dup 0) (any_or:DI (match_dup 0) (match_dup 3)))])
++
++(define_split
++  [(set (match_operand:DI 0 "register_operand")
++	(any_or:DI (sign_extend:DI
++		    (neg:SI (match_operand:SI 1 "register_operand")))
++		   (match_operand:DI 2 "single_bit_mask_operand")))]
++  "TARGET_64BIT && TARGET_ZBS && (UINTVAL (operands[2]) >> 31) == 0"
++  [(set (match_dup 0) (sign_extend:DI (neg:SI (match_dup 1))))
++   (set (match_dup 0) (any_or:DI (match_dup 0) (match_dup 2)))])
++
++;; Shifts and rotates take their count in QImode, so separate pattern.
++(define_split
++  [(set (match_operand:DI 0 "register_operand")
++	(any_or:DI (sign_extend:DI
++		    (any_shift_rotate:SI (match_operand:SI 1 "register_operand")
++					 (match_operand:QI 2 "arith_operand")))
++		   (match_operand:DI 3 "single_bit_mask_operand")))]
++  "TARGET_64BIT && TARGET_ZBS && (UINTVAL (operands[3]) >> 31) == 0"
++  [(set (match_dup 0)
++	(sign_extend:DI (any_shift_rotate:SI (match_dup 1) (match_dup 2))))
++   (set (match_dup 0) (ior:DI (match_dup 0) (match_dup 3)))])
++
++;; A logical right shift by N clears the top N bits.  Adding a single bit
++;; constant that lies in those bits cannot carry, so the add is an IOR and
++;; can be a bseti.  Constants that fit an addi are already handled.
++(define_split
++  [(set (match_operand:DI 0 "register_operand")
++	(plus:DI (lshiftrt:DI (match_operand:DI 1 "register_operand")
++			      (match_operand 2 "const_int_operand"))
++		 (match_operand:DI 3 "single_bit_mask_operand")))]
++  "TARGET_64BIT && TARGET_ZBS
++   && IN_RANGE (INTVAL (operands[2]), 1, 63)
++   && !SMALL_OPERAND (INTVAL (operands[3]))
++   && exact_log2 (UINTVAL (operands[3])) >= 64 - INTVAL (operands[2])"
++  [(set (match_dup 0) (lshiftrt:DI (match_dup 1) (match_dup 2)))
++   (set (match_dup 0) (ior:DI (match_dup 0) (match_dup 3)))])
+diff --git a/gcc/config/riscv/iterators.md b/gcc/config/riscv/iterators.md
+index 2f4fd1d1504..b53cb961ba0 100644
+--- a/gcc/config/riscv/iterators.md
++++ b/gcc/config/riscv/iterators.md
+@@ -221,6 +221,11 @@
+ 					  ashiftrt rotatert rotate])
+ (define_code_iterator zero_is_neutral_op_c [plus ior xor])
+ 
++;; Iterator for all the basic binary operations that have W forms except
++;; shifts/rotates.  Shifts/rotates have mismatched operand modes and
++;; thus are painful to handle in a single pattern
++(define_code_iterator sext_w_binop [plus minus mult div udiv])
++
+ ;; These code iterators allow unsigned and signed extraction to be generated
+ ;; from the same template.
+ (define_code_iterator any_extract [sign_extract zero_extract])
+diff --git a/gcc/config/riscv/predicates.md b/gcc/config/riscv/predicates.md
+index f019426007c..9ffe2fc2d52 100644
+--- a/gcc/config/riscv/predicates.md
++++ b/gcc/config/riscv/predicates.md
+@@ -425,6 +425,11 @@
+   (and (match_code "const_int")
+        (match_test "SINGLE_BIT_MASK_OPERAND (~UINTVAL (op))")))
+ 
++(define_predicate "arith_or_single_bit_operand"
++  (ior (match_operand 0 "arith_operand")
++       (and (match_test "TARGET_ZBS")
++	    (match_operand 0 "single_bit_mask_operand"))))
++
+ (define_predicate "arith_or_mode_mask_or_zbs_operand"
+   (ior (match_operand 0 "arith_operand")
+        (and (match_test "TARGET_ZBS")
+diff --git a/gcc/config/riscv/riscv.md b/gcc/config/riscv/riscv.md
+index e6572f629ab..f715906c246 100644
+--- a/gcc/config/riscv/riscv.md
++++ b/gcc/config/riscv/riscv.md
+@@ -5501,12 +5501,22 @@
+ (define_expand "aop<mode>3"
+   [(set (match_operand:GPR 0 "register_operand")
+         (ior:GPR (match_operand:GPR 1 "register_operand")
+-                 (match_operand:GPR 2 "arith_operand")))]
++                 (match_operand:GPR 2 "arith_or_single_bit_operand")))]
+   ""          
+   {
+     /* If we have shift-add insns and arguments are all registers, steer
+        towards PLUS, otherwise steer towards IOR.  */
+-    if ((TARGET_ZBA && REG_P (operands[2]))
++    if (TARGET_64BIT && TARGET_ZBS
++	&& single_bit_mask_operand (operands[2], VOIDmode))
++      {
++	if (<MODE>mode != word_mode)
++	  {
++	    operands[0] = gen_lowpart (word_mode, operands[0]);
++	    operands[1] = gen_lowpart (word_mode, operands[1]);
++	  }
++	emit_insn (gen_iordi3 (operands[0], operands[1], operands[2]));
++      }
++    else if ((TARGET_ZBA && REG_P (operands[2]))
+ 	|| (TARGET_64BIT && GET_MODE (operands[0]) == SImode))
+       emit_insn (gen_add<mode>3 (operands[0], operands[1], operands[2]));
+     else
+diff --git a/gcc/testsuite/gcc.target/riscv/zbs-bseti-disjoint-add.c b/gcc/testsuite/gcc.target/riscv/zbs-bseti-disjoint-add.c
+new file mode 100644
+index 00000000000..49b2b0faabd
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/zbs-bseti-disjoint-add.c
+@@ -0,0 +1,92 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64gc_zbs -mabi=lp64" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
++
++/* If the constant operand is a single bit and we know the bit is off in
++   the other operand, then we can use bseti to turn on the bit.  This
++   wins if the constant does not fit into a simm12 for addi.  */
++
++typedef unsigned long u64;
++
++u64
++f1 (u64 x)
++{
++  return (x >> 49) + 0x8000;
++}
++
++u64
++f2 (u64 x)
++{
++  return (x >> 40) + (1UL << 24);
++}
++
++u64
++f3 (u64 x)
++{
++  return (x >> 33) + (1UL << 31);
++}
++
++u64
++f4 (u64 x)
++{
++  return (x >> 20) + (1UL << 44);
++}
++
++u64
++f5 (u64 x)
++{
++  return (x >> 1) + (1UL << 63);
++}
++
++u64
++f6 (u64 x)
++{
++  return (x & 0x7fff) + 0x8000;
++}
++
++u64
++f7 (u64 x, u64 y)
++{
++  return (y << 16) + (x & 0x7fff) + 0x8000;
++}
++
++/* The exact shape form from x264  */
++unsigned int
++f8 (int x, int y)
++{
++  return ((x << 16) | (y & 0x7FFF)) | 0x8000;
++}
++
++/* The constant overlaps the bits the shift can produce: a real add.  */
++u64
++n1 (u64 x)
++{
++  return (x >> 48) + 0x8000;
++}
++
++/* An arithmetic shift can produce sign bits.  */
++long
++n2 (long x)
++{
++  return (x >> 49) + 0x8000;
++}
++
++/* The constant fits an addi, which may compress; bseti would be larger.  */
++u64
++n3 (u64 x)
++{
++  return (x >> 63) + 0x400;
++}
++
++/* f1, f6, f7 and f8 each set bit 15; n1 and n2 must not, as their adds can
++   carry.  */
++/* { dg-final { scan-assembler-times "bseti\t\[axt\]\[0-9\],\[axt\]\[0-9\],15" 4 } } */
++/* n3 keeps its addi, so there must be no bseti of bit 10.  */
++/* { dg-final { scan-assembler-not "bseti\t\[axt\]\[0-9\],\[axt\]\[0-9\],10" } } */
++/* f2, f3 and f4 set bits 24, 31 and 44.  */
++/* { dg-final { scan-assembler-times "bseti\t\[axt\]\[0-9\],\[axt\]\[0-9\],24" 1 } } */
++/* { dg-final { scan-assembler-times "bseti\t\[axt\]\[0-9\],\[axt\]\[0-9\],31" 1 } } */
++/* { dg-final { scan-assembler-times "bseti\t\[axt\]\[0-9\],\[axt\]\[0-9\],44" 1 } } */
++/* f5 sets bit 63.  After the shift that bit is clear, so bseti and binvi are
++   equivalent.  */
++/* { dg-final { scan-assembler-times "(?:bseti|binvi)\t\[axt\]\[0-9\],\[axt\]\[0-9\],63" 1 } } */
