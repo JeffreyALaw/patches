@@ -1,0 +1,199 @@
+diff --git a/gcc/simplify-rtx.cc b/gcc/simplify-rtx.cc
+index e979d4c29641..662f4ab9a8bb 100644
+--- a/gcc/simplify-rtx.cc
++++ b/gcc/simplify-rtx.cc
+@@ -4484,6 +4484,34 @@ simplify_context::simplify_binary_operation_1 (rtx_code code,
+ 	  && GET_MODE_CLASS (mode) != MODE_CC)
+ 	return CONST0_RTX (mode);
+ 
++      /* (X ^ 1) & Y -> ~X & Y when Y is 0/1 which is ultimately NAND on
++	 supported targets.
++
++	 We're using nonzero_bits, so we need to know we're working with a
++	 scalar integer mode that fits in HWI.  */
++      if (is_a <scalar_int_mode> (mode, &int_mode)
++	  && HWI_COMPUTABLE_MODE_P (int_mode))
++	{
++	  /* Y may be another logical expression which has the same precedence
++	     ordering for RTL canonicalization, so we have to check both
++	     orderings. */
++	  for (int i = 0; i < 2; i++)
++	    {
++	      rtx x = i ? op1 : op0;
++	      rtx y = i ? op0 : op1;
++
++	      /* X must be the XOR expression, Y must be a 0/1 value.  */
++	      if (GET_CODE (x) == XOR
++		  && XEXP (x, 1) == CONST1_RTX (mode)
++		  && (nonzero_bits (y, int_mode) & ~HOST_WIDE_INT_1U) == 0)
++		return simplify_gen_binary (AND, mode,
++					    simplify_gen_unary (NOT, mode,
++								XEXP (x, 0),
++								mode),
++					    y);
++	    }
++ 	}
++
+       /* Convert (and (plus (A - 1)) (neg A)) to 0.  */
+       if (match_plus_neg_pattern (op0, op1, mode))
+ 	return CONST0_RTX (mode);
+diff --git a/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-1.c b/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-1.c
+new file mode 100644
+index 000000000000..986e277eac7d
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-1.c
+@@ -0,0 +1,56 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -march=rv64gc_zbb -mabi=lp64d" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
++
++/* RISC-V has no sge/sgeu, so the inverse of a comparison is computed as a
++   set-on-less-than followed by xori 1.  When that value is ANDed with
++   another comparison result, which is known to be 0 or 1, the xori is
++   equivalent to a NOT and the pair folds into a single andn.  */
++
++int
++f_lt (long a, long b, long c, long d)
++{
++  return (a < b) & !(c < d);
++}
++
++int
++f_gt (long a, long b, long c, long d)
++{
++  return (a < b) & !(c > d);
++}
++
++int
++f_ltu (unsigned long a, unsigned long b, unsigned long c, unsigned long d)
++{
++  return (a < b) & !(c < d);
++}
++
++int
++f_gtu (unsigned long a, unsigned long b, unsigned long c, unsigned long d)
++{
++  return (a < b) & !(c > d);
++}
++
++/* The inverted comparison as the first operand.  */
++int
++f_swapped (long a, long b, long c, long d)
++{
++  return !(c < d) & (a < b);
++}
++
++/* 32-bit operands.  */
++int
++f_si (int a, int b, int c, int d)
++{
++  return (a < b) & !(c < d);
++}
++
++/* The other operand is itself an AND of comparisons.  */
++int
++f_and (long a, long b, long c, long d, long e, long f)
++{
++  return ((a < b) & (e < f)) & !(c < d);
++}
++
++/* { dg-final { scan-assembler-times "\tandn\t" 7 } } */
++/* { dg-final { scan-assembler-not "\txori\t" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-2.c b/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-2.c
+new file mode 100644
+index 000000000000..95928487226e
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-2.c
+@@ -0,0 +1,15 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -march=rv64gc_zbb -mabi=lp64d" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
++
++/* The other operand is not known to be 0 or 1, so the xori cannot be
++   treated as a NOT: (x ^ 1) & b clears bit 0 of b when x is 1, whereas
++   ~x & b would keep the upper bits of b.  */
++
++long
++f (long a, long b, long c, long d)
++{
++  return (long) !(c < d) & a;
++}
++
++/* { dg-final { scan-assembler-not "\tandn\t" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-3.c b/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-3.c
+new file mode 100644
+index 000000000000..1f0e8465215d
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-3.c
+@@ -0,0 +1,49 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -march=rv32gc_zbb -mabi=ilp32d" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
++
++/* RV32 version of zbb-andn-xor1-1.c.  The inverse of a comparison is
++   computed as a set-on-less-than followed by xori 1.  When that value is
++   ANDed with another comparison result, which is known to be 0 or 1, the
++   xori is equivalent to a NOT and the pair folds into a single andn.  */
++
++int
++f_lt (int a, int b, int c, int d)
++{
++  return (a < b) & !(c < d);
++}
++
++int
++f_gt (int a, int b, int c, int d)
++{
++  return (a < b) & !(c > d);
++}
++
++int
++f_ltu (unsigned a, unsigned b, unsigned c, unsigned d)
++{
++  return (a < b) & !(c < d);
++}
++
++int
++f_gtu (unsigned a, unsigned b, unsigned c, unsigned d)
++{
++  return (a < b) & !(c > d);
++}
++
++/* The inverted comparison as the first operand.  */
++int
++f_swapped (int a, int b, int c, int d)
++{
++  return !(c < d) & (a < b);
++}
++
++/* The other operand is itself an AND of comparisons.  */
++int
++f_and (int a, int b, int c, int d, int e, int f)
++{
++  return ((a < b) & (e < f)) & !(c < d);
++}
++
++/* { dg-final { scan-assembler-times "\tandn\t" 6 } } */
++/* { dg-final { scan-assembler-not "\txori\t" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-4.c b/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-4.c
+new file mode 100644
+index 000000000000..3b8beb5d2dc9
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-4.c
+@@ -0,0 +1,16 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -march=rv32gc_zbb -mabi=ilp32d" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
++
++/* RV32 version of zbb-andn-xor1-2.c.  The other operand is not known to be
++   0 or 1, so the xori cannot be treated as a NOT: (x ^ 1) & b clears bit 0
++   of b when x is 1, whereas ~x & b would keep the upper bits of b.  */
++
++int
++f (int a, int c)
++{
++  return (c ^ 1) & a;
++}
++
++/* { dg-final { scan-assembler-not "\tandn\t" } } */
++/* { dg-final { scan-assembler "\txori\t" } } */
