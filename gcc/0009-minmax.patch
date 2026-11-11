@@ -52,3 +52,16 @@
 +/* { dg-final { scan-tree-dump-times "MIN_EXPR" 2 "optimized" } } */
 +/* { dg-final { scan-tree-dump-times "MAX_EXPR" 2 "optimized" } } */
 +/* { dg-final { scan-tree-dump-not " \\? " "optimized" } } */
+diff --git a/gcc/testsuite/gcc.dg/tree-ssa/loop-15.c b/gcc/testsuite/gcc.dg/tree-ssa/loop-15.c
+index dce6ad57a04..36228d6e0ae 100644
+--- a/gcc/testsuite/gcc.dg/tree-ssa/loop-15.c
++++ b/gcc/testsuite/gcc.dg/tree-ssa/loop-15.c
+@@ -22,5 +22,6 @@ int bla(void)
+ /* { dg-final { scan-tree-dump-times " \\+ " 0 "optimized" } } */
+ /* { dg-final { scan-tree-dump-times " \\* " 1 "optimized" } } */
+ 
+-/* The if from the loop header copying remains in the code.  */
+-/* { dg-final { scan-tree-dump-times "if " 1 "optimized" } } */
++/* The if from the loop header copying remains in the code, but gets
++   converted into a MAX_EXPR.  */
++/* { dg-final { scan-tree-dump-times "MAX_EXPR" 1 "optimized" } } */
