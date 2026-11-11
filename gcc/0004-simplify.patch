@@ -1,8 +1,8 @@
 diff --git a/gcc/simplify-rtx.cc b/gcc/simplify-rtx.cc
-index e979d4c2964..47609c524f8 100644
+index e979d4c29641..617b421f32a0 100644
 --- a/gcc/simplify-rtx.cc
 +++ b/gcc/simplify-rtx.cc
-@@ -3168,6 +3168,41 @@ simplify_rotate_op (rtx op0, rtx op1, machine_mode mode)
+@@ -3168,6 +3168,43 @@ simplify_rotate_op (rtx op0, rtx op1, machine_mode mode)
    return NULL_RTX;
  }
  
@@ -14,7 +14,9 @@ index e979d4c2964..47609c524f8 100644
 +     (A >u C) | (B >u C)    ->  umax (A, B) >u C
 +     (A >u C) & (B >u C)    ->  umin (A, B) >u C
 +
-+   and likewise for LTU and GEU.  Return NULL_RTX if not applicable.  */
++   and likewise for LTU and GEU.
++
++   Return the combined RTX or NULL_RTX otherwise.  */
 +
 +static rtx
 +simplify_unsigned_cmp_minmax (rtx_code code, machine_mode mode,
@@ -44,7 +46,7 @@ index e979d4c2964..47609c524f8 100644
  /* Returns true if OP0 and OP1 match the pattern (OP (plus (A - 1)) (neg A)),
     and the pattern can be simplified (there are no side effects).  */
  
-@@ -3877,6 +3912,25 @@ simplify_context::simplify_binary_operation_1 (rtx_code code,
+@@ -3877,6 +3914,25 @@ simplify_context::simplify_binary_operation_1 (rtx_code code,
  	  && GET_MODE_CLASS (mode) != MODE_CC)
  	return CONSTM1_RTX (mode);
  
@@ -70,12 +72,28 @@ index e979d4c2964..47609c524f8 100644
        /* IOR of two single bit bitfields extracted from the same object.
  	 Bitfields are represented as an AND based extraction */
        if (GET_CODE (op0) == AND
-@@ -4484,6 +4538,28 @@ simplify_context::simplify_binary_operation_1 (rtx_code code,
+@@ -4484,6 +4540,44 @@ simplify_context::simplify_binary_operation_1 (rtx_code code,
  	  && GET_MODE_CLASS (mode) != MODE_CC)
  	return CONST0_RTX (mode);
  
 +      if (rtx tem = simplify_unsigned_cmp_minmax (AND, mode, op0, op1))
 +	return tem;
++
++      /* Convert (and (xor A 1) (xor B 1)) to (xor (ior A B) 1) when A and B
++	 are both known to be 0 or 1.  */
++      if (is_a <scalar_int_mode> (mode, &int_mode)
++	  && HWI_COMPUTABLE_MODE_P (int_mode)
++	  && GET_CODE (op0) == XOR
++	  && GET_CODE (op1) == XOR
++	  && XEXP (op0, 1) == CONST1_RTX (mode)
++	  && XEXP (op1, 1) == CONST1_RTX (mode)
++	  && (nonzero_bits (XEXP (op0, 0), int_mode) & ~HOST_WIDE_INT_1U) == 0
++	  && (nonzero_bits (XEXP (op1, 0), int_mode) & ~HOST_WIDE_INT_1U) == 0)
++	return simplify_gen_binary (XOR, mode,
++				    simplify_gen_binary (IOR, mode,
++							 XEXP (op0, 0),
++							 XEXP (op1, 0)),
++				    CONST1_RTX (mode));
 +
 +      /* Convert (and (xor A 1) B) to (and (not A) B) when B is known to be
 +	 0 or 1.  Only bit 0 of the XOR matters, and the NOT may be folded
@@ -99,9 +117,96 @@ index e979d4c2964..47609c524f8 100644
        /* Convert (and (plus (A - 1)) (neg A)) to 0.  */
        if (match_plus_neg_pattern (op0, op1, mode))
  	return CONST0_RTX (mode);
+diff --git a/gcc/testsuite/gcc.target/riscv/xor1-demorgan-1.c b/gcc/testsuite/gcc.target/riscv/xor1-demorgan-1.c
+new file mode 100644
+index 000000000000..5fcec85dbd46
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/xor1-demorgan-1.c
+@@ -0,0 +1,39 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -march=rv64gc_zbb -mabi=lp64d" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
++
++/* RISC-V has no sge/sgeu, so the inverse of a comparison is computed as a
++   set-on-less-than followed by xori 1.  When two such inverted values, each
++   known to be 0 or 1, are ANDed, (!A & !B) is !(A | B).  With Zbb the pair
++   of compares is combined with seqz and andn.  */
++
++int
++f_lt (long a, long b, long c, long d)
++{
++  return !(a < b) & !(c < d);
++}
++
++int
++f_gt (long a, long b, long c, long d)
++{
++  return !(a < b) & !(c > d);
++}
++
++int
++f_ltu (unsigned long a, unsigned long b, unsigned long c, unsigned long d)
++{
++  return !(a < b) & !(c < d);
++}
++
++/* 32-bit operands.  */
++int
++f_si (int a, int b, int c, int d)
++{
++  return !(a < b) & !(c < d);
++}
++
++/* { dg-final { scan-assembler-times "\tseqz\t" 4 } } */
++/* { dg-final { scan-assembler-times "\tandn\t" 4 } } */
++/* { dg-final { scan-assembler-not "\tor\t" } } */
++/* { dg-final { scan-assembler-not "\tand\t" } } */
++/* { dg-final { scan-assembler-not "\txori\t" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/xor1-demorgan-2.c b/gcc/testsuite/gcc.target/riscv/xor1-demorgan-2.c
+new file mode 100644
+index 000000000000..6531d5d71a94
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/xor1-demorgan-2.c
+@@ -0,0 +1,36 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -march=rv64gc -mabi=lp64d" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
++
++/* RISC-V has no sge/sgeu, so the inverse of a comparison is computed as a
++   set-on-less-than followed by xori 1.  When two such inverted values, each
++   known to be 0 or 1, are ORed, (!A | !B) is !(A & B).  */
++
++int
++f_lt (long a, long b, long c, long d)
++{
++  return !(a < b) | !(c < d);
++}
++
++int
++f_gt (long a, long b, long c, long d)
++{
++  return !(a < b) | !(c > d);
++}
++
++int
++f_ltu (unsigned long a, unsigned long b, unsigned long c, unsigned long d)
++{
++  return !(a < b) | !(c < d);
++}
++
++/* 32-bit operands.  */
++int
++f_si (int a, int b, int c, int d)
++{
++  return !(a < b) | !(c < d);
++}
++
++/* { dg-final { scan-assembler-times "\tand\t" 4 } } */
++/* { dg-final { scan-assembler-times "\txori\t" 4 } } */
++/* { dg-final { scan-assembler-not "\tor\t" } } */
 diff --git a/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-1.c b/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-1.c
 new file mode 100644
-index 00000000000..986e277eac7
+index 000000000000..986e277eac7d
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-1.c
 @@ -0,0 +1,56 @@
@@ -163,7 +268,7 @@ index 00000000000..986e277eac7
 +/* { dg-final { scan-assembler-not "\txori\t" } } */
 diff --git a/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-2.c b/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-2.c
 new file mode 100644
-index 00000000000..95928487226
+index 000000000000..95928487226e
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-2.c
 @@ -0,0 +1,15 @@
@@ -184,7 +289,7 @@ index 00000000000..95928487226
 +/* { dg-final { scan-assembler-not "\tandn\t" } } */
 diff --git a/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-3.c b/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-3.c
 new file mode 100644
-index 00000000000..1f0e8465215
+index 000000000000..1f0e8465215d
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-3.c
 @@ -0,0 +1,49 @@
@@ -239,7 +344,7 @@ index 00000000000..1f0e8465215
 +/* { dg-final { scan-assembler-not "\txori\t" } } */
 diff --git a/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-4.c b/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-4.c
 new file mode 100644
-index 00000000000..3b8beb5d2dc
+index 000000000000..3b8beb5d2dc9
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-4.c
 @@ -0,0 +1,16 @@
@@ -261,7 +366,7 @@ index 00000000000..3b8beb5d2dc
 +/* { dg-final { scan-assembler "\txori\t" } } */
 diff --git a/gcc/testsuite/gcc.target/riscv/zbb-minmax-cmp-uns-1.c b/gcc/testsuite/gcc.target/riscv/zbb-minmax-cmp-uns-1.c
 new file mode 100644
-index 00000000000..a2ae75443bb
+index 000000000000..a2ae75443bb2
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/zbb-minmax-cmp-uns-1.c
 @@ -0,0 +1,29 @@
@@ -296,7 +401,7 @@ index 00000000000..a2ae75443bb
 +/* { dg-final { scan-assembler-not "\tand\t" } } */
 diff --git a/gcc/testsuite/gcc.target/riscv/zbb-minmax-cmp-uns-2.c b/gcc/testsuite/gcc.target/riscv/zbb-minmax-cmp-uns-2.c
 new file mode 100644
-index 00000000000..5c5b03e417e
+index 000000000000..5c5b03e417ec
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/zbb-minmax-cmp-uns-2.c
 @@ -0,0 +1,29 @@
@@ -331,7 +436,7 @@ index 00000000000..5c5b03e417e
 +/* { dg-final { scan-assembler-not "\tand\t" } } */
 diff --git a/gcc/testsuite/gcc.target/riscv/zbb-minu-leu-1.c b/gcc/testsuite/gcc.target/riscv/zbb-minu-leu-1.c
 new file mode 100644
-index 00000000000..261daa41ad9
+index 000000000000..261daa41ad97
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/zbb-minu-leu-1.c
 @@ -0,0 +1,31 @@
@@ -368,7 +473,7 @@ index 00000000000..261daa41ad9
 +/* { dg-final { scan-assembler-times "\tor\t" 1 } } */
 diff --git a/gcc/testsuite/gcc.target/riscv/zbb-minu-leu-2.c b/gcc/testsuite/gcc.target/riscv/zbb-minu-leu-2.c
 new file mode 100644
-index 00000000000..71b097cdc2f
+index 000000000000..71b097cdc2f1
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/zbb-minu-leu-2.c
 @@ -0,0 +1,32 @@
@@ -406,7 +511,7 @@ index 00000000000..71b097cdc2f
 +/* { dg-final { scan-assembler-times "\tor\t" 1 } } */
 diff --git a/gcc/testsuite/gcc.target/riscv/zbb-minu-leu-3.c b/gcc/testsuite/gcc.target/riscv/zbb-minu-leu-3.c
 new file mode 100644
-index 00000000000..ba245a5e79d
+index 000000000000..ba245a5e79de
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/zbb-minu-leu-3.c
 @@ -0,0 +1,18 @@
@@ -430,7 +535,7 @@ index 00000000000..ba245a5e79d
 +/* { dg-final { scan-assembler-not "\tseqz\t" } } */
 diff --git a/gcc/testsuite/gcc.target/riscv/zbb-minu-leu-4.c b/gcc/testsuite/gcc.target/riscv/zbb-minu-leu-4.c
 new file mode 100644
-index 00000000000..50439db857b
+index 000000000000..50439db857b9
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/zbb-minu-leu-4.c
 @@ -0,0 +1,19 @@
