@@ -1,0 +1,245 @@
+
+
+The backward jump threader fails to thread the state-machine loop in
+binascii_a2b_base64 because the switch has already been lowered to a
+decision tree by the time the late FSM threading runs, and the
+duplication limits are tight for the resulting branch sequence.
+
+Move the switch lowering after the backward jump threader so it still
+sees the GIMPLE_SWITCH.  pass_dominator and pass_strlen keep their
+place relative to the jump threaders, so the only change is the
+position of pass_lower_switch.  This restores the GCC 11 performance
+for the state machine in PR128102.
+
+gcc/
+	* passes.def (pass_lower_switch): Move after pass_thread_jumps_full.
+
+gcc/testsuite/
+	* gcc.dg/tree-ssa/pr128102.c: New test.
+---
+ gcc/passes.def                           |  4 +-
+ gcc/testsuite/gcc.dg/tree-ssa/pr128102.c | 69 ++++++++++++++++++++++++
+ 2 files changed, 72 insertions(+), 1 deletion(-)
+ create mode 100644 gcc/testsuite/gcc.dg/tree-ssa/pr128102.c
+
+diff --git a/gcc/passes.def b/gcc/passes.def
+index 9095c134f49..64b8f8102d2 100644
+--- a/gcc/passes.def
++++ b/gcc/passes.def
+@@ -346,7 +346,6 @@ along with GCC; see the file COPYING3.  If not see
+       POP_INSERT_PASSES ()
+       NEXT_PASS (pass_simduid_cleanup);
+       NEXT_PASS (pass_lower_vector_ssa);
+-      NEXT_PASS (pass_lower_switch);
+       NEXT_PASS (pass_cse_sincos);
+       NEXT_PASS (pass_cse_reciprocals);
+       NEXT_PASS (pass_reassoc, false /* early_p */);
+@@ -355,10 +354,13 @@ along with GCC; see the file COPYING3.  If not see
+       NEXT_PASS (pass_fre, false /* may_iterate */);
+       /* After late FRE we rewrite no longer addressed locals into SSA
+          form if possible.  */
++      /* Thread the loop with the backward threader before lowering
++	 switches so it still sees the GIMPLE_SWITCH.  */
+       NEXT_PASS (pass_thread_jumps, /*first=*/false);
+       NEXT_PASS (pass_dominator, false /* may_peel_loop_headers_p */);
+       NEXT_PASS (pass_strlen);
+       NEXT_PASS (pass_thread_jumps_full, /*first=*/false);
++      NEXT_PASS (pass_lower_switch);
+       NEXT_PASS (pass_vrp, true /* final_p */);
+       /* Run CCP to compute alignment and nonzero bits.  */
+       NEXT_PASS (pass_ccp, true /* nonzero_p */);
+diff --git a/gcc/testsuite/gcc.dg/tree-ssa/pr128102.c b/gcc/testsuite/gcc.dg/tree-ssa/pr128102.c
+new file mode 100644
+index 00000000000..29374fc3a73
+--- /dev/null
++++ b/gcc/testsuite/gcc.dg/tree-ssa/pr128102.c
+@@ -0,0 +1,69 @@
++/* PR tree-optimization/128102 */
++/* { dg-do compile } */
++/* { dg-options "-O2 -fdump-tree-optimized" } */
++
++typedef __SIZE_TYPE__ size_t;
++typedef unsigned char u8;
++
++static u8 table_a2b_base64[256];
++
++__attribute__ ((noinline, noclone)) size_t
++decode_b64 (const u8 *restrict src, size_t len, u8 *restrict dst)
++{
++  u8 *out = dst;
++  int quad_pos = 0;
++  u8 leftchar = 0;
++
++  for (size_t i = 0; i < len; i++)
++    {
++      u8 this_ch = src[i];
++
++      if (this_ch == '=')
++	continue;
++
++      this_ch = table_a2b_base64[this_ch];
++      if (this_ch >= 64)
++	continue;
++
++      switch (quad_pos)
++	{
++	case 0:
++	  quad_pos = 1;
++	  leftchar = this_ch;
++	  break;
++	case 1:
++	  quad_pos = 2;
++	  *out++ = (u8) ((leftchar << 2) | (this_ch >> 4));
++	  leftchar = this_ch & 0x0f;
++	  break;
++	case 2:
++	  quad_pos = 3;
++	  *out++ = (u8) ((leftchar << 4) | (this_ch >> 2));
++	  leftchar = this_ch & 0x03;
++	  break;
++	case 3:
++	  quad_pos = 0;
++	  *out++ = (u8) ((leftchar << 6) | this_ch);
++	  leftchar = 0;
++	  break;
++	}
++    }
++  return (size_t) (out - dst);
++}
++
++int
++main (void)
++{
++  static u8 src[256], dst[256];
++
++  for (int i = 0; i < 256; i++)
++    table_a2b_base64[i] = (u8) (i & 63);
++
++  return (int) decode_b64 (src, sizeof src, dst);
++}
++
++/* Threading the loop back edge replicates the loop body, and quad_pos
++   becomes a constant on every copy, so the '=' test of the source loop
++   is left 11 times.  Without the fix the loop stays rolled and the test
++   appears only once.  */
++/* { dg-final { scan-tree-dump-times "== 61" 11 "optimized" } } */
+-- 
+2.34.1
+
+
+
+
+Moving pass_lower_switch after the late jump threading changed the
+control flow seen by the uninitialized warning pass, exposing two
+false positives (PR107919 and PR44547).  Both stem from the same
+defect in uninit_analysis::is_use_guarded.
+
+is_use_guarded treats an empty use predicate (the PHI is defined and
+used in the same block) as an unguarded use because init_use_preds
+returns false when the predicate is empty.  That is wrong: whether
+such a use is guarded depends solely on the definition predicate, so
+fall through and compute it.
+
+An empty (TRUE) use predicate is then matched by m_phi_def_preds being
+TRUE, i.e. the value is defined on every path.  Two spots made this
+mismatch on a TRUE use predicate:
+  - predicate::simplify_2 folded a tautological disjunction to TRUE by
+    clearing m_preds but forgot to set m_cval, so a definition
+    predicate that simplified to TRUE was misread as FALSE ("never
+    defined").  Set m_cval as well.
+  - the fallback path only recognized an implied guard when the
+    relaxed definition predicate was a superset of the use predicate,
+    which is vacuous for a TRUE use predicate; simplify and normalize
+    the relaxed predicate and check relaxed.is_true () instead.
+
+gcc/ChangeLog:
+
+	* gimple-predicate-analysis.cc (predicate::simplify_2): Set
+	m_cval when a disjunction simplifies to true.
+	(uninit_analysis::is_use_guarded): Do not return early for an
+	empty use predicate; skip the overlap pruning and use an
+	is_true-based superset test for an unconditional use; simplify
+	and normalize the relaxed definition predicate in the fallback
+	and test it with is_true for an unconditional use.
+---
+ gcc/gimple-predicate-analysis.cc | 36 ++++++++++++++++++++++----------
+ 1 file changed, 25 insertions(+), 11 deletions(-)
+
+diff --git a/gcc/gimple-predicate-analysis.cc b/gcc/gimple-predicate-analysis.cc
+index 6ecb1bc0387..37ced7e2663 100644
+--- a/gcc/gimple-predicate-analysis.cc
++++ b/gcc/gimple-predicate-analysis.cc
+@@ -1402,6 +1402,8 @@ predicate::simplify_2 ()
+ 		  for (unsigned k = 0; k < m_preds.length (); ++k)
+ 		    m_preds[k].release ();
+ 		  m_preds.truncate (0);
++		  /* The whole disjunction has simplified to true.  */
++		  m_cval = true;
+ 		}
+ 	      break;
+ 	    }
+@@ -2257,18 +2259,22 @@ uninit_analysis::is_use_guarded (gimple *use_stmt, basic_block use_bb,
+      into its use.  This will be empty if the PHI is defined and used
+      in the same bb.  */
+   predicate use_preds (true);
+-  if (!init_use_preds (use_preds, def_bb, use_bb))
+-    return false;
++  init_use_preds (use_preds, def_bb, use_bb);
++  /* init_use_preds() returns false for an empty (unconditional) use
++     predicate.  That does not make the use unguarded: whether it is
++     guarded then depends solely on the definition predicate, which is
++     computed below.  */
+ 
+   use_preds.simplify (use_stmt, /*is_use=*/true);
+   use_preds.normalize (use_stmt, /*is_use=*/true);
+   if (use_preds.is_false ())
+     return true;
+-  if (use_preds.is_true ())
+-    return false;
+ 
+-  /* Try to prune the dead incoming phi edges.  */
+-  if (!overlap (phi, opnds, visited, use_preds))
++  /* Try to prune the dead incoming phi edges.  This requires a non-trivial
++     use predicate; an unconditional use (USE_PREDS is TRUE) has nothing to
++     check against.  */
++  if (!use_preds.is_true ()
++      && !overlap (phi, opnds, visited, use_preds))
+     {
+       if (DEBUG_PREDICATE_ANALYZER && dump_file)
+ 	fputs ("found predicate overlap\n", dump_file);
+@@ -2292,8 +2298,11 @@ uninit_analysis::is_use_guarded (gimple *use_stmt, basic_block use_bb,
+ 
+   /* Return true if the predicate guarding the valid definition (i.e.,
+      *THIS) is a superset of the predicate guarding the use (i.e.,
+-     USE_PREDS).  */
+-  if (m_phi_def_preds.superset_of (use_preds))
++     USE_PREDS).  An unconditional use (USE_PREDS is TRUE) is guarded only
++     if the value is defined on every path, i.e. the definition predicate
++     is TRUE; superset_of() is vacuous for a TRUE use predicate.  */
++  if (use_preds.is_true () ? m_phi_def_preds.is_true ()
++			   : m_phi_def_preds.superset_of (use_preds))
+     return true;
+ 
+   /* The superset test fails when a guard that distinguishes the defined from
+@@ -2329,9 +2338,14 @@ uninit_analysis::is_use_guarded (gimple *use_stmt, basic_block use_bb,
+   if (!edge_conds.is_empty ())
+     {
+       predicate relaxed (m_phi_def_preds);
+-      if (relaxed.drop_conjuncts_implied_by (edge_conds)
+-	  && relaxed.superset_of (use_preds))
+-	return true;
++      if (relaxed.drop_conjuncts_implied_by (edge_conds))
++	{
++	  relaxed.simplify (phi);
++	  relaxed.normalize (phi);
++	  if (use_preds.is_true () ? relaxed.is_true ()
++	      : relaxed.superset_of (use_preds))
++	    return true;
++	}
+     }
+ 
+   return false;
+-- 
+2.34.1
+
+
