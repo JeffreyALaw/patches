@@ -1,8 +1,34 @@
 diff --git a/gcc/config/riscv/zicond.md b/gcc/config/riscv/zicond.md
-index b07aec8feb2..7409ce4c66f 100644
+index 859096ead21..a3b59a7fd08 100644
 --- a/gcc/config/riscv/zicond.md
 +++ b/gcc/config/riscv/zicond.md
-@@ -536,3 +536,106 @@
+@@ -42,6 +42,25 @@
+   "czero.<nez>\t%0,%2,%1"
+ [(set_attr "type" "zicond")])
+ 
++;;The same as the prior two, but without the explicit NE node.
++(define_insn "*czero.eqz.<GPR:mode><X:mode>"
++  [(set (match_operand:GPR 0 "register_operand"                      "=r")
++        (if_then_else:GPR (match_operand:X 1 "register_operand" "r")
++                          (match_operand:GPR 2 "register_operand"    "r")
++                          (const_int 0)))]
++  "TARGET_ZICOND"
++  "czero.eqz\t%0,%2,%1"
++[(set_attr "type" "zicond")])
++
++(define_insn "*czero.nez.<GPR:mode><X:mode>"
++  [(set (match_operand:GPR 0 "register_operand"                     "=r")
++        (if_then_else:GPR (match_operand:X 1 "register_operand" "r")
++                          (const_int 0)
++                          (match_operand:GPR 2 "register_operand"   "r")))]
++  "TARGET_ZICOND"
++  "czero.nez\t%0,%2,%1"
++[(set_attr "type" "zicond")])
++
+ ;; Special optimization under eq/ne in primitive semantics
+ (define_insn "*czero.eqz.<GPR:mode><X:mode>.opt1"
+   [(set (match_operand:GPR 0 "register_operand"                   "=r")
+@@ -572,3 +591,33 @@
  				      (const_int 0)))
     (set (match_dup 0) (ior:X (match_dup 4) (match_dup 3)))])
  
@@ -15,103 +41,167 @@ index b07aec8feb2..7409ce4c66f 100644
 +  [(set (match_operand:X 0 "register_operand")
 +	(if_then_else:X (ge:X (match_operand:X 1 "register_operand")
 +			      (const_int 0))
-+			(match_operand:X 2 "register_operand")
-+			(const_int 0)))]
-+  "TARGET_ZICOND && can_create_pseudo_p ()"
-+  [(set (match_dup 3) (lt:X (match_dup 1) (const_int 0)))
-+   (set (match_dup 0) (if_then_else:X (eq:X (match_dup 3) (const_int 0))
++			(match_operand:X 2 "reg_or_0_operand")
++			(match_operand:X 3 "reg_or_0_operand")))
++   (clobber (match_operand:X 4 "register_operand"))]
++  "(TARGET_ZICOND
++    && (operands[2] == CONST0_RTX (word_mode)
++	|| operands[3] == CONST0_RTX (word_mode)))"
++  [(set (match_dup 4) (lt:X (match_dup 1) (const_int 0)))
++   (set (match_dup 0) (if_then_else:X (match_dup 5)
 +				      (match_dup 2)
-+				      (const_int 0)))]
-+  { operands[3] = gen_reg_rtx (<MODE>mode); })
++				      (match_dup 3)))]
++  { 
++    rtx_code code = EQ;
++    if (operands[3] != CONST0_RTX (word_mode))
++      {
++        std::swap (operands[2], operands[3]);
++	code = NE;
++      }
 +
-+(define_split
-+  [(set (match_operand:X 0 "register_operand")
-+	(if_then_else:X (ge:X (match_operand:X 1 "register_operand")
-+			      (const_int 0))
-+			(const_int 0)
-+			(match_operand:X 2 "register_operand")))]
-+  "TARGET_ZICOND && can_create_pseudo_p ()"
-+  [(set (match_dup 3) (lt:X (match_dup 1) (const_int 0)))
-+   (set (match_dup 0) (if_then_else:X (ne:X (match_dup 3) (const_int 0))
-+				      (match_dup 2)
-+				      (const_int 0)))]
-+  { operands[3] = gen_reg_rtx (<MODE>mode); })
++    operands[5] = gen_rtx_fmt_ee (code, word_mode,
++				  operands[4], CONST0_RTX (word_mode));
++  })
+diff --git a/gcc/simplify-rtx.cc b/gcc/simplify-rtx.cc
+index e979d4c2964..f4b7c8abae5 100644
+--- a/gcc/simplify-rtx.cc
++++ b/gcc/simplify-rtx.cc
+@@ -7951,6 +7951,19 @@ simplify_context::simplify_ternary_operation (rtx_code code, machine_mode mode,
+ 	    return simplified;
+ 	}
+ 
++      /* Convert (xor X 1) ? a : b into X ? b : a when X is known to be
++	 0 or 1.  */
++      if (GET_CODE (op0) == XOR
++	  && XEXP (op0, 1) == const1_rtx
++	  && SCALAR_INT_MODE_P (GET_MODE (op0))
++	  && !side_effects_p (XEXP (op0, 0))
++	  && nonzero_bits (XEXP (op0, 0), GET_MODE (op0)) == 1)
++	{
++	  rtx cond = simplify_gen_relational (NE, VOIDmode, GET_MODE (op0),
++					      XEXP (op0, 0), const0_rtx);
++	  return gen_rtx_IF_THEN_ELSE (mode, cond, op2, op1);
++	}
 +
-+;; A condition (C ^ 1) where C is known to be 0 or 1 is true exactly when C
-+;; is zero, so the XOR is not needed.  The arm is computed unconditionally
-+;; and the czero does the selection.
-+(define_code_iterator zicond_binop [plus minus ior xor and])
-+(define_code_attr zicond_binop_pred [(plus "arith_operand")
-+				     (minus "register_operand")
-+				     (ior "arith_operand")
-+				     (xor "arith_operand")
-+				     (and "arith_operand")])
+       if (COMPARISON_P (op0) && ! side_effects_p (op0))
+ 	{
+ 	  machine_mode cmp_mode = (GET_MODE (XEXP (op0, 0)) == VOIDmode
+diff --git a/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-2.c b/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-2.c
+new file mode 100644
+index 00000000000..95928487226
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-2.c
+@@ -0,0 +1,15 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -march=rv64gc_zbb -mabi=lp64d" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
 +
-+(define_split
-+  [(set (match_operand:X 0 "register_operand")
-+	(if_then_else:X (xor:X (match_operand:X 1 "register_operand")
-+			       (const_int 1))
-+			(zicond_binop:X (match_operand:X 2 "register_operand")
-+					(match_operand:X 3 "<zicond_binop_pred>"))
-+			(const_int 0)))]
-+  "TARGET_ZICOND
-+   && nonzero_bits (operands[1], word_mode) == 1
-+   && can_create_pseudo_p ()"
-+  [(set (match_dup 4) (zicond_binop:X (match_dup 2) (match_dup 3)))
-+   (set (match_dup 0) (if_then_else:X (eq:X (match_dup 1) (const_int 0))
-+				      (match_dup 4)
-+				      (const_int 0)))]
-+  { operands[4] = gen_reg_rtx (<MODE>mode); })
++/* The other operand is not known to be 0 or 1, so the xori cannot be
++   treated as a NOT: (x ^ 1) & b clears bit 0 of b when x is 1, whereas
++   ~x & b would keep the upper bits of b.  */
 +
-+;; With the arms the other way around, combine simplifies the condition
-+;; (C ^ 1) == 0 to a bare C.
-+(define_split
-+  [(set (match_operand:X 0 "register_operand")
-+	(if_then_else:X (match_operand:X 1 "register_operand")
-+			(zicond_binop:X (match_operand:X 2 "register_operand")
-+					(match_operand:X 3 "<zicond_binop_pred>"))
-+			(const_int 0)))]
-+  "TARGET_ZICOND && can_create_pseudo_p ()"
-+  [(set (match_dup 4) (zicond_binop:X (match_dup 2) (match_dup 3)))
-+   (set (match_dup 0) (if_then_else:X (ne:X (match_dup 1) (const_int 0))
-+				      (match_dup 4)
-+				      (const_int 0)))]
-+  { operands[4] = gen_reg_rtx (<MODE>mode); })
++long
++f (long a, long b, long c, long d)
++{
++  return (long) !(c < d) & a;
++}
 +
-+;; Shifts and rotates need their own splits as the count is QImode.
-+(define_split
-+  [(set (match_operand:X 0 "register_operand")
-+	(if_then_else:X (xor:X (match_operand:X 1 "register_operand")
-+			       (const_int 1))
-+			(any_shift_rotate:X
-+			  (match_operand:X 2 "register_operand")
-+			  (match_operand:QI 3 "arith_operand"))
-+			(const_int 0)))]
-+  "TARGET_ZICOND
-+   && nonzero_bits (operands[1], word_mode) == 1
-+   && can_create_pseudo_p ()"
-+  [(set (match_dup 4) (any_shift_rotate:X (match_dup 2) (match_dup 3)))
-+   (set (match_dup 0) (if_then_else:X (eq:X (match_dup 1) (const_int 0))
-+				      (match_dup 4)
-+				      (const_int 0)))]
-+  { operands[4] = gen_reg_rtx (<MODE>mode); })
++/* { dg-final { scan-assembler-not "\tandn\t" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-4.c b/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-4.c
+new file mode 100644
+index 00000000000..3b8beb5d2dc
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-4.c
+@@ -0,0 +1,16 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -march=rv32gc_zbb -mabi=ilp32d" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
 +
-+(define_split
-+  [(set (match_operand:X 0 "register_operand")
-+	(if_then_else:X (match_operand:X 1 "register_operand")
-+			(any_shift_rotate:X
-+			  (match_operand:X 2 "register_operand")
-+			  (match_operand:QI 3 "arith_operand"))
-+			(const_int 0)))]
-+  "TARGET_ZICOND && can_create_pseudo_p ()"
-+  [(set (match_dup 4) (any_shift_rotate:X (match_dup 2) (match_dup 3)))
-+   (set (match_dup 0) (if_then_else:X (ne:X (match_dup 1) (const_int 0))
-+				      (match_dup 4)
-+				      (const_int 0)))]
-+  { operands[4] = gen_reg_rtx (<MODE>mode); })
++/* RV32 version of zbb-andn-xor1-2.c.  The other operand is not known to be
++   0 or 1, so the xori cannot be treated as a NOT: (x ^ 1) & b clears bit 0
++   of b when x is 1, whereas ~x & b would keep the upper bits of b.  */
++
++int
++f (int a, int c)
++{
++  return (c ^ 1) & a;
++}
++
++/* { dg-final { scan-assembler-not "\tandn\t" } } */
++/* { dg-final { scan-assembler "\txori\t" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/zbb-minmax-cmp-uns-1.c b/gcc/testsuite/gcc.target/riscv/zbb-minmax-cmp-uns-1.c
+new file mode 100644
+index 00000000000..a2ae75443bb
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/zbb-minmax-cmp-uns-1.c
+@@ -0,0 +1,29 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -march=rv64gc_zbb -mabi=lp64d" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
++
++/* Two unsigned comparisons against the same value, joined by | or &, are one
++   comparison of the umin or umax of the operands:
++
++     (A <=u C) | (B <=u C)  ==  umin (A, B) <=u C
++     (A <=u C) & (B <=u C)  ==  umax (A, B) <=u C
++     (A >u C) | (B >u C)    ==  umax (A, B) >u C
++     (A >u C) & (B >u C)    ==  umin (A, B) >u C
++
++   and likewise for LTU and GEU.  */
++
++typedef unsigned long T;
++
++int or_leu (T a, T b, T c) { return (a <= c) | (b <= c); }
++int or_ltu (T a, T b, T c) { return (a < c) | (b < c); }
++int or_gtu (T a, T b, T c) { return (a > c) | (b > c); }
++int or_geu (T a, T b, T c) { return (a >= c) | (b >= c); }
++int and_leu (T a, T b, T c) { return (a <= c) & (b <= c); }
++int and_ltu (T a, T b, T c) { return (a < c) & (b < c); }
++int and_gtu (T a, T b, T c) { return (a > c) & (b > c); }
++int and_geu (T a, T b, T c) { return (a >= c) & (b >= c); }
++
++/* { dg-final { scan-assembler-times "\tminu\t" 4 } } */
++/* { dg-final { scan-assembler-times "\tmaxu\t" 4 } } */
++/* { dg-final { scan-assembler-not "\tor\t" } } */
++/* { dg-final { scan-assembler-not "\tand\t" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/zbb-minmax-cmp-uns-2.c b/gcc/testsuite/gcc.target/riscv/zbb-minmax-cmp-uns-2.c
+new file mode 100644
+index 00000000000..5c5b03e417e
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/zbb-minmax-cmp-uns-2.c
+@@ -0,0 +1,29 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -march=rv32gc_zbb -mabi=ilp32d" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
++
++/* Two unsigned comparisons against the same value, joined by | or &, are one
++   comparison of the umin or umax of the operands:
++
++     (A <=u C) | (B <=u C)  ==  umin (A, B) <=u C
++     (A <=u C) & (B <=u C)  ==  umax (A, B) <=u C
++     (A >u C) | (B >u C)    ==  umax (A, B) >u C
++     (A >u C) & (B >u C)    ==  umin (A, B) >u C
++
++   and likewise for LTU and GEU.  */
++
++typedef unsigned long T;
++
++int or_leu (T a, T b, T c) { return (a <= c) | (b <= c); }
++int or_ltu (T a, T b, T c) { return (a < c) | (b < c); }
++int or_gtu (T a, T b, T c) { return (a > c) | (b > c); }
++int or_geu (T a, T b, T c) { return (a >= c) | (b >= c); }
++int and_leu (T a, T b, T c) { return (a <= c) & (b <= c); }
++int and_ltu (T a, T b, T c) { return (a < c) & (b < c); }
++int and_gtu (T a, T b, T c) { return (a > c) & (b > c); }
++int and_geu (T a, T b, T c) { return (a >= c) & (b >= c); }
++
++/* { dg-final { scan-assembler-times "\tminu\t" 4 } } */
++/* { dg-final { scan-assembler-times "\tmaxu\t" 4 } } */
++/* { dg-final { scan-assembler-not "\tor\t" } } */
++/* { dg-final { scan-assembler-not "\tand\t" } } */
 diff --git a/gcc/testsuite/gcc.target/riscv/zicond-ge-select.c b/gcc/testsuite/gcc.target/riscv/zicond-ge-select.c
 new file mode 100644
-index 00000000000..77000e902ff
+index 00000000000..b3713e9f4b2
 --- /dev/null
 +++ b/gcc/testsuite/gcc.target/riscv/zicond-ge-select.c
 @@ -0,0 +1,47 @@
@@ -155,13 +245,13 @@ index 00000000000..77000e902ff
 +/* f_nez uses czero.nez and f_eqz uses czero.eqz, each with one slti and an
 +   addi pair around it.  These counts need both functions, so they fail
 +   until f_eqz is handled.  */
-+/* { dg-final { scan-assembler-times "\tslti\t\[axt\]\[0-9\],\[axt\]\[0-9\],0" 2 { xfail *-*-* } } } */
++/* { dg-final { scan-assembler-times "\tslti\t\[axt\]\[0-9\],\[axt\]\[0-9\],0" 2 } } */
 +/* { dg-final { scan-assembler-times "\taddi\t\[axt\]\[0-9\],\[axt\]\[0-9\],-7" 2 } } */
-+/* { dg-final { scan-assembler-times "\tczero\.nez\t" 1 { xfail *-*-* } } } */
-+/* { dg-final { scan-assembler-times "\tczero\.eqz\t" 1 { xfail *-*-* } } } */
++/* { dg-final { scan-assembler-times "\tczero\.nez\t" 1 } } */
++/* { dg-final { scan-assembler-times "\tczero\.eqz\t" 1 } } */
 +/* { dg-final { scan-assembler-times "\taddi\t\[axt\]\[0-9\],\[axt\]\[0-9\],7" 2 } } */
-+/* { dg-final { scan-assembler-not "\tnot\t" { xfail *-*-* } } } */
-+/* { dg-final { scan-assembler-not "\tsrli\t" { xfail *-*-* } } } */
++/* { dg-final { scan-assembler-not "\tnot\t" } } */
++/* { dg-final { scan-assembler-not "\tsrli\t" } } */
 diff --git a/gcc/testsuite/gcc.target/riscv/zicond-xor1-binop.c b/gcc/testsuite/gcc.target/riscv/zicond-xor1-binop.c
 new file mode 100644
 index 00000000000..7c37346887e
