@@ -955,3 +955,31 @@ index d5f4548fc7c..f4d669ac368 100644
  extern unsigned int default_min_arithmetic_precision (void);
  
  extern enum flt_eval_method
+commit f359b7743b6a0a951f7d38de4eea12c8c20f45f1
+Author: Jeff Law <jeffreyalaw@gmail.com>
+Date:   Sun Nov 15 21:31:48 2026 -0700
+
+    Test for x86
+
+diff --git a/gcc/testsuite/gcc.target/i386/pr126914.c b/gcc/testsuite/gcc.target/i386/pr126914.c
+new file mode 100644
+index 00000000000..5f524a1fc6b
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/i386/pr126914.c
+@@ -0,0 +1,16 @@
++/* { dg-do compile } */
++/* { dg-options "-O2" } */
++
++
++long fun_not1 (int a, long b) { if (!(a & 1)) b ^= 8;    return b; }
++long xor_not (int a, long b) { if (!(a & 1)) b ^= 8;     return b; }  
++long ior_not (int a, long b) { if (!(a & 1)) b |= 64;    return b; }
++long add_not (int a, long b) { if (!(a & 1)) b += 65536; return b; }
++long shl_not (int a, long b) { if (!(a & 1)) b <<= 16;   return b; }
++long xor_cmp (int a, long b) { if (a > 100)  b ^= 8;     return b; }
++long add_cmp (int a, long b) { if (a > 100)  b += 256;   return b; }
++long add_ne  (int a, long b) { if (a != 0)   b += 256;   return b; }
++
++/* { dg-final { scan-assembler-times "cmov"  8 } } */
++
++
