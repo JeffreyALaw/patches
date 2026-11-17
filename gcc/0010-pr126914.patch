@@ -41,8 +41,8 @@ index 263c0afd4ab..b5bf4162850 100644
      {
 -      unsigned cost = seq_cost (seq, true);
 -      return cost <= if_info->max_seq_cost;
-+      unsigned new cost = seq_cost (seq, true);
-+      if (cost <= if_info->max_seq_cost)
++      unsigned new_cost = seq_cost (seq, true);
++      if (new_cost <= if_info->max_seq_cost)
 +	{
 +	  *cost = new_cost;
 +	  return true;
