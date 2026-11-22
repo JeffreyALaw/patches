@@ -1,0 +1,389 @@
+commit 11a22895d067726a383a66dd10379a85966d0431
+Author: Jeff Law <jeffrey.law@oss.qualcomm.com>
+Date:   Sun Nov 22 11:07:24 2026 -0700
+
+    Revert "[PATCH] match.pd: Fold (X | A) cmp C and (X ^ A) cmp C into X cmp C [PR115392]"
+    
+    This reverts commit 610ffda1010fd9c02ea73382a151c463a44e1d4b.
+
+diff --git a/gcc/match.pd b/gcc/match.pd
+index 07fb23ef84a5..91dde5d51fae 100644
+--- a/gcc/match.pd
++++ b/gcc/match.pd
+@@ -6005,47 +6005,6 @@ DEFINE_INT_AND_FLOAT_ROUND_FN (RINT)
+    (with { wide_int c = wi::to_wide (@2) | wi::bit_not (wi::to_wide (@1)); }
+     (cmp @0 { wide_int_to_tree (TREE_TYPE (@0), c); })))))
+ 
+-/* Fold (X op A) cmp C, with op in { |, ^ } and cmp in {le,gt,lt,ge},
+-   into X cmp C when all potentially nonzero bits of A are below bit m
+-   and 0 < m < the precision of A (to avoid sign bit).
+-   'A' leaves the bits of X at and above position m unchanged,
+-   so the comparison is decided by the high parts alone when the
+-   low m bits of C are all ones (cmp = le/gt) or all zeros (cmp = lt/ge).
+-   Skip cases where A is known to be zero, which are handled by
+-   other simplifications.  */
+-(for cmp (le gt lt ge)
+- (for bitop (bit_ior bit_xor)
+-  (simplify
+-   (cmp (bitop:c@3 @0 @1) INTEGER_CST@2)
+-   (if (INTEGRAL_TYPE_P (TREE_TYPE (@2)))
+-    (with
+-     {
+-       wide_int nz;
+-       bool nz_valid = true;
+-#if GIMPLE
+-       int_range_max vr;
+-       nz_valid = (gimple_match_range_of_expr (vr, @1, @3)
+-		    && !vr.undefined_p ());
+-       if (nz_valid)
+-	  nz = vr.get_nonzero_bits ();
+-#else
+-	nz = tree_nonzero_bits (@1);
+-#endif
+-     }
+-     (if (nz_valid)
+-      (with
+-       {
+-	  unsigned int prec = TYPE_PRECISION (TREE_TYPE (@1));
+-	  unsigned int m = prec - (unsigned int) wi::clz (nz);
+-	  wide_int mask = wi::mask (m, false, prec);
+-	  wide_int lowc = cmp == LE_EXPR || cmp == GT_EXPR
+-			  ? mask : wi::zero (prec);
+-       }
+-       (if (0 < m && m < prec
+-	    && wi::eq_p (wi::bit_and (wi::to_wide (@2), mask), lowc))
+-	  (cmp @0 @2)))))))))
+-
+-
+ /* Fold ((X << C1) & C2) cmp C3 into (X & (C2 >> C1)) cmp (C3 >> C1)
+ 	((X >> C1) & C2) cmp C3 into (X & (C2 << C1)) cmp (C3 << C1).  */
+ (for cmp (ne eq)
+diff --git a/gcc/testsuite/gcc.dg/ipa/pr91088.c b/gcc/testsuite/gcc.dg/ipa/pr91088.c
+index 01e99b689d64..f8b3c49b973a 100644
+--- a/gcc/testsuite/gcc.dg/ipa/pr91088.c
++++ b/gcc/testsuite/gcc.dg/ipa/pr91088.c
+@@ -68,8 +68,8 @@ int callee1 (struct A a)
+ 
+ int callee2 (short *p)
+ {
+-  if ((*p ^ 1)  <  7)
+-    large_code;
++  if ((*p ^ 1)  <  8)
++    large_code;      
+ 
+   return 2;
+ }
+diff --git a/gcc/testsuite/gcc.dg/tree-ssa/pr115392-1.c b/gcc/testsuite/gcc.dg/tree-ssa/pr115392-1.c
+deleted file mode 100644
+index 08f6a4c0bd8c..000000000000
+--- a/gcc/testsuite/gcc.dg/tree-ssa/pr115392-1.c
++++ /dev/null
+@@ -1,40 +0,0 @@
+-/* PR tree-optimization/115392 */
+-/* { dg-do compile } */
+-/* { dg-options "-O2 -fdump-tree-optimized" } */
+-
+-/* Case 1: low m bits of C all set, le/gt.  */
+-_Bool f11(unsigned b) { return (b | 0x12) <= 0xFF; }
+-_Bool f12(unsigned b) { return (b ^ 0x12) <= 0xFF; }
+-
+-_Bool f21(unsigned b) { return (b | 0x12) > 0xFF; }
+-_Bool f22(unsigned b) { return (b ^ 0x12) > 0xFF; }
+-
+-/* Case 2: low m bits of C all clear, lt/ge.  */
+-_Bool f31(unsigned b) { return (b | 0x12) < 0x100; }
+-_Bool f32(unsigned b) { return (b ^ 0x12) < 0x100; }
+-
+-_Bool f41(unsigned b) { return (b | 0x12) >= 0x100; }
+-_Bool f42(unsigned b) { return (b ^ 0x12) >= 0x100; }
+-
+-/* Original report: a has range [0,1].  */
+-_Bool f51(unsigned b, _Bool a) { return (b | a) <= 3; }
+-_Bool f52(unsigned b, _Bool a) { return (b ^ a) <= 3; }
+-
+-/* Signed type, constant cannot touch the sign bit.  */
+-_Bool f61(int b) { return (b | 0x12) <= 0xFF; }
+-_Bool f62(int b) { return (b ^ 0x12) <= 0xFF; }
+-
+-/* Operand order (the pattern is commutative).  */
+-_Bool f71(_Bool a, unsigned b) { return (a | b) <= 3; }
+-_Bool f72(_Bool a, unsigned b) { return (a ^ b) <= 3; }
+-
+-/* Range from a mask rather than a _Bool, with lt.  */
+-_Bool f81(unsigned a, unsigned b) { return (b | (a & 7)) < 16; }
+-_Bool f82(unsigned a, unsigned b) { return (b ^ (a & 7)) < 16; }
+-
+-/* Signed, negative C.  */
+-_Bool f91(int b) { return (b | 7) < -8; }
+-_Bool f92(int b) { return (b ^ 7) < -8; }
+-
+-/* { dg-final { scan-tree-dump-not " \\| " "optimized" } } */
+-/* { dg-final { scan-tree-dump-not " \\^ " "optimized" } } */
+diff --git a/gcc/testsuite/gcc.dg/tree-ssa/pr115392-2.c b/gcc/testsuite/gcc.dg/tree-ssa/pr115392-2.c
+deleted file mode 100644
+index 7442135364c7..000000000000
+--- a/gcc/testsuite/gcc.dg/tree-ssa/pr115392-2.c
++++ /dev/null
+@@ -1,22 +0,0 @@
+-/* PR tree-optimization/115392 */
+-/* { dg-do compile } */
+-/* { dg-options "-O2 -fdump-tree-optimized" } */
+-
+-/* ge with low bit of C set: e.g. b = 2 gives (b|1) >= 3 true but b >= 3 false.  */
+-_Bool n11(unsigned b) { return (b | 1) >= 3; }
+-_Bool n12(unsigned b) { return (b ^ 1) >= 3; }
+-
+-/* lt with low bit of C set: e.g. b = 2 gives (b|1) < 3 false but b < 3 true.  */
+-_Bool n21(unsigned b) { return (b | 1) < 3; }
+-_Bool n22(unsigned b) { return (b ^ 1) < 3; }
+-
+-/* le with low 5 bits of C not all set.  */
+-_Bool n31(unsigned b) { return (b | 0x12) <= 0xE0; }
+-_Bool n32(unsigned b) { return (b ^ 0x12) <= 0xE0; }
+-
+-/* A has no known range. */
+-_Bool n41(unsigned a, unsigned b) { return (b | a) <= 3; }
+-_Bool n42(unsigned a, unsigned b) { return (b ^ a) <= 3; }
+-
+-/* { dg-final { scan-tree-dump-times " \\| " 4 "optimized" } } */
+-/* { dg-final { scan-tree-dump-times " \\^ " 4 "optimized" } } */
+diff --git a/gcc/testsuite/gcc.dg/tree-ssa/pr115392-3.c b/gcc/testsuite/gcc.dg/tree-ssa/pr115392-3.c
+deleted file mode 100644
+index d74a41ca66e2..000000000000
+--- a/gcc/testsuite/gcc.dg/tree-ssa/pr115392-3.c
++++ /dev/null
+@@ -1,120 +0,0 @@
+-/* PR tree-optimization/115392 */
+-/* { dg-do run } */
+-/* { dg-options "-O2" } */
+-
+-/* Run-time check of (X op A) cmp C -> X cmp C, op in { |, ^ }.
+-
+-   Every function has a *_ref twin that computes the same thing, but gets
+-   A through a volatile variable, so that the compiler cannot see its
+-   value and cannot apply the fold.  The two must always agree.
+-*/
+-
+-#define NOIPA __attribute__((noipa))
+-
+-volatile int k7 = 7;
+-volatile int km8 = -8;
+-volatile int kmin = -__INT_MAX__ - 1;
+-volatile int kmax = __INT_MAX__;
+-
+-/* Fold applies: A is a constant, low bits of C all ones (le, gt)
+-   or all zeros (lt, ge).  Includes negative C.  */
+-NOIPA int le_ior (int x)     { return (x | 7) <= 15; }
+-NOIPA int le_ior_ref (int x) { return (x | k7) <= 15; }
+-NOIPA int gt_xor (int x)     { return (x ^ 7) > -9; }
+-NOIPA int gt_xor_ref (int x) { return (x ^ k7) > -9; }
+-NOIPA int lt_ior (int x)     { return (x | 7) < 16; }
+-NOIPA int lt_ior_ref (int x) { return (x | k7) < 16; }
+-NOIPA int ge_xor (int x)     { return (x ^ 7) >= -8; }
+-NOIPA int ge_xor_ref (int x) { return (x ^ k7) >= -8; }
+-
+-/* Same with unsigned arithmetic.  */
+-NOIPA int gt_xor_u (int x)
+-{ return ((unsigned) x ^ 7) > (unsigned) -9; }
+-
+-NOIPA int gt_xor_u_ref (int x)
+-{ return ((unsigned) x ^ k7) > (unsigned) -9; }
+-
+-NOIPA int lt_ior_u (int x)
+-{ return ((unsigned) x | 7) < (unsigned) -8; }
+-
+-NOIPA int lt_ior_u_ref (int x)
+-{ return ((unsigned) x | k7) < (unsigned) -8; }
+-
+-/* 'A' has every non-sign bit set.  */
+-NOIPA int lt_ior_max (int x)     { return (x | __INT_MAX__) < 0; }
+-NOIPA int lt_ior_max_ref (int x) { return (x | kmax) < 0; }
+-NOIPA int ge_xor_max (int x)     { return (x ^ __INT_MAX__) >= 0; }
+-NOIPA int ge_xor_max_ref (int x) { return (x ^ kmax) >= 0; }
+-
+-/* Low bits of C dont satisfy fold condition.  */
+-NOIPA int no_le (int x)     { return (x | 7) <= 5; }
+-NOIPA int no_le_ref (int x) { return (x | k7) <= 5; }
+-NOIPA int no_ge (int x)     { return (x ^ 7) >= 9; }
+-NOIPA int no_ge_ref (int x) { return (x ^ k7) >= 9; }
+-
+-/* 'A' has the sign bit set, the fold doesn't apply.  */
+-NOIPA int sign_min (int x)     { return (x ^ (-__INT_MAX__ - 1)) <= -1; }
+-NOIPA int sign_min_ref (int x) { return (x ^ kmin) <= -1; }
+-NOIPA int sign_m8 (int x)      { return (x | -8) <= -1; }
+-NOIPA int sign_m8_ref (int x)  { return (x | km8) <= -1; }
+-
+-/* A is not constant but known to be in [0, 7], fold applies.  */
+-NOIPA int le_mask (int x, int a)     { return (x | (a & 7)) <= 15; }
+-NOIPA int le_mask_ref (int x, int a) { return (x | (a & k7)) <= 15; }
+-NOIPA int gt_mask (int x, int a)     { return (x ^ (a & 7)) > 7; }
+-NOIPA int gt_mask_ref (int x, int a) { return (x ^ (a & k7)) > 7; }
+-NOIPA int lt_mask (int x, int a)     { return (x | (a & 7)) < 8; }
+-NOIPA int lt_mask_ref (int x, int a) { return (x | (a & k7)) < 8; }
+-NOIPA int ge_mask (int x, int a)     { return (x ^ (a & 7)) >= -16; }
+-NOIPA int ge_mask_ref (int x, int a) { return (x ^ (a & k7)) >= -16; }
+-
+-#define CHECK_X(F) \
+-if (F (x) != F##_ref (x)) \
+-  __builtin_abort ()
+-
+-#define CHECK_X_A(F) \
+-if (F (x, a) != F##_ref (x, a)) \
+-  __builtin_abort ()
+-
+-void check (int x)
+-{
+-  CHECK_X (gt_xor);
+-  CHECK_X (le_ior);
+-  CHECK_X (lt_ior);
+-  CHECK_X (ge_xor);
+-  CHECK_X (gt_xor_u);
+-  CHECK_X (lt_ior_u);
+-  CHECK_X (lt_ior_max);
+-  CHECK_X (ge_xor_max);
+-  CHECK_X (no_le);
+-  CHECK_X (no_ge);
+-  CHECK_X (sign_min);
+-  CHECK_X (sign_m8);
+-
+-  for (int a = -8; a <= 8; a++)
+-  {
+-    CHECK_X_A (le_mask);
+-    CHECK_X_A (gt_mask);
+-    CHECK_X_A (lt_mask);
+-    CHECK_X_A (ge_mask);
+-  }
+-}
+-
+-int main ()
+-{
+-  /* Small values, negative and positive. */
+-  for (int x = -32; x <= 32; x++)
+-    check (x);
+-
+-  /* Large values, negative and positive. */
+-  check (-__INT_MAX__ - 1);
+-  check (-__INT_MAX__);
+-  check (-__INT_MAX__ / 2 - 1);
+-  check (-__INT_MAX__ / 2);
+-  check (__INT_MAX__ / 2);
+-  check (__INT_MAX__ / 2 + 1);
+-  check (__INT_MAX__ - 1);
+-  check (__INT_MAX__);
+-
+-  return 0;
+-}
+diff --git a/gcc/testsuite/gcc.dg/tree-ssa/pr115392-4.c b/gcc/testsuite/gcc.dg/tree-ssa/pr115392-4.c
+deleted file mode 100644
+index 1a1481fdae44..000000000000
+--- a/gcc/testsuite/gcc.dg/tree-ssa/pr115392-4.c
++++ /dev/null
+@@ -1,70 +0,0 @@
+-/* PR tree-optimization/115392 */
+-/* { dg-do compile } */
+-/* { dg-options "-O2 -fdump-tree-cddce1" } */
+-
+-/* The range of A is known only inside the branch. The dump is taken before ifcombine,
+-   which would otherwise in some cases rebuild an OR from the simplified conditions. */
+-
+-extern void bar (void);
+-
+-/* le: A in [0,7], low 3 bits of 15 all set.  */
+-void f11 (unsigned b, unsigned a)
+-{ if (a < 8) { if ((b | a) <= 15) bar (); } }
+-void f12 (unsigned b, unsigned a)
+-{ if (a < 8) { if ((b ^ a) <= 15) bar (); } }
+-
+-/* gt */
+-void f21 (unsigned b, unsigned a)
+-{ if (a <= 7) { if ((b | a) > 15) bar (); } }
+-void f22 (unsigned b, unsigned a)
+-{ if (a <= 7) { if ((b ^ a) > 15) bar (); } }
+-
+-/* lt: low 3 bits of 16 all clear.  */
+-void f31 (unsigned b, unsigned a)
+-{ if (a < 8) { if ((b | a) < 16) bar (); } }
+-void f32 (unsigned b, unsigned a)
+-{ if (a < 8) { if ((b ^ a) < 16) bar (); } }
+-
+-/* ge: low 3 bits of 8 all clear.  */
+-void f41 (unsigned b, unsigned a)
+-{ if (a < 8) { if ((b | a) >= 8) bar (); } }
+-void f42 (unsigned b, unsigned a)
+-{ if (a < 8) { if ((b ^ a) >= 8) bar (); } }
+-
+-/* Signed, range from two compares.  */
+-void f51 (int b, int a)
+-{ if (a >= 0 && a < 8) { if ((b | a) <= 15) bar (); } }
+-void f52 (int b, int a)
+-{ if (a >= 0 && a < 8) { if ((b ^ a) <= 15) bar (); } }
+-
+-/* Swapped operands.  */
+-void f61 (unsigned b, unsigned a)
+-{ if (a < 8) { if ((a | b) > 15) bar (); } }
+-void f62 (unsigned b, unsigned a)
+-{ if (a < 8) { if ((a ^ b) > 15) bar (); } }
+-
+-/* Signed, negative C.  */
+-void f71 (int b, int a)
+-{ if (a >= 0 && a < 8) { if ((b | a) >= -8) bar (); } }
+-void f72 (int b, int a)
+-{ if (a >= 0 && a < 8) { if ((b ^ a) >= -8) bar (); } }
+-
+-/* Same constant on both tests: m = 4, low 4 bits of 15 all set.  */
+-void f81 (unsigned b, unsigned a)
+-{ if (a <= 15) { if ((b | a) <= 15) bar (); } }
+-void f82 (unsigned b, unsigned a)
+-{ if (a <= 15) { if ((b ^ a) <= 15) bar (); } }
+-
+-void f91 (unsigned b, unsigned a)
+-{ if (a <= 15) { if ((b | a) > 15) bar (); } }
+-void f92 (unsigned b, unsigned a)
+-{ if (a <= 15) { if ((b ^ a) > 15) bar (); } }
+-
+-/* Same constant on both tests: m = 4, low 4 bits of 16 all cleared.  */
+-void f101 (unsigned b, unsigned a)
+-{ if (a <= 15) { if ((b | a) < 16) bar (); } }
+-void f102 (unsigned b, unsigned a)
+-{ if (a <= 15) { if ((b ^ a) < 16) bar (); } }
+-
+-/* { dg-final { scan-tree-dump-not " \\| " "cddce1" } } */
+-/* { dg-final { scan-tree-dump-not " \\^ " "cddce1" } } */
+diff --git a/gcc/testsuite/gcc.dg/tree-ssa/pr115392-5.c b/gcc/testsuite/gcc.dg/tree-ssa/pr115392-5.c
+deleted file mode 100644
+index 0bf3b6d581df..000000000000
+--- a/gcc/testsuite/gcc.dg/tree-ssa/pr115392-5.c
++++ /dev/null
+@@ -1,32 +0,0 @@
+-/* PR tree-optimization/115392 */
+-/* { dg-do compile } */
+-/* { dg-options "-O2 -fdump-tree-cddce1" } */
+-
+-extern void bar (void);
+-
+-/* a in [0,8] needs m = 4, low 4 bits of 7 are not all set.  */
+-void n11 (unsigned b, unsigned a)
+-{ if (a <= 8) { if ((b | a) <= 7) bar (); } }
+-void n12 (unsigned b, unsigned a)
+-{ if (a <= 8) { if ((b ^ a) <= 7) bar (); } }
+-
+-/* a may be negative, so the sign bit can be set.  */
+-void n21 (int b, int a)
+-{ if (a >= -1 && a <= 3) { if ((b | a) <= 3) bar (); } }
+-void n22 (int b, int a)
+-{ if (a >= -1 && a <= 3) { if ((b ^ a) <= 3) bar (); } }
+-
+-/* ge with low bit of C set.  */
+-void n31 (unsigned b, unsigned a)
+-{ if (a < 8) { if ((b | a) >= 5) bar (); } }
+-void n32 (unsigned b, unsigned a)
+-{ if (a < 8) { if ((b ^ a) >= 5) bar (); } }
+-
+-/* No range information at all.  */
+-void n41 (unsigned b, unsigned a)
+-{ if ((b | a) <= 15) bar (); }
+-void n42 (unsigned b, unsigned a)
+-{ if ((b ^ a) <= 15) bar (); }
+-
+-/* { dg-final { scan-tree-dump-times " \\| " 4 "cddce1" } } */
+-/* { dg-final { scan-tree-dump-times " \\^ " 4 "cddce1" } } */
