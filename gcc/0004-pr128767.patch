@@ -1,3 +1,16 @@
+	PR rtl-optimization/128767
+gcc
+	* simplify-rtx.cc (simplify_context::simplify_binary_operation_1):
+	Simplify (and (xor A 1) B) to (and not (A) B) when B is a 0/1 value.
+
+gcc/testsuite
+
+	* gcc.target/riscv/abb-andn-xor1-1.c: New test.
+	* gcc.target/riscv/abb-andn-xor1-2.c: New test.
+	* gcc.target/riscv/abb-andn-xor1-3.c: New test.
+	* gcc.target/riscv/abb-andn-xor1-4.c: New test.
+	* gcc.target/aarch64/bic-1.c: Adjust expected output.
+
 diff --git a/gcc/simplify-rtx.cc b/gcc/simplify-rtx.cc
 index fb3a83bd3aef..3146bb5b0a2f 100644
 --- a/gcc/simplify-rtx.cc
@@ -188,3 +201,18 @@ index 000000000000..3b8beb5d2dc9
 +
 +/* { dg-final { scan-assembler-not "\tandn\t" } } */
 +/* { dg-final { scan-assembler "\txori\t" } } */
+diff --git a/gcc/testsuite/gcc.target/aarch64/bic-1.c b/gcc/testsuite/gcc.target/aarch64/bic-1.c
+index 65e1514755f..2ad815023d3 100644
+--- a/gcc/testsuite/gcc.target/aarch64/bic-1.c
++++ b/gcc/testsuite/gcc.target/aarch64/bic-1.c
+@@ -30,8 +30,8 @@ unsigned func2(bool a, bool b)
+ 
+ /*
+ **func3:
+-**	bic	w([0-9]+), w1, w0
+-**	and	w0, w\1, 1
++**	and	w([0-9]+), w1, 1
++**	bic	w0, w\1, w0
+ **      ret
+ */
+ bool func3(bool a, unsigned char b)
