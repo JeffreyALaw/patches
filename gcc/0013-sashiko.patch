@@ -1,0 +1,13 @@
+diff --git a/gcc/simplify-rtx.cc b/gcc/simplify-rtx.cc
+index 213853a2f41..a764e66872f 100644
+--- a/gcc/simplify-rtx.cc
++++ b/gcc/simplify-rtx.cc
+@@ -4496,7 +4496,7 @@ simplify_context::simplify_binary_operation_1 (rtx_code code,
+ 	    rtx y = i ? op0 : op1;
+ 	    if (GET_CODE (x) == XOR
+ 		&& XEXP (x, 1) == CONST1_RTX (mode)
+-		&& (nonzero_bits (y, int_mode) & ~HOST_WIDE_INT_1U) == 0)
++		&& (nonzero_bits (y, tmode) & ~HOST_WIDE_INT_1U) == 0)
+ 	      return simplify_gen_binary (AND, mode,
+ 					  simplify_gen_unary (NOT, mode,
+ 							      XEXP (x, 0),
