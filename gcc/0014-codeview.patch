@@ -1,0 +1,19 @@
+diff --git a/gcc/dwarf2codeview.cc b/gcc/dwarf2codeview.cc
+index 9507dc27e03..d00144c8b86 100644
+--- a/gcc/dwarf2codeview.cc
++++ b/gcc/dwarf2codeview.cc
+@@ -6358,9 +6358,11 @@ get_type_num_struct (dw_die_ref type, bool in_struct, bool *is_fwd_ref)
+ 
+   parent = dw_get_die_parent (type);
+ 
+-  if (parent && (dw_get_die_tag (parent) == DW_TAG_structure_type
+-      || dw_get_die_tag (parent) == DW_TAG_class_type
+-      || dw_get_die_tag (parent) == DW_TAG_union_type))
++  if (parent
++      && (dw_get_die_tag (parent) == DW_TAG_structure_type
++	  || dw_get_die_tag (parent) == DW_TAG_class_type
++	  || dw_get_die_tag (parent) == DW_TAG_union_type)
++      && !get_AT_flag (parent, DW_AT_declaration))
+     /* An unnamed parent may still be building the member that led here.
+        Complete this type before visiting the parent.  */
+     add_deferred_type (parent);
