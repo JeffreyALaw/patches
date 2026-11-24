@@ -9,7 +9,7 @@ index 213853a2f41..99a9f60be83 100644
 +
 +	    /* When WORD_REGISTER_OPERATIONS is true, we need to know the
 +	       nonzero bits in WORD_MODE rather than MODE.  */
-+	    scalar_int_mode tmode = as_a <scalar_int_mode> (mode);
++	    scalar_int_mode tmode = as_a <scalar_int_mode> (int_mode);
 +	    if (WORD_REGISTER_OPERATIONS
 +		&& GET_MODE_BITSIZE (tmode) < BITS_PER_WORD)
 +	      tmode = word_mode;
