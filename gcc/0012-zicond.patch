@@ -86,49 +86,6 @@ index e979d4c2964..f4b7c8abae5 100644
        if (COMPARISON_P (op0) && ! side_effects_p (op0))
  	{
  	  machine_mode cmp_mode = (GET_MODE (XEXP (op0, 0)) == VOIDmode
-diff --git a/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-2.c b/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-2.c
-new file mode 100644
-index 00000000000..95928487226
---- /dev/null
-+++ b/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-2.c
-@@ -0,0 +1,15 @@
-+/* { dg-do compile } */
-+/* { dg-options "-O2 -march=rv64gc_zbb -mabi=lp64d" } */
-+/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
-+
-+/* The other operand is not known to be 0 or 1, so the xori cannot be
-+   treated as a NOT: (x ^ 1) & b clears bit 0 of b when x is 1, whereas
-+   ~x & b would keep the upper bits of b.  */
-+
-+long
-+f (long a, long b, long c, long d)
-+{
-+  return (long) !(c < d) & a;
-+}
-+
-+/* { dg-final { scan-assembler-not "\tandn\t" } } */
-diff --git a/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-4.c b/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-4.c
-new file mode 100644
-index 00000000000..3b8beb5d2dc
---- /dev/null
-+++ b/gcc/testsuite/gcc.target/riscv/zbb-andn-xor1-4.c
-@@ -0,0 +1,16 @@
-+/* { dg-do compile } */
-+/* { dg-options "-O2 -march=rv32gc_zbb -mabi=ilp32d" } */
-+/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
-+
-+/* RV32 version of zbb-andn-xor1-2.c.  The other operand is not known to be
-+   0 or 1, so the xori cannot be treated as a NOT: (x ^ 1) & b clears bit 0
-+   of b when x is 1, whereas ~x & b would keep the upper bits of b.  */
-+
-+int
-+f (int a, int c)
-+{
-+  return (c ^ 1) & a;
-+}
-+
-+/* { dg-final { scan-assembler-not "\tandn\t" } } */
-+/* { dg-final { scan-assembler "\txori\t" } } */
 diff --git a/gcc/testsuite/gcc.target/riscv/zbb-minmax-cmp-uns-1.c b/gcc/testsuite/gcc.target/riscv/zbb-minmax-cmp-uns-1.c
 new file mode 100644
 index 00000000000..a2ae75443bb
