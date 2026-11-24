@@ -1,0 +1,262 @@
+diff --git a/gcc/simplify-rtx.cc b/gcc/simplify-rtx.cc
+index 213853a2f41..7eed2525dbf 100644
+--- a/gcc/simplify-rtx.cc
++++ b/gcc/simplify-rtx.cc
+@@ -3168,6 +3168,43 @@ simplify_rotate_op (rtx op0, rtx op1, machine_mode mode)
+   return NULL_RTX;
+ }
+ 
++/* Try to combine two unsigned comparisons against the same value, OP0 and
++   OP1, joined by CODE (IOR or AND), into one comparison of a UMIN/UMAX:
++
++     (A <=u C) | (B <=u C)  ->  umin (A, B) <=u C
++     (A <=u C) & (B <=u C)  ->  umax (A, B) <=u C
++     (A >u C) | (B >u C)    ->  umax (A, B) >u C
++     (A >u C) & (B >u C)    ->  umin (A, B) >u C
++
++   and likewise for LTU and GEU.
++
++   Return the combined RTX or NULL_RTX otherwise.  */
++
++static rtx
++simplify_unsigned_cmp_minmax (rtx_code code, machine_mode mode,
++			      rtx op0, rtx op1)
++{
++  rtx_code cmp = GET_CODE (op0);
++  if (STORE_FLAG_VALUE != 1
++      || GET_CODE (op1) != cmp
++      || (cmp != LEU && cmp != LTU && cmp != GEU && cmp != GTU)
++      || !SCALAR_INT_MODE_P (mode)
++      || !rtx_equal_p (XEXP (op0, 1), XEXP (op1, 1))
++      || side_effects_p (op0)
++      || side_effects_p (op1))
++    return NULL_RTX;
++
++  machine_mode cmp_mode = GET_MODE (XEXP (op0, 0));
++  if (!SCALAR_INT_MODE_P (cmp_mode) || GET_MODE (XEXP (op1, 0)) != cmp_mode)
++    return NULL_RTX;
++
++  bool less = cmp == LEU || cmp == LTU;
++  rtx_code minmax = (less == (code == IOR)) ? UMIN : UMAX;
++  rtx m = simplify_gen_binary (minmax, cmp_mode,
++			       XEXP (op0, 0), XEXP (op1, 0));
++  return simplify_gen_relational (cmp, mode, cmp_mode, m, XEXP (op0, 1));
++}
++
+ /* Returns true if OP0 and OP1 match the pattern (OP (plus (A - 1)) (neg A)),
+    and the pattern can be simplified (there are no side effects).  */
+ 
+@@ -3877,6 +3914,9 @@ simplify_context::simplify_binary_operation_1 (rtx_code code,
+ 	  && GET_MODE_CLASS (mode) != MODE_CC)
+ 	return CONSTM1_RTX (mode);
+ 
++      if (rtx tem = simplify_unsigned_cmp_minmax (IOR, mode, op0, op1))
++	return tem;
++
+       /* IOR of two single bit bitfields extracted from the same object.
+ 	 Bitfields are represented as an AND based extraction */
+       if (GET_CODE (op0) == AND
+@@ -4485,6 +4525,9 @@ simplify_context::simplify_binary_operation_1 (rtx_code code,
+ 	  && GET_MODE_CLASS (mode) != MODE_CC)
+ 	return CONST0_RTX (mode);
+ 
++      if (rtx tem = simplify_unsigned_cmp_minmax (AND, mode, op0, op1))
++	return tem;
++
+       /* Convert (and (xor A 1) B) to (and (not A) B) when B is known to be
+ 	 0 or 1.  Only bit 0 of the XOR matters, and the NOT may be folded
+ 	 into an and-not instruction.  */
+diff --git a/gcc/testsuite/gcc.target/riscv/zbb-minmax-cmp-uns-1.c b/gcc/testsuite/gcc.target/riscv/zbb-minmax-cmp-uns-1.c
+new file mode 100644
+index 00000000000..a2ae75443bb
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/zbb-minmax-cmp-uns-1.c
+@@ -0,0 +1,29 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -march=rv64gc_zbb -mabi=lp64d" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
++
++/* Two unsigned comparisons against the same value, joined by | or &, are one
++   comparison of the umin or umax of the operands:
++
++     (A <=u C) | (B <=u C)  ==  umin (A, B) <=u C
++     (A <=u C) & (B <=u C)  ==  umax (A, B) <=u C
++     (A >u C) | (B >u C)    ==  umax (A, B) >u C
++     (A >u C) & (B >u C)    ==  umin (A, B) >u C
++
++   and likewise for LTU and GEU.  */
++
++typedef unsigned long T;
++
++int or_leu (T a, T b, T c) { return (a <= c) | (b <= c); }
++int or_ltu (T a, T b, T c) { return (a < c) | (b < c); }
++int or_gtu (T a, T b, T c) { return (a > c) | (b > c); }
++int or_geu (T a, T b, T c) { return (a >= c) | (b >= c); }
++int and_leu (T a, T b, T c) { return (a <= c) & (b <= c); }
++int and_ltu (T a, T b, T c) { return (a < c) & (b < c); }
++int and_gtu (T a, T b, T c) { return (a > c) & (b > c); }
++int and_geu (T a, T b, T c) { return (a >= c) & (b >= c); }
++
++/* { dg-final { scan-assembler-times "\tminu\t" 4 } } */
++/* { dg-final { scan-assembler-times "\tmaxu\t" 4 } } */
++/* { dg-final { scan-assembler-not "\tor\t" } } */
++/* { dg-final { scan-assembler-not "\tand\t" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/zbb-minmax-cmp-uns-2.c b/gcc/testsuite/gcc.target/riscv/zbb-minmax-cmp-uns-2.c
+new file mode 100644
+index 00000000000..5c5b03e417e
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/zbb-minmax-cmp-uns-2.c
+@@ -0,0 +1,29 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -march=rv32gc_zbb -mabi=ilp32d" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
++
++/* Two unsigned comparisons against the same value, joined by | or &, are one
++   comparison of the umin or umax of the operands:
++
++     (A <=u C) | (B <=u C)  ==  umin (A, B) <=u C
++     (A <=u C) & (B <=u C)  ==  umax (A, B) <=u C
++     (A >u C) | (B >u C)    ==  umax (A, B) >u C
++     (A >u C) & (B >u C)    ==  umin (A, B) >u C
++
++   and likewise for LTU and GEU.  */
++
++typedef unsigned long T;
++
++int or_leu (T a, T b, T c) { return (a <= c) | (b <= c); }
++int or_ltu (T a, T b, T c) { return (a < c) | (b < c); }
++int or_gtu (T a, T b, T c) { return (a > c) | (b > c); }
++int or_geu (T a, T b, T c) { return (a >= c) | (b >= c); }
++int and_leu (T a, T b, T c) { return (a <= c) & (b <= c); }
++int and_ltu (T a, T b, T c) { return (a < c) & (b < c); }
++int and_gtu (T a, T b, T c) { return (a > c) & (b > c); }
++int and_geu (T a, T b, T c) { return (a >= c) & (b >= c); }
++
++/* { dg-final { scan-assembler-times "\tminu\t" 4 } } */
++/* { dg-final { scan-assembler-times "\tmaxu\t" 4 } } */
++/* { dg-final { scan-assembler-not "\tor\t" } } */
++/* { dg-final { scan-assembler-not "\tand\t" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/zbb-minu-leu-1.c b/gcc/testsuite/gcc.target/riscv/zbb-minu-leu-1.c
+new file mode 100644
+index 00000000000..261daa41ad9
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/zbb-minu-leu-1.c
+@@ -0,0 +1,31 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -march=rv64gc_zbb -mabi=lp64d" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
++
++/* (A <=u C) | (B <=u C) is umin (A, B) <=u C, which takes two instructions
++   instead of the three needed to compute each comparison and OR them.  */
++
++int
++f_or (unsigned long a, unsigned long b)
++{
++  return (a <= 12) | (b <= 12);
++}
++
++/* The operands in the other order.  */
++int
++f_swapped (unsigned long a, unsigned long b)
++{
++  return (b <= 12) | (a <= 12);
++}
++
++/* The constants differ, so there is no common bound to apply to the
++   minimum.  This must not use minu.  */
++int
++f_diff (unsigned long a, unsigned long b)
++{
++  return (a <= 12) | (b <= 13);
++}
++
++/* { dg-final { scan-assembler-times "\tminu\t" 2 } } */
++/* { dg-final { scan-assembler-times "\tsltiu\t" 4 } } */
++/* { dg-final { scan-assembler-times "\tor\t" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/zbb-minu-leu-2.c b/gcc/testsuite/gcc.target/riscv/zbb-minu-leu-2.c
+new file mode 100644
+index 00000000000..71b097cdc2f
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/zbb-minu-leu-2.c
+@@ -0,0 +1,32 @@
++/* { dg-do compile } */
++/* { dg-options "-O2 -march=rv32gc_zbb -mabi=ilp32d" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-Og" } } */
++
++/* RV32 version of zbb-minu-leu-1.c.  (A <=u C) | (B <=u C) is
++   umin (A, B) <=u C, which takes two instructions instead of the three
++   needed to compute each comparison and OR them.  */
++
++int
++f_or (unsigned a, unsigned b)
++{
++  return (a <= 12) | (b <= 12);
++}
++
++/* The operands in the other order.  */
++int
++f_swapped (unsigned a, unsigned b)
++{
++  return (b <= 12) | (a <= 12);
++}
++
++/* The constants differ, so there is no common bound to apply to the
++   minimum.  This must not use minu.  */
++int
++f_diff (unsigned a, unsigned b)
++{
++  return (a <= 12) | (b <= 13);
++}
++
++/* { dg-final { scan-assembler-times "\tminu\t" 2 } } */
++/* { dg-final { scan-assembler-times "\tsltiu\t" 4 } } */
++/* { dg-final { scan-assembler-times "\tor\t" 1 } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/zbb-minu-leu-3.c b/gcc/testsuite/gcc.target/riscv/zbb-minu-leu-3.c
+new file mode 100644
+index 00000000000..ba245a5e79d
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/zbb-minu-leu-3.c
+@@ -0,0 +1,18 @@
++/* { dg-do compile } */
++/* { dg-options "-O3 -march=rv64gcbv_zicond_zvl128b -mabi=lp64" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-O2" "-Os" "-Og" } } */
++
++/* The vectorizer guards this loop with a runtime alias check, which tests
++   that neither address difference is within 12 bytes of zero.  That is
++   !(A <=u 12) && !(B <=u 12), which should be computed as
++   !(umin (A, B) <=u 12) and branched on directly.  */
++
++void
++f (short *a, short *b, short *c)
++{
++  for (int i = 0; i < 16; i++)
++    a[i] = b[i] + c[i];
++}
++
++/* { dg-final { scan-assembler-times "\tminu\t" 1 } } */
++/* { dg-final { scan-assembler-not "\tseqz\t" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/zbb-minu-leu-4.c b/gcc/testsuite/gcc.target/riscv/zbb-minu-leu-4.c
+new file mode 100644
+index 00000000000..50439db857b
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/riscv/zbb-minu-leu-4.c
+@@ -0,0 +1,19 @@
++/* { dg-do compile } */
++/* { dg-options "-O3 -march=rv32gcbv_zicond_zvl128b -mabi=ilp32" } */
++/* { dg-skip-if "" { *-*-* } { "-O0" "-O1" "-O2" "-Os" "-Og" } } */
++
++/* RV32 version of zbb-minu-leu-3.c.  The vectorizer guards this loop with
++   a runtime alias check, which tests that neither address difference is
++   within 12 bytes of zero.  That is
++   !(A <=u 12) && !(B <=u 12), which should be computed as
++   !(umin (A, B) <=u 12) and branched on directly.  */
++
++void
++f (short *a, short *b, short *c)
++{
++  for (int i = 0; i < 16; i++)
++    a[i] = b[i] + c[i];
++}
++
++/* { dg-final { scan-assembler-times "\tminu\t" 1 } } */
++/* { dg-final { scan-assembler-not "\tseqz\t" } } */
