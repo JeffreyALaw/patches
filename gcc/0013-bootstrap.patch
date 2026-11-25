@@ -8,8 +8,8 @@ index 9c836d8dde0..581b4ff9413 100644
  	 into an and-not instruction.  */
 -      if (is_a <scalar_int_mode> (mode, &int_mode)
 -	  && HWI_COMPUTABLE_MODE_P (int_mode))
-+      if (HWI_COMPUTABLE_MODE_P (mode))
-+	  is_a <scalar_int_mode> (mode, &int_mode)
++      if (HWI_COMPUTABLE_MODE_P (mode)
++	  is_a <scalar_int_mode> (mode, &int_mode))
  	for (int i = 0; i < 2; i++)
  	  {
  	    rtx x = i ? op1 : op0;
