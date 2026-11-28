@@ -1,0 +1,11 @@
+diff --git a/gcc/testsuite/gcc.target/riscv/rvv/autovec/max-vect-1.c b/gcc/testsuite/gcc.target/riscv/rvv/autovec/max-vect-1.c
+index 923c1f8fb9ce..efd8ed85c2ef 100644
+--- a/gcc/testsuite/gcc.target/riscv/rvv/autovec/max-vect-1.c
++++ b/gcc/testsuite/gcc.target/riscv/rvv/autovec/max-vect-1.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-O3 -march=rv64gcv -mabi=lp64d -fdump-tree-vect-details" } */
++/* { dg-options "-O3 -march=rv64gcv -mabi=lp64d -fdump-tree-vect-details -fno-vectoc-cost-model" } */
+ 
+ void __attribute__ (( target ("max-vectorization")))
+ foo (char *restrict a, int *restrict b, short *restrict c,
